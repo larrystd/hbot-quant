@@ -7,7 +7,7 @@
 
 #include "absl/status/statusor.h"
 #include "application/config.h"
-#include "application/control.h"
+#include "application/quant_server.h"
 
 namespace hquant {
 
@@ -24,13 +24,13 @@ struct CliOptions {
 absl::StatusOr<CliOptions> ParseCliArguments(
     std::span<const std::string_view> arguments);
 absl::StatusOr<AppConfig> PrepareStart(const CliOptions& options);
-absl::StatusOr<ControlRequest> MakeControlRequest(const CliOptions& options,
-                                                  uint64_t request_id);
-std::string ControlSocketPath(std::string_view state_dir);
-absl::StatusOr<ControlResponse> SendControlRequest(
-    const std::string& state_dir, const ControlRequest& request);
-absl::StatusOr<std::string> FormatControlResponse(
-    const CliOptions& options, const ControlResponse& response,
-    uint64_t request_id);
+absl::StatusOr<ServerRequest> MakeServerRequest(const CliOptions& options,
+                                                uint64_t request_id);
+std::string ServerSocketPath(std::string_view state_dir);
+absl::StatusOr<ServerResponse> SendServerRequest(const std::string& state_dir,
+                                                 const ServerRequest& request);
+absl::StatusOr<std::string> FormatServerResponse(const CliOptions& options,
+                                                 const ServerResponse& response,
+                                                 uint64_t request_id);
 
 }  // namespace hquant

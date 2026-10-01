@@ -29,17 +29,17 @@ int main(int argc, char** argv) {
     return 0;
   }
   constexpr uint64_t kRequestId = 1;
-  auto request = hquant::MakeControlRequest(*options, kRequestId);
+  auto request = hquant::MakeServerRequest(*options, kRequestId);
   if (!request.ok()) {
     std::cerr << request.status() << '\n';
     return 2;
   }
-  auto response = hquant::SendControlRequest(options->state_dir, *request);
+  auto response = hquant::SendServerRequest(options->state_dir, *request);
   if (!response.ok()) {
     std::cerr << response.status() << '\n';
     return 1;
   }
-  auto output = hquant::FormatControlResponse(*options, *response, kRequestId);
+  auto output = hquant::FormatServerResponse(*options, *response, kRequestId);
   if (!output.ok()) {
     std::cerr << output.status() << '\n';
     return 1;

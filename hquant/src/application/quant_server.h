@@ -23,13 +23,13 @@ struct HistoryRequest {
   std::string cursor;
 };
 struct StopRequest {};
-using ControlRequestPayload =
+using ServerRequestPayload =
     std::variant<StatusRequest, HistoryRequest, StopRequest>;
 
-struct ControlRequest {
+struct ServerRequest {
   uint32_t schema_version = 2;
   uint64_t request_id = 0;
-  ControlRequestPayload payload;
+  ServerRequestPayload payload;
 };
 
 struct StatusResponse {
@@ -41,44 +41,44 @@ struct HistoryResponse {
 struct StopResponse {
   bool accepted = false;
 };
-struct ControlError {
+struct ServerError {
   ErrorCode code = ErrorCode::kInternal;
   std::string message;
 };
-using ControlResponsePayload =
-    std::variant<StatusResponse, HistoryResponse, StopResponse, ControlError>;
+using ServerResponsePayload =
+    std::variant<StatusResponse, HistoryResponse, StopResponse, ServerError>;
 
-struct ControlResponse {
+struct ServerResponse {
   uint32_t schema_version = 2;
   uint64_t request_id = 0;
-  ControlResponsePayload payload;
+  ServerResponsePayload payload;
 };
 
 // One compact JSON object per frame. The Unix socket transport supplies frame
 // boundaries; no C++ variant layout is sent over the wire.
-absl::StatusOr<std::string> EncodeControlRequest(const ControlRequest& request);
-absl::StatusOr<ControlRequest> DecodeControlRequest(std::string_view json);
-absl::StatusOr<std::string> EncodeControlResponse(
-    const ControlResponse& response);
-absl::StatusOr<ControlResponse> DecodeControlResponse(std::string_view json);
+absl::StatusOr<std::string> EncodeServerRequest(const ServerRequest& request);
+absl::StatusOr<ServerRequest> DecodeServerRequest(std::string_view json);
+absl::StatusOr<std::string> EncodeServerResponse(
+    const ServerResponse& response);
+absl::StatusOr<ServerResponse> DecodeServerResponse(std::string_view json);
 
 // One JSON request and response line per Unix stream connection. Requests are
 // handled on bounded workers so a history query cannot delay status or stop.
-class ControlServer {
+class QuantServer {
  public:
-  using Handler = std::function<ControlResponse(const ControlRequest&)>;
+  using Handler = std::function<ServerResponse(const ServerRequest&)>;
 
-  static absl::StatusOr<std::unique_ptr<ControlServer>> Start(
+  static absl::StatusOr<std::unique_ptr<QuantServer>> Start(
       std::string socket_path, Handler handler);
-  ~ControlServer();
-  ControlServer(const ControlServer&) = delete;
-  ControlServer& operator=(const ControlServer&) = delete;
+  ~QuantServer();
+  QuantServer(const QuantServer&) = delete;
+  QuantServer& operator=(const QuantServer&) = delete;
 
   void Stop();
   const std::string& socket_path() const { return socket_path_; }
 
  private:
-  ControlServer(std::string path, Handler handler, int listen_fd);
+  QuantServer(std::string path, Handler handler, int listen_fd);
   void AcceptLoop();
   void HandleConnection(int fd);
 

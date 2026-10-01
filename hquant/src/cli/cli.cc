@@ -17,7 +17,7 @@
 #include <variant>
 
 #include "absl/status/status.h"
-#include "application/control.h"
+#include "application/quant_server.h"
 #include "base/error.h"
 
 namespace hquant {
@@ -119,13 +119,13 @@ absl::StatusOr<AppConfig> PrepareStart(const CliOptions& options) {
   return LoadConfig(options.config_path);
 }
 
-absl::StatusOr<ControlRequest> MakeControlRequest(const CliOptions& options,
-                                                  uint64_t request_id) {
+absl::StatusOr<ServerRequest> MakeServerRequest(const CliOptions& options,
+                                                uint64_t request_id) {
   if (options.verb == CliVerb::Start || options.state_dir.empty() ||
       request_id == 0) {
-    return Error(ErrorCode::kCliUsageInvalid, "invalid control command");
+    return Error(ErrorCode::kCliUsageInvalid, "invalid server command");
   }
-  ControlRequest request;
+  ServerRequest request;
   request.request_id = request_id;
   if (options.verb == CliVerb::Status)
     request.payload = StatusRequest{};
@@ -140,22 +140,22 @@ absl::StatusOr<ControlRequest> MakeControlRequest(const CliOptions& options,
   return request;
 }
 
-std::string ControlSocketPath(std::string_view state_dir) {
+std::string ServerSocketPath(std::string_view state_dir) {
   std::string path(state_dir);
   if (!path.empty() && path.back() != '/') path.push_back('/');
-  return path + "control.sock";
+  return path + "quant_server.sock";
 }
 
-absl::StatusOr<ControlResponse> SendControlRequest(
-    const std::string& state_dir, const ControlRequest& request) {
+absl::StatusOr<ServerResponse> SendServerRequest(const std::string& state_dir,
+                                                 const ServerRequest& request) {
   if (state_dir.empty())
     return Error(ErrorCode::kCliUsageInvalid, "state_dir required");
-  auto encoded = EncodeControlRequest(request);
+  auto encoded = EncodeServerRequest(request);
   if (!encoded.ok()) return encoded.status();
-  const std::string path = ControlSocketPath(state_dir);
+  const std::string path = ServerSocketPath(state_dir);
   sockaddr_un address{};
   if (path.size() >= sizeof(address.sun_path)) {
-    return Error(ErrorCode::kCliUsageInvalid, "control socket path too long");
+    return Error(ErrorCode::kCliUsageInvalid, "server socket path too long");
   }
   address.sun_family = AF_UNIX;
   std::memcpy(address.sun_path, path.c_str(), path.size() + 1);
@@ -201,37 +201,36 @@ absl::StatusOr<ControlResponse> SendControlRequest(
     if (received < 0) return IoError("receive");
     if (received == 0)
       return Error(ErrorCode::kCliEngineUnreachable,
-                   "control socket closed before response");
+                   "server socket closed before response");
     response.append(buffer, static_cast<size_t>(received));
     const auto newline = response.find('\n');
     if (newline != std::string::npos) {
       if (newline > (1 << 20))
-        return Error(ErrorCode::kCliResponseInvalid, "control frame too large");
+        return Error(ErrorCode::kCliResponseInvalid, "server frame too large");
       auto decoded =
-          DecodeControlResponse(std::string_view(response.data(), newline));
+          DecodeServerResponse(std::string_view(response.data(), newline));
       if (!decoded.ok())
         return Error(ErrorCode::kCliResponseInvalid,
-                     "invalid control response: " +
+                     "invalid server response: " +
                          std::string(decoded.status().message()));
       return decoded;
     }
   }
-  return Error(ErrorCode::kCliResponseInvalid, "control frame too large");
+  return Error(ErrorCode::kCliResponseInvalid, "server frame too large");
 }
 
-absl::StatusOr<std::string> FormatControlResponse(
-    const CliOptions& options, const ControlResponse& response,
-    uint64_t request_id) {
+absl::StatusOr<std::string> FormatServerResponse(const CliOptions& options,
+                                                 const ServerResponse& response,
+                                                 uint64_t request_id) {
   if ((response.schema_version != 1 && response.schema_version != 2) ||
       response.request_id != request_id) {
     return Error(ErrorCode::kCliResponseInvalid,
-                 "control response header mismatch");
+                 "server response header mismatch");
   }
-  if (const auto* error = std::get_if<ControlError>(&response.payload)) {
+  if (const auto* error = std::get_if<ServerError>(&response.payload)) {
     if (error->code == ErrorCode::kOk ||
         Info(error->code).code != error->code) {
-      return Error(ErrorCode::kCliResponseInvalid,
-                   "unknown control error code");
+      return Error(ErrorCode::kCliResponseInvalid, "unknown server error code");
     }
     return Error(ErrorCode::kCliEngineError,
                  std::string(Info(error->code).name) + " (" +
@@ -258,7 +257,7 @@ absl::StatusOr<std::string> FormatControlResponse(
       return Error(ErrorCode::kCliStopRejected, "stop not accepted");
     return std::string("stop requested\n");
   }
-  return Error(ErrorCode::kCliUsageInvalid, "start has no control response");
+  return Error(ErrorCode::kCliUsageInvalid, "start has no server response");
 }
 
 }  // namespace hquant

@@ -1,4 +1,4 @@
-#include "application/control.h"
+#include "application/quant_server.h"
 
 #include <cstdint>
 #include <string>
@@ -58,11 +58,11 @@ absl::StatusOr<simdjson::dom::element> Parse(std::string_view json,
                                              simdjson::dom::parser* parser) {
   simdjson::dom::element root;
   if (parser->parse(json).get(root))
-    return Error(ErrorCode::kControlMessageInvalid, "invalid control JSON");
+    return Error(ErrorCode::kServerMessageInvalid, "invalid server JSON");
   simdjson::dom::object object;
   if (root.get(object))
-    return Error(ErrorCode::kControlMessageInvalid,
-                 "control frame must be object");
+    return Error(ErrorCode::kServerMessageInvalid,
+                 "server frame must be object");
   return root;
 }
 
@@ -78,8 +78,8 @@ absl::StatusOr<std::pair<uint32_t, uint64_t>> Header(
   uint64_t version = 0, request_id = 0;
   if (root["schema_version"].get(version) || (version != 1 && version != 2) ||
       root["request_id"].get(request_id)) {
-    return Error(ErrorCode::kControlMessageInvalid,
-                 "unsupported control frame header");
+    return Error(ErrorCode::kServerMessageInvalid,
+                 "unsupported server frame header");
   }
   return std::pair<uint32_t, uint64_t>{static_cast<uint32_t>(version),
                                        request_id};
@@ -87,17 +87,17 @@ absl::StatusOr<std::pair<uint32_t, uint64_t>> Header(
 
 ErrorCode LegacyErrorCode(std::string_view name) {
   if (name == "bad_request" || name == "frame_too_large")
-    return ErrorCode::kControlMessageInvalid;
-  if (name == "busy") return ErrorCode::kControlBusy;
-  if (name == "timeout") return ErrorCode::kControlTimeout;
+    return ErrorCode::kServerMessageInvalid;
+  if (name == "busy") return ErrorCode::kServerBusy;
+  if (name == "timeout") return ErrorCode::kServerTimeout;
   if (name == "history") return ErrorCode::kStorageQueryFailed;
   return ErrorCode::kInternal;
 }
 
 std::string_view LegacyErrorName(ErrorCode code) {
-  if (code == ErrorCode::kControlMessageInvalid) return "bad_request";
-  if (code == ErrorCode::kControlBusy) return "busy";
-  if (code == ErrorCode::kControlTimeout) return "timeout";
+  if (code == ErrorCode::kServerMessageInvalid) return "bad_request";
+  if (code == ErrorCode::kServerBusy) return "busy";
+  if (code == ErrorCode::kServerTimeout) return "timeout";
   const auto value = -ErrorNumber(code);
   if (value >= 17000 && value < 18000) return "history";
   return "internal";
@@ -105,11 +105,10 @@ std::string_view LegacyErrorName(ErrorCode code) {
 
 }  // namespace
 
-absl::StatusOr<std::string> EncodeControlRequest(
-    const ControlRequest& request) {
+absl::StatusOr<std::string> EncodeServerRequest(const ServerRequest& request) {
   if (request.schema_version != 1 && request.schema_version != 2)
-    return Error(ErrorCode::kControlMessageInvalid,
-                 "unsupported control version");
+    return Error(ErrorCode::kServerMessageInvalid,
+                 "unsupported server version");
   std::string frame =
       "{\"schema_version\":" + std::to_string(request.schema_version) +
       ",\"request_id\":" + std::to_string(request.request_id);
@@ -118,7 +117,7 @@ absl::StatusOr<std::string> EncodeControlRequest(
   } else if (const auto* history =
                  std::get_if<HistoryRequest>(&request.payload)) {
     if (history->limit == 0 || history->limit > 500) {
-      return Error(ErrorCode::kControlMessageInvalid,
+      return Error(ErrorCode::kServerMessageInvalid,
                    "history limit out of range");
     }
     frame +=
@@ -130,7 +129,7 @@ absl::StatusOr<std::string> EncodeControlRequest(
   return frame;
 }
 
-absl::StatusOr<ControlRequest> DecodeControlRequest(std::string_view json) {
+absl::StatusOr<ServerRequest> DecodeServerRequest(std::string_view json) {
   simdjson::dom::parser parser;
   auto root = Parse(json, &parser);
   if (!root.ok()) return root.status();
@@ -138,8 +137,8 @@ absl::StatusOr<ControlRequest> DecodeControlRequest(std::string_view json) {
   if (!header.ok()) return header.status();
   std::string_view kind;
   if ((*root)["kind"].get(kind))
-    return Error(ErrorCode::kControlMessageInvalid, "missing request kind");
-  ControlRequest request;
+    return Error(ErrorCode::kServerMessageInvalid, "missing request kind");
+  ServerRequest request;
   request.schema_version = header->first;
   request.request_id = header->second;
   if (kind == "status")
@@ -151,21 +150,20 @@ absl::StatusOr<ControlRequest> DecodeControlRequest(std::string_view json) {
     std::string_view cursor;
     if ((*root)["limit"].get(limit) || limit == 0 || limit > 500 ||
         (*root)["cursor"].get(cursor)) {
-      return Error(ErrorCode::kControlMessageInvalid,
-                   "invalid history request");
+      return Error(ErrorCode::kServerMessageInvalid, "invalid history request");
     }
     request.payload =
         HistoryRequest{static_cast<uint32_t>(limit), std::string(cursor)};
   } else
-    return Error(ErrorCode::kControlMessageInvalid, "unknown request kind");
+    return Error(ErrorCode::kServerMessageInvalid, "unknown request kind");
   return request;
 }
 
-absl::StatusOr<std::string> EncodeControlResponse(
-    const ControlResponse& response) {
+absl::StatusOr<std::string> EncodeServerResponse(
+    const ServerResponse& response) {
   if (response.schema_version != 1 && response.schema_version != 2)
-    return Error(ErrorCode::kControlMessageInvalid,
-                 "unsupported control version");
+    return Error(ErrorCode::kServerMessageInvalid,
+                 "unsupported server version");
   std::string frame =
       "{\"schema_version\":" + std::to_string(response.schema_version) +
       ",\"request_id\":" + std::to_string(response.request_id);
@@ -182,10 +180,10 @@ absl::StatusOr<std::string> EncodeControlResponse(
     frame += std::string(",\"kind\":\"stop\",\"accepted\":") +
              (stop->accepted ? "true}" : "false}");
   } else {
-    const auto& error = std::get<ControlError>(response.payload);
+    const auto& error = std::get<ServerError>(response.payload);
     if (error.code == ErrorCode::kOk || Info(error.code).code != error.code) {
-      return Error(ErrorCode::kControlMessageInvalid,
-                   "invalid control error code");
+      return Error(ErrorCode::kServerMessageInvalid,
+                   "invalid server error code");
     }
     if (response.schema_version == 1) {
       frame += ",\"kind\":\"error\",\"code\":" +
@@ -201,7 +199,7 @@ absl::StatusOr<std::string> EncodeControlResponse(
   return frame;
 }
 
-absl::StatusOr<ControlResponse> DecodeControlResponse(std::string_view json) {
+absl::StatusOr<ServerResponse> DecodeServerResponse(std::string_view json) {
   simdjson::dom::parser parser;
   auto root = Parse(json, &parser);
   if (!root.ok()) return root.status();
@@ -209,15 +207,15 @@ absl::StatusOr<ControlResponse> DecodeControlResponse(std::string_view json) {
   if (!header.ok()) return header.status();
   std::string_view kind;
   if ((*root)["kind"].get(kind))
-    return Error(ErrorCode::kControlMessageInvalid, "missing response kind");
-  ControlResponse response;
+    return Error(ErrorCode::kServerMessageInvalid, "missing response kind");
+  ServerResponse response;
   response.schema_version = header->first;
   response.request_id = header->second;
   if (kind == "status" || kind == "history") {
     simdjson::dom::element data;
     simdjson::dom::object object;
     if ((*root)["data"].get(data) || data.get(object)) {
-      return Error(ErrorCode::kControlMessageInvalid, "invalid response data");
+      return Error(ErrorCode::kServerMessageInvalid, "invalid response data");
     }
     if (kind == "status")
       response.payload = StatusResponse{simdjson::minify(data)};
@@ -226,37 +224,37 @@ absl::StatusOr<ControlResponse> DecodeControlResponse(std::string_view json) {
   } else if (kind == "stop") {
     bool accepted = false;
     if ((*root)["accepted"].get(accepted))
-      return Error(ErrorCode::kControlMessageInvalid, "invalid stop response");
+      return Error(ErrorCode::kServerMessageInvalid, "invalid stop response");
     response.payload = StopResponse{accepted};
   } else if (kind == "error") {
     std::string_view message;
     if ((*root)["message"].get(message)) {
-      return Error(ErrorCode::kControlMessageInvalid, "invalid error response");
+      return Error(ErrorCode::kServerMessageInvalid, "invalid error response");
     }
     ErrorCode code;
     if (response.schema_version == 1) {
       std::string_view legacy;
       if ((*root)["code"].get(legacy))
-        return Error(ErrorCode::kControlMessageInvalid,
+        return Error(ErrorCode::kServerMessageInvalid,
                      "invalid legacy error response");
       code = LegacyErrorCode(legacy);
     } else {
       int64_t number = 0;
       std::string_view name;
       if ((*root)["code"].get(number) || (*root)["name"].get(name)) {
-        return Error(ErrorCode::kControlMessageInvalid,
+        return Error(ErrorCode::kServerMessageInvalid,
                      "invalid error code or name");
       }
       const auto known = ErrorFromNumber(number);
       code = known.value_or(ErrorCode::kInternal);
       if (!known || Info(code).name != name) {
-        return Error(ErrorCode::kControlMessageInvalid,
+        return Error(ErrorCode::kServerMessageInvalid,
                      "error code and name mismatch");
       }
     }
-    response.payload = ControlError{code, std::string(message)};
+    response.payload = ServerError{code, std::string(message)};
   } else
-    return Error(ErrorCode::kControlMessageInvalid, "unknown response kind");
+    return Error(ErrorCode::kServerMessageInvalid, "unknown response kind");
   return response;
 }
 
@@ -296,32 +294,32 @@ bool SendAll(int fd, std::string_view bytes) {
 
 void SendError(int fd, ErrorCode code, std::string message,
                uint32_t schema_version = 2) {
-  ControlResponse response;
+  ServerResponse response;
   response.schema_version = schema_version;
-  response.payload = ControlError{code, std::move(message)};
-  auto frame = EncodeControlResponse(response);
+  response.payload = ServerError{code, std::move(message)};
+  auto frame = EncodeServerResponse(response);
   if (frame.ok()) SendAll(fd, *frame + "\n");
 }
 
 }  // namespace
 
-ControlServer::ControlServer(std::string path, Handler handler, int listen_fd)
+QuantServer::QuantServer(std::string path, Handler handler, int listen_fd)
     : socket_path_(std::move(path)),
       handler_(std::move(handler)),
       listen_fd_(listen_fd) {}
 
-absl::StatusOr<std::unique_ptr<ControlServer>> ControlServer::Start(
+absl::StatusOr<std::unique_ptr<QuantServer>> QuantServer::Start(
     std::string socket_path, Handler handler) {
   if (!handler || socket_path.empty() ||
       socket_path.size() >= sizeof(sockaddr_un::sun_path)) {
-    return Error(ErrorCode::kControlSocketFailed,
-                 "invalid control socket path or handler");
+    return Error(ErrorCode::kServerSocketFailed,
+                 "invalid server socket path or handler");
   }
   const int fd = socket(AF_UNIX, SOCK_STREAM, 0);
   if (fd < 0)
-    return ErrorFromSystem(ErrorCode::kControlSocketFailed,
+    return ErrorFromSystem(ErrorCode::kServerSocketFailed,
                            std::error_code(errno, std::generic_category()),
-                           "control socket");
+                           "server socket");
   sockaddr_un address{};
   address.sun_family = AF_UNIX;
   std::memcpy(address.sun_path, socket_path.c_str(), socket_path.size() + 1);
@@ -333,13 +331,13 @@ absl::StatusOr<std::unique_ptr<ControlServer>> ControlServer::Start(
     if (probe >= 0) close(probe);
     if (in_use) {
       close(fd);
-      return Error(ErrorCode::kControlSocketInUse, "control socket is in use");
+      return Error(ErrorCode::kServerSocketInUse, "server socket is in use");
     }
     if (unlink(socket_path.c_str()) != 0) {
       close(fd);
-      return ErrorFromSystem(ErrorCode::kControlSocketFailed,
+      return ErrorFromSystem(ErrorCode::kServerSocketFailed,
                              std::error_code(errno, std::generic_category()),
-                             "remove stale control socket: " + socket_path);
+                             "remove stale server socket: " + socket_path);
     }
   }
   if (bind(fd, reinterpret_cast<sockaddr*>(&address), sizeof(address)) != 0 ||
@@ -347,19 +345,19 @@ absl::StatusOr<std::unique_ptr<ControlServer>> ControlServer::Start(
     const std::error_code error(errno, std::generic_category());
     close(fd);
     unlink(socket_path.c_str());
-    return ErrorFromSystem(ErrorCode::kControlSocketFailed, error,
-                           "bind/listen control socket: " + socket_path);
+    return ErrorFromSystem(ErrorCode::kServerSocketFailed, error,
+                           "bind/listen server socket: " + socket_path);
   }
-  auto server = std::unique_ptr<ControlServer>(
-      new ControlServer(std::move(socket_path), std::move(handler), fd));
+  auto server = std::unique_ptr<QuantServer>(
+      new QuantServer(std::move(socket_path), std::move(handler), fd));
   server->accept_thread_ =
       std::thread([self = server.get()] { self->AcceptLoop(); });
   return server;
 }
 
-ControlServer::~ControlServer() { Stop(); }
+QuantServer::~QuantServer() { Stop(); }
 
-void ControlServer::Stop() {
+void QuantServer::Stop() {
   if (stopping_.exchange(true)) return;
   if (listen_fd_ >= 0) {
     shutdown(listen_fd_, SHUT_RDWR);
@@ -375,7 +373,7 @@ void ControlServer::Stop() {
   unlink(socket_path_.c_str());
 }
 
-void ControlServer::AcceptLoop() {
+void QuantServer::AcceptLoop() {
   while (!stopping_) {
     const int client = accept(listen_fd_, nullptr, nullptr);
     if (client < 0) {
@@ -384,8 +382,7 @@ void ControlServer::AcceptLoop() {
     }
     if (active_.fetch_add(1) >= kMaxConcurrent) {
       active_.fetch_sub(1);
-      SendError(client, ErrorCode::kControlBusy,
-                "control server request limit reached");
+      SendError(client, ErrorCode::kServerBusy, "server request limit reached");
       close(client);
       continue;
     }
@@ -416,7 +413,7 @@ void ControlServer::AcceptLoop() {
   }
 }
 
-void ControlServer::HandleConnection(int fd) {
+void QuantServer::HandleConnection(int fd) {
   std::string frame;
   frame.reserve(1024);
   char buffer[4096];
@@ -431,20 +428,20 @@ void ControlServer::HandleConnection(int fd) {
     }
   }
   if (frame.size() > kMaxFrame) {
-    SendError(fd, ErrorCode::kControlMessageInvalid,
-              "control frame exceeds 64 KiB");
+    SendError(fd, ErrorCode::kServerMessageInvalid,
+              "server frame exceeds 64 KiB");
     return;
   }
-  auto request = DecodeControlRequest(frame);
+  auto request = DecodeServerRequest(frame);
   if (!request.ok()) {
-    SendError(fd, ErrorCode::kControlMessageInvalid,
+    SendError(fd, ErrorCode::kServerMessageInvalid,
               std::string(request.status().message()));
     return;
   }
   auto response = handler_(*request);
   response.schema_version = request->schema_version;
   response.request_id = request->request_id;
-  auto encoded = EncodeControlResponse(response);
+  auto encoded = EncodeServerResponse(response);
   if (!encoded.ok()) {
     SendError(fd, ErrorCode::kInternal, std::string(encoded.status().message()),
               request->schema_version);

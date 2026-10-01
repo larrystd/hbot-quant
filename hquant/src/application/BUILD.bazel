@@ -16,9 +16,9 @@ hquant_cc_library(
 )
 
 hquant_cc_library(
-    name = "control",
-    srcs = ["control.cc"],
-    hdrs = ["control.h"],
+    name = "quant_server",
+    srcs = ["quant_server.cc"],
+    hdrs = ["quant_server.h"],
     deps = [
         "//hquant/src/base:error",
         "//hquant/src/base:market",
@@ -40,7 +40,7 @@ hquant_cc_library(
     hdrs = ["launcher.h"],
     deps = [
         ":config",
-        ":control",
+        ":quant_server",
         "//hquant/src/base:error",
         "//hquant/src/base:net",
         "//hquant/src/market:binance_spot_feed",

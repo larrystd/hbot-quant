@@ -17,7 +17,7 @@
 #include <vector>
 
 #include "absl/status/status.h"
-#include "application/control.h"
+#include "application/quant_server.h"
 #include "base/error.h"
 #include "base/net.h"
 #include "boost/asio/co_spawn.hpp"
@@ -220,8 +220,8 @@ absl::Status RunSimulatedBinanceEngine(const AppConfig& config,
   std::thread shard_thread([&] { io.run(); });
 
   std::mutex history_mutex;
-  auto handler = [&](const ControlRequest& request) -> ControlResponse {
-    ControlResponse response;
+  auto handler = [&](const ServerRequest& request) -> ServerResponse {
+    ServerResponse response;
     response.request_id = request.request_id;
     if (std::holds_alternative<StatusRequest>(request.payload)) {
       auto result = std::make_shared<std::promise<std::string>>();
@@ -241,7 +241,7 @@ absl::Status RunSimulatedBinanceEngine(const AppConfig& config,
       if (ready.wait_for(std::chrono::seconds(2)) !=
           std::future_status::ready) {
         response.payload =
-            ControlError{ErrorCode::kControlTimeout, "status query timed out"};
+            ServerError{ErrorCode::kServerTimeout, "status query timed out"};
       } else {
         response.payload = StatusResponse{ready.get()};
       }
@@ -255,14 +255,14 @@ absl::Status RunSimulatedBinanceEngine(const AppConfig& config,
       auto accepted = (**reader).TrySubmit(query);
       if (!accepted.ok()) {
         response.payload =
-            ControlError{CodeOf(accepted), std::string(accepted.message())};
+            ServerError{CodeOf(accepted), std::string(accepted.message())};
       } else {
         const auto deadline =
             std::chrono::steady_clock::now() + std::chrono::seconds(2);
         while (std::chrono::steady_clock::now() < deadline) {
           if (auto page = (**reader).TryReceive()) {
             if (!page->status.ok()) {
-              response.payload = ControlError{
+              response.payload = ServerError{
                   CodeOf(page->status), std::string(page->status.message())};
             } else
               response.payload = HistoryResponse{HistoryJson(*page)};
@@ -271,7 +271,7 @@ absl::Status RunSimulatedBinanceEngine(const AppConfig& config,
           std::this_thread::sleep_for(std::chrono::milliseconds(2));
         }
         response.payload =
-            ControlError{ErrorCode::kControlTimeout, "history query timed out"};
+            ServerError{ErrorCode::kServerTimeout, "history query timed out"};
       }
     } else {
       stopping = true;
@@ -283,7 +283,7 @@ absl::Status RunSimulatedBinanceEngine(const AppConfig& config,
     }
     return response;
   };
-  auto server = ControlServer::Start(state_dir + "/control.sock", handler);
+  auto server = QuantServer::Start(state_dir + "/quant_server.sock", handler);
   if (!server.ok()) {
     stopping = true;
     boost::asio::post(io, [&] {
@@ -384,8 +384,8 @@ absl::Status Launch(const AppConfig& config, const std::string& state_dir) {
 
   std::atomic<bool> stopping{false};
   std::mutex history_mutex;
-  auto handler = [&](const ControlRequest& request) -> ControlResponse {
-    ControlResponse response;
+  auto handler = [&](const ServerRequest& request) -> ServerResponse {
+    ServerResponse response;
     response.request_id = request.request_id;
     if (std::holds_alternative<StatusRequest>(request.payload)) {
       response.payload = StatusResponse{
@@ -400,14 +400,14 @@ absl::Status Launch(const AppConfig& config, const std::string& state_dir) {
       auto accepted = (**reader).TrySubmit(query);
       if (!accepted.ok()) {
         response.payload =
-            ControlError{CodeOf(accepted), std::string(accepted.message())};
+            ServerError{CodeOf(accepted), std::string(accepted.message())};
       } else {
         const auto deadline =
             std::chrono::steady_clock::now() + std::chrono::seconds(2);
         while (std::chrono::steady_clock::now() < deadline) {
           if (auto page = (**reader).TryReceive()) {
             if (!page->status.ok()) {
-              response.payload = ControlError{
+              response.payload = ServerError{
                   CodeOf(page->status), std::string(page->status.message())};
             } else
               response.payload = HistoryResponse{HistoryJson(*page)};
@@ -416,7 +416,7 @@ absl::Status Launch(const AppConfig& config, const std::string& state_dir) {
           std::this_thread::sleep_for(std::chrono::milliseconds(2));
         }
         response.payload =
-            ControlError{ErrorCode::kControlTimeout, "history query timed out"};
+            ServerError{ErrorCode::kServerTimeout, "history query timed out"};
       }
     } else {
       stopping = true;
@@ -424,7 +424,7 @@ absl::Status Launch(const AppConfig& config, const std::string& state_dir) {
     }
     return response;
   };
-  auto server = ControlServer::Start(state_dir + "/control.sock", handler);
+  auto server = QuantServer::Start(state_dir + "/quant_server.sock", handler);
   if (!server.ok()) return server.status();
   while (!stopping) std::this_thread::sleep_for(std::chrono::milliseconds(20));
   (*server)->Stop();

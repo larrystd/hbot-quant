@@ -27,7 +27,7 @@
 | 16000 | 分片服务 | `service/shard`、`service/dispatcher` |
 | 17000 | 存储 | `offline/*` |
 | 18000 | 配置与进程 | `application/config`、`application/launcher` |
-| 19000 | 控制与命令行 | `application/control`、`cli` |
+| 19000 | 控制与命令行 | `application/quant_server`、`cli` |
 
 ## 3. 处理方式
 
@@ -234,15 +234,15 @@ payload 中的业务码以十进制 ASCII 编码；读取到未知编号、非�
 
 | 码 | 名称 | 处理 | absl | 含义 | 现有来源 |
 | --- | --- | --- | --- | --- | --- |
-| 19001 | `CONTROL_MESSAGE_INVALID` | Reject | InvalidArgument | 控制帧、JSON、版本、请求或响应类型非法 | `application/control` |
-| 19002 | `CONTROL_SOCKET_FAILED` | Halt | Unavailable | 控制 socket 创建、绑定或监听失败 | `application/control` |
-| 19003 | `CONTROL_SOCKET_IN_USE` | Halt | AlreadyExists | 控制 socket 已被占用，可能已有引擎在运行 | `application/control` |
+| 19001 | `SERVER_MESSAGE_INVALID` | Reject | InvalidArgument | 控制帧、JSON、版本、请求或响应类型非法 | `application/quant_server` |
+| 19002 | `SERVER_SOCKET_FAILED` | Halt | Unavailable | 控制 socket 创建、绑定或监听失败 | `application/quant_server` |
+| 19003 | `SERVER_SOCKET_IN_USE` | Halt | AlreadyExists | 控制 socket 已被占用，可能已有引擎在运行 | `application/quant_server` |
 | 19004 | `CLI_USAGE_INVALID` | Reject | InvalidArgument | 命令或参数错误：未知命令、缺值、`state_dir` 缺失、socket 路径过长、history limit 越界 | `cli` |
 | 19005 | `CLI_ENGINE_UNREACHABLE` | Retry | Unavailable | 无法连接引擎，或连接在收到响应前关闭 | `cli` |
 | 19006 | `CLI_RESPONSE_INVALID` | Reject | DataLoss | 引擎响应帧过大、头部不匹配或类型不符 | `cli` |
 | 19007 | `CLI_COMMAND_FAILED` | Reject | FailedPrecondition | 引擎返回错误或拒绝 stop；消息带引擎给出的错误码名 | `cli` |
-| 19008 | `CONTROL_BUSY` | Retry | ResourceExhausted | 控制请求并发额度用尽；退避后重试 | `application/control` |
-| 19009 | `CONTROL_TIMEOUT` | Retry | DeadlineExceeded | 控制请求等待或执行超时；退避后重试 | `application/control` |
+| 19008 | `SERVER_BUSY` | Retry | ResourceExhausted | 控制请求并发额度用尽；退避后重试 | `application/quant_server` |
+| 19009 | `SERVER_TIMEOUT` | Retry | DeadlineExceeded | 控制请求等待或执行超时；退避后重试 | `application/quant_server` |
 
 ## 6. 现有枚举与字符串的归并
 
@@ -253,7 +253,7 @@ payload 中的业务码以十进制 ASCII 编码；读取到未知编号、非�
 | `RouteFailure` | 改为 `ErrorCode`（150xx）；`OrderOwnershipIndex::Resolve` 直接返回业务码，不再从 absl 码反推 |
 | `GapReason` | 持久化字段改存 `ErrorCode`；旧值按第 5 节 17000 段映射 |
 | `DispatchResult::reason`（字符串） | 改为 `ErrorCode`，消息另存；拒单统计按码计数 |
-| `ControlError{"bad_request" / "internal"}` | 改为携带 `ErrorCode`，线上格式输出数字和名字 |
+| `ServerError{"bad_request" / "internal"}` | 改为携带 `ErrorCode`，线上格式输出数字和名字 |
 | `binance_spot_account` 的 `unresolved_reason`、launcher 的 `stream_error`（字符串） | 改为保存 `absl::Status`，展示时输出码名与消息 |
 
 ## 7. 落地步骤

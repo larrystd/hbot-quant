@@ -133,15 +133,15 @@ enum class ErrorCode : int32_t {
   kConfigBudgetInvalid = -18009,
   kLaunchMultipleNotSupported = -18010,
   kStateDirUnavailable = -18011,
-  kControlMessageInvalid = -19001,
-  kControlSocketFailed = -19002,
-  kControlSocketInUse = -19003,
+  kServerMessageInvalid = -19001,
+  kServerSocketFailed = -19002,
+  kServerSocketInUse = -19003,
   kCliUsageInvalid = -19004,
   kCliEngineUnreachable = -19005,
   kCliResponseInvalid = -19006,
   kCliStopRejected = -19007,
-  kControlBusy = -19008,
-  kControlTimeout = -19009,
+  kServerBusy = -19008,
+  kServerTimeout = -19009,
   kCliEngineError = -19010,
 };
 
@@ -168,7 +168,9 @@ absl::Status Error(ErrorCode code, std::string_view message);
 ErrorCode CodeOf(const absl::Status& status);
 
 // The negative number shown to users and sent over the control socket.
-inline int32_t ErrorNumber(ErrorCode code) { return static_cast<int32_t>(code); }
+inline int32_t ErrorNumber(ErrorCode code) {
+  return static_cast<int32_t>(code);
+}
 // Known code for a number from ErrorNumber; nullopt for kOk or unknown values.
 std::optional<ErrorCode> ErrorFromNumber(int64_t number);
 // History storage keeps the positive magnitude so rows written before codes

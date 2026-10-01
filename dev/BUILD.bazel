@@ -28,7 +28,7 @@ cc_test(
     size = "small",
     srcs = ["contract_compile_test.cc"],
     deps = [
-        "//hquant/src/application:control",
+        "//hquant/src/application:quant_server",
         "//hquant/src/base:types",
         "//hquant/src/base:market",
         "//hquant/src/base:order",

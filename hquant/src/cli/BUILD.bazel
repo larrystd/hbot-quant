@@ -6,7 +6,7 @@ hquant_cc_library(
     hdrs = ["cli.h"],
     deps = [
         "//hquant/src/application:config",
-        "//hquant/src/application:control",
+        "//hquant/src/application:quant_server",
         "//hquant/src/base:error",
         "@abseil-cpp//absl/status:status",
         "@abseil-cpp//absl/status:statusor",
