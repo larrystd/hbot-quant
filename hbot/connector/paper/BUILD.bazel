@@ -1,0 +1,24 @@
+load("@rules_cc//cc:defs.bzl", "cc_library", "cc_test")
+
+cc_library(
+    name = "paper",
+    srcs = ["paper_connector.cc"],
+    hdrs = ["paper_connector.h"],
+    deps = [
+        "//hbot/base:clock",
+        "//hbot/base:decimal",
+        "//hbot/connector:api",
+        "//hbot/event:events",
+        "//hbot/model:domain",
+        "@abseil-cpp//absl/status:status",
+        "@abseil-cpp//absl/status:statusor",
+    ],
+    visibility = ["//visibility:public"],
+)
+
+cc_test(
+    name = "paper_test",
+    srcs = ["paper_test.cc"],
+    data = ["//tests/fixtures:paper_data"],
+    deps = [":paper", "//tests/fixtures:all_fixtures", "@googletest//:gtest_main", "@simdjson//:simdjson"],
+)

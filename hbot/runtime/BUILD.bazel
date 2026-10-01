@@ -1,0 +1,48 @@
+load("@rules_cc//cc:defs.bzl", "cc_library", "cc_test")
+
+cc_library(
+    name = "shard_command", hdrs = ["shard_command.h"],
+    deps = ["//hbot/base:clock", "//hbot/base:decimal", "//hbot/base:ids", "//hbot/model:domain", "//hbot/storage:ports"],
+    visibility = ["//visibility:public"],
+)
+
+cc_library(
+    name = "replay_clock", hdrs = ["replay_clock.h"],
+    deps = ["//hbot/base:clock", "@abseil-cpp//absl/status:status"],
+    visibility = ["//visibility:public"],
+)
+
+cc_test(
+    name = "replay_clock_test",
+    srcs = ["replay_clock_test.cc"],
+    deps = [":replay_clock"],
+)
+
+cc_library(
+    name = "dispatcher",
+    hdrs = ["dispatcher.h"],
+    srcs = ["dispatcher.cc"],
+    deps = ["//hbot/base:clock", "//hbot/base:ids", "//hbot/connector:api", "//hbot/model:domain", "//hbot/risk:risk_gate", "//hbot/storage:ports", "//hbot/strategy:api", "@abseil-cpp//absl/status:status"],
+    visibility = ["//visibility:public"],
+)
+
+cc_test(name = "dispatcher_test", srcs = ["dispatcher_test.cc"], deps = [":dispatcher"])
+
+cc_library(
+    name = "shard",
+    hdrs = ["shard.h"],
+    srcs = ["shard.cc"],
+    deps = [
+        ":dispatcher",
+        "//hbot/connector:order_tracker",
+        "//hbot/connector:api",
+        "//hbot/market_data:order_book",
+        "//hbot/model:domain",
+        "//hbot/risk:risk_gate",
+        "//hbot/storage:ports",
+        "//hbot/strategy:api",
+        "@abseil-cpp//absl/status:status",
+        "@abseil-cpp//absl/status:statusor",
+    ],
+    visibility = ["//visibility:public"],
+)

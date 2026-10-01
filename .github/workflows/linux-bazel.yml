@@ -1,0 +1,53 @@
+name: Linux Bazel
+
+"on":
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  linux-x86_64:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: bazel-contrib/setup-bazel@0.19.0
+        with:
+          bazelisk-version: 1.29.0
+          bazelisk-cache: true
+          repository-cache: true
+      - name: Report toolchain
+        run: |
+          uname -a
+          uname -m
+          c++ --version
+          bazel version
+      - name: Build every target
+        run: bazel build --jobs=2 //...
+      - name: Test every target
+        run: bazel test --jobs=2 //...
+
+  sanitizers:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        config: [asan, tsan]
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: bazel-contrib/setup-bazel@0.19.0
+        with:
+          bazelisk-version: 1.29.0
+          bazelisk-cache: true
+          repository-cache: true
+      - name: Report toolchain
+        run: |
+          uname -m
+          c++ --version
+          bazel version
+      - name: Run sanitizer smoke
+        run: bazel test --jobs=2 --config=${{ matrix.config }} //dev:sanitizer_smoke

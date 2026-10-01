@@ -1,0 +1,31 @@
+load("@rules_cc//cc:defs.bzl", "cc_library", "cc_test")
+
+filegroup(name = "order_book_data", srcs = glob(["order_book/*.json"]), visibility = ["//visibility:public"])
+filegroup(name = "order_tracker_data", srcs = glob(["order_tracker/*.json"]), visibility = ["//visibility:public"])
+filegroup(name = "simple_pmm_data", srcs = glob(["simple_pmm/*.json"]), visibility = ["//visibility:public"])
+filegroup(name = "paper_data", srcs = glob(["paper/*.json"]), visibility = ["//visibility:public"])
+
+cc_library(
+    name = "all_fixtures",
+    hdrs = ["fixture_loader.h"],
+    srcs = ["fixture_loader.cc"],
+    deps = ["//hbot/base:clock", "//hbot/base:decimal", "@abseil-cpp//absl/status:status", "@abseil-cpp//absl/status:statusor", "@simdjson//:simdjson"],
+    visibility = ["//visibility:public"],
+)
+
+cc_test(
+    name = "schema_test",
+    size = "small",
+    srcs = ["fixture_schema_test.cc"],
+    data = glob(["order_book/*.json", "order_tracker/*.json", "simple_pmm/*.json", "paper/*.json"]),
+    deps = [":all_fixtures"],
+)
+
+cc_test(
+    name = "paper_schema_test",
+    size = "small",
+    srcs = ["fixture_schema_test.cc"],
+    args = ["--paper"],
+    data = glob(["order_book/*.json", "order_tracker/*.json", "simple_pmm/*.json", "paper/*.json"]),
+    deps = [":all_fixtures"],
+)

@@ -1,0 +1,37 @@
+load("@rules_cc//cc:defs.bzl", "cc_library", "cc_test")
+
+cc_library(
+    name = "book_view",
+    hdrs = ["book_view.h", "book_sync.h"],
+    deps = ["//hbot/model:domain"],
+    visibility = ["//visibility:public"],
+)
+
+cc_library(
+    name = "order_book",
+    hdrs = ["order_book.h"],
+    srcs = ["order_book.cc", "book_sync.cc"],
+    deps = [
+        ":book_view",
+        "//hbot/model:domain",
+        "@abseil-cpp//absl/container:btree",
+    ],
+    visibility = ["//visibility:public"],
+)
+
+cc_test(
+    name = "order_book_test",
+    srcs = ["order_book_test.cc"],
+    deps = [":order_book"],
+)
+
+cc_test(
+    name = "book_sync_test",
+    srcs = ["book_sync_test.cc"],
+    data = ["//tests/fixtures:order_book_data"],
+    deps = [
+        ":order_book",
+        "//tests/fixtures:all_fixtures",
+        "@simdjson//:simdjson",
+    ],
+)

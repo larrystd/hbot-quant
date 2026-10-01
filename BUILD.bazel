@@ -1,0 +1,1 @@
+# 工作区根 package。各模块的 target 位于 //hbot/...、//apps、//tests。

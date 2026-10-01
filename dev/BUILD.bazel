@@ -1,0 +1,50 @@
+# 开发期工具与依赖 smoke target 放在这里；正式业务 target 位于 //hbot/...。
+
+load("@rules_cc//cc:defs.bzl", "cc_test")
+
+cc_test(
+    name = "dependency_smoke",
+    size = "small",
+    srcs = ["dependency_smoke.cc"],
+    deps = [
+        "@abseil-cpp//absl/container:flat_hash_map",
+        "@abseil-cpp//absl/status:status",
+        "@boost.asio//:boost.asio",
+        "@boost.beast//:boost.beast",
+        "@cli11//:cli11",
+        "@mpdecimal//:mpdecimal",
+        "@openssl//:crypto",
+        "@openssl//:ssl",
+        "@quill//:quill",
+        "@simdjson//:simdjson",
+        "@sqlite3//:sqlite3",
+        "@yaml-cpp//:yaml-cpp",
+        "@zlib//:zlib",
+    ],
+)
+
+cc_test(
+    name = "contract_compile",
+    size = "small",
+    srcs = ["contract_compile_test.cc"],
+    deps = [
+        "//hbot/base:clock",
+        "//hbot/base:decimal",
+        "//hbot/base:ids",
+        "//hbot/control:protocol",
+        "//hbot/connector:api",
+        "//hbot/event:events",
+        "//hbot/market_data:book_view",
+        "//hbot/model:domain",
+        "//hbot/net:api",
+        "//hbot/runtime:shard_command",
+        "//hbot/storage:ports",
+        "//hbot/strategy:api",
+    ],
+)
+
+cc_test(
+    name = "sanitizer_smoke",
+    size = "small",
+    srcs = ["sanitizer_smoke.cc"],
+)

@@ -1,0 +1,52 @@
+load("@rules_cc//cc:defs.bzl", "cc_library", "cc_test")
+
+cc_library(
+    name = "ports", hdrs = ["ports.h"],
+    deps = ["//hbot/base:clock", "//hbot/base:ids", "//hbot/model:domain", "@abseil-cpp//absl/status:status"],
+    visibility = ["//visibility:public"],
+)
+
+cc_library(
+    name = "record_codec",
+    hdrs = ["record_codec.h"],
+    srcs = ["record_codec.cc"],
+    deps = [":ports", "//hbot/base:decimal", "@abseil-cpp//absl/status:status", "@abseil-cpp//absl/status:statusor"],
+    visibility = ["//hbot/storage:__pkg__"],
+)
+
+cc_library(
+    name = "sqlite_recorder",
+    hdrs = ["sqlite_recorder.h"],
+    srcs = ["sqlite_recorder.cc"],
+    data = ["migrations/001_init.sql"],
+    deps = [":ports", ":record_codec", "@abseil-cpp//absl/status:status", "@abseil-cpp//absl/status:statusor", "@sqlite3//:sqlite3"],
+    visibility = ["//hbot/app:__subpackages__", "//tests:__subpackages__"],
+)
+
+cc_library(
+    name = "history_reader",
+    hdrs = ["history_reader.h"],
+    srcs = ["history_reader.cc"],
+    deps = [":ports", ":record_codec", "@abseil-cpp//absl/status:status", "@abseil-cpp//absl/status:statusor", "@sqlite3//:sqlite3"],
+    visibility = ["//hbot/app:__subpackages__", "//tests:__subpackages__"],
+)
+
+cc_library(
+    name = "recovery",
+    hdrs = ["recovery.h"],
+    srcs = ["recovery.cc"],
+    deps = [":ports", ":record_codec", "@abseil-cpp//absl/status:status", "@abseil-cpp//absl/status:statusor", "@sqlite3//:sqlite3"],
+    visibility = ["//hbot/app:__subpackages__", "//tests:__subpackages__"],
+)
+
+cc_test(
+    name = "storage_test",
+    srcs = ["storage_test.cc"],
+    deps = [":sqlite_recorder", ":history_reader", "@googletest//:gtest_main"],
+)
+
+cc_test(
+    name = "recovery_test",
+    srcs = ["recovery_test.cc"],
+    deps = [":recovery", ":sqlite_recorder", "//hbot/base:decimal", "@googletest//:gtest_main", "@sqlite3//:sqlite3"],
+)

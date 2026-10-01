@@ -1,0 +1,22 @@
+load("@rules_cc//cc:defs.bzl", "cc_library", "cc_test")
+
+cc_library(
+    name = "api", hdrs = ["api.h"],
+    deps = ["//hbot/base:decimal", "//hbot/base:ids", "//hbot/event:events", "//hbot/model:domain", "@abseil-cpp//absl/status:status", "@abseil-cpp//absl/status:statusor"],
+    visibility = ["//visibility:public"],
+)
+
+cc_library(
+    name = "order_tracker",
+    hdrs = ["order_tracker.h"],
+    srcs = ["order_tracker.cc"],
+    deps = ["//hbot/base:decimal", "//hbot/event:events", "//hbot/model:domain", "@abseil-cpp//absl/status:status", "@abseil-cpp//absl/status:statusor"],
+    visibility = ["//hbot/app:__subpackages__", "//hbot/runtime:__subpackages__", "//hbot/connector/binance_spot/private:__pkg__", "//tests:__subpackages__"],
+)
+
+cc_test(
+    name = "order_tracker_test",
+    srcs = ["order_tracker_test.cc"],
+    data = ["//tests/fixtures:order_tracker_data"],
+    deps = [":order_tracker", "//tests/fixtures:all_fixtures", "@googletest//:gtest_main", "@simdjson//:simdjson"],
+)

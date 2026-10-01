@@ -1,0 +1,20 @@
+load("@rules_cc//cc:defs.bzl", "cc_library", "cc_test")
+
+cc_library(
+    name = "routing",
+    srcs = ["order_ownership_index.cc", "private_report_router.cc"],
+    hdrs = ["order_ownership_index.h", "private_report_router.h"],
+    deps = [
+        "//hbot/base:ids",
+        "//hbot/model:domain",
+        "@abseil-cpp//absl/status:status",
+        "@abseil-cpp//absl/status:statusor",
+    ],
+    visibility = ["//visibility:public"],
+)
+
+cc_test(
+    name = "routing_test",
+    srcs = ["routing_test.cc"],
+    deps = [":routing", "@googletest//:gtest_main"],
+)

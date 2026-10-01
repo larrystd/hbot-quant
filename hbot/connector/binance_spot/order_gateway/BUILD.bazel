@@ -1,0 +1,28 @@
+load("@rules_cc//cc:defs.bzl", "cc_library", "cc_test")
+
+cc_library(
+    name = "order_gateway",
+    srcs = ["client_id_codec.cc", "signer.cc", "order_gateway.cc"],
+    hdrs = ["client_id_codec.h", "signer.h", "order_gateway.h"],
+    deps = [
+        "//hbot/base:clock",
+        "//hbot/base:decimal",
+        "//hbot/base:ids",
+        "//hbot/connector:api",
+        "//hbot/model:domain",
+        "//hbot/net:api",
+        "//hbot/net:rate_limit",
+        "@abseil-cpp//absl/status:status",
+        "@abseil-cpp//absl/status:statusor",
+        "@boost.asio//:boost.asio",
+        "@openssl//:crypto",
+        "@simdjson//:simdjson",
+    ],
+    visibility = ["//visibility:public"],
+)
+
+cc_test(
+    name = "order_gateway_test",
+    srcs = ["order_gateway_test.cc"],
+    deps = [":order_gateway", "@boost.asio//:boost.asio", "@googletest//:gtest_main"],
+)

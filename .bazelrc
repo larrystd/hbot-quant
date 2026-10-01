@@ -1,0 +1,17 @@
+common --enable_bzlmod
+
+build --cxxopt=-std=c++20 --host_cxxopt=-std=c++20
+build --macos_minimum_os=10.15
+build --@boost.asio//:ssl=openssl
+build --copt=-fno-omit-frame-pointer
+
+test --test_output=errors
+
+build:asan --copt=-fsanitize=address,undefined --linkopt=-fsanitize=address,undefined
+build:asan --copt=-fno-sanitize-recover=all
+
+build:tsan --copt=-fsanitize=thread --linkopt=-fsanitize=thread
+
+build:release -c opt --copt=-g1
+
+try-import %workspace%/user.bazelrc

@@ -1,0 +1,61 @@
+schema_version: 1
+mode: paper
+loop_mode: blocking
+replay_fixture: examples/paper_market.json
+storage_path: history.sqlite
+
+accounts:
+  - account: paper
+    initial_balances:
+      BTC: "0.02"
+      USDT: "10"
+
+market_specs:
+  - market: BTC-USDT
+    venue: paper
+    base_asset: BTC
+    quote_asset: USDT
+    book_scale:
+      quote_per_tick: "0.01"
+      base_per_lot: "0.001"
+      scale_version: 1
+    trading_rule:
+      price_increment: "0.01"
+      base_increment: "0.001"
+      min_base_amount: "0.001"
+      min_notional: "0.01"
+
+strategy_configs:
+  - owner_key: 1
+    strategy: simple_pmm
+    account: paper
+    markets: [BTC-USDT]
+    order_amount: "0.01"
+    bid_spread: "0.001"
+    ask_spread: "0.001"
+    refresh_interval: 15s
+
+assignments:
+  - shard: 0
+    markets: [BTC-USDT]
+    owners: [1]
+    accounts: [paper]
+
+static_risk_leases:
+  - account: paper
+    asset: BTC
+    shard: 0
+    hard_limit: "0.02"
+  - account: paper
+    asset: USDT
+    shard: 0
+    hard_limit: "10"
+
+static_rate_leases:
+  - account: paper
+    shard: 0
+    ip: local
+    endpoint: order
+    limit: 100
+    cancel_reserve: 20
+    window_us: 1000000

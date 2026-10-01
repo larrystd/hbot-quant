@@ -1,0 +1,15 @@
+load("@rules_cc//cc:defs.bzl", "cc_binary")
+
+cc_binary(
+    name = "hbot",
+    srcs = ["hbot.cc"],
+    data = ["//examples:paper_replay.yaml", "//examples:paper_simple_pmm.yaml", "//examples:paper_market.json"],
+    deps = ["//hbot/app:engine", "//hbot/cli:cli"],
+)
+
+cc_binary(
+    name = "hbot_engine",
+    srcs = ["hbot_engine.cc"],
+    data = ["//examples:paper_replay.yaml", "//examples:paper_simple_pmm.yaml", "//examples:paper_market.json"],
+    deps = ["//hbot/app:engine", "//hbot/app/config:config"],
+)
