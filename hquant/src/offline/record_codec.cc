@@ -85,7 +85,7 @@ class Writer {
     if (request.time_in_force)
       Byte(static_cast<uint8_t>(*request.time_in_force));
   }
-  void CheckpointValue(const ExecutorCheckpoint& checkpoint) {
+  void CheckpointValue(const StrategyCheckpoint& checkpoint) {
     U64(checkpoint.schema_version);
     StrategyIdField(checkpoint.strategy_id);
     U64(checkpoint.config_revision);
@@ -182,7 +182,7 @@ class Reader {
     }
     return true;
   }
-  bool CheckpointValue(ExecutorCheckpoint* checkpoint) {
+  bool CheckpointValue(StrategyCheckpoint* checkpoint) {
     uint64_t version = 0;
     if (!U64(&version) || version > std::numeric_limits<uint32_t>::max() ||
         !StrategyIdField(&checkpoint->strategy_id) ||
@@ -200,7 +200,7 @@ class Reader {
 
 }  // namespace
 
-std::string EncodeRecord(const RecordEnvelope& record) {
+std::string EncodeRecord(const HistoryRecord& record) {
   Writer out;
   out.Byte(kVersion);
   out.U64(record.schema_version);
@@ -261,7 +261,7 @@ std::string EncodeRecord(const RecordEnvelope& record) {
           out.Byte(payload.maker.has_value());
           if (payload.maker) out.Byte(*payload.maker);
           out.Time(payload.time);
-        } else if constexpr (std::is_same_v<T, Checkpoint>) {
+        } else if constexpr (std::is_same_v<T, RecordedCheckpoint>) {
           out.CheckpointValue(payload.state);
           out.I64(Us(payload.recorded_at));
         } else if constexpr (std::is_same_v<T, HistoryGap>) {
@@ -286,9 +286,9 @@ std::string EncodeRecord(const RecordEnvelope& record) {
   return std::move(out).Finish();
 }
 
-absl::StatusOr<RecordEnvelope> DecodeRecord(std::string_view bytes) {
+absl::StatusOr<HistoryRecord> DecodeRecord(std::string_view bytes) {
   Reader in(bytes);
-  RecordEnvelope record;
+  HistoryRecord record;
   uint8_t version = 0, shard = 0, present = 0, kind = 0;
   uint64_t schema_version = 0;
   int64_t timestamp = 0;
@@ -418,7 +418,7 @@ absl::StatusOr<RecordEnvelope> DecodeRecord(std::string_view bytes) {
       return Error(ErrorCode::kHistoryRecordCorrupted, "invalid trade time");
     record.payload = std::move(value);
   } else if (kind == 3) {
-    Checkpoint value;
+    RecordedCheckpoint value;
     if (!in.CheckpointValue(&value.state) || !in.I64(&timestamp))
       return Error(ErrorCode::kHistoryRecordCorrupted, "invalid checkpoint");
     value.recorded_at = Utc(timestamp);
@@ -473,7 +473,7 @@ absl::StatusOr<RecordEnvelope> DecodeRecord(std::string_view bytes) {
   return record;
 }
 
-RecordIndex IndexRecord(const RecordEnvelope& record) {
+RecordIndex IndexRecord(const HistoryRecord& record) {
   RecordIndex index;
   index.payload_kind = static_cast<int>(record.payload.index());
   if (const auto* value = std::get_if<PreparedOrder>(&record.payload)) {

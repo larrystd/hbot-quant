@@ -45,7 +45,7 @@ MarketId Market() {
   return MarketId{ExchangeId{"binance"}, InstrumentKind::Spot, "BTCUSDT"};
 }
 
-RecordEnvelope PreparedRecord(uint64_t sequence, std::string client = "B1") {
+HistoryRecord PreparedRecord(uint64_t sequence, std::string client = "B1") {
   PreparedOrder prepared;
   prepared.client_id = ClientOrderId{std::move(client)};
   prepared.strategy_id = MakeStrategyId();
@@ -58,8 +58,8 @@ RecordEnvelope PreparedRecord(uint64_t sequence, std::string client = "B1") {
   prepared.created_at_utc = At(1000 + sequence);
   prepared.config_revision = 7;
   prepared.executor_checkpoint =
-      ExecutorCheckpoint{1, MakeStrategyId(), 7, "prepared state"};
-  RecordEnvelope record;
+      StrategyCheckpoint{1, MakeStrategyId(), 7, "prepared state"};
+  HistoryRecord record;
   record.run_id = RunId{21};
   record.shard = ShardId{0};
   record.shard_sequence = sequence;
@@ -71,10 +71,11 @@ RecordEnvelope PreparedRecord(uint64_t sequence, std::string client = "B1") {
 
 TEST(RecoveryTest, CleanRunLoadsTypedContextAndOpenClientIds) {
   TemporaryDatabase db;
-  auto recorder = SqliteRecorder::Open({db.path(), RunId{21}, At(100), 8, 4});
+  auto recorder =
+      SqliteHistoryWriter::Open({db.path(), RunId{21}, At(100), 8, 4});
   ASSERT_TRUE(recorder.ok()) << recorder.status();
   ASSERT_TRUE((*recorder)->TryPush(PreparedRecord(1, "B1")));
-  RecordEnvelope filled = PreparedRecord(2);
+  HistoryRecord filled = PreparedRecord(2);
   OrderUpdate update;
   update.account = AccountId{"A1"};
   update.market = Market();
@@ -83,9 +84,9 @@ TEST(RecoveryTest, CleanRunLoadsTypedContextAndOpenClientIds) {
   filled.payload = update;
   ASSERT_TRUE((*recorder)->TryPush(std::move(filled)));
   ASSERT_TRUE((*recorder)->TryPush(PreparedRecord(3, "B2")));
-  RecordEnvelope checkpoint = PreparedRecord(4);
-  checkpoint.payload = Checkpoint{
-      ExecutorCheckpoint{1, MakeStrategyId(), 8, "latest state"}, At(1004)};
+  HistoryRecord checkpoint = PreparedRecord(4);
+  checkpoint.payload = RecordedCheckpoint{
+      StrategyCheckpoint{1, MakeStrategyId(), 8, "latest state"}, At(1004)};
   ASSERT_TRUE((*recorder)->TryPush(std::move(checkpoint)));
   ASSERT_TRUE((*recorder)->Stop(At(2000)).ok());
   recorder->reset();
@@ -109,7 +110,8 @@ TEST(RecoveryTest, CleanRunLoadsTypedContextAndOpenClientIds) {
 TEST(RecoveryTest, UncleanStopReportsPossibleCrashTailWithoutInventingRange) {
   TemporaryDatabase db;
   {
-    auto recorder = SqliteRecorder::Open({db.path(), RunId{21}, At(100), 8, 1});
+    auto recorder =
+        SqliteHistoryWriter::Open({db.path(), RunId{21}, At(100), 8, 1});
     ASSERT_TRUE(recorder.ok()) << recorder.status();
     ASSERT_TRUE((*recorder)->TryPush(PreparedRecord(1)));
     ASSERT_TRUE((*recorder)->Flush().ok());
@@ -127,7 +129,8 @@ TEST(RecoveryTest, UncleanStopReportsPossibleCrashTailWithoutInventingRange) {
 
 TEST(RecoveryTest, DistinguishesQueueDropFromDiskWriteFailure) {
   TemporaryDatabase db;
-  auto recorder = SqliteRecorder::Open({db.path(), RunId{21}, At(100), 1, 1});
+  auto recorder =
+      SqliteHistoryWriter::Open({db.path(), RunId{21}, At(100), 1, 1});
   ASSERT_TRUE(recorder.ok()) << recorder.status();
   (*recorder)->PauseWorkerForTesting(true);
   ASSERT_TRUE((*recorder)->TryPush(PreparedRecord(1)));
@@ -159,7 +162,8 @@ TEST(RecoveryTest, DistinguishesQueueDropFromDiskWriteFailure) {
 
 TEST(RecoveryTest, RejectsCorruptedRecordAndMissingRun) {
   TemporaryDatabase db;
-  auto recorder = SqliteRecorder::Open({db.path(), RunId{21}, At(100), 8, 1});
+  auto recorder =
+      SqliteHistoryWriter::Open({db.path(), RunId{21}, At(100), 8, 1});
   ASSERT_TRUE(recorder.ok()) << recorder.status();
   ASSERT_TRUE((*recorder)->TryPush(PreparedRecord(1)));
   ASSERT_TRUE((*recorder)->Stop(At(2000)).ok());
@@ -181,7 +185,8 @@ TEST(RecoveryTest, RejectsCorruptedRecordAndMissingRun) {
 
 TEST(RecoveryTest, RejectsUnknownStorageSchemaVersion) {
   TemporaryDatabase db;
-  auto recorder = SqliteRecorder::Open({db.path(), RunId{21}, At(100), 8, 1});
+  auto recorder =
+      SqliteHistoryWriter::Open({db.path(), RunId{21}, At(100), 8, 1});
   ASSERT_TRUE(recorder.ok()) << recorder.status();
   ASSERT_TRUE((*recorder)->Stop(At(2000)).ok());
   recorder->reset();

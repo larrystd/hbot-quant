@@ -97,7 +97,7 @@ class ShardRuntime {
 
   ShardRuntime(Config config, const Clock& clock, Strategy& strategy,
                SimulatedExchange& exchange, RiskGate& risk,
-               RecorderPort& recorder);
+               HistoryWriter& recorder);
 
   BookApplyResult Subscribe(uint64_t connection_id);
   absl::Status OnSnapshot(const BookSnapshot& snapshot);
@@ -120,7 +120,8 @@ class ShardRuntime {
   absl::Status UpdateSimulatedExchangeBbo();
   absl::Status DrainSimulatedExchangeEvents();
   absl::Status ProcessAccountEvent(const AccountEvent& event);
-  absl::Status Record(RecordPayload payload, const StrategyId& strategy_id);
+  absl::Status Record(HistoryRecordPayload payload,
+                      const StrategyId& strategy_id);
   void AddGap(uint64_t sequence);
   std::vector<OrderSnapshot> OrderViews() const;
   std::vector<Balance> BalanceViews() const;
@@ -132,7 +133,7 @@ class ShardRuntime {
   Strategy& strategy_;
   SimulatedExchange& exchange_;
   RiskGate& risk_;
-  RecorderPort& recorder_;
+  HistoryWriter& recorder_;
   OrderBookSync book_;
   OrderTracker tracker_;
   uint64_t shard_sequence_ = 0;

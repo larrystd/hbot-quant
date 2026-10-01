@@ -97,12 +97,13 @@ class ProgressGuard {
 
 }  // namespace
 
-HistoryReader::HistoryReader(Options options, sqlite3* db, int storage_version)
+SqliteHistoryReader::SqliteHistoryReader(Options options, sqlite3* db,
+                                         int storage_version)
     : options_(std::move(options)),
       db_(db),
       storage_version_(storage_version) {}
 
-absl::StatusOr<std::unique_ptr<HistoryReader>> HistoryReader::Open(
+absl::StatusOr<std::unique_ptr<SqliteHistoryReader>> SqliteHistoryReader::Open(
     Options options) {
   if (options.path.empty() || options.queue_capacity == 0 ||
       options.max_page_size == 0 || options.max_page_size > 500)
@@ -124,13 +125,13 @@ absl::StatusOr<std::unique_ptr<HistoryReader>> HistoryReader::Open(
     sqlite3_close(db);
     return storage_version.status();
   }
-  auto reader = std::unique_ptr<HistoryReader>(
-      new HistoryReader(std::move(options), db, *storage_version));
+  auto reader = std::unique_ptr<SqliteHistoryReader>(
+      new SqliteHistoryReader(std::move(options), db, *storage_version));
   reader->worker_ = std::thread([self = reader.get()] { self->Run(); });
   return reader;
 }
 
-HistoryReader::~HistoryReader() {
+SqliteHistoryReader::~SqliteHistoryReader() {
   {
     std::lock_guard lock(mutex_);
     stopping_ = true;
@@ -141,7 +142,7 @@ HistoryReader::~HistoryReader() {
   sqlite3_close(db_);
 }
 
-absl::Status HistoryReader::TrySubmit(HistoryQuery query) {
+absl::Status SqliteHistoryReader::TrySubmit(HistoryQuery query) {
   if (query.page_size == 0 || query.page_size > options_.max_page_size)
     return Error(ErrorCode::kStorageConfigInvalid,
                  "history page size outside configured bound");
@@ -159,7 +160,7 @@ absl::Status HistoryReader::TrySubmit(HistoryQuery query) {
   return absl::OkStatus();
 }
 
-std::optional<HistoryPage> HistoryReader::TryReceive() {
+std::optional<HistoryPage> SqliteHistoryReader::TryReceive() {
   std::lock_guard lock(mutex_);
   if (results_.empty()) return std::nullopt;
   HistoryPage result = std::move(results_.front());
@@ -168,7 +169,7 @@ std::optional<HistoryPage> HistoryReader::TryReceive() {
   return result;
 }
 
-void HistoryReader::Run() {
+void SqliteHistoryReader::Run() {
   for (;;) {
     HistoryQuery query;
     {
@@ -186,7 +187,7 @@ void HistoryReader::Run() {
   }
 }
 
-HistoryPage HistoryReader::Query(const HistoryQuery& query) {
+HistoryPage SqliteHistoryReader::Query(const HistoryQuery& query) {
   HistoryPage page;
   page.request_id = query.request_id;
   const auto now = std::chrono::time_point_cast<std::chrono::microseconds>(
@@ -570,11 +571,11 @@ absl::StatusOr<RecoverySnapshot> LoadRecoverySnapshot(const std::string& path,
         }
         snapshot.context.recovered_prepared_orders.push_back(*prepared);
         if (prepared->executor_checkpoint) {
-          snapshot.context.checkpoints.push_back(Checkpoint{
+          snapshot.context.checkpoints.push_back(RecordedCheckpoint{
               *prepared->executor_checkpoint, prepared->created_at_utc});
         }
       } else if (const auto* checkpoint =
-                     std::get_if<Checkpoint>(&decoded->payload)) {
+                     std::get_if<RecordedCheckpoint>(&decoded->payload)) {
         snapshot.context.checkpoints.push_back(*checkpoint);
       } else if (const auto* order =
                      std::get_if<OrderUpdate>(&decoded->payload)) {

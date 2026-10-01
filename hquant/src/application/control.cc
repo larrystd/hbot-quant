@@ -501,7 +501,7 @@ const char* BookStateName(BookSyncState state) {
 std::string StatusJson(const ShardRuntime& shard,
                        const SimpleSimulatedExchange& sim_exchange,
                        const MarketSpec& market,
-                       const SqliteRecorder& recorder) {
+                       const SqliteHistoryWriter& recorder) {
   const auto health = recorder.Health();
   return "{\"mode\":\"simulated\",\"exchange\":\"simulated\",\"book\":" +
          EscapeJson(BookStateName(shard.Book().State())) +
@@ -577,7 +577,7 @@ std::string HistoryJson(const HistoryPage& page) {
                 ",\"reason\":" + std::to_string(ErrorNumber(decision->reason)) +
                 ",\"reason_name\":" + EscapeJson(Info(decision->reason).name) +
                 ",\"message\":" + EscapeJson(decision->message);
-    } else if (std::holds_alternative<Checkpoint>(row.payload))
+    } else if (std::holds_alternative<RecordedCheckpoint>(row.payload))
       kind = "checkpoint";
     else {
       kind = "gap";

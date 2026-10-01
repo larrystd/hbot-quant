@@ -12,12 +12,12 @@ namespace {
 
 hquant::Decimal D(const char* text) { return *hquant::Decimal::Parse(text); }
 
-struct FakeRecorder final : hquant::RecorderPort {
+struct FakeRecorder final : hquant::HistoryWriter {
   FakeRecorder(std::vector<std::string>* output, bool drop)
       : trace(output), drop_prepared(drop) {}
   std::vector<std::string>* trace = nullptr;
   bool drop_prepared = false;
-  bool TryPush(hquant::RecordEnvelope record) override {
+  bool TryPush(hquant::HistoryRecord record) override {
     const bool prepared =
         std::holds_alternative<hquant::PreparedOrder>(record.payload);
     trace->push_back(prepared ? "prepared" : "decision");
@@ -92,11 +92,11 @@ int main() {
   FakeRecorder recorder{&trace, true};
   FakeGateway gateway{&trace};
   uint64_t sequence = 0;
-  hquant::ActionExecutor action_executor(risk, gateway, recorder, hquant::RunId{1},
-                                      hquant::ShardId{0}, sequence);
+  hquant::ActionExecutor action_executor(
+      risk, gateway, recorder, hquant::RunId{1}, hquant::ShardId{0}, sequence);
   hquant::ActionContext context{
       strategy_id, hquant::ActionBatchId{1}, spec, rule,
-      now,         hquant::MonoTime{},    true, true};
+      now,         hquant::MonoTime{},       true, true};
   auto results = action_executor.Execute(batch, context);
   if (results.size() != 2 || !results[0].accepted || !results[1].accepted ||
       results[1].client_id != hquant::ClientOrderId("B1"))

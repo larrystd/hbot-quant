@@ -42,14 +42,14 @@ ErrorCode NormalizeOrder(const OrderRequest& raw, const TradingRule& rule,
 
 }  // namespace
 
-bool ActionExecutor::Record(RecordPayload payload,
-                              const StrategyId& strategy_id, UtcTime now) {
+bool ActionExecutor::Record(HistoryRecordPayload payload,
+                            const StrategyId& strategy_id, UtcTime now) {
   if (shard_sequence_ == std::numeric_limits<uint64_t>::max()) {
     risk_.EmergencyStop();
     return false;
   }
   const uint64_t sequence = ++shard_sequence_;
-  RecordEnvelope envelope;
+  HistoryRecord envelope;
   envelope.run_id = run_;
   envelope.shard = shard_;
   envelope.shard_sequence = sequence;

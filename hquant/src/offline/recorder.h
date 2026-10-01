@@ -20,7 +20,7 @@ struct sqlite3;
 
 namespace hquant {
 
-class SqliteRecorder final : public RecorderPort {
+class SqliteHistoryWriter final : public HistoryWriter {
  public:
   struct Options {
     std::string path;
@@ -30,15 +30,16 @@ class SqliteRecorder final : public RecorderPort {
     size_t batch_size = 64;
   };
 
-  static absl::StatusOr<std::unique_ptr<SqliteRecorder>> Open(Options options);
-  ~SqliteRecorder() override;
-  SqliteRecorder(const SqliteRecorder&) = delete;
-  SqliteRecorder& operator=(const SqliteRecorder&) = delete;
+  static absl::StatusOr<std::unique_ptr<SqliteHistoryWriter>> Open(
+      Options options);
+  ~SqliteHistoryWriter() override;
+  SqliteHistoryWriter(const SqliteHistoryWriter&) = delete;
+  SqliteHistoryWriter& operator=(const SqliteHistoryWriter&) = delete;
 
   // One producer per shard. Never waits for a SQLite commit or acquires a
   // mutex. The caller allocates shard_sequence before calling, even if this
   // returns false.
-  bool TryPush(RecordEnvelope record) override;
+  bool TryPush(HistoryRecord record) override;
 
   // Control/test thread operations. Call Stop only after producers have
   // stopped.
@@ -55,7 +56,7 @@ class SqliteRecorder final : public RecorderPort {
  private:
   struct Queue {
     explicit Queue(size_t capacity) : slots(capacity) {}
-    std::vector<std::optional<RecordEnvelope>> slots;
+    std::vector<std::optional<HistoryRecord>> slots;
     alignas(64) std::atomic<size_t> head{0};
     alignas(64) std::atomic<size_t> tail{0};
     std::atomic<uint64_t> last_attempted_seq{0};
@@ -64,11 +65,11 @@ class SqliteRecorder final : public RecorderPort {
     std::atomic<uint64_t> dropped_count{0};
   };
 
-  SqliteRecorder(Options options, sqlite3* db);
+  SqliteHistoryWriter(Options options, sqlite3* db);
   void Run();
-  bool Pop(uint8_t shard, RecordEnvelope* record);
+  bool Pop(uint8_t shard, HistoryRecord* record);
   void AddGap(const HistoryGap& gap);
-  absl::Status WriteBatch(const std::vector<RecordEnvelope>& batch);
+  absl::Status WriteBatch(const std::vector<HistoryRecord>& batch);
   absl::Status PersistPendingGaps();
   absl::Status FinishManifest(UtcTime clean_time);
   void SetError(const absl::Status& status);

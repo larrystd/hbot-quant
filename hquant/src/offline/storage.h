@@ -22,8 +22,8 @@ struct HistoryGap {
   ErrorCode reason = ErrorCode::kInternal;
 };
 
-struct Checkpoint {
-  ExecutorCheckpoint state;
+struct RecordedCheckpoint {
+  StrategyCheckpoint state;
   UtcTime recorded_at{};
 };
 enum class ActionKind { Submit, Cancel };
@@ -37,10 +37,11 @@ struct ActionRecord {
   std::string message;
   std::optional<ClientOrderId> client_id;
 };
-using RecordPayload = std::variant<PreparedOrder, OrderUpdate, TradeUpdate,
-                                   Checkpoint, HistoryGap, ActionRecord>;
+using HistoryRecordPayload =
+    std::variant<PreparedOrder, OrderUpdate, TradeUpdate, RecordedCheckpoint,
+                 HistoryGap, ActionRecord>;
 
-struct RecordEnvelope {
+struct HistoryRecord {
   uint32_t schema_version = 2;
   RunId run_id;
   ShardId shard;
@@ -48,7 +49,7 @@ struct RecordEnvelope {
   std::optional<StrategyId> strategy_id;
   UtcTime received_at_utc{};
   std::optional<UtcTime> exchange_at_utc;
-  RecordPayload payload;
+  HistoryRecordPayload payload;
 };
 
 struct StorageHealth {
@@ -82,7 +83,7 @@ struct HistoryQuery {
 struct HistoryPage {
   uint64_t request_id = 0;
   absl::Status status = absl::OkStatus();
-  std::vector<RecordEnvelope> rows;
+  std::vector<HistoryRecord> rows;
   std::optional<std::string> next_cursor;
   std::vector<HistoryGap> incomplete_ranges;
 };
@@ -91,7 +92,7 @@ enum class RecoveryConfidence { Verified, Partial, Unresolved };
 struct RecoveryContext {
   RunId run_id;
   std::vector<PreparedOrder> recovered_prepared_orders;
-  std::vector<Checkpoint> checkpoints;
+  std::vector<RecordedCheckpoint> checkpoints;
   std::vector<OrderUpdate> exchange_orders;
   std::vector<TradeUpdate> exchange_trades;
   std::vector<Balance> balances;
@@ -100,16 +101,16 @@ struct RecoveryContext {
 };
 
 // A shard calls TryPush without blocking or waiting for a database commit.
-class RecorderPort {
+class HistoryWriter {
  public:
-  virtual ~RecorderPort() = default;
-  virtual bool TryPush(RecordEnvelope record) = 0;
+  virtual ~HistoryWriter() = default;
+  virtual bool TryPush(HistoryRecord record) = 0;
 };
 
 // Query submission and result collection are bounded and run off shard threads.
-class HistoryReaderPort {
+class HistoryReader {
  public:
-  virtual ~HistoryReaderPort() = default;
+  virtual ~HistoryReader() = default;
   virtual absl::Status TrySubmit(HistoryQuery query) = 0;
   virtual std::optional<HistoryPage> TryReceive() = 0;
 };

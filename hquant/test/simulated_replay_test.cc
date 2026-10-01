@@ -44,7 +44,7 @@ class TemporaryDatabase {
   std::string path_;
 };
 
-std::optional<HistoryPage> WaitPage(HistoryReader& reader) {
+std::optional<HistoryPage> WaitPage(SqliteHistoryReader& reader) {
   for (int i = 0; i < 1000; ++i) {
     if (auto page = reader.TryReceive()) return page;
     std::this_thread::sleep_for(std::chrono::milliseconds(1));
@@ -89,7 +89,7 @@ std::string ReplayOnce() {
     throw std::runtime_error("risk budget setup failed");
   }
   auto recorder =
-      SqliteRecorder::Open({database.path(), RunId{1}, origin, 64, 8});
+      SqliteHistoryWriter::Open({database.path(), RunId{1}, origin, 64, 8});
   if (!recorder.ok())
     throw std::runtime_error(std::string(recorder.status().message()));
   ShardRuntime shard(
@@ -172,7 +172,7 @@ std::string ReplayOnce() {
   }
   if (!(*recorder)->Flush().ok())
     throw std::runtime_error("SQLite flush failed");
-  auto reader = HistoryReader::Open({database.path(), 8, 100});
+  auto reader = SqliteHistoryReader::Open({database.path(), 8, 100});
   if (!reader.ok()) throw std::runtime_error("history reader failed");
   HistoryQuery query;
   query.request_id = 1;

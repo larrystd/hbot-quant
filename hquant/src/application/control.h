@@ -99,14 +99,15 @@ class ControlServer {
 
 class ShardRuntime;
 class SimpleSimulatedExchange;
-class SqliteRecorder;
+class SqliteHistoryWriter;
 struct MarketSpec;
 struct HistoryPage;
 
 std::string EscapeJson(std::string_view text);
-std::string StatusJson(const ShardRuntime& shard, const SimpleSimulatedExchange& sim_exchange,
+std::string StatusJson(const ShardRuntime& shard,
+                       const SimpleSimulatedExchange& sim_exchange,
                        const MarketSpec& market,
-                       const SqliteRecorder& recorder);
+                       const SqliteHistoryWriter& recorder);
 std::string HistoryJson(const HistoryPage& page);
 
 }  // namespace hquant

@@ -29,7 +29,7 @@ int main() {
   hquant::ActionBatch batch;
   batch.ordered.emplace_back(
       hquant::SubmitOrder{hquant::StrategyId{}, request});
-  hquant::RecordEnvelope record;
+  hquant::HistoryRecord record;
   record.payload = hquant::PreparedOrder{};
   hquant::ControlRequest control;
   control.payload = hquant::StatusRequest{};

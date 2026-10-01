@@ -80,18 +80,18 @@ namespace {
 TEST(ControlHistoryTest, DisplaysNegativeReasonNumbers) {
   constexpr auto reason = ErrorCode::kStorageQueueFull;
   HistoryPage page;
-  RecordEnvelope prepared_record;
+  HistoryRecord prepared_record;
   PreparedOrder prepared;
   prepared.client_id = ClientOrderId{"P1"};
   prepared.request.base_amount = *Decimal::Parse("0.01");
   prepared_record.payload = prepared;
   page.rows.push_back(prepared_record);
-  RecordEnvelope decision;
+  HistoryRecord decision;
   ActionRecord action;
   action.reason = reason;
   decision.payload = action;
   page.rows.push_back(decision);
-  RecordEnvelope gap;
+  HistoryRecord gap;
   gap.payload = HistoryGap{RunId{1}, ShardId{0}, 1, 2, reason};
   page.rows.push_back(gap);
   page.incomplete_ranges.push_back(

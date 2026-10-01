@@ -11,7 +11,7 @@ namespace hquant {
 
 ShardRuntime::ShardRuntime(Config config, const Clock& clock,
                            Strategy& strategy, SimulatedExchange& exchange,
-                           RiskGate& risk, RecorderPort& recorder)
+                           RiskGate& risk, HistoryWriter& recorder)
     : config_(std::move(config)),
       clock_(clock),
       strategy_(strategy),
@@ -136,14 +136,14 @@ absl::StatusOr<std::vector<ActionResult>> ShardRuntime::OnTimer(
   return results;
 }
 
-absl::Status ShardRuntime::Record(RecordPayload payload,
+absl::Status ShardRuntime::Record(HistoryRecordPayload payload,
                                   const StrategyId& strategy_id) {
   if (shard_sequence_ == std::numeric_limits<uint64_t>::max()) {
     risk_.EmergencyStop();
     return Error(ErrorCode::kSequenceExhausted, "shard sequence exhausted");
   }
   const uint64_t sequence = ++shard_sequence_;
-  RecordEnvelope record;
+  HistoryRecord record;
   record.run_id = config_.run;
   record.shard = config_.shard;
   record.shard_sequence = sequence;

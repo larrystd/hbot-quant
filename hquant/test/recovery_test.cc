@@ -138,10 +138,10 @@ TEST(RecoveryIntegrationTest, UnknownWriteAndCrashUseOriginalIdWithoutResend) {
   ASSERT_TRUE(prepared.ok()) << prepared.status();
   ASSERT_TRUE(
       original_risk.AttachClientId(hold->hold_id, prepared->client_id).ok());
-  auto recorder =
-      SqliteRecorder::Open({database.path(), RunId{42}, clock.UtcNow(), 8, 1});
+  auto recorder = SqliteHistoryWriter::Open(
+      {database.path(), RunId{42}, clock.UtcNow(), 8, 1});
   ASSERT_TRUE(recorder.ok()) << recorder.status();
-  RecordEnvelope record;
+  HistoryRecord record;
   record.run_id = RunId{42};
   record.shard = ShardId{0};
   record.shard_sequence = 1;

@@ -70,7 +70,7 @@ struct ApprovedOrder {
   MonoTime expires_at_mono{};
 };
 
-struct ExecutorCheckpoint {
+struct StrategyCheckpoint {
   uint32_t schema_version = 0;
   StrategyId strategy_id;
   uint64_t config_revision = 0;
@@ -83,7 +83,7 @@ struct PreparedOrder {
   OrderRequest request;
   uint64_t config_revision = 0;
   UtcTime created_at_utc{};
-  std::optional<ExecutorCheckpoint> executor_checkpoint;
+  std::optional<StrategyCheckpoint> executor_checkpoint;
 };
 
 struct OrderUpdate {

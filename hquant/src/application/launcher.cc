@@ -149,14 +149,14 @@ absl::Status RunSimulatedBinanceEngine(const AppConfig& config,
                                          started + std::chrono::hours(24)});
     if (!status.ok()) return status;
   }
-  auto recorder =
-      SqliteRecorder::Open({storage_path.string(), run, started, 1024, 64});
+  auto recorder = SqliteHistoryWriter::Open(
+      {storage_path.string(), run, started, 1024, 64});
   if (!recorder.ok()) return recorder.status();
   ShardRuntime shard(
       {run, assignment.shard, strategy_config.strategy_id, account.account,
        market.spec, market.tick_lot_size, rule, 5'000'000},
       clock, strategy, sim_exchange, risk, **recorder);
-  auto reader = HistoryReader::Open({storage_path.string(), 32, 500});
+  auto reader = SqliteHistoryReader::Open({storage_path.string(), 32, 500});
   if (!reader.ok()) return reader.status();
 
   boost::asio::io_context io;
@@ -367,7 +367,7 @@ absl::Status Launch(const AppConfig& config, const std::string& state_dir) {
     if (!status.ok()) return status;
   }
   auto recorder =
-      SqliteRecorder::Open({storage_path.string(), run, origin, 1024, 64});
+      SqliteHistoryWriter::Open({storage_path.string(), run, origin, 1024, 64});
   if (!recorder.ok()) return recorder.status();
   ShardRuntime shard({run, assignment.shard, strategy_config.strategy_id,
                       account.account, market.spec, market.tick_lot_size, rule},
@@ -379,7 +379,7 @@ absl::Status Launch(const AppConfig& config, const std::string& state_dir) {
   if (!replay.ok()) return replay;
   auto flush = (*recorder)->Flush();
   if (!flush.ok()) return flush;
-  auto reader = HistoryReader::Open({storage_path.string(), 32, 500});
+  auto reader = SqliteHistoryReader::Open({storage_path.string(), 32, 500});
   if (!reader.ok()) return reader.status();
 
   std::atomic<bool> stopping{false};

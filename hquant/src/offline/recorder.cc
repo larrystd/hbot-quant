@@ -74,7 +74,7 @@ int64_t Us(UtcTime value) { return value.time_since_epoch().count(); }
 
 }  // namespace
 
-SqliteRecorder::SqliteRecorder(Options options, sqlite3* db)
+SqliteHistoryWriter::SqliteHistoryWriter(Options options, sqlite3* db)
     : options_(std::move(options)), db_(db) {
   for (auto& queue : queues_) {
     queue = std::make_unique<Queue>(options_.queue_capacity_per_shard);
@@ -83,7 +83,7 @@ SqliteRecorder::SqliteRecorder(Options options, sqlite3* db)
   manifest_.started_at_utc = options_.started_at_utc;
 }
 
-absl::StatusOr<std::unique_ptr<SqliteRecorder>> SqliteRecorder::Open(
+absl::StatusOr<std::unique_ptr<SqliteHistoryWriter>> SqliteHistoryWriter::Open(
     Options options) {
   if (options.path.empty() || !options.run_id.IsValid() ||
       options.queue_capacity_per_shard == 0 || options.batch_size == 0 ||
@@ -167,13 +167,13 @@ absl::StatusOr<std::unique_ptr<SqliteRecorder>> SqliteRecorder::Open(
     return error;
   }
   statement->reset();
-  auto recorder = std::unique_ptr<SqliteRecorder>(
-      new SqliteRecorder(std::move(options), db));
+  auto recorder = std::unique_ptr<SqliteHistoryWriter>(
+      new SqliteHistoryWriter(std::move(options), db));
   recorder->worker_ = std::thread([self = recorder.get()] { self->Run(); });
   return recorder;
 }
 
-SqliteRecorder::~SqliteRecorder() {
+SqliteHistoryWriter::~SqliteHistoryWriter() {
   {
     std::lock_guard lock(wake_mutex_);
     stopping_ = true;
@@ -183,7 +183,7 @@ SqliteRecorder::~SqliteRecorder() {
   if (db_) sqlite3_close(db_);
 }
 
-bool SqliteRecorder::TryPush(RecordEnvelope record) {
+bool SqliteHistoryWriter::TryPush(HistoryRecord record) {
   if (!record.shard.IsValid() || record.run_id != options_.run_id ||
       record.shard_sequence == 0 || record.schema_version != 2)
     return false;
@@ -214,7 +214,7 @@ bool SqliteRecorder::TryPush(RecordEnvelope record) {
   return true;
 }
 
-bool SqliteRecorder::Pop(uint8_t shard, RecordEnvelope* record) {
+bool SqliteHistoryWriter::Pop(uint8_t shard, HistoryRecord* record) {
   Queue& queue = *queues_[shard];
   const size_t head = queue.head.load(std::memory_order_relaxed);
   if (head == queue.tail.load(std::memory_order_acquire)) return false;
@@ -224,7 +224,7 @@ bool SqliteRecorder::Pop(uint8_t shard, RecordEnvelope* record) {
   return true;
 }
 
-void SqliteRecorder::AddGap(const HistoryGap& gap) {
+void SqliteHistoryWriter::AddGap(const HistoryGap& gap) {
   if (gap.first_seq > gap.last_seq) return;
   pending_gaps_.push_back(gap);
   std::lock_guard lock(state_mutex_);
@@ -232,14 +232,14 @@ void SqliteRecorder::AddGap(const HistoryGap& gap) {
   manifest_.history_complete = false;
 }
 
-void SqliteRecorder::SetError(const absl::Status& status) {
+void SqliteHistoryWriter::SetError(const absl::Status& status) {
   if (status.ok()) return;
   std::lock_guard lock(state_mutex_);
   health_.last_error = std::string(status.message());
 }
 
-absl::Status SqliteRecorder::WriteBatch(
-    const std::vector<RecordEnvelope>& batch) {
+absl::Status SqliteHistoryWriter::WriteBatch(
+    const std::vector<HistoryRecord>& batch) {
   if (batch.empty()) return absl::OkStatus();
   if (fail_writes_for_testing_.load(std::memory_order_acquire))
     return Error(ErrorCode::kStorageWriteFailed,
@@ -333,7 +333,7 @@ absl::Status SqliteRecorder::WriteBatch(
   return absl::OkStatus();
 }
 
-absl::Status SqliteRecorder::PersistPendingGaps() {
+absl::Status SqliteHistoryWriter::PersistPendingGaps() {
   if (pending_gaps_.empty()) return absl::OkStatus();
   if (fail_writes_for_testing_.load(std::memory_order_acquire))
     return Error(ErrorCode::kStorageGapPersistFailed,
@@ -380,7 +380,7 @@ absl::Status SqliteRecorder::PersistPendingGaps() {
   return absl::OkStatus();
 }
 
-absl::Status SqliteRecorder::FinishManifest(UtcTime clean_time) {
+absl::Status SqliteHistoryWriter::FinishManifest(UtcTime clean_time) {
   if (!pending_gaps_.empty())
     return Error(ErrorCode::kStorageGapPersistFailed,
                  "history gaps could not be persisted");
@@ -409,7 +409,7 @@ absl::Status SqliteRecorder::FinishManifest(UtcTime clean_time) {
   return absl::OkStatus();
 }
 
-void SqliteRecorder::Run() {
+void SqliteHistoryWriter::Run() {
   uint8_t round_robin = 0;
   for (;;) {
     if (pause_worker_for_testing_.load(std::memory_order_acquire)) {
@@ -422,12 +422,12 @@ void SqliteRecorder::Run() {
       });
       worker_paused_ = false;
     }
-    std::vector<RecordEnvelope> batch;
+    std::vector<HistoryRecord> batch;
     batch.reserve(options_.batch_size);
     for (uint8_t checked = 0; checked < 8 && batch.size() < options_.batch_size;
          ++checked) {
       uint8_t shard = (round_robin + checked) % 8;
-      RecordEnvelope record;
+      HistoryRecord record;
       while (batch.size() < options_.batch_size && Pop(shard, &record)) {
         if (record.shard_sequence > last_observed_seq_[shard] + 1) {
           const uint64_t last_dropped =
@@ -507,7 +507,7 @@ void SqliteRecorder::Run() {
   wake_cv_.notify_all();
 }
 
-absl::Status SqliteRecorder::Flush() {
+absl::Status SqliteHistoryWriter::Flush() {
   std::unique_lock lock(wake_mutex_);
   wake_cv_.notify_one();
   wake_cv_.wait(lock, [this] {
@@ -526,7 +526,7 @@ absl::Status SqliteRecorder::Flush() {
   return absl::OkStatus();
 }
 
-absl::Status SqliteRecorder::Stop(UtcTime clean_stopped_at_utc) {
+absl::Status SqliteHistoryWriter::Stop(UtcTime clean_stopped_at_utc) {
   {
     std::lock_guard lock(wake_mutex_);
     if (!worker_.joinable()) return final_status_;
@@ -539,7 +539,7 @@ absl::Status SqliteRecorder::Stop(UtcTime clean_stopped_at_utc) {
   return final_status_;
 }
 
-StorageHealth SqliteRecorder::Health() const {
+StorageHealth SqliteHistoryWriter::Health() const {
   std::lock_guard lock(state_mutex_);
   StorageHealth copy = health_;
   for (const auto& queue : queues_)
@@ -548,16 +548,16 @@ StorageHealth SqliteRecorder::Health() const {
   return copy;
 }
 
-RunManifest SqliteRecorder::Manifest() const {
+RunManifest SqliteHistoryWriter::Manifest() const {
   std::lock_guard lock(state_mutex_);
   return manifest_;
 }
 
-void SqliteRecorder::SetWriteFailureForTesting(bool enabled) {
+void SqliteHistoryWriter::SetWriteFailureForTesting(bool enabled) {
   fail_writes_for_testing_.store(enabled, std::memory_order_release);
 }
 
-void SqliteRecorder::PauseWorkerForTesting(bool paused) {
+void SqliteHistoryWriter::PauseWorkerForTesting(bool paused) {
   pause_worker_for_testing_.store(paused, std::memory_order_release);
   wake_cv_.notify_one();
   if (paused) {

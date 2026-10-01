@@ -8,8 +8,8 @@
 namespace hquant {
 namespace {
 
-RecordEnvelope Record(RecordPayload payload) {
-  RecordEnvelope record;
+HistoryRecord Record(HistoryRecordPayload payload) {
+  HistoryRecord record;
   record.run_id = RunId{42};
   record.shard = ShardId{0};
   record.shard_sequence = 1;
@@ -33,10 +33,10 @@ TEST(RecordCodecTest, VersionTwoPreservesFullWidthReasonCodesAndMessages) {
   ASSERT_FALSE(rejected_gap.ok());
   EXPECT_EQ(CodeOf(rejected_gap.status()), ErrorCode::kHistoryRecordCorrupted);
 
-  auto decision = Record(ActionRecord{
-      ActionBatchId{7}, StrategyId{1, StrategyName{"test"}}, 0,
-      ActionKind::Submit, false, ErrorCode::kRiskBudgetExhausted,
-      "insufficient quote", std::nullopt});
+  auto decision = Record(
+      ActionRecord{ActionBatchId{7}, StrategyId{1, StrategyName{"test"}}, 0,
+                   ActionKind::Submit, false, ErrorCode::kRiskBudgetExhausted,
+                   "insufficient quote", std::nullopt});
   auto decoded_decision =
       storage_internal::DecodeRecord(storage_internal::EncodeRecord(decision));
   ASSERT_TRUE(decoded_decision.ok()) << decoded_decision.status();
@@ -60,10 +60,10 @@ TEST(RecordCodecTest, ReadsLegacyGapAndPreservesArbitraryDecisionText) {
             ErrorCode::kStorageQueueFull);
 
   constexpr std::string_view kLegacyText = "Unmapped legacy rejection";
-  auto decision = Record(ActionRecord{
-      ActionBatchId{7}, StrategyId{1, StrategyName{"test"}}, 0,
-      ActionKind::Submit, false, ErrorCode::kRiskBudgetExhausted,
-      std::string(kLegacyText), std::nullopt});
+  auto decision = Record(
+      ActionRecord{ActionBatchId{7}, StrategyId{1, StrategyName{"test"}}, 0,
+                   ActionKind::Submit, false, ErrorCode::kRiskBudgetExhausted,
+                   std::string(kLegacyText), std::nullopt});
   std::string old_decision = storage_internal::EncodeRecord(decision);
   old_decision[0] = 1;
   old_decision[1] = 1;

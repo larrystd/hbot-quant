@@ -38,9 +38,8 @@ struct ActionResult {
 // Executes one shard's strategy actions synchronously on the owning thread.
 class ActionExecutor {
  public:
-  ActionExecutor(RiskGate& risk, OrderGateway& gateway,
-                   RecorderPort& recorder, RunId run, ShardId shard,
-                   uint64_t& shard_sequence)
+  ActionExecutor(RiskGate& risk, OrderGateway& gateway, HistoryWriter& recorder,
+                 RunId run, ShardId shard, uint64_t& shard_sequence)
       : risk_(risk),
         gateway_(gateway),
         recorder_(recorder),
@@ -53,13 +52,13 @@ class ActionExecutor {
   const std::vector<HistoryGap>& local_gaps() const { return local_gaps_; }
 
  private:
-  bool Record(RecordPayload payload, const StrategyId& strategy_id,
+  bool Record(HistoryRecordPayload payload, const StrategyId& strategy_id,
               UtcTime now);
   void Gap(uint64_t sequence);
 
   RiskGate& risk_;
   OrderGateway& gateway_;
-  RecorderPort& recorder_;
+  HistoryWriter& recorder_;
   RunId run_;
   ShardId shard_;
   uint64_t& shard_sequence_;

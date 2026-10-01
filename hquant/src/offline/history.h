@@ -16,7 +16,7 @@ struct sqlite3;
 
 namespace hquant {
 
-class HistoryReader final : public HistoryReaderPort {
+class SqliteHistoryReader final : public HistoryReader {
  public:
   struct Options {
     std::string path;
@@ -24,10 +24,11 @@ class HistoryReader final : public HistoryReaderPort {
     uint32_t max_page_size = 500;
   };
 
-  static absl::StatusOr<std::unique_ptr<HistoryReader>> Open(Options options);
-  ~HistoryReader() override;
-  HistoryReader(const HistoryReader&) = delete;
-  HistoryReader& operator=(const HistoryReader&) = delete;
+  static absl::StatusOr<std::unique_ptr<SqliteHistoryReader>> Open(
+      Options options);
+  ~SqliteHistoryReader() override;
+  SqliteHistoryReader(const SqliteHistoryReader&) = delete;
+  SqliteHistoryReader& operator=(const SqliteHistoryReader&) = delete;
 
   absl::Status TrySubmit(HistoryQuery query) override;
   // nullopt means no response yet. Every accepted query eventually returns a
@@ -35,7 +36,7 @@ class HistoryReader final : public HistoryReaderPort {
   std::optional<HistoryPage> TryReceive() override;
 
  private:
-  HistoryReader(Options options, sqlite3* db, int storage_version);
+  SqliteHistoryReader(Options options, sqlite3* db, int storage_version);
   void Run();
   HistoryPage Query(const HistoryQuery& query);
 
