@@ -86,7 +86,7 @@ the C++ architecture supports are `intentional_divergence`. `output` has:
 ```
 
 `events` is the ordered list emitted *by this input*, with values
-`OrderCreated`, `OrderFilled`, `OrderCompleted`, `OrderCanceled`, or
+`OrderOpened`, `OrderTraded`, `OrderFullyTraded`, `OrderCanceled`, or
 `OrderFailed`. `display_state` is `Absent` or a value of `OrderDisplayState`.
 `remaining_base` is the requested amount minus verified fills.
 If present, `expected[i].risk_expectation` is
@@ -137,8 +137,8 @@ live connector's current fee schedule. `event.kind` is `submit`, `cancel`,
 
 Each `output` is the state **after** processing the input and flushing local
 Paper event callbacks. It has ordered `events` emitted by this input, each an
-object with `kind` (`OrderCreated`, `OrderFilled`, `OrderCompleted`,
-`OrderCanceled`, `OrderFailed`) and `client_id`; an `OrderFilled` additionally
+object with `kind` (`OrderOpened`, `OrderTraded`, `OrderFullyTraded`,
+`OrderCanceled`, `OrderFailed`) and `client_id`; an `OrderTraded` additionally
 has `trade_id`, `price`, `amount`, and `fee_by_asset` (asset → decimal string).
 It also has `open_orders`, ordered by fixture ID, each with `client_id`,
 `side`, `price`, and `amount`; `balances` and `available_balances` as asset →

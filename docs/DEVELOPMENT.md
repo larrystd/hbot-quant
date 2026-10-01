@@ -56,7 +56,7 @@
 
 **行情到动作：** adapter 用 simdjson 解析原始十进制文本和序号，按 `BookScale` 转整数事件 → 订单簿缓存增量、异步取快照、按序号回放，缺口/交叉/溢出进入重同步 → 一个输入批次内先完成全部盘口更新，再按各策略 `TriggerPolicy` 通知一次 → 策略返回 `ActionBatch`，dispatcher 检查依赖就绪、最小动作间隔、规则、分片额度和限速，拒绝要有原因和统计。
 
-**动作到实盘订单：** 风险门预留最坏敞口 → 网关取得有界连接槽、生成 client ID、登记 `PendingCreate`，按最终字节签名；发起写入前的同步失败撤销预留并产生本地失败事件 → `try_push(OrderIntent)`，失败只标记缺口 → 发起 `async_write`；写完成、HTTP 响应、私有 WS 回报是后续可能乱序的事件；无法证明请求未送达则 `SubmissionUnknown` → OrderTracker 去重并先更新订单与风险，再回调 `OnFill/OnOrderUpdate`。Paper 用相同接口，只把网关换成可重放撮合。
+**动作到实盘订单：** 风险门预留最坏敞口 → 网关取得有界连接槽、生成 client ID、登记 `PendingCreate`，按最终字节签名；发起写入前的同步失败撤销预留并产生本地失败事件 → `try_push(PreparedOrder)`，失败只标记缺口 → 发起 `async_write`；写完成、HTTP 响应、私有 WS 回报是后续可能乱序的事件；无法证明请求未送达则 `SubmissionUnknown` → OrderTracker 去重并先更新订单与风险，再回调 `OnFill/OnOrderUpdate`。Paper 用相同接口，只把网关换成可重放撮合。
 
 **启动与多分片：** 校验配置和分片分配 → 建立 `RunId` 与归属索引 → 读取可用意图与检查点 → 连接交易所补查挂单/成交/余额 → 对账后才打开新单门（详见 [ARCHITECTURE.md](ARCHITECTURE.md) 第 11.3 节）。同账户跨分片前，控制线程按账户/币种分配互不重叠的静态资金租约，账户级私有流由指定分片按 owner 转发，限速按分片静态分配并保留撤单余量，429/418 触发全局熔断。
 
@@ -93,8 +93,8 @@ Sanitizer：`bazel test --config=asan //...`、`bazel test --config=tsan //...`�
 | --- | --- | --- |
 | 数值/身份 | `Decimal` 精度与舍入、`MarketId`、`StrategyId`、`RunId`、三种订单/成交 ID、时间类型 | 盘口步长与下单规则分开；client ID 的归属和唯一性不依赖 SQLite |
 | 行情 | `BookScale`、Snapshot/Diff 的序号与 ticks/lots、`BookView` 生命周期、同步状态 | adapter 负责原始序号，订单簿负责连续性和状态 |
-| 订单与策略 | `OrderRequest/Command/Update/TradeUpdate`、`TrackedOrder`、`ActionBatch`、`TriggerPolicy`、`AwaitingFills` | 回报乱序/去重、动作顺序和本账户成交边界清楚 |
-| 存储与恢复 | `OrderIntent`、`RecoveryContext`、`StorageHealth`、每分片记录序号、schema 版本、`HistoryQuery` | 非阻塞入队；提交不触发发单；缺口与不可恢复状态可见 |
+| 订单与策略 | `OrderRequest/ApprovedOrder/OrderUpdate/TradeUpdate`、`TrackedOrder`、`ActionBatch`、`TriggerPolicy`、`AwaitingFills` | 回报乱序/去重、动作顺序和本账户成交边界清楚 |
+| 存储与恢复 | `PreparedOrder`、`RecoveryContext`、`StorageHealth`、每分片记录序号、schema 版本、`HistoryQuery` | 非阻塞入队；提交不触发发单；缺口与不可恢复状态可见 |
 | 多分片 | 静态资金/限速租约、`ShardReport`、`OrderOwnershipIndex`、私有回报转发与队列满语义 | ID 生成到索引更新之间可能先到回报：能从 ID 判定 owner，或隔离补查，不能投错分片 |
 | 构建与夹具 | target 名/`visibility`、`hquant/test/fixtures/v1` 格式、输入时钟与同时间序号、差异标记 | 独立包可编译；夹具可由 C++ 离线 runner 读取 |
 

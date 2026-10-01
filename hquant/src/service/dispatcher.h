@@ -31,7 +31,7 @@ struct DispatchResult {
   ErrorCode reason = ErrorCode::kOk;
   std::string message;
   std::optional<ClientOrderId> client_id;
-  std::optional<OrderIntent> intent;
+  std::optional<PreparedOrder> prepared;
   std::optional<ReservationId> reservation_id;
 };
 
@@ -53,7 +53,8 @@ class ActionDispatcher {
   const std::vector<HistoryGap>& local_gaps() const { return local_gaps_; }
 
  private:
-  bool Record(RecordPayload payload, const StrategyId& strategy_id, UtcTime now);
+  bool Record(RecordPayload payload, const StrategyId& strategy_id,
+              UtcTime now);
   void Gap(uint64_t sequence);
 
   RiskGate& risk_;

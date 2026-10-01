@@ -98,15 +98,15 @@ std::string TradeJson(int trade_id, const char* amount = "1",
 TEST(UserDataStreamTest, EmitsTradeBeforeStatusAndTrackerDeduplicates) {
   UserDataStream stream(AccountId("A1"), ExchangeId("binance"));
   OrderTracker tracker;
-  OrderIntent intent;
-  intent.client_id = ClientOrderId("C1");
-  intent.strategy_id = StrategyId{1, StrategyName("simple_pmm")};
-  intent.request.account = AccountId("A1");
-  intent.request.market = Market();
-  intent.request.base_amount = D("1");
-  intent.request.limit_price = D("100");
-  intent.created_at_utc = Received().receive_utc;
-  ASSERT_TRUE(tracker.Register(intent).ok());
+  PreparedOrder prepared;
+  prepared.client_id = ClientOrderId("C1");
+  prepared.strategy_id = StrategyId{1, StrategyName("simple_pmm")};
+  prepared.request.account = AccountId("A1");
+  prepared.request.market = Market();
+  prepared.request.base_amount = D("1");
+  prepared.request.limit_price = D("100");
+  prepared.created_at_utc = Received().receive_utc;
+  ASSERT_TRUE(tracker.Register(prepared).ok());
 
   auto first = stream.Parse(Report("TRADE", "PARTIALLY_FILLED", "0.4", "0.4",
                                    "40", "40", 7, "C1", "", "0.01", "\"BNB\""),
@@ -145,7 +145,8 @@ TEST(UserDataStreamTest, EmitsTradeBeforeStatusAndTrackerDeduplicates) {
   filled.cumulative_quote = D("100");
   auto awaiting = tracker.ApplyOrderUpdate(filled);
   ASSERT_TRUE(awaiting.ok());
-  EXPECT_EQ(awaiting->snapshot.display_state, OrderDisplayState::AwaitingTrades);
+  EXPECT_EQ(awaiting->snapshot.display_state,
+            OrderDisplayState::AwaitingTrades);
   auto second = stream.Parse(
       Report("TRADE", "FILLED", "0.6", "1", "60", "100", 8), Received());
   ASSERT_TRUE(second.ok());
@@ -323,14 +324,14 @@ TEST(ReconciliationTest, RestartPlanAndOpenOrderDiscovery) {
   input.history_complete = false;
   input.previous_run_clean = false;
   input.executor_checkpoints_complete = false;
-  OrderIntent intent;
-  intent.client_id = ClientOrderId("C1");
-  intent.request.account = input.account;
-  intent.request.market = Market();
-  input.persisted_intents.push_back(intent);
+  PreparedOrder prepared;
+  prepared.client_id = ClientOrderId("C1");
+  prepared.request.account = input.account;
+  prepared.request.market = Market();
+  input.persisted_prepared_orders.push_back(prepared);
   OrderSnapshot snapshot;
   snapshot.client_id = ClientOrderId("C1");
-  snapshot.request = intent.request;
+  snapshot.request = prepared.request;
   input.live_snapshots.push_back(snapshot);
   auto plan = PlanRestart(input);
   ASSERT_TRUE(plan.ok()) << plan.status();

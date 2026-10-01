@@ -42,18 +42,20 @@ absl::StatusOr<uint64_t> ParseBase32(std::string_view text, uint64_t max) {
     }
     value = (value << 5) | digit;
     if (value > max)
-      return Error(ErrorCode::kClientOrderIdInvalid, "client ID field overflow");
+      return Error(ErrorCode::kClientOrderIdInvalid,
+                   "client ID field overflow");
   }
   return value;
 }
 }  // namespace
 
-absl::StatusOr<ClientOrderId> EncodeClientId(const StrategyId& strategy_id, RunId run,
-                                             ShardId shard,
+absl::StatusOr<ClientOrderId> EncodeClientId(const StrategyId& strategy_id,
+                                             RunId run, ShardId shard,
                                              uint32_t shard_sequence) {
   if (!strategy_id.IsValid() || !run.IsValid() || !shard.IsValid() ||
       shard_sequence == 0 || shard_sequence > kMaxShardSequence) {
-    return Error(ErrorCode::kClientOrderIdInvalid, "invalid client ID components");
+    return Error(ErrorCode::kClientOrderIdInvalid,
+                 "invalid client ID components");
   }
   const uint32_t suffix =
       (static_cast<uint32_t>(shard.value) << 29) | shard_sequence;
@@ -68,10 +70,11 @@ absl::StatusOr<ClientOrderId> EncodeClientId(const StrategyId& strategy_id, RunI
 
 absl::StatusOr<DecodedClientId> DecodeClientId(const ClientOrderId& id) {
   if (id.value.size() != 31 || id.value[0] != 'H') {
-    return Error(ErrorCode::kClientOrderIdInvalid, "unsupported client ID format");
+    return Error(ErrorCode::kClientOrderIdInvalid,
+                 "unsupported client ID format");
   }
   auto strategy_id = ParseBase32(std::string_view(id.value).substr(1, 10),
-                           (uint64_t{1} << 48) - 1);
+                                 (uint64_t{1} << 48) - 1);
   auto run = ParseBase32(std::string_view(id.value).substr(11, 13), UINT64_MAX);
   auto suffix =
       ParseBase32(std::string_view(id.value).substr(24, 7), UINT32_MAX);
@@ -83,7 +86,8 @@ absl::StatusOr<DecodedClientId> DecodeClientId(const ClientOrderId& id) {
                          static_cast<uint32_t>(*suffix & kMaxShardSequence)};
   if (result.strategy_id == 0 || !result.run.IsValid() ||
       result.shard_sequence == 0) {
-    return Error(ErrorCode::kClientOrderIdInvalid, "invalid client ID identity");
+    return Error(ErrorCode::kClientOrderIdInvalid,
+                 "invalid client ID identity");
   }
   return result;
 }
@@ -199,8 +203,8 @@ BinanceOrderGateway::BinanceOrderGateway(boost::asio::io_context& io,
       on_event_(std::move(on_event)) {}
 
 absl::Status BinanceOrderGateway::ValidateAndQuantize(
-    OrderCommand* command) const {
-  auto& request = command->request;
+    ApprovedOrder* approved) const {
+  auto& request = approved->request;
   if (!config_.run.IsValid() || !config_.shard.IsValid() ||
       config_.api_key.empty() || config_.secret_key.empty() ||
       config_.recv_window_ms == 0 || config_.recv_window_ms > 60'000 ||
@@ -210,7 +214,7 @@ absl::Status BinanceOrderGateway::ValidateAndQuantize(
     return Error(ErrorCode::kGatewayConfigInvalid,
                  "invalid Binance gateway config");
   }
-  if (!command->strategy_id.IsValid())
+  if (!approved->strategy_id.IsValid())
     return Error(ErrorCode::kOrderStrategyIdInvalid, "invalid strategy ID");
   if (request.account != config_.account)
     return Error(ErrorCode::kOrderAccountInvalid,
@@ -222,9 +226,9 @@ absl::Status BinanceOrderGateway::ValidateAndQuantize(
       !request.base_amount.IsStrictlyPositive())
     return Error(ErrorCode::kOrderPriceOrAmountInvalid,
                  "limit price and amount must be positive");
-  if (clock_.MonoNow() >= command->expires_at_mono)
+  if (clock_.MonoNow() >= approved->expires_at_mono)
     return Error(ErrorCode::kOrderExpiredBeforeSend,
-                 "Binance order command expired before preparation");
+                 "approved Binance order expired before preparation");
   if (request.type == OrderType::LimitMaker && request.time_in_force) {
     return Error(ErrorCode::kOrderTypeUnsupported,
                  "LIMIT_MAKER cannot specify timeInForce");
@@ -263,8 +267,8 @@ absl::Status BinanceOrderGateway::ValidateAndQuantize(
   return absl::OkStatus();
 }
 
-absl::StatusOr<OrderIntent> BinanceOrderGateway::PrepareSubmit(
-    OrderCommand command) {
+absl::StatusOr<PreparedOrder> BinanceOrderGateway::PrepareSubmit(
+    ApprovedOrder approved) {
   if (run_collision_) {
     return Error(ErrorCode::kOrderRecoveryInvalid,
                  "run ID collides with recovered order");
@@ -272,34 +276,35 @@ absl::StatusOr<OrderIntent> BinanceOrderGateway::PrepareSubmit(
   if (pending_submits_ >= config_.max_pending_submits) {
     return Error(ErrorCode::kOrderSendQueueFull, "Binance submit slots full");
   }
-  auto status = ValidateAndQuantize(&command);
+  auto status = ValidateAndQuantize(&approved);
   if (!status.ok()) return status;
   if (next_sequence_ > ((uint32_t{1} << 29) - 1)) {
     return Error(ErrorCode::kSequenceExhausted,
                  "Binance client ID sequence exhausted");
   }
-  auto id =
-      EncodeClientId(command.strategy_id, config_.run, config_.shard, next_sequence_);
+  auto id = EncodeClientId(approved.strategy_id, config_.run, config_.shard,
+                           next_sequence_);
   if (!id.ok()) return id.status();
   if (historical_ids_.contains(id->value) ||
       known_orders_.contains(id->value)) {
     return Error(ErrorCode::kOrderDuplicate, "Binance client ID collision");
   }
-  OrderIntent intent;
-  intent.client_id = *id;
-  intent.strategy_id = command.strategy_id;
-  intent.request = command.request;
-  intent.created_at_utc = clock_.UtcNow();
+  PreparedOrder prepared;
+  prepared.client_id = *id;
+  prepared.strategy_id = approved.strategy_id;
+  prepared.request = approved.request;
+  prepared.created_at_utc = clock_.UtcNow();
   known_orders_.emplace(
-      id->value, KnownOrder{intent, command.expires_at_mono, State::Prepared});
+      id->value,
+      KnownOrder{prepared, approved.expires_at_mono, State::Prepared});
   ++next_sequence_;
   ++pending_submits_;
-  return intent;
+  return prepared;
 }
 
 absl::StatusOr<HttpRequest> BinanceOrderGateway::MakeSubmitRequest(
     const KnownOrder& order) const {
-  const auto& request = order.intent.request;
+  const auto& request = order.prepared.request;
   QueryParameters params{
       {"symbol", request.market.native_symbol},
       {"side", request.side == Side::Buy ? "BUY" : "SELL"},
@@ -312,7 +317,7 @@ absl::StatusOr<HttpRequest> BinanceOrderGateway::MakeSubmitRequest(
   }
   params.emplace_back("quantity", request.base_amount.ToString());
   params.emplace_back("price", request.limit_price->ToString());
-  params.emplace_back("newClientOrderId", order.intent.client_id.value);
+  params.emplace_back("newClientOrderId", order.prepared.client_id.value);
   params.emplace_back("newOrderRespType", "RESULT");
   params.emplace_back("recvWindow", std::to_string(config_.recv_window_ms));
   params.emplace_back("timestamp", Milliseconds(clock_.UtcNow()));
@@ -331,10 +336,11 @@ absl::StatusOr<HttpRequest> BinanceOrderGateway::MakeSubmitRequest(
 
 absl::StatusOr<HttpRequest> BinanceOrderGateway::MakeCancelRequest(
     const KnownOrder& order) const {
-  QueryParameters params{{"symbol", order.intent.request.market.native_symbol},
-                         {"origClientOrderId", order.intent.client_id.value},
-                         {"recvWindow", std::to_string(config_.recv_window_ms)},
-                         {"timestamp", Milliseconds(clock_.UtcNow())}};
+  QueryParameters params{
+      {"symbol", order.prepared.request.market.native_symbol},
+      {"origClientOrderId", order.prepared.client_id.value},
+      {"recvWindow", std::to_string(config_.recv_window_ms)},
+      {"timestamp", Milliseconds(clock_.UtcNow())}};
   auto query = SignedQuery(params, config_.secret_key);
   if (!query.ok()) return query.status();
   return HttpRequest{
@@ -386,7 +392,8 @@ absl::Status BinanceOrderGateway::AbortPrepared(
 absl::Status BinanceOrderGateway::StartCancel(const StrategyId& strategy_id,
                                               const ClientOrderId& client_id) {
   auto found = known_orders_.find(client_id.value);
-  if (found == known_orders_.end() || found->second.intent.strategy_id != strategy_id ||
+  if (found == known_orders_.end() ||
+      found->second.prepared.strategy_id != strategy_id ||
       (found->second.state != State::Submitted &&
        found->second.state != State::Unknown)) {
     return Error(ErrorCode::kOrderNotCancelable,
@@ -419,7 +426,8 @@ absl::Status BinanceOrderGateway::StartCancel(const StrategyId& strategy_id,
 absl::Status BinanceOrderGateway::ObserveHistoricalClientId(
     const ClientOrderId& client_id) {
   if (client_id.value.empty())
-    return Error(ErrorCode::kClientOrderIdInvalid, "empty historical client ID");
+    return Error(ErrorCode::kClientOrderIdInvalid,
+                 "empty historical client ID");
   historical_ids_.insert(client_id.value);
   auto decoded = DecodeClientId(client_id);
   if (decoded.ok() && decoded->run == config_.run) {
@@ -430,18 +438,19 @@ absl::Status BinanceOrderGateway::ObserveHistoricalClientId(
   return absl::OkStatus();
 }
 
-absl::Status BinanceOrderGateway::RestoreOrder(OrderIntent intent) {
-  if (intent.client_id.value.empty() || intent.strategy_id.IsValid() == false ||
-      intent.request.account != config_.account ||
-      intent.request.market != config_.market ||
-      known_orders_.contains(intent.client_id.value)) {
+absl::Status BinanceOrderGateway::RestoreOrder(PreparedOrder prepared) {
+  if (prepared.client_id.value.empty() ||
+      prepared.strategy_id.IsValid() == false ||
+      prepared.request.account != config_.account ||
+      prepared.request.market != config_.market ||
+      known_orders_.contains(prepared.client_id.value)) {
     return Error(ErrorCode::kOrderRecoveryInvalid,
                  "invalid recovered Binance order");
   }
-  auto status = ObserveHistoricalClientId(intent.client_id);
+  auto status = ObserveHistoricalClientId(prepared.client_id);
   if (!status.ok()) return status;
-  known_orders_.emplace(intent.client_id.value,
-                        KnownOrder{std::move(intent), {}, State::Submitted});
+  known_orders_.emplace(prepared.client_id.value,
+                        KnownOrder{std::move(prepared), {}, State::Submitted});
   return absl::OkStatus();
 }
 
@@ -457,17 +466,17 @@ absl::StatusOr<OrderUpdate> BinanceOrderGateway::ParseSuccess(
   std::string_view status_text;
   std::string_view symbol;
   if (doc["clientOrderId"].get(client) || doc["status"].get(status_text) ||
-      doc["symbol"].get(symbol) || client != order.intent.client_id.value ||
-      symbol != order.intent.request.market.native_symbol) {
+      doc["symbol"].get(symbol) || client != order.prepared.client_id.value ||
+      symbol != order.prepared.request.market.native_symbol) {
     return Error(ErrorCode::kExchangeOrderIdConflict,
                  "Binance response identity/status mismatch");
   }
   auto status = ParseStatus(status_text);
   if (!status.ok()) return status.status();
   OrderUpdate update;
-  update.account = order.intent.request.account;
-  update.market = order.intent.request.market;
-  update.client_id = order.intent.client_id;
+  update.account = order.prepared.request.account;
+  update.market = order.prepared.request.market;
+  update.client_id = order.prepared.client_id;
   update.exchange_status = *status;
   update.time = EventTime{{}, clock_.UtcNow(), clock_.MonoNow()};
   auto order_id = doc["orderId"];
@@ -566,8 +575,8 @@ boost::asio::awaitable<void> BinanceOrderGateway::ProcessQueue() {
       std::optional<OrderUpdate> rejected;
       if (!work.cancel) {
         OrderUpdate update;
-        update.account = found->second.intent.request.account;
-        update.market = found->second.intent.request.market;
+        update.account = found->second.prepared.request.account;
+        update.market = found->second.prepared.request.market;
         update.client_id = work.client_id;
         update.exchange_status = ExchangeOrderStatus::Rejected;
         update.time = EventTime{{}, clock_.UtcNow(), clock_.MonoNow()};

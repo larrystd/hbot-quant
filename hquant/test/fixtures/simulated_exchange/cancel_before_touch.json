@@ -63,7 +63,7 @@
       "output": {
         "events": [
           {
-            "kind": "OrderCreated",
+            "kind": "OrderOpened",
             "client_id": "B1"
           }
         ],

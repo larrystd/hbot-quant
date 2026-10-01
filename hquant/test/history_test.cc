@@ -45,27 +45,27 @@ MarketId Market() {
   return MarketId{ExchangeId{"binance"}, InstrumentKind::Spot, "BTCUSDT"};
 }
 
-RecordEnvelope Intent(uint64_t sequence, std::string client = "B1") {
-  OrderIntent intent;
-  intent.client_id = ClientOrderId{std::move(client)};
-  intent.strategy_id = MakeStrategyId();
-  intent.request.account = AccountId{"A1"};
-  intent.request.market = Market();
-  intent.request.side = Side::Buy;
-  intent.request.type = OrderType::Limit;
-  intent.request.base_amount = D("0.01");
-  intent.request.limit_price = D("100");
-  intent.created_at_utc = At(1000 + sequence);
-  intent.config_revision = 7;
-  intent.executor_checkpoint =
-      ExecutorCheckpoint{1, MakeStrategyId(), 7, "intent state"};
+RecordEnvelope PreparedRecord(uint64_t sequence, std::string client = "B1") {
+  PreparedOrder prepared;
+  prepared.client_id = ClientOrderId{std::move(client)};
+  prepared.strategy_id = MakeStrategyId();
+  prepared.request.account = AccountId{"A1"};
+  prepared.request.market = Market();
+  prepared.request.side = Side::Buy;
+  prepared.request.type = OrderType::Limit;
+  prepared.request.base_amount = D("0.01");
+  prepared.request.limit_price = D("100");
+  prepared.created_at_utc = At(1000 + sequence);
+  prepared.config_revision = 7;
+  prepared.executor_checkpoint =
+      ExecutorCheckpoint{1, MakeStrategyId(), 7, "prepared state"};
   RecordEnvelope record;
   record.run_id = RunId{21};
   record.shard = ShardId{0};
   record.shard_sequence = sequence;
   record.strategy_id = MakeStrategyId();
   record.received_at_utc = At(1000 + sequence);
-  record.payload = std::move(intent);
+  record.payload = std::move(prepared);
   return record;
 }
 
@@ -73,8 +73,8 @@ TEST(RecoveryTest, CleanRunLoadsTypedContextAndOpenClientIds) {
   TemporaryDatabase db;
   auto recorder = SqliteRecorder::Open({db.path(), RunId{21}, At(100), 8, 4});
   ASSERT_TRUE(recorder.ok()) << recorder.status();
-  ASSERT_TRUE((*recorder)->TryPush(Intent(1, "B1")));
-  RecordEnvelope filled = Intent(2);
+  ASSERT_TRUE((*recorder)->TryPush(PreparedRecord(1, "B1")));
+  RecordEnvelope filled = PreparedRecord(2);
   OrderUpdate update;
   update.account = AccountId{"A1"};
   update.market = Market();
@@ -82,10 +82,10 @@ TEST(RecoveryTest, CleanRunLoadsTypedContextAndOpenClientIds) {
   update.exchange_status = ExchangeOrderStatus::Traded;
   filled.payload = update;
   ASSERT_TRUE((*recorder)->TryPush(std::move(filled)));
-  ASSERT_TRUE((*recorder)->TryPush(Intent(3, "B2")));
-  RecordEnvelope checkpoint = Intent(4);
-  checkpoint.payload =
-      Checkpoint{ExecutorCheckpoint{1, MakeStrategyId(), 8, "latest state"}, At(1004)};
+  ASSERT_TRUE((*recorder)->TryPush(PreparedRecord(3, "B2")));
+  RecordEnvelope checkpoint = PreparedRecord(4);
+  checkpoint.payload = Checkpoint{
+      ExecutorCheckpoint{1, MakeStrategyId(), 8, "latest state"}, At(1004)};
   ASSERT_TRUE((*recorder)->TryPush(std::move(checkpoint)));
   ASSERT_TRUE((*recorder)->Stop(At(2000)).ok());
   recorder->reset();
@@ -97,7 +97,7 @@ TEST(RecoveryTest, CleanRunLoadsTypedContextAndOpenClientIds) {
   EXPECT_EQ(recovered->manifest.last_committed_seq_by_shard.at(0), 4);
   EXPECT_FALSE(recovered->crash_tail_possible);
   EXPECT_TRUE(recovered->gaps.empty());
-  EXPECT_EQ(recovered->context.recovered_intents.size(), 2);
+  EXPECT_EQ(recovered->context.recovered_prepared_orders.size(), 2);
   EXPECT_EQ(recovered->context.exchange_orders.size(), 1);
   EXPECT_EQ(recovered->context.checkpoints.size(), 3);
   ASSERT_EQ(recovered->context.unresolved_ids.size(), 1);
@@ -111,7 +111,7 @@ TEST(RecoveryTest, UncleanStopReportsPossibleCrashTailWithoutInventingRange) {
   {
     auto recorder = SqliteRecorder::Open({db.path(), RunId{21}, At(100), 8, 1});
     ASSERT_TRUE(recorder.ok()) << recorder.status();
-    ASSERT_TRUE((*recorder)->TryPush(Intent(1)));
+    ASSERT_TRUE((*recorder)->TryPush(PreparedRecord(1)));
     ASSERT_TRUE((*recorder)->Flush().ok());
     // Destruction simulates process termination without a clean stop marker.
   }
@@ -130,15 +130,15 @@ TEST(RecoveryTest, DistinguishesQueueDropFromDiskWriteFailure) {
   auto recorder = SqliteRecorder::Open({db.path(), RunId{21}, At(100), 1, 1});
   ASSERT_TRUE(recorder.ok()) << recorder.status();
   (*recorder)->PauseWorkerForTesting(true);
-  ASSERT_TRUE((*recorder)->TryPush(Intent(1)));
-  ASSERT_FALSE((*recorder)->TryPush(Intent(2)));
+  ASSERT_TRUE((*recorder)->TryPush(PreparedRecord(1)));
+  ASSERT_FALSE((*recorder)->TryPush(PreparedRecord(2)));
   (*recorder)->PauseWorkerForTesting(false);
   ASSERT_TRUE((*recorder)->Flush().ok());
   (*recorder)->SetWriteFailureForTesting(true);
-  ASSERT_TRUE((*recorder)->TryPush(Intent(3)));
+  ASSERT_TRUE((*recorder)->TryPush(PreparedRecord(3)));
   ASSERT_FALSE((*recorder)->Flush().ok());
   (*recorder)->SetWriteFailureForTesting(false);
-  ASSERT_TRUE((*recorder)->TryPush(Intent(4)));
+  ASSERT_TRUE((*recorder)->TryPush(PreparedRecord(4)));
   ASSERT_TRUE((*recorder)->Stop(At(2000)).ok());
 
   auto recovered = LoadRecoverySnapshot(db.path(), RunId{21});
@@ -161,7 +161,7 @@ TEST(RecoveryTest, RejectsCorruptedRecordAndMissingRun) {
   TemporaryDatabase db;
   auto recorder = SqliteRecorder::Open({db.path(), RunId{21}, At(100), 8, 1});
   ASSERT_TRUE(recorder.ok()) << recorder.status();
-  ASSERT_TRUE((*recorder)->TryPush(Intent(1)));
+  ASSERT_TRUE((*recorder)->TryPush(PreparedRecord(1)));
   ASSERT_TRUE((*recorder)->Stop(At(2000)).ok());
   recorder->reset();
   EXPECT_EQ(LoadRecoverySnapshot(db.path(), RunId{22}).status().code(),

@@ -32,11 +32,12 @@ struct DecodedClientId {
   uint32_t shard_sequence = 0;
 };
 
-// Candidate Binance Spot codec: H + 10/13/7 RFC4648 base32 digits. The strategy_id
-// key is stable; shard_hint is only a uniqueness/routing hint within one run.
-// Enable live trading only after the target exchange accepts and echoes this form.
-absl::StatusOr<ClientOrderId> EncodeClientId(const StrategyId& strategy_id, RunId run,
-                                             ShardId shard,
+// Candidate Binance Spot codec: H + 10/13/7 RFC4648 base32 digits. The
+// strategy_id key is stable; shard_hint is only a uniqueness/routing hint
+// within one run. Enable live trading only after the target exchange accepts
+// and echoes this form.
+absl::StatusOr<ClientOrderId> EncodeClientId(const StrategyId& strategy_id,
+                                             RunId run, ShardId shard,
                                              uint32_t shard_sequence);
 absl::StatusOr<DecodedClientId> DecodeClientId(const ClientOrderId& id);
 
@@ -102,7 +103,7 @@ class BinanceOrderGateway final : public OrderGateway {
                       const Clock& clock, BinanceGatewayConfig config,
                       EventHandler on_event);
 
-  absl::StatusOr<OrderIntent> PrepareSubmit(OrderCommand command) override;
+  absl::StatusOr<PreparedOrder> PrepareSubmit(ApprovedOrder approved) override;
   absl::Status StartPrepared(const ClientOrderId& client_id) override;
   absl::Status AbortPrepared(const ClientOrderId& client_id) override;
   absl::Status StartCancel(const StrategyId& strategy_id,
@@ -111,7 +112,7 @@ class BinanceOrderGateway final : public OrderGateway {
   // Recovery loads historical IDs before order creation; a repeated run ID is
   // refused even if its next local sequence has not yet collided.
   absl::Status ObserveHistoricalClientId(const ClientOrderId& client_id);
-  absl::Status RestoreOrder(OrderIntent intent);
+  absl::Status RestoreOrder(PreparedOrder prepared);
   size_t PendingSubmitCount() const { return pending_submits_; }
   size_t PendingCancelCount() const { return pending_cancels_; }
 
@@ -126,7 +127,7 @@ class BinanceOrderGateway final : public OrderGateway {
     Terminal
   };
   struct KnownOrder {
-    OrderIntent intent;
+    PreparedOrder prepared;
     MonoTime expires_at_mono{};
     State state = State::Prepared;
   };
@@ -137,7 +138,7 @@ class BinanceOrderGateway final : public OrderGateway {
     MonoTime expires_at_mono{};
   };
 
-  absl::Status ValidateAndQuantize(OrderCommand* command) const;
+  absl::Status ValidateAndQuantize(ApprovedOrder* approved) const;
   absl::StatusOr<HttpRequest> MakeSubmitRequest(const KnownOrder& order) const;
   absl::StatusOr<HttpRequest> MakeCancelRequest(const KnownOrder& order) const;
   absl::StatusOr<OrderUpdate> ParseSuccess(const KnownOrder& order,

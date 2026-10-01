@@ -80,6 +80,12 @@ namespace {
 TEST(ControlHistoryTest, DisplaysNegativeReasonNumbers) {
   constexpr auto reason = ErrorCode::kStorageQueueFull;
   HistoryPage page;
+  RecordEnvelope prepared_record;
+  PreparedOrder prepared;
+  prepared.client_id = ClientOrderId{"P1"};
+  prepared.request.base_amount = *Decimal::Parse("0.01");
+  prepared_record.payload = prepared;
+  page.rows.push_back(prepared_record);
   RecordEnvelope decision;
   DecisionRecord action;
   action.reason = reason;
@@ -91,6 +97,7 @@ TEST(ControlHistoryTest, DisplaysNegativeReasonNumbers) {
   page.incomplete_ranges.push_back(
       HistoryGap{RunId{1}, ShardId{0}, 1, 2, reason});
   const std::string json = HistoryJson(page);
+  EXPECT_NE(json.find("\"kind\":\"prepared_order\""), std::string::npos);
   const std::string needle = "\"reason\":-17004";
   const auto first = json.find(needle);
   ASSERT_NE(first, std::string::npos);

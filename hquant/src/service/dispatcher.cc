@@ -43,8 +43,8 @@ ErrorCode NormalizeOrder(const OrderRequest& raw, const TradingRule& rule,
 
 }  // namespace
 
-bool ActionDispatcher::Record(RecordPayload payload, const StrategyId& strategy_id,
-                              UtcTime now) {
+bool ActionDispatcher::Record(RecordPayload payload,
+                              const StrategyId& strategy_id, UtcTime now) {
   if (shard_sequence_ == std::numeric_limits<uint64_t>::max()) {
     risk_.EmergencyStop();
     return false;
@@ -82,10 +82,13 @@ std::vector<DispatchResult> ActionDispatcher::Dispatch(
     DispatchResult result;
     result.action_index = index;
     const StrategyId& action_strategy_id = std::visit(
-        [](const auto& value) -> const StrategyId& { return value.strategy_id; },
+        [](const auto& value) -> const StrategyId& {
+          return value.strategy_id;
+        },
         action);
     const bool submit = std::holds_alternative<SubmitOrder>(action);
-    if (action_strategy_id != context.strategy_id || !context.strategy_id.IsValid()) {
+    if (action_strategy_id != context.strategy_id ||
+        !context.strategy_id.IsValid()) {
       result.reason = ErrorCode::kOrderStrategyIdInvalid;
       result.message = "action strategy ID does not match the shard strategy";
     } else if (const auto* cancel = std::get_if<CancelOrder>(&action)) {
@@ -112,36 +115,36 @@ std::vector<DispatchResult> ActionDispatcher::Dispatch(
         if (reserve_code != ErrorCode::kOk) {
           result.reason = reserve_code;
         } else {
-          OrderCommand command{order.strategy_id, *normalized,
-                               reservation.reservation_id, context.decision_id,
-                               context.now_mono + std::chrono::seconds(1)};
-          auto intent = gateway_.PrepareSubmit(std::move(command));
-          if (!intent.ok()) {
+          ApprovedOrder approved{
+              order.strategy_id, *normalized, reservation.reservation_id,
+              context.decision_id, context.now_mono + std::chrono::seconds(1)};
+          auto prepared = gateway_.PrepareSubmit(std::move(approved));
+          if (!prepared.ok()) {
             UnwindPrepared(risk_, gateway_, reservation.reservation_id,
                            std::nullopt);
-            result.reason = CodeOf(intent.status());
-            result.message = std::string(intent.status().message());
-          } else if (intent->client_id.value.empty() ||
-                     intent->strategy_id != order.strategy_id ||
-                     intent->request.account != normalized->account ||
-                     intent->request.market != normalized->market) {
+            result.reason = CodeOf(prepared.status());
+            result.message = std::string(prepared.status().message());
+          } else if (prepared->client_id.value.empty() ||
+                     prepared->strategy_id != order.strategy_id ||
+                     prepared->request.account != normalized->account ||
+                     prepared->request.market != normalized->market) {
             UnwindPrepared(risk_, gateway_, reservation.reservation_id,
-                           intent->client_id);
+                           prepared->client_id);
             result.reason = ErrorCode::kInternal;
-            result.message = "gateway returned mismatched intent";
+            result.message = "gateway returned mismatched prepared order";
           } else {
             const auto attached = risk_.AttachClientId(
-                reservation.reservation_id, intent->client_id);
+                reservation.reservation_id, prepared->client_id);
             if (!attached.ok()) {
               UnwindPrepared(risk_, gateway_, reservation.reservation_id,
-                             intent->client_id);
+                             prepared->client_id);
               result.reason = CodeOf(attached);
               result.message = std::string(attached.message());
             } else {
-              result.client_id = intent->client_id;
-              result.intent = *intent;
-              Record(*intent, order.strategy_id, context.now_utc);
-              const auto started = gateway_.StartPrepared(intent->client_id);
+              result.client_id = prepared->client_id;
+              result.prepared = *prepared;
+              Record(*prepared, order.strategy_id, context.now_utc);
+              const auto started = gateway_.StartPrepared(prepared->client_id);
               result.accepted = started.ok();
               result.reason = started.ok() ? ErrorCode::kOk : CodeOf(started);
               result.message = started.ok() ? "locally submitted"
@@ -151,7 +154,7 @@ std::vector<DispatchResult> ActionDispatcher::Dispatch(
               }
               if (!started.ok()) {
                 UnwindPrepared(risk_, gateway_, reservation.reservation_id,
-                               intent->client_id);
+                               prepared->client_id);
               }
             }
           }

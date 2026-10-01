@@ -74,7 +74,7 @@
       "output": {
         "events": [
           {
-            "kind": "OrderCreated",
+            "kind": "OrderOpened",
             "client_id": "B1"
           }
         ],
@@ -103,7 +103,7 @@
       "output": {
         "events": [
           {
-            "kind": "OrderCreated",
+            "kind": "OrderOpened",
             "client_id": "S1"
           }
         ],

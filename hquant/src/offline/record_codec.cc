@@ -185,8 +185,8 @@ class Reader {
   bool CheckpointValue(ExecutorCheckpoint* checkpoint) {
     uint64_t version = 0;
     if (!U64(&version) || version > std::numeric_limits<uint32_t>::max() ||
-        !StrategyIdField(&checkpoint->strategy_id) || !U64(&checkpoint->config_revision) ||
-        !String(&checkpoint->payload))
+        !StrategyIdField(&checkpoint->strategy_id) ||
+        !U64(&checkpoint->config_revision) || !String(&checkpoint->payload))
       return false;
     checkpoint->schema_version = static_cast<uint32_t>(version);
     return true;
@@ -216,7 +216,7 @@ std::string EncodeRecord(const RecordEnvelope& record) {
   std::visit(
       [&out](const auto& payload) {
         using T = std::decay_t<decltype(payload)>;
-        if constexpr (std::is_same_v<T, OrderIntent>) {
+        if constexpr (std::is_same_v<T, PreparedOrder>) {
           out.String(payload.client_id.value);
           out.StrategyIdField(payload.strategy_id);
           out.Request(payload.request);
@@ -317,17 +317,19 @@ absl::StatusOr<RecordEnvelope> DecodeRecord(std::string_view bytes) {
   if (!in.Byte(&kind) || kind > 5)
     return Error(ErrorCode::kHistoryRecordCorrupted, "invalid payload kind");
   if (kind == 0) {
-    OrderIntent value;
-    if (!in.String(&value.client_id.value) || !in.StrategyIdField(&value.strategy_id) ||
+    PreparedOrder value;
+    if (!in.String(&value.client_id.value) ||
+        !in.StrategyIdField(&value.strategy_id) ||
         !in.Request(&value.request) || !in.U64(&value.config_revision) ||
         !in.I64(&timestamp) || !in.Byte(&present) || present > 1)
-      return Error(ErrorCode::kHistoryRecordCorrupted, "invalid order intent");
+      return Error(ErrorCode::kHistoryRecordCorrupted,
+                   "invalid prepared order");
     value.created_at_utc = Utc(timestamp);
     if (present) {
       value.executor_checkpoint.emplace();
       if (!in.CheckpointValue(&*value.executor_checkpoint))
         return Error(ErrorCode::kHistoryRecordCorrupted,
-                     "invalid intent checkpoint");
+                     "invalid prepared order checkpoint");
     }
     record.payload = std::move(value);
   } else if (kind == 1) {
@@ -440,8 +442,8 @@ absl::StatusOr<RecordEnvelope> DecodeRecord(std::string_view bytes) {
     uint64_t action_index = 0;
     uint8_t action_kind = 0, accepted = 0;
     uint64_t reason = 0;
-    if (!in.U64(&value.decision_id.value) || !in.StrategyIdField(&value.strategy_id) ||
-        !in.U64(&action_index) ||
+    if (!in.U64(&value.decision_id.value) ||
+        !in.StrategyIdField(&value.strategy_id) || !in.U64(&action_index) ||
         action_index > std::numeric_limits<uint32_t>::max() ||
         !in.Byte(&action_kind) || action_kind > 1 || !in.Byte(&accepted) ||
         accepted > 1 ||
@@ -474,7 +476,7 @@ absl::StatusOr<RecordEnvelope> DecodeRecord(std::string_view bytes) {
 RecordIndex IndexRecord(const RecordEnvelope& record) {
   RecordIndex index;
   index.payload_kind = static_cast<int>(record.payload.index());
-  if (const auto* value = std::get_if<OrderIntent>(&record.payload)) {
+  if (const auto* value = std::get_if<PreparedOrder>(&record.payload)) {
     index.account = value->request.account.value;
     index.market = value->request.market;
   } else if (const auto* value = std::get_if<OrderUpdate>(&record.payload)) {

@@ -487,9 +487,9 @@ absl::StatusOr<RestartReconciliationPlan> PlanRestart(
     }
     return absl::OkStatus();
   };
-  for (const auto& intent : input.persisted_intents) {
-    auto status =
-        insert(intent.request.account, intent.request.market, intent.client_id);
+  for (const auto& prepared : input.persisted_prepared_orders) {
+    auto status = insert(prepared.request.account, prepared.request.market,
+                         prepared.client_id);
     if (!status.ok()) return status;
   }
   for (const auto& snapshot : input.live_snapshots) {

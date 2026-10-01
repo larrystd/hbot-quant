@@ -38,7 +38,7 @@ struct TriggerPolicy {
   std::chrono::microseconds min_action_interval{0};
 };
 
-struct StrategyContext {
+struct StrategyInput {
   const BookView& book;
   const BookScale& book_scale;
   const TradingRule& trading_rule;
@@ -54,7 +54,7 @@ class Strategy {
  public:
   virtual ~Strategy() = default;
   virtual TriggerPolicy Triggers() const = 0;
-  virtual ActionBatch OnTimer(const StrategyContext& context) = 0;
+  virtual ActionBatch OnTimer(const StrategyInput& context) = 0;
 };
 
 }  // namespace hquant

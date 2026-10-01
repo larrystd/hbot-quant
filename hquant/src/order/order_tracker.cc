@@ -101,10 +101,10 @@ OrderDisplayState OrderTracker::Display(const TrackedOrder& order) const {
 
 OrderSnapshot OrderTracker::MakeSnapshot(const TrackedOrder& order) const {
   OrderSnapshot snapshot;
-  snapshot.client_id = order.intent.client_id;
+  snapshot.client_id = order.prepared.client_id;
   snapshot.exchange_id = order.exchange_id;
-  snapshot.strategy_id = order.intent.strategy_id;
-  snapshot.request = order.intent.request;
+  snapshot.strategy_id = order.prepared.strategy_id;
+  snapshot.request = order.prepared.request;
   snapshot.display_state = Display(order);
   snapshot.cumulative_base = order.cumulative_base;
   snapshot.cumulative_quote = order.cumulative_quote;
@@ -129,28 +129,28 @@ TrackerResult OrderTracker::MakeResult(
   return result;
 }
 
-absl::StatusOr<TrackerResult> OrderTracker::Register(OrderIntent intent) {
-  if (intent.client_id.value.empty())
+absl::StatusOr<TrackerResult> OrderTracker::Register(PreparedOrder prepared) {
+  if (prepared.client_id.value.empty())
     return Error(ErrorCode::kClientOrderIdInvalid, "empty client order ID");
-  if (!intent.strategy_id.IsValid())
+  if (!prepared.strategy_id.IsValid())
     return Error(ErrorCode::kOrderStrategyIdInvalid, "invalid strategy ID");
-  if (intent.request.account.value.empty())
+  if (prepared.request.account.value.empty())
     return Error(ErrorCode::kOrderAccountInvalid, "empty order account");
-  if (intent.request.market.exchange.value.empty() ||
-      intent.request.market.native_symbol.empty())
+  if (prepared.request.market.exchange.value.empty() ||
+      prepared.request.market.native_symbol.empty())
     return Error(ErrorCode::kOrderMarketInvalid, "empty order market");
-  if (!intent.request.base_amount.IsStrictlyPositive() ||
-      !intent.request.limit_price ||
-      !intent.request.limit_price->IsStrictlyPositive())
+  if (!prepared.request.base_amount.IsStrictlyPositive() ||
+      !prepared.request.limit_price ||
+      !prepared.request.limit_price->IsStrictlyPositive())
     return Error(ErrorCode::kOrderPriceOrAmountInvalid,
                  "limit price and amount must be positive");
-  if (orders_.contains(intent.client_id.value))
+  if (orders_.contains(prepared.client_id.value))
     return Error(ErrorCode::kOrderDuplicate, "client order ID already tracked");
   TrackedOrder order;
-  order.last_update_time.receive_utc = intent.created_at_utc;
-  order.intent = std::move(intent);
+  order.last_update_time.receive_utc = prepared.created_at_utc;
+  order.prepared = std::move(prepared);
   auto [it, inserted] =
-      orders_.emplace(order.intent.client_id.value, std::move(order));
+      orders_.emplace(order.prepared.client_id.value, std::move(order));
   (void)inserted;
   return MakeResult(it->second, true);
 }
@@ -191,10 +191,11 @@ absl::StatusOr<OrderTracker::TrackedOrder*> OrderTracker::Find(
   if (!order)
     return Error(ErrorCode::kReportOrderUnknown,
                  "order report has no tracked strategy_id");
-  if (order->intent.request.account != account ||
-      order->intent.request.market != market) {
+  if (order->prepared.request.account != account ||
+      order->prepared.request.market != market) {
     order->reconciliation = ReconciliationState::ResyncRequired;
-    return Error(ErrorCode::kReportAccountMarketMismatch, "account or market mismatch");
+    return Error(ErrorCode::kReportAccountMarketMismatch,
+                 "account or market mismatch");
   }
   if (order->exchange_id && exchange_id &&
       *order->exchange_id != *exchange_id) {
@@ -215,17 +216,18 @@ absl::Status OrderTracker::BindExchangeId(
     }
     return absl::OkStatus();
   }
-  const auto key = ExchangeIndexKey(order.intent.request.account,
-                                    order.intent.request.market, *exchange_id);
+  const auto key =
+      ExchangeIndexKey(order.prepared.request.account,
+                       order.prepared.request.market, *exchange_id);
   if (auto found = exchange_index_.find(key);
       found != exchange_index_.end() &&
-      found->second != order.intent.client_id.value) {
+      found->second != order.prepared.client_id.value) {
     order.reconciliation = ReconciliationState::ResyncRequired;
     return Error(ErrorCode::kExchangeOrderIdConflict,
                  "exchange ID already owned by another order");
   }
   order.exchange_id = *exchange_id;
-  exchange_index_[key] = order.intent.client_id.value;
+  exchange_index_[key] = order.prepared.client_id.value;
   return absl::OkStatus();
 }
 
@@ -342,7 +344,7 @@ absl::StatusOr<TrackerResult> OrderTracker::Update(const OrderUpdate& update,
   }
   if (order.lifecycle == OrderLifecycle::Traded) {
     auto comparison =
-        order.cumulative_base.Compare(order.intent.request.base_amount);
+        order.cumulative_base.Compare(order.prepared.request.base_amount);
     if (!comparison.ok())
       return Error(ErrorCode::kDecimalArithmeticFailed,
                    "reported cumulative amount cannot be compared");
@@ -351,11 +353,11 @@ absl::StatusOr<TrackerResult> OrderTracker::Update(const OrderUpdate& update,
     order.completion_pending_fills = awaiting;
   }
   if (changed) order.last_update_time = update.time;
-  if (created_now) events.emplace_back(OrderCreated{MakeSnapshot(order)});
+  if (created_now) events.emplace_back(OrderOpened{MakeSnapshot(order)});
   if (next == OrderLifecycle::Traded && !order.completion_pending_fills &&
       !order.terminal_emitted) {
     order.terminal_emitted = true;
-    events.emplace_back(OrderCompleted{MakeSnapshot(order)});
+    events.emplace_back(OrderFullyTraded{MakeSnapshot(order)});
   } else if (next == OrderLifecycle::Canceled && !order.terminal_emitted) {
     order.terminal_emitted = true;
     events.emplace_back(OrderCanceled{MakeSnapshot(order)});
@@ -387,7 +389,7 @@ absl::StatusOr<TrackerResult> OrderTracker::ApplyTradeUpdate(
   const auto key =
       TradeIndexKey(trade.account, trade.market, trade.exchange_trade_id);
   if (auto seen = seen_trades_.find(key); seen != seen_trades_.end()) {
-    if (seen->second != order.intent.client_id.value) {
+    if (seen->second != order.prepared.client_id.value) {
       order.reconciliation = ReconciliationState::ResyncRequired;
       return Error(ErrorCode::kTradeIdOnOtherOrder,
                    "trade ID assigned to another order");
@@ -402,7 +404,7 @@ absl::StatusOr<TrackerResult> OrderTracker::ApplyTradeUpdate(
   if (!quote.ok())
     return Error(ErrorCode::kOrderReportInvalid,
                  "trade cumulative quote cannot be calculated");
-  auto overfill = base->Compare(order.intent.request.base_amount);
+  auto overfill = base->Compare(order.prepared.request.base_amount);
   if (!overfill.ok())
     return Error(ErrorCode::kOrderReportInvalid,
                  "trade fill amount cannot be compared");
@@ -425,15 +427,15 @@ absl::StatusOr<TrackerResult> OrderTracker::ApplyTradeUpdate(
   order.cumulative_quote = *quote;
   order.fees_by_asset = std::move(fees);
   order.last_update_time = trade.time;
-  seen_trades_[key] = order.intent.client_id.value;
+  seen_trades_[key] = order.prepared.client_id.value;
   std::vector<TrackedOrderEvent> events;
-  events.emplace_back(OrderFilled{MakeSnapshot(order), trade});
+  events.emplace_back(OrderTraded{MakeSnapshot(order), trade});
   if (order.lifecycle == OrderLifecycle::Traded &&
       order.completion_pending_fills && *overfill == 0 &&
       !order.terminal_emitted) {
     order.completion_pending_fills = false;
     order.terminal_emitted = true;
-    events.emplace_back(OrderCompleted{MakeSnapshot(order)});
+    events.emplace_back(OrderFullyTraded{MakeSnapshot(order)});
   }
   return MakeResult(order, true, std::move(events));
 }

@@ -18,7 +18,8 @@ bool AtLeast(const Decimal& left, const Decimal& right) {
 
 }  // namespace
 
-SimpleSimulatedExchange::SimpleSimulatedExchange(SimulatedExchangeConfig config, const Clock& clock)
+SimpleSimulatedExchange::SimpleSimulatedExchange(SimulatedExchangeConfig config,
+                                                 const Clock& clock)
     : config_(std::move(config)),
       clock_(clock),
       balances_(config_.initial_balances) {}
@@ -68,7 +69,7 @@ std::vector<AccountEvent> SimpleSimulatedExchange::DrainEvents() {
 }
 
 void SimpleSimulatedExchange::EmitOrder(const RestingOrder& order,
-                               ExchangeOrderStatus status) {
+                                        ExchangeOrderStatus status) {
   OrderUpdate update;
   update.account = config_.account;
   update.market = config_.market.market;
@@ -93,9 +94,10 @@ void SimpleSimulatedExchange::EmitBalance(const AssetId& asset) {
   events_.emplace_back(std::move(balance));
 }
 
-absl::Status SimpleSimulatedExchange::ValidateAndQuantize(OrderCommand* command) const {
-  auto& request = command->request;
-  if (!command->strategy_id.IsValid())
+absl::Status SimpleSimulatedExchange::ValidateAndQuantize(
+    ApprovedOrder* approved) const {
+  auto& request = approved->request;
+  if (!approved->strategy_id.IsValid())
     return Error(ErrorCode::kOrderStrategyIdInvalid, "invalid strategy ID");
   if (request.account != config_.account)
     return Error(ErrorCode::kOrderAccountInvalid,
@@ -145,34 +147,35 @@ absl::Status SimpleSimulatedExchange::ValidateAndQuantize(OrderCommand* command)
   return absl::OkStatus();
 }
 
-absl::StatusOr<OrderIntent> SimpleSimulatedExchange::PrepareSubmit(
-    OrderCommand command) {
-  auto status = ValidateAndQuantize(&command);
+absl::StatusOr<PreparedOrder> SimpleSimulatedExchange::PrepareSubmit(
+    ApprovedOrder approved) {
+  auto status = ValidateAndQuantize(&approved);
   if (!status.ok()) return status;
   ClientOrderId id =
       config_.make_client_id
-          ? config_.make_client_id(command.request.side)
+          ? config_.make_client_id(approved.request.side)
           : ClientOrderId("P" + std::to_string(next_client_id_++));
   if (id.value.empty() || used_ids_.contains(id.value)) {
     return Error(ErrorCode::kOrderDuplicate, "duplicate Simulated client ID");
   }
-  OrderIntent intent;
-  intent.client_id = id;
-  intent.strategy_id = command.strategy_id;
-  intent.request = command.request;
-  intent.created_at_utc = clock_.UtcNow();
+  PreparedOrder prepared;
+  prepared.client_id = id;
+  prepared.strategy_id = approved.strategy_id;
+  prepared.request = approved.request;
+  prepared.created_at_utc = clock_.UtcNow();
   used_ids_.insert(id.value);
-  prepared_.emplace(id.value, std::move(command));
-  return intent;
+  prepared_.emplace(id.value, std::move(approved));
+  return prepared;
 }
 
-absl::Status SimpleSimulatedExchange::StartPrepared(const ClientOrderId& client_id) {
+absl::Status SimpleSimulatedExchange::StartPrepared(
+    const ClientOrderId& client_id) {
   auto it = prepared_.find(client_id.value);
   if (it == prepared_.end())
     return Error(ErrorCode::kOrderNotFound, "Simulated prepared order absent");
-  OrderCommand command = std::move(it->second);
+  ApprovedOrder approved = std::move(it->second);
   prepared_.erase(it);
-  RestingOrder order{client_id, command.strategy_id, command.request};
+  RestingOrder order{client_id, approved.strategy_id, approved.request};
   const AssetId& collateral = order.request.side == Side::Buy
                                   ? config_.market.quote_asset
                                   : config_.market.base_asset;
@@ -186,7 +189,8 @@ absl::Status SimpleSimulatedExchange::StartPrepared(const ClientOrderId& client_
   if (order.request.side == Side::Buy && !config_.buy_fee_from_returns) {
     auto fee = required->Multiply(config_.maker_fee_rate);
     if (!fee.ok())
-      return Error(ErrorCode::kDecimalArithmeticFailed, "Simulated fee calculation failed");
+      return Error(ErrorCode::kDecimalArithmeticFailed,
+                   "Simulated fee calculation failed");
     required = required->Add(*fee);
     if (!required.ok())
       return Error(ErrorCode::kDecimalArithmeticFailed,
@@ -203,15 +207,16 @@ absl::Status SimpleSimulatedExchange::StartPrepared(const ClientOrderId& client_
   return absl::OkStatus();
 }
 
-absl::Status SimpleSimulatedExchange::AbortPrepared(const ClientOrderId& client_id) {
+absl::Status SimpleSimulatedExchange::AbortPrepared(
+    const ClientOrderId& client_id) {
   if (prepared_.erase(client_id.value) == 0) {
     return Error(ErrorCode::kOrderNotFound, "Simulated prepared order absent");
   }
   return absl::OkStatus();
 }
 
-absl::Status SimpleSimulatedExchange::StartCancel(const StrategyId& strategy_id,
-                                         const ClientOrderId& client_id) {
+absl::Status SimpleSimulatedExchange::StartCancel(
+    const StrategyId& strategy_id, const ClientOrderId& client_id) {
   auto it = std::find_if(
       orders_.begin(), orders_.end(), [&](const RestingOrder& order) {
         return order.client_id == client_id && order.strategy_id == strategy_id;
@@ -232,7 +237,8 @@ absl::Status SimpleSimulatedExchange::Fill(size_t index) {
   const Decimal& amount = order.request.base_amount;
   auto quote = price.Multiply(amount);
   if (!quote.ok())
-    return Error(ErrorCode::kDecimalArithmeticFailed, "Simulated fill quote calculation failed");
+    return Error(ErrorCode::kDecimalArithmeticFailed,
+                 "Simulated fill quote calculation failed");
   const bool buy = order.request.side == Side::Buy;
   AssetId fee_asset = buy && config_.buy_fee_from_returns
                           ? config_.market.base_asset
@@ -242,27 +248,33 @@ absl::Status SimpleSimulatedExchange::Fill(size_t index) {
                       : absl::StatusOr<Decimal>(*quote);
   auto fee = fee_base->Multiply(config_.maker_fee_rate);
   if (!fee.ok())
-    return Error(ErrorCode::kDecimalArithmeticFailed, "Simulated fill fee calculation failed");
+    return Error(ErrorCode::kDecimalArithmeticFailed,
+                 "Simulated fill fee calculation failed");
 
   auto next_base = buy ? BalanceOf(config_.market.base_asset).Add(amount)
                        : BalanceOf(config_.market.base_asset).Subtract(amount);
   auto next_quote = buy ? BalanceOf(config_.market.quote_asset).Subtract(*quote)
                         : BalanceOf(config_.market.quote_asset).Add(*quote);
   if (!next_base.ok())
-    return Error(ErrorCode::kDecimalArithmeticFailed, "Simulated fill base balance failed");
+    return Error(ErrorCode::kDecimalArithmeticFailed,
+                 "Simulated fill base balance failed");
   if (!next_quote.ok())
-    return Error(ErrorCode::kDecimalArithmeticFailed, "Simulated fill quote balance failed");
+    return Error(ErrorCode::kDecimalArithmeticFailed,
+                 "Simulated fill quote balance failed");
   if (fee_asset == config_.market.base_asset)
     next_base = next_base->Subtract(*fee);
   else
     next_quote = next_quote->Subtract(*fee);
   if (!next_base.ok())
-    return Error(ErrorCode::kDecimalArithmeticFailed, "Simulated fill net base balance failed");
+    return Error(ErrorCode::kDecimalArithmeticFailed,
+                 "Simulated fill net base balance failed");
   if (!next_quote.ok())
-    return Error(ErrorCode::kDecimalArithmeticFailed, "Simulated fill net quote balance failed");
+    return Error(ErrorCode::kDecimalArithmeticFailed,
+                 "Simulated fill net quote balance failed");
   auto fees_total = FeesPaid(fee_asset).Add(*fee);
   if (!fees_total.ok())
-    return Error(ErrorCode::kDecimalArithmeticFailed, "Simulated accumulated fees failed");
+    return Error(ErrorCode::kDecimalArithmeticFailed,
+                 "Simulated accumulated fees failed");
 
   orders_.erase(orders_.begin() + index);
   balances_[config_.market.base_asset.value] = *next_base;
@@ -288,9 +300,11 @@ absl::Status SimpleSimulatedExchange::Fill(size_t index) {
   return absl::OkStatus();
 }
 
-absl::Status SimpleSimulatedExchange::OnBookBbo(const Decimal& bid, const Decimal& ask) {
+absl::Status SimpleSimulatedExchange::OnBookBbo(const Decimal& bid,
+                                                const Decimal& ask) {
   if (!bid.IsStrictlyPositive() || !ask.IsStrictlyPositive()) {
-    return Error(ErrorCode::kSimulatedMarketDataInvalid, "Simulated BBO invalid");
+    return Error(ErrorCode::kSimulatedMarketDataInvalid,
+                 "Simulated BBO invalid");
   }
   for (size_t i = 0; i < orders_.size();) {
     const auto& order = orders_[i];
@@ -311,10 +325,11 @@ absl::Status SimpleSimulatedExchange::OnBookBbo(const Decimal& bid, const Decima
   return absl::OkStatus();
 }
 
-absl::Status SimpleSimulatedExchange::OnPublicTrade(Side aggressor, const Decimal& price,
-                                           const Decimal& public_amount) {
+absl::Status SimpleSimulatedExchange::OnPublicTrade(
+    Side aggressor, const Decimal& price, const Decimal& public_amount) {
   if (!price.IsStrictlyPositive() || !public_amount.IsStrictlyPositive()) {
-    return Error(ErrorCode::kSimulatedMarketDataInvalid, "Simulated public trade invalid");
+    return Error(ErrorCode::kSimulatedMarketDataInvalid,
+                 "Simulated public trade invalid");
   }
   for (size_t i = 0; i < orders_.size();) {
     const auto& order = orders_[i];

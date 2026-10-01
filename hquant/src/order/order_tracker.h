@@ -38,7 +38,7 @@ struct TrackerResult {
 // dispatching the ordered events.
 class OrderTracker {
  public:
-  absl::StatusOr<TrackerResult> Register(OrderIntent intent);
+  absl::StatusOr<TrackerResult> Register(PreparedOrder prepared);
   absl::StatusOr<TrackerResult> RequestCancel(const ClientOrderId& client_id);
   // A failure proven to occur before any socket write releases PendingCreate.
   absl::StatusOr<TrackerResult> FailBeforeWrite(const ClientOrderId& client_id,
@@ -55,7 +55,7 @@ class OrderTracker {
 
  private:
   struct TrackedOrder {
-    OrderIntent intent;
+    PreparedOrder prepared;
     std::optional<ExchangeOrderId> exchange_id;
     OrderLifecycle lifecycle = OrderLifecycle::PendingCreate;
     bool cancel_pending = false;

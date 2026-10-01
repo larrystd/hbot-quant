@@ -132,14 +132,14 @@ TEST(RecoveryIntegrationTest, UnknownWriteAndCrashUseOriginalIdWithoutResend) {
       io, transport, clock, config, [&](binance_spot::GatewayEvent event) {
         events.push_back(std::move(event));
       });
-  OrderCommand command{strategy_id, request, reservation->reservation_id,
-                       DecisionId{1},
-                       clock.MonoNow() + std::chrono::seconds(1)};
-  auto intent = gateway.PrepareSubmit(std::move(command));
-  ASSERT_TRUE(intent.ok()) << intent.status();
+  ApprovedOrder approved{strategy_id, request, reservation->reservation_id,
+                         DecisionId{1},
+                         clock.MonoNow() + std::chrono::seconds(1)};
+  auto prepared = gateway.PrepareSubmit(std::move(approved));
+  ASSERT_TRUE(prepared.ok()) << prepared.status();
   ASSERT_TRUE(
       original_risk
-          .AttachClientId(reservation->reservation_id, intent->client_id)
+          .AttachClientId(reservation->reservation_id, prepared->client_id)
           .ok());
   auto recorder =
       SqliteRecorder::Open({database.path(), RunId{42}, clock.UtcNow(), 8, 1});
@@ -150,22 +150,22 @@ TEST(RecoveryIntegrationTest, UnknownWriteAndCrashUseOriginalIdWithoutResend) {
   record.shard_sequence = 1;
   record.strategy_id = strategy_id;
   record.received_at_utc = clock.UtcNow();
-  record.payload = *intent;
+  record.payload = *prepared;
   ASSERT_TRUE((*recorder)->TryPush(std::move(record)));
   ASSERT_TRUE((*recorder)->Flush().ok());
   OrderTracker original_tracker;
-  ASSERT_TRUE(original_tracker.Register(*intent).ok());
-  ASSERT_TRUE(gateway.StartPrepared(intent->client_id).ok());
+  ASSERT_TRUE(original_tracker.Register(*prepared).ok());
+  ASSERT_TRUE(gateway.StartPrepared(prepared->client_id).ok());
   io.run();
   ASSERT_EQ(transport.calls, 1);
   ASSERT_EQ(events.size(), 1);
   EXPECT_EQ(events[0].kind, binance_spot::GatewayEventKind::SubmissionUnknown);
-  ASSERT_TRUE(original_tracker.MarkSubmissionUnknown(intent->client_id).ok());
+  ASSERT_TRUE(original_tracker.MarkSubmissionUnknown(prepared->client_id).ok());
   ASSERT_TRUE(
       original_risk.MarkSubmissionUnknown(reservation->reservation_id).ok());
   EXPECT_EQ(
       *original_risk.Available(account, AssetId("USDT"))->Compare(D("99")), 0);
-  EXPECT_FALSE(gateway.StartPrepared(intent->client_id).ok());
+  EXPECT_FALSE(gateway.StartPrepared(prepared->client_id).ok());
   EXPECT_EQ(transport.calls, 1);
   recorder->reset();  // abrupt exit: no clean-stop marker
 
@@ -173,20 +173,21 @@ TEST(RecoveryIntegrationTest, UnknownWriteAndCrashUseOriginalIdWithoutResend) {
   ASSERT_TRUE(recovered.ok()) << recovered.status();
   EXPECT_TRUE(recovered->crash_tail_possible);
   EXPECT_TRUE(recovered->needs_reconciliation);
-  ASSERT_EQ(recovered->context.recovered_intents.size(), 1);
-  EXPECT_EQ(recovered->context.recovered_intents[0].client_id,
-            intent->client_id);
+  ASSERT_EQ(recovered->context.recovered_prepared_orders.size(), 1);
+  EXPECT_EQ(recovered->context.recovered_prepared_orders[0].client_id,
+            prepared->client_id);
   binance_spot::RestartReconciliationInput restart;
   restart.account = account;
   restart.assigned_markets = {market};
-  restart.persisted_intents = recovered->context.recovered_intents;
+  restart.persisted_prepared_orders =
+      recovered->context.recovered_prepared_orders;
   restart.history_complete = recovered->manifest.history_complete;
   restart.previous_run_clean = !recovered->crash_tail_possible;
   restart.executor_checkpoints_complete = false;
   auto plan = binance_spot::PlanRestart(restart);
   ASSERT_TRUE(plan.ok()) << plan.status();
   ASSERT_EQ(plan->known_orders.size(), 1);
-  EXPECT_EQ(plan->known_orders[0].original_client_id, intent->client_id);
+  EXPECT_EQ(plan->known_orders[0].original_client_id, prepared->client_id);
   EXPECT_FALSE(plan->markets_to_scan.empty());
   EXPECT_TRUE(plan->pause_stateful_executors);
 
@@ -196,18 +197,19 @@ TEST(RecoveryIntegrationTest, UnknownWriteAndCrashUseOriginalIdWithoutResend) {
           .SetInitialLease({account, AssetId("USDT"), ShardId{0}, 1, D("100"),
                             clock.UtcNow() + std::chrono::hours(1)})
           .ok());
-  auto restored_hold = restored_risk.TryReserve(strategy_id, request, spec, rule,
-                                                clock.UtcNow(), true, true);
+  auto restored_hold = restored_risk.TryReserve(
+      strategy_id, request, spec, rule, clock.UtcNow(), true, true);
   ASSERT_TRUE(restored_hold.ok());
   ASSERT_TRUE(
       restored_risk
-          .AttachClientId(restored_hold->reservation_id, intent->client_id)
+          .AttachClientId(restored_hold->reservation_id, prepared->client_id)
           .ok());
   ASSERT_TRUE(
       restored_risk.MarkSubmissionUnknown(restored_hold->reservation_id).ok());
   OrderTracker tracker;
-  ASSERT_TRUE(tracker.Register(recovered->context.recovered_intents[0]).ok());
-  ASSERT_TRUE(tracker.MarkSubmissionUnknown(intent->client_id).ok());
+  ASSERT_TRUE(
+      tracker.Register(recovered->context.recovered_prepared_orders[0]).ok());
+  ASSERT_TRUE(tracker.MarkSubmissionUnknown(prepared->client_id).ok());
   FakeSignedRest missing;
   missing.responses.push_back(
       {404, R"({"code":-2013,"msg":"Order does not exist."})"});
@@ -224,7 +226,7 @@ TEST(RecoveryIntegrationTest, UnknownWriteAndCrashUseOriginalIdWithoutResend) {
   rest.responses.push_back(
       {200,
        "{\"symbol\":\"BTCUSDT\",\"clientOrderId\":\"" +
-           intent->client_id.value +
+           prepared->client_id.value +
            "\",\"orderId\":123,\"status\":\"FILLED\",\"executedQty\":\"0.01\","
            "\"cummulativeQuoteQty\":\"1\",\"updateTime\":1499827319559}"});
   rest.responses.push_back(
@@ -240,7 +242,7 @@ TEST(RecoveryIntegrationTest, UnknownWriteAndCrashUseOriginalIdWithoutResend) {
   ASSERT_EQ(reconciled->trades.size(), 1);
   ASSERT_EQ(rest.targets.size(), 2);
   EXPECT_EQ(rest.targets[0], "/api/v3/order?symbol=BTCUSDT&origClientOrderId=" +
-                                 intent->client_id.value);
+                                 prepared->client_id.value);
   ASSERT_TRUE(tracker.ApplyTradeUpdate(reconciled->trades[0]).ok());
   ASSERT_TRUE(tracker.ApplyTradeUpdate(reconciled->trades[0]).ok());
   auto final = tracker.Reconcile(*reconciled->order);

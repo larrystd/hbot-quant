@@ -68,7 +68,7 @@
       "output": {
         "events": [
           {
-            "kind": "OrderCreated",
+            "kind": "OrderOpened",
             "client_id": "S1"
           }
         ],
@@ -121,7 +121,7 @@
       "output": {
         "events": [
           {
-            "kind": "OrderFilled",
+            "kind": "OrderTraded",
             "client_id": "S1",
             "trade_id": "T1",
             "price": "100",
@@ -131,7 +131,7 @@
             }
           },
           {
-            "kind": "OrderCompleted",
+            "kind": "OrderFullyTraded",
             "client_id": "S1"
           }
         ],

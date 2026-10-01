@@ -51,7 +51,7 @@ struct ReconciliationTarget {
 struct RestartReconciliationInput {
   AccountId account;
   std::vector<MarketId> assigned_markets;
-  std::vector<OrderIntent> persisted_intents;
+  std::vector<PreparedOrder> persisted_prepared_orders;
   std::vector<OrderSnapshot> live_snapshots;
   bool history_complete = true;
   bool previous_run_clean = true;
@@ -60,8 +60,8 @@ struct RestartReconciliationInput {
 
 struct RestartReconciliationPlan {
   std::vector<ReconciliationTarget> known_orders;
-  // A crash/history gap can omit the intent itself. Scan these markets for
-  // exchange orders before resuming trading or stateful executors.
+  // A crash/history gap can omit the prepared order itself. Scan these markets
+  // for exchange orders before resuming trading or stateful executors.
   std::vector<MarketId> markets_to_scan;
   bool pause_stateful_executors = false;
 };
@@ -109,7 +109,8 @@ class ReconciliationClient {
       std::chrono::steady_clock::time_point deadline);
 
   // Returns exchange-discovered client IDs after an unclean restart. The
-  // caller still validates stable strategy_id identity and queries each original ID.
+  // caller still validates stable strategy_id identity and queries each
+  // original ID.
   boost::asio::awaitable<absl::StatusOr<std::vector<ReconciliationTarget>>>
   DiscoverOpenOrders(AccountId account, MarketId market,
                      std::chrono::steady_clock::time_point deadline);

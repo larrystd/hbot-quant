@@ -78,9 +78,10 @@ std::string State(OrderDisplayState state) {
   return "Absent";
 }
 std::string EventName(const TrackedOrderEvent& event) {
-  if (std::holds_alternative<OrderCreated>(event)) return "OrderCreated";
-  if (std::holds_alternative<OrderFilled>(event)) return "OrderFilled";
-  if (std::holds_alternative<OrderCompleted>(event)) return "OrderCompleted";
+  if (std::holds_alternative<OrderOpened>(event)) return "OrderOpened";
+  if (std::holds_alternative<OrderTraded>(event)) return "OrderTraded";
+  if (std::holds_alternative<OrderFullyTraded>(event))
+    return "OrderFullyTraded";
   if (std::holds_alternative<OrderCanceled>(event)) return "OrderCanceled";
   return "OrderFailed";
 }
@@ -94,37 +95,39 @@ ExchangeOrderStatus Status(const std::string& text) {
   throw std::runtime_error("unknown exchange status");
 }
 
-OrderIntent Intent(simdjson::dom::element setup) {
-  OrderIntent intent;
-  intent.client_id = ClientOrderId{String(setup, "client_id")};
-  intent.strategy_id = StrategyId{Unsigned(setup, "strategy_id"), StrategyName{"simple_pmm"}};
-  intent.request.account = AccountId{String(setup, "account")};
-  intent.request.market =
-      MarketId{ExchangeId{"simulated"}, InstrumentKind::Spot, String(setup, "market")};
-  intent.request.side = String(setup, "side") == "Buy" ? Side::Buy : Side::Sell;
-  intent.request.type = OrderType::Limit;
-  intent.request.base_amount = D(String(setup, "base_amount"));
-  intent.request.limit_price = D(String(setup, "limit_price"));
-  return intent;
+PreparedOrder PreparedFromFixture(simdjson::dom::element setup) {
+  PreparedOrder prepared;
+  prepared.client_id = ClientOrderId{String(setup, "client_id")};
+  prepared.strategy_id =
+      StrategyId{Unsigned(setup, "strategy_id"), StrategyName{"simple_pmm"}};
+  prepared.request.account = AccountId{String(setup, "account")};
+  prepared.request.market = MarketId{
+      ExchangeId{"simulated"}, InstrumentKind::Spot, String(setup, "market")};
+  prepared.request.side =
+      String(setup, "side") == "Buy" ? Side::Buy : Side::Sell;
+  prepared.request.type = OrderType::Limit;
+  prepared.request.base_amount = D(String(setup, "base_amount"));
+  prepared.request.limit_price = D(String(setup, "limit_price"));
+  return prepared;
 }
 
 absl::StatusOr<TrackerResult> ReplayStep(OrderTracker& tracker,
-                                         const OrderIntent& intent,
+                                         const PreparedOrder& prepared,
                                          const fixtures::FixtureStep& step) {
   simdjson::dom::parser parser;
   simdjson::dom::element event;
   if (parser.parse(step.event_json).get(event))
     return absl::InvalidArgumentError("fixture event JSON invalid");
   const std::string kind = String(event, "kind");
-  if (kind == "register") return tracker.Register(intent);
+  if (kind == "register") return tracker.Register(prepared);
   if (kind == "cancel_requested")
-    return tracker.RequestCancel(intent.client_id);
+    return tracker.RequestCancel(prepared.client_id);
   if (kind == "submission_unknown")
-    return tracker.MarkSubmissionUnknown(intent.client_id);
+    return tracker.MarkSubmissionUnknown(prepared.client_id);
   if (kind == "order_update" || kind == "reconcile") {
     OrderUpdate update;
-    update.account = intent.request.account;
-    update.market = intent.request.market;
+    update.account = prepared.request.account;
+    update.market = prepared.request.market;
     if (auto id = OptionalString(event, "client_id"))
       update.client_id = ClientOrderId{*id};
     if (auto id = OptionalString(event, "exchange_order_id"))
@@ -141,8 +144,8 @@ absl::StatusOr<TrackerResult> ReplayStep(OrderTracker& tracker,
   }
   if (kind == "trade_update") {
     TradeUpdate trade;
-    trade.account = intent.request.account;
-    trade.market = intent.request.market;
+    trade.account = prepared.request.account;
+    trade.market = prepared.request.market;
     if (auto id = OptionalString(event, "client_id"))
       trade.client_id = ClientOrderId{*id};
     if (auto id = OptionalString(event, "exchange_order_id"))
@@ -167,7 +170,7 @@ absl::StatusOr<TrackerResult> ReplayStep(OrderTracker& tracker,
   return absl::InvalidArgumentError("unknown fixture event");
 }
 
-void CheckOutput(const TrackerResult& result, const OrderIntent& intent,
+void CheckOutput(const TrackerResult& result, const PreparedOrder& prepared,
                  const fixtures::FixtureStep& step) {
   simdjson::dom::parser parser;
   simdjson::dom::element expected;
@@ -179,7 +182,7 @@ void CheckOutput(const TrackerResult& result, const OrderIntent& intent,
   ExpectDecimal(result.snapshot.cumulative_quote,
                 String(expected, "cumulative_quote"));
   auto remaining =
-      intent.request.base_amount.Subtract(result.snapshot.cumulative_base);
+      prepared.request.base_amount.Subtract(result.snapshot.cumulative_base);
   ASSERT_TRUE(remaining.ok()) << remaining.status();
   ExpectDecimal(*remaining, String(expected, "remaining_base"));
   std::vector<std::string> events;
@@ -229,13 +232,13 @@ TEST(OrderTrackerTest, ReplaysAllPinnedPythonAndArchitectureFixtures) {
     simdjson::dom::parser setup_parser;
     simdjson::dom::element setup;
     ASSERT_FALSE(setup_parser.parse(fixture->setup_json).get(setup));
-    const OrderIntent intent = Intent(setup);
+    const PreparedOrder prepared = PreparedFromFixture(setup);
     OrderTracker tracker;
     for (const auto& step : fixture->steps) {
       SCOPED_TRACE(step.stamp.at_us);
-      auto result = ReplayStep(tracker, intent, step);
+      auto result = ReplayStep(tracker, prepared, step);
       ASSERT_TRUE(result.ok()) << result.status();
-      CheckOutput(*result, intent, step);
+      CheckOutput(*result, prepared, step);
     }
   }
 }
@@ -243,7 +246,7 @@ TEST(OrderTrackerTest, ReplaysAllPinnedPythonAndArchitectureFixtures) {
 TEST(OrderTrackerTest,
      RejectsIdCollisionAndOverfillWithoutMutatingVerifiedFills) {
   OrderTracker tracker;
-  OrderIntent first;
+  PreparedOrder first;
   first.client_id = ClientOrderId{"B1"};
   first.strategy_id = StrategyId{1, StrategyName{"s"}};
   first.request.account = AccountId{"A1"};
@@ -284,24 +287,24 @@ TEST(OrderTrackerTest,
 
 TEST(OrderTrackerTest, ReconcilesUnknownSubmissionUsingOriginalClientId) {
   OrderTracker tracker;
-  OrderIntent intent;
-  intent.client_id = ClientOrderId{"B1"};
-  intent.strategy_id = StrategyId{1, StrategyName{"s"}};
-  intent.request.account = AccountId{"A1"};
-  intent.request.market =
+  PreparedOrder prepared;
+  prepared.client_id = ClientOrderId{"B1"};
+  prepared.strategy_id = StrategyId{1, StrategyName{"s"}};
+  prepared.request.account = AccountId{"A1"};
+  prepared.request.market =
       MarketId{ExchangeId{"simulated"}, InstrumentKind::Spot, "BTC-USDT"};
-  intent.request.base_amount = D("1");
-  intent.request.limit_price = D("100");
-  ASSERT_TRUE(tracker.Register(intent).ok());
-  auto unknown = tracker.MarkSubmissionUnknown(intent.client_id);
+  prepared.request.base_amount = D("1");
+  prepared.request.limit_price = D("100");
+  ASSERT_TRUE(tracker.Register(prepared).ok());
+  auto unknown = tracker.MarkSubmissionUnknown(prepared.client_id);
   ASSERT_TRUE(unknown.ok());
   EXPECT_EQ(unknown->snapshot.display_state,
             OrderDisplayState::SubmissionUnknown);
   ASSERT_EQ(tracker.ReconciliationQueue().size(), 1);
   OrderUpdate recovered;
-  recovered.account = intent.request.account;
-  recovered.market = intent.request.market;
-  recovered.client_id = intent.client_id;
+  recovered.account = prepared.request.account;
+  recovered.market = prepared.request.market;
+  recovered.client_id = prepared.client_id;
   recovered.exchange_order_id = ExchangeOrderId{"E1"};
   recovered.exchange_status = ExchangeOrderStatus::Open;
   auto reconciled = tracker.Reconcile(recovered);
@@ -309,7 +312,7 @@ TEST(OrderTrackerTest, ReconcilesUnknownSubmissionUsingOriginalClientId) {
   EXPECT_EQ(reconciled->reconciliation, ReconciliationState::Confirmed);
   EXPECT_EQ(reconciled->snapshot.display_state, OrderDisplayState::Open);
   ASSERT_EQ(reconciled->events.size(), 1);
-  EXPECT_EQ(EventName(reconciled->events[0]), "OrderCreated");
+  EXPECT_EQ(EventName(reconciled->events[0]), "OrderOpened");
   EXPECT_TRUE(tracker.ReconciliationQueue().empty());
   auto duplicate = tracker.ApplyOrderUpdate(recovered);
   ASSERT_TRUE(duplicate.ok());
@@ -318,19 +321,19 @@ TEST(OrderTrackerTest, ReconcilesUnknownSubmissionUsingOriginalClientId) {
 
 TEST(OrderTrackerTest, RoutesExchangeOnlyReportAndDoesNotRegressOnStaleStatus) {
   OrderTracker tracker;
-  OrderIntent intent;
-  intent.client_id = ClientOrderId{"B1"};
-  intent.strategy_id = StrategyId{1, StrategyName{"s"}};
-  intent.request.account = AccountId{"A1"};
-  intent.request.market =
+  PreparedOrder prepared;
+  prepared.client_id = ClientOrderId{"B1"};
+  prepared.strategy_id = StrategyId{1, StrategyName{"s"}};
+  prepared.request.account = AccountId{"A1"};
+  prepared.request.market =
       MarketId{ExchangeId{"simulated"}, InstrumentKind::Spot, "BTC-USDT"};
-  intent.request.base_amount = D("1");
-  intent.request.limit_price = D("100");
-  ASSERT_TRUE(tracker.Register(intent).ok());
+  prepared.request.base_amount = D("1");
+  prepared.request.limit_price = D("100");
+  ASSERT_TRUE(tracker.Register(prepared).ok());
   OrderUpdate update;
-  update.account = intent.request.account;
-  update.market = intent.request.market;
-  update.client_id = intent.client_id;
+  update.account = prepared.request.account;
+  update.market = prepared.request.market;
+  update.client_id = prepared.client_id;
   update.exchange_order_id = ExchangeOrderId{"E1"};
   update.exchange_status = ExchangeOrderStatus::Open;
   ASSERT_TRUE(tracker.ApplyOrderUpdate(update).ok());
@@ -350,25 +353,26 @@ TEST(OrderTrackerTest, RoutesExchangeOnlyReportAndDoesNotRegressOnStaleStatus) {
 TEST(OrderTrackerTest,
      ProvenPreWriteFailureEndsPendingOrderWithoutCreatedEvent) {
   OrderTracker tracker;
-  OrderIntent intent;
-  intent.client_id = ClientOrderId{"B1"};
-  intent.strategy_id = StrategyId{1, StrategyName{"s"}};
-  intent.request.account = AccountId{"A1"};
-  intent.request.market =
+  PreparedOrder prepared;
+  prepared.client_id = ClientOrderId{"B1"};
+  prepared.strategy_id = StrategyId{1, StrategyName{"s"}};
+  prepared.request.account = AccountId{"A1"};
+  prepared.request.market =
       MarketId{ExchangeId{"simulated"}, InstrumentKind::Spot, "BTC-USDT"};
-  intent.request.base_amount = D("1");
-  intent.request.limit_price = D("100");
-  ASSERT_TRUE(tracker.Register(intent).ok());
+  prepared.request.base_amount = D("1");
+  prepared.request.limit_price = D("100");
+  ASSERT_TRUE(tracker.Register(prepared).ok());
   auto failed =
-      tracker.FailBeforeWrite(intent.client_id, "SendSlotUnavailable");
+      tracker.FailBeforeWrite(prepared.client_id, "SendSlotUnavailable");
   ASSERT_TRUE(failed.ok()) << failed.status();
   EXPECT_EQ(failed->snapshot.display_state, OrderDisplayState::Failed);
   ASSERT_EQ(failed->events.size(), 1);
   EXPECT_EQ(EventName(failed->events[0]), "OrderFailed");
   EXPECT_EQ(std::get<OrderFailed>(failed->events[0]).reason,
             "SendSlotUnavailable");
-  EXPECT_EQ(CodeOf(tracker.FailBeforeWrite(intent.client_id, "again").status()),
-            ErrorCode::kOrderNotCancelable);
+  EXPECT_EQ(
+      CodeOf(tracker.FailBeforeWrite(prepared.client_id, "again").status()),
+      ErrorCode::kOrderNotCancelable);
 }
 
 }  // namespace

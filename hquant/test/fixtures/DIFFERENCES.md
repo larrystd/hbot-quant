@@ -11,7 +11,7 @@ that the pinned Python program emits the same output.
 | Order book validity | `crossed_book`, `invalid_raw_precision` | Crossed books and prices that cannot map exactly to integer ticks trigger resynchronization. |
 | Order book freshness | `stale_then_continuous_resume` | A stale book blocks new orders until the configured recovery condition holds. |
 | Tracker cancellation | `cancel_fill_race` | Keep `cancel_pending` separate from verified fills and hold the remaining reservation until cancellation is confirmed. |
-| Tracker completion | `filled_status_before_details` | Show `AwaitingFills` and defer `OrderCompleted` until required trade details and fees are verified. |
+| Tracker completion | `filled_status_before_details` | Show `AwaitingFills` and defer `OrderFullyTraded` until required trade details and fees are verified. |
 | Unknown submission | `submission_unknown_retains_reservation` | Preserve the original client ID and worst-case reservation while reconciling an uncertain write. |
 | Paper admission | `unfunded_sell_rejected_before_exchange` | RiskGate rejects an unfunded order before Paper submission; Python Paper creates it and cancels at attempted match. |
 

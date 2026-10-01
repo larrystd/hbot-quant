@@ -27,9 +27,10 @@ int main() {
   request.market = market;
   request.limit_price = *price;
   hquant::ActionBatch batch;
-  batch.ordered.emplace_back(hquant::SubmitOrder{hquant::StrategyId{}, request});
+  batch.ordered.emplace_back(
+      hquant::SubmitOrder{hquant::StrategyId{}, request});
   hquant::RecordEnvelope record;
-  record.payload = hquant::OrderIntent{};
+  record.payload = hquant::PreparedOrder{};
   hquant::ControlRequest control;
   control.payload = hquant::StatusRequest{};
   hquant::ShardReport report;

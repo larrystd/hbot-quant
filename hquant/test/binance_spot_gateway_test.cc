@@ -94,7 +94,8 @@ class MockTransport final : public HttpTransport {
 BinanceGatewayConfig Config() {
   BinanceGatewayConfig config;
   config.account = AccountId("test-account");
-  config.market = MarketId{ExchangeId("binance"), InstrumentKind::Spot, "BTCUSDT"};
+  config.market =
+      MarketId{ExchangeId("binance"), InstrumentKind::Spot, "BTCUSDT"};
   config.trading_rule =
       TradingRule{config.market, D("0.01"), D("0.001"), D("0.001"), D("0.01")};
   config.run = RunId{42};
@@ -106,9 +107,11 @@ BinanceGatewayConfig Config() {
   return config;
 }
 
-StrategyId MakeStrategyId() { return StrategyId{17, StrategyName("simple_pmm")}; }
+StrategyId MakeStrategyId() {
+  return StrategyId{17, StrategyName("simple_pmm")};
+}
 
-OrderCommand Command(const TestClock& clock) {
+ApprovedOrder Approved(const TestClock& clock) {
   OrderRequest request;
   request.account = AccountId("test-account");
   request.market = Config().market;
@@ -116,8 +119,9 @@ OrderCommand Command(const TestClock& clock) {
   request.type = OrderType::LimitMaker;
   request.base_amount = D("0.0109");
   request.limit_price = D("99.999");
-  return OrderCommand{MakeStrategyId(), request, ReservationId{1}, DecisionId{1},
-                      clock.MonoNow() + std::chrono::seconds(1)};
+  return ApprovedOrder{MakeStrategyId(), request, ReservationId{1},
+                       DecisionId{1},
+                       clock.MonoNow() + std::chrono::seconds(1)};
 }
 
 TEST(ClientIdCodecTest, StableStrategyIdAndUniqueRunRoundTrip) {
@@ -135,7 +139,8 @@ TEST(ClientIdCodecTest, StableStrategyIdAndUniqueRunRoundTrip) {
   EXPECT_EQ(CodeOf(DecodeClientId(ClientOrderId(first->value + "A")).status()),
             ErrorCode::kClientOrderIdInvalid);
   EXPECT_FALSE(EncodeClientId(MakeStrategyId(), RunId{42}, ShardId{3}, 0).ok());
-  EXPECT_FALSE(EncodeClientId(MakeStrategyId(), RunId{42}, ShardId{3}, 1U << 29).ok());
+  EXPECT_FALSE(
+      EncodeClientId(MakeStrategyId(), RunId{42}, ShardId{3}, 1U << 29).ok());
 }
 
 TEST(SignerTest, OfficialHmacVectorAndPercentEncodedWireBytes) {
@@ -167,16 +172,16 @@ TEST(BinanceOrderGatewayTest,
   BinanceOrderGateway gateway(
       io, transport, clock, config,
       [&](GatewayEvent event) { events.push_back(std::move(event)); });
-  auto invalid = Command(clock);
+  auto invalid = Approved(clock);
   invalid.request.base_amount = D("0");
   EXPECT_EQ(CodeOf(gateway.PrepareSubmit(std::move(invalid)).status()),
             ErrorCode::kOrderPriceOrAmountInvalid);
   EXPECT_EQ(gateway.PendingSubmitCount(), 0);
-  auto intent = gateway.PrepareSubmit(Command(clock));
-  ASSERT_TRUE(intent.ok());
-  EXPECT_EQ(intent->request.base_amount.ToString(), "0.01");
-  EXPECT_EQ(intent->request.limit_price->ToString(), "99.99");
-  EXPECT_TRUE(gateway.StartPrepared(intent->client_id).ok());
+  auto prepared = gateway.PrepareSubmit(Approved(clock));
+  ASSERT_TRUE(prepared.ok());
+  EXPECT_EQ(prepared->request.base_amount.ToString(), "0.01");
+  EXPECT_EQ(prepared->request.limit_price->ToString(), "99.99");
+  EXPECT_TRUE(gateway.StartPrepared(prepared->client_id).ok());
   clock.Advance(std::chrono::seconds(2));
   io.run();
   EXPECT_TRUE(transport.requests.empty());
@@ -184,7 +189,7 @@ TEST(BinanceOrderGatewayTest,
   ASSERT_EQ(events.size(), 1);
   EXPECT_EQ(events[0].kind, GatewayEventKind::BeforeWriteFailed);
   EXPECT_EQ(events[0].code, ErrorCode::kOrderExpiredBeforeSend);
-  EXPECT_EQ(events[0].client_id, intent->client_id);
+  EXPECT_EQ(events[0].client_id, prepared->client_id);
 }
 
 TEST(BinanceOrderGatewayTest, InvalidQuantizationUsesDecimalArithmeticCode) {
@@ -194,7 +199,7 @@ TEST(BinanceOrderGatewayTest, InvalidQuantizationUsesDecimalArithmeticCode) {
   auto config = Config();
   config.trading_rule.base_increment = D("0");
   BinanceOrderGateway gateway(io, transport, clock, std::move(config), {});
-  EXPECT_EQ(CodeOf(gateway.PrepareSubmit(Command(clock)).status()),
+  EXPECT_EQ(CodeOf(gateway.PrepareSubmit(Approved(clock)).status()),
             ErrorCode::kDecimalArithmeticFailed);
 }
 
@@ -208,8 +213,8 @@ TEST(BinanceOrderGatewayTest, TimeoutAndServerErrorRemainUnknownWithoutResend) {
   BinanceOrderGateway gateway(
       io, transport, clock, Config(),
       [&](GatewayEvent event) { events.push_back(std::move(event)); });
-  auto first = gateway.PrepareSubmit(Command(clock));
-  auto second = gateway.PrepareSubmit(Command(clock));
+  auto first = gateway.PrepareSubmit(Approved(clock));
+  auto second = gateway.PrepareSubmit(Approved(clock));
   ASSERT_TRUE(first.ok() && second.ok());
   ASSERT_TRUE(gateway.StartPrepared(first->client_id).ok());
   ASSERT_TRUE(gateway.StartPrepared(second->client_id).ok());
@@ -240,8 +245,8 @@ TEST(BinanceOrderGatewayTest, DistinguishesRateLimitFromIpBan) {
   BinanceOrderGateway gateway(
       io, transport, clock, Config(),
       [&](GatewayEvent event) { events.push_back(std::move(event)); });
-  auto first = gateway.PrepareSubmit(Command(clock));
-  auto second = gateway.PrepareSubmit(Command(clock));
+  auto first = gateway.PrepareSubmit(Approved(clock));
+  auto second = gateway.PrepareSubmit(Approved(clock));
   ASSERT_TRUE(first.ok() && second.ok());
   ASSERT_TRUE(gateway.StartPrepared(first->client_id).ok());
   ASSERT_TRUE(gateway.StartPrepared(second->client_id).ok());
@@ -269,7 +274,7 @@ TEST(BinanceOrderGatewayTest, CancelUsesReservedRateSlotAndOriginalClientId) {
   BinanceOrderGateway gateway(
       io, transport, clock, config,
       [&](GatewayEvent event) { events.push_back(std::move(event)); });
-  auto first = gateway.PrepareSubmit(Command(clock));
+  auto first = gateway.PrepareSubmit(Approved(clock));
   ASSERT_TRUE(first.ok());
   ASSERT_TRUE(gateway.StartPrepared(first->client_id).ok());
   io.run();
@@ -277,7 +282,7 @@ TEST(BinanceOrderGatewayTest, CancelUsesReservedRateSlotAndOriginalClientId) {
   ASSERT_EQ(events[0].kind, GatewayEventKind::SubmitConfirmed);
   ASSERT_TRUE(events[0].update);
   EXPECT_EQ(events[0].update->exchange_order_id->value, "123");
-  auto second = gateway.PrepareSubmit(Command(clock));
+  auto second = gateway.PrepareSubmit(Approved(clock));
   ASSERT_TRUE(second.ok());
   EXPECT_EQ(CodeOf(gateway.StartPrepared(second->client_id)),
             ErrorCode::kRateBudgetExhausted);
@@ -305,12 +310,12 @@ TEST(BinanceOrderGatewayTest, CancellationRunsAheadOfQueuedSubmissions) {
   BinanceOrderGateway gateway(
       io, transport, clock, Config(),
       [&](GatewayEvent event) { events.push_back(std::move(event)); });
-  auto original = gateway.PrepareSubmit(Command(clock));
+  auto original = gateway.PrepareSubmit(Approved(clock));
   ASSERT_TRUE(original.ok());
   ASSERT_TRUE(gateway.StartPrepared(original->client_id).ok());
   io.run();
-  auto a = gateway.PrepareSubmit(Command(clock));
-  auto b = gateway.PrepareSubmit(Command(clock));
+  auto a = gateway.PrepareSubmit(Approved(clock));
+  auto b = gateway.PrepareSubmit(Approved(clock));
   ASSERT_TRUE(a.ok() && b.ok());
   ASSERT_TRUE(gateway.StartPrepared(a->client_id).ok());
   ASSERT_TRUE(gateway.StartPrepared(b->client_id).ok());
@@ -332,7 +337,7 @@ TEST(BinanceOrderGatewayTest, HistoricalRunCollisionStopsNewIds) {
   ASSERT_TRUE(old.ok());
   EXPECT_EQ(CodeOf(gateway.ObserveHistoricalClientId(*old)),
             ErrorCode::kOrderRecoveryInvalid);
-  EXPECT_EQ(CodeOf(gateway.PrepareSubmit(Command(clock)).status()),
+  EXPECT_EQ(CodeOf(gateway.PrepareSubmit(Approved(clock)).status()),
             ErrorCode::kOrderRecoveryInvalid);
 }
 
@@ -346,14 +351,14 @@ TEST(BinanceOrderGatewayTest,
   BinanceOrderGateway gateway(
       io, transport, clock, Config(),
       [&](GatewayEvent event) { events.push_back(std::move(event)); });
-  auto intent = gateway.PrepareSubmit(Command(clock));
-  ASSERT_TRUE(intent.ok());
-  ASSERT_TRUE(gateway.StartPrepared(intent->client_id).ok());
+  auto prepared = gateway.PrepareSubmit(Approved(clock));
+  ASSERT_TRUE(prepared.ok());
+  ASSERT_TRUE(gateway.StartPrepared(prepared->client_id).ok());
   io.run();
   ASSERT_EQ(events.size(), 1);
   EXPECT_EQ(events[0].kind, GatewayEventKind::SubmissionUnknown);
   EXPECT_EQ(events[0].code, ErrorCode::kOrderSubmissionUnknown);
-  EXPECT_EQ(events[0].client_id, intent->client_id);
+  EXPECT_EQ(events[0].client_id, prepared->client_id);
   EXPECT_EQ(transport.requests.size(), 1);
 }
 

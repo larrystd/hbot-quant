@@ -149,7 +149,8 @@ absl::Status HistoryReader::TrySubmit(HistoryQuery query) {
     return Error(ErrorCode::kHistoryCursorInvalid, "invalid history cursor");
   std::lock_guard lock(mutex_);
   if (stopping_)
-    return Error(ErrorCode::kHistoryReaderStopping, "history reader is stopping");
+    return Error(ErrorCode::kHistoryReaderStopping,
+                 "history reader is stopping");
   if (outstanding_ == options_.queue_capacity)
     return Error(ErrorCode::kHistoryQueueFull, "history query queue is full");
   pending_.push_back(std::move(query));
@@ -195,8 +196,8 @@ HistoryPage HistoryReader::Query(const HistoryQuery& query) {
           ? now + std::chrono::seconds(1)
           : std::min(query.deadline, now + std::chrono::seconds(1));
   if (deadline <= now) {
-    page.status =
-        Error(ErrorCode::kHistoryQueryTimeout, "history query deadline elapsed");
+    page.status = Error(ErrorCode::kHistoryQueryTimeout,
+                        "history query deadline elapsed");
     return page;
   }
   ProgressGuard progress(db_, &deadline);
@@ -255,7 +256,8 @@ HistoryPage HistoryReader::Query(const HistoryQuery& query) {
     if (rc != SQLITE_ROW) {
       page.status =
           rc == SQLITE_INTERRUPT
-              ? Error(ErrorCode::kHistoryQueryTimeout, "history query interrupted")
+              ? Error(ErrorCode::kHistoryQueryTimeout,
+                      "history query interrupted")
               : Error(ErrorCode::kStorageQueryFailed, sqlite3_errmsg(db_));
       return page;
     }
@@ -560,15 +562,16 @@ absl::StatusOr<RecoverySnapshot> LoadRecoverySnapshot(const std::string& path,
                      static_cast<uint64_t>(sequence) - 1);
       }
       last_seen[shard] = static_cast<uint64_t>(sequence);
-      if (const auto* intent = std::get_if<OrderIntent>(&decoded->payload)) {
-        if (intent->client_id.value.empty()) {
+      if (const auto* prepared =
+              std::get_if<PreparedOrder>(&decoded->payload)) {
+        if (prepared->client_id.value.empty()) {
           return Error(ErrorCode::kRecoveryDataCorrupted,
-                       "empty client ID in recovered intent");
+                       "empty client ID in recovered prepared order");
         }
-        snapshot.context.recovered_intents.push_back(*intent);
-        if (intent->executor_checkpoint) {
-          snapshot.context.checkpoints.push_back(
-              Checkpoint{*intent->executor_checkpoint, intent->created_at_utc});
+        snapshot.context.recovered_prepared_orders.push_back(*prepared);
+        if (prepared->executor_checkpoint) {
+          snapshot.context.checkpoints.push_back(Checkpoint{
+              *prepared->executor_checkpoint, prepared->created_at_utc});
         }
       } else if (const auto* checkpoint =
                      std::get_if<Checkpoint>(&decoded->payload)) {
@@ -608,17 +611,17 @@ absl::StatusOr<RecoverySnapshot> LoadRecoverySnapshot(const std::string& path,
   const bool incomplete = !snapshot.manifest.history_complete ||
                           !snapshot.gaps.empty() ||
                           snapshot.crash_tail_possible;
-  for (const auto& intent : snapshot.context.recovered_intents) {
-    const auto terminal = terminal_by_client.find(intent.client_id.value);
+  for (const auto& prepared : snapshot.context.recovered_prepared_orders) {
+    const auto terminal = terminal_by_client.find(prepared.client_id.value);
     if (incomplete || terminal == terminal_by_client.end() ||
         !terminal->second) {
-      snapshot.context.unresolved_ids.push_back(intent.client_id);
+      snapshot.context.unresolved_ids.push_back(prepared.client_id);
     }
   }
   snapshot.context.confidence =
       incomplete ? RecoveryConfidence::Unresolved : RecoveryConfidence::Partial;
   snapshot.needs_reconciliation =
-      incomplete || !snapshot.context.recovered_intents.empty();
+      incomplete || !snapshot.context.recovered_prepared_orders.empty();
   return snapshot;
 }
 

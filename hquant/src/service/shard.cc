@@ -106,29 +106,29 @@ absl::StatusOr<std::vector<DispatchResult>> ShardRuntime::OnTimer(
   book_.OnTimer(now_us > 0 ? static_cast<uint64_t>(now_us) : 0);
   auto orders = OrderViews();
   auto balances = BalanceViews();
-  StrategyContext strategy_context{book_.View(),
-                                   config_.scale,
-                                   config_.rule,
-                                   last_trade_price_,
-                                   book_.View().State() == BookSyncState::Live,
-                                   orders,
-                                   balances,
-                                   stamp,
-                                   clock_};
-  auto batch = strategy_.OnTimer(strategy_context);
+  StrategyInput strategy_input{book_.View(),
+                               config_.scale,
+                               config_.rule,
+                               last_trade_price_,
+                               book_.View().State() == BookSyncState::Live,
+                               orders,
+                               balances,
+                               stamp,
+                               clock_};
+  auto batch = strategy_.OnTimer(strategy_input);
   DispatchContext dispatch_context{
-      config_.strategy_id,          DecisionId{next_decision_id_++},
-      config_.market,         config_.rule,
-      clock_.UtcNow(),        clock_.MonoNow(),
-      strategy_context.ready, true};
+      config_.strategy_id,  DecisionId{next_decision_id_++},
+      config_.market,       config_.rule,
+      clock_.UtcNow(),      clock_.MonoNow(),
+      strategy_input.ready, true};
   auto results = dispatcher_.Dispatch(batch, dispatch_context);
   for (const auto& result : results) {
-    if (!result.intent) continue;
-    auto registered = tracker_.Register(*result.intent);
+    if (!result.prepared) continue;
+    auto registered = tracker_.Register(*result.prepared);
     if (!registered.ok()) return registered.status();
-    order_ids_.push_back(result.intent->client_id);
+    order_ids_.push_back(result.prepared->client_id);
     if (result.reservation_id) {
-      reservations_.emplace(result.intent->client_id.value,
+      reservations_.emplace(result.prepared->client_id.value,
                             *result.reservation_id);
     }
   }
@@ -137,7 +137,8 @@ absl::StatusOr<std::vector<DispatchResult>> ShardRuntime::OnTimer(
   return results;
 }
 
-absl::Status ShardRuntime::Record(RecordPayload payload, const StrategyId& strategy_id) {
+absl::Status ShardRuntime::Record(RecordPayload payload,
+                                  const StrategyId& strategy_id) {
   if (shard_sequence_ == std::numeric_limits<uint64_t>::max()) {
     risk_.EmergencyStop();
     return Error(ErrorCode::kSequenceExhausted, "shard sequence exhausted");

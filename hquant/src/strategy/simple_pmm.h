@@ -29,12 +29,12 @@ class SimplePmm final : public Strategy {
   explicit SimplePmm(SimplePmmConfig config) : config_(std::move(config)) {}
 
   TriggerPolicy Triggers() const override;
-  ActionBatch OnTimer(const StrategyContext& context) override;
+  ActionBatch OnTimer(const StrategyInput& context) override;
   std::optional<int64_t> NextRefreshAtUs() const { return next_refresh_at_us_; }
 
  private:
-  std::optional<Decimal> ReferencePrice(const StrategyContext& context) const;
-  Decimal Available(const StrategyContext& context, const AssetId& asset) const;
+  std::optional<Decimal> ReferencePrice(const StrategyInput& context) const;
+  Decimal Available(const StrategyInput& context, const AssetId& asset) const;
   bool Active(const OrderSnapshot& order) const;
 
   SimplePmmConfig config_;

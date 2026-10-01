@@ -546,11 +546,11 @@ std::string HistoryJson(const HistoryPage& page) {
     if (index) json += ",";
     std::string kind;
     std::string details;
-    if (const auto* intent = std::get_if<OrderIntent>(&row.payload)) {
-      kind = "intent";
+    if (const auto* prepared = std::get_if<PreparedOrder>(&row.payload)) {
+      kind = "prepared_order";
       details =
-          ",\"client_id\":" + EscapeJson(intent->client_id.value) +
-          ",\"amount\":" + EscapeJson(intent->request.base_amount.ToString());
+          ",\"client_id\":" + EscapeJson(prepared->client_id.value) +
+          ",\"amount\":" + EscapeJson(prepared->request.base_amount.ToString());
     } else if (const auto* update = std::get_if<OrderUpdate>(&row.payload)) {
       kind = "order";
       if (update->client_id)

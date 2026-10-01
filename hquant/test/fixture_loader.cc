@@ -267,7 +267,7 @@ bool ValidateOutput(const std::string& family, simdjson::dom::element output) {
     for (auto event : events) {
       std::string_view name;
       if (event.get(name) ||
-          !OneOf(name, {"OrderCreated", "OrderFilled", "OrderCompleted",
+          !OneOf(name, {"OrderOpened", "OrderTraded", "OrderFullyTraded",
                         "OrderCanceled", "OrderFailed"}))
         return false;
     }
@@ -308,11 +308,11 @@ bool ValidateOutput(const std::string& family, simdjson::dom::element output) {
     for (auto event : events) {
       std::string kind, id;
       if (!String(event, "kind", &kind) ||
-          !OneOf(kind, {"OrderCreated", "OrderFilled", "OrderCompleted",
+          !OneOf(kind, {"OrderOpened", "OrderTraded", "OrderFullyTraded",
                         "OrderCanceled", "OrderFailed"}) ||
           !String(event, "client_id", &id) || id.empty())
         return false;
-      if (kind == "OrderFilled") {
+      if (kind == "OrderTraded") {
         std::string trade_id;
         if (!String(event, "trade_id", &trade_id) || trade_id.empty() ||
             !PositiveDecimalString(event, "price") ||
@@ -349,8 +349,8 @@ absl::StatusOr<FixtureCase> LoadFixture(const std::string& path) {
   uint64_t version = 0;
   if (!U64(root, "schema_version", &version) || version != 1 ||
       !String(root, "family", &result.family) ||
-      !OneOf(result.family,
-             {"order_book", "order_tracker", "simple_pmm", "simulated_exchange"}) ||
+      !OneOf(result.family, {"order_book", "order_tracker", "simple_pmm",
+                             "simulated_exchange"}) ||
       !String(root, "case_id", &result.case_id) ||
       result.case_id.rfind(result.family + "/", 0) != 0 ||
       !String(root, "baseline_commit", &result.baseline_commit) ||

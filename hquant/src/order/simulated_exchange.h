@@ -37,7 +37,7 @@ class SimpleSimulatedExchange final : public SimulatedExchange {
  public:
   SimpleSimulatedExchange(SimulatedExchangeConfig config, const Clock& clock);
 
-  absl::StatusOr<OrderIntent> PrepareSubmit(OrderCommand command) override;
+  absl::StatusOr<PreparedOrder> PrepareSubmit(ApprovedOrder approved) override;
   absl::Status StartPrepared(const ClientOrderId& client_id) override;
   absl::Status AbortPrepared(const ClientOrderId& client_id) override;
   absl::Status StartCancel(const StrategyId& strategy_id,
@@ -55,7 +55,7 @@ class SimpleSimulatedExchange final : public SimulatedExchange {
 
  private:
   absl::Status Fill(size_t index);
-  absl::Status ValidateAndQuantize(OrderCommand* command) const;
+  absl::Status ValidateAndQuantize(ApprovedOrder* approved) const;
   void EmitOrder(const RestingOrder& order, ExchangeOrderStatus status);
   void EmitBalance(const AssetId& asset);
   EventTime Now() const;
@@ -63,7 +63,7 @@ class SimpleSimulatedExchange final : public SimulatedExchange {
   SimulatedExchangeConfig config_;
   const Clock& clock_;
   std::vector<RestingOrder> orders_;
-  std::map<std::string, OrderCommand> prepared_;
+  std::map<std::string, ApprovedOrder> prepared_;
   std::set<std::string> used_ids_;
   std::map<std::string, Decimal> balances_;
   std::map<std::string, Decimal> fees_paid_;

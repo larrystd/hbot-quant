@@ -14,28 +14,28 @@ hquant::Decimal D(const char* text) { return *hquant::Decimal::Parse(text); }
 
 struct FakeRecorder final : hquant::RecorderPort {
   FakeRecorder(std::vector<std::string>* output, bool drop)
-      : trace(output), drop_intent(drop) {}
+      : trace(output), drop_prepared(drop) {}
   std::vector<std::string>* trace = nullptr;
-  bool drop_intent = false;
+  bool drop_prepared = false;
   bool TryPush(hquant::RecordEnvelope record) override {
-    const bool intent =
-        std::holds_alternative<hquant::OrderIntent>(record.payload);
-    trace->push_back(intent ? "intent" : "decision");
-    return !(intent && drop_intent);
+    const bool prepared =
+        std::holds_alternative<hquant::PreparedOrder>(record.payload);
+    trace->push_back(prepared ? "prepared" : "decision");
+    return !(prepared && drop_prepared);
   }
 };
 
 struct FakeGateway final : hquant::OrderGateway {
   explicit FakeGateway(std::vector<std::string>* output) : trace(output) {}
   std::vector<std::string>* trace = nullptr;
-  hquant::OrderIntent intent;
-  absl::StatusOr<hquant::OrderIntent> PrepareSubmit(
-      hquant::OrderCommand command) override {
+  hquant::PreparedOrder prepared;
+  absl::StatusOr<hquant::PreparedOrder> PrepareSubmit(
+      hquant::ApprovedOrder approved) override {
     trace->push_back("prepare");
-    intent.client_id = hquant::ClientOrderId("B1");
-    intent.strategy_id = command.strategy_id;
-    intent.request = command.request;
-    return intent;
+    prepared.client_id = hquant::ClientOrderId("B1");
+    prepared.strategy_id = approved.strategy_id;
+    prepared.request = approved.request;
+    return prepared;
   }
   absl::Status StartPrepared(const hquant::ClientOrderId& id) override {
     trace->push_back("start");
@@ -94,14 +94,15 @@ int main() {
   uint64_t sequence = 0;
   hquant::ActionDispatcher dispatcher(risk, gateway, recorder, hquant::RunId{1},
                                       hquant::ShardId{0}, sequence);
-  hquant::DispatchContext context{strategy_id, hquant::DecisionId{1}, spec, rule,
-                                  now,   hquant::MonoTime{},    true, true};
+  hquant::DispatchContext context{
+      strategy_id, hquant::DecisionId{1}, spec, rule,
+      now,         hquant::MonoTime{},    true, true};
   auto results = dispatcher.Dispatch(batch, context);
   if (results.size() != 2 || !results[0].accepted || !results[1].accepted ||
       results[1].client_id != hquant::ClientOrderId("B1"))
     return 2;
-  const std::vector<std::string> expected{"cancel", "decision", "prepare",
-                                          "intent", "start",    "decision"};
+  const std::vector<std::string> expected{"cancel",   "decision", "prepare",
+                                          "prepared", "start",    "decision"};
   if (trace != expected || sequence != 3 ||
       dispatcher.local_gaps().size() != 1 ||
       dispatcher.local_gaps()[0].first_seq != 2)
@@ -110,9 +111,9 @@ int main() {
   hquant::ActionBatch quantized;
   quantized.ordered.emplace_back(hquant::SubmitOrder{strategy_id, buy});
   auto next = dispatcher.Dispatch(quantized, context);
-  if (next.size() != 1 || !next[0].accepted || !next[0].intent ||
-      !next[0].intent->request.limit_price ||
-      *next[0].intent->request.limit_price->Compare(D("100.05")) != 0)
+  if (next.size() != 1 || !next[0].accepted || !next[0].prepared ||
+      !next[0].prepared->request.limit_price ||
+      *next[0].prepared->request.limit_price->Compare(D("100.05")) != 0)
     return 4;
   context.market_live = false;
   auto rejected = dispatcher.Dispatch(quantized, context);

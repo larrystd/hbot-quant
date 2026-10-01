@@ -13,8 +13,8 @@
 #include "gtest/gtest.h"
 #include "offline/history.h"
 #include "offline/recorder.h"
-#include "order/simulated_exchange.h"
 #include "order/risk.h"
+#include "order/simulated_exchange.h"
 #include "service/shard.h"
 #include "strategy/simple_pmm.h"
 
@@ -26,9 +26,9 @@ Decimal D(const char* text) { return *Decimal::Parse(text); }
 class TemporaryDatabase {
  public:
   TemporaryDatabase() {
-    path_ =
-        (std::filesystem::temp_directory_path() / "hquant_simulated_replay_XXXXXX")
-            .string();
+    path_ = (std::filesystem::temp_directory_path() /
+             "hquant_simulated_replay_XXXXXX")
+                .string();
     const int fd = mkstemp(path_.data());
     if (fd < 0) throw std::runtime_error("mkstemp failed");
     close(fd);
@@ -57,7 +57,8 @@ std::string ReplayOnce() {
   const UtcTime origin(std::chrono::microseconds(1'000'000));
   ReplayClock clock(origin, MonoTime(std::chrono::microseconds(1'000'000)));
   const AccountId account("SIMULATED");
-  const MarketId market{ExchangeId("simulated"), InstrumentKind::Spot, "BTCUSDT"};
+  const MarketId market{ExchangeId("simulated"), InstrumentKind::Spot,
+                        "BTCUSDT"};
   const MarketSpec spec{market, AssetId("BTC"), AssetId("USDT")};
   const StrategyId strategy_id{1, StrategyName("simple_pmm")};
   const BookScale scale{D("0.01"), D("0.001"), 1};
@@ -91,8 +92,9 @@ std::string ReplayOnce() {
       SqliteRecorder::Open({database.path(), RunId{1}, origin, 64, 8});
   if (!recorder.ok())
     throw std::runtime_error(std::string(recorder.status().message()));
-  ShardRuntime shard({RunId{1}, ShardId{0}, strategy_id, account, spec, scale, rule},
-                     clock, strategy, sim_exchange, risk, **recorder);
+  ShardRuntime shard(
+      {RunId{1}, ShardId{0}, strategy_id, account, spec, scale, rule}, clock,
+      strategy, sim_exchange, risk, **recorder);
 
   if (!clock.Advance({0, 1}).ok() ||
       shard.Subscribe(1).state != BookSyncState::Buffering) {
@@ -180,9 +182,9 @@ std::string ReplayOnce() {
   auto page = WaitPage(**reader);
   if (!page || !page->status.ok())
     throw std::runtime_error("history page failed");
-  size_t intents = 0, trades = 0, decisions = 0;
+  size_t prepared_orders = 0, trades = 0, decisions = 0;
   for (const auto& row : page->rows) {
-    if (std::holds_alternative<OrderIntent>(row.payload)) ++intents;
+    if (std::holds_alternative<PreparedOrder>(row.payload)) ++prepared_orders;
     if (std::holds_alternative<DecisionRecord>(row.payload)) ++decisions;
     if (const auto* trade = std::get_if<TradeUpdate>(&row.payload)) {
       ++trades;
@@ -192,7 +194,7 @@ std::string ReplayOnce() {
       }
     }
   }
-  if (intents != 4 || decisions != 6 || trades != 1 ||
+  if (prepared_orders != 4 || decisions != 6 || trades != 1 ||
       !shard.local_gaps().empty()) {
     throw std::runtime_error("history types or gaps wrong");
   }
@@ -205,7 +207,8 @@ std::string ReplayOnce() {
          sim_exchange.FeesPaid(AssetId("BTC")).ToString();
 }
 
-TEST(SimulatedReplayTest, DeterministicBookStrategyRiskSimulatedExchangeTrackerAndSqlite) {
+TEST(SimulatedReplayTest,
+     DeterministicBookStrategyRiskSimulatedExchangeTrackerAndSqlite) {
   EXPECT_EQ(ReplayOnce(), ReplayOnce());
 }
 

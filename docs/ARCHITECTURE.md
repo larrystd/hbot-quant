@@ -152,11 +152,11 @@ sequenceDiagram
         S-->>A: 返回 ActionBatch（T2）
         A->>K: 按序验证动作、额度和账户新鲜度
         K->>K: 预留最大敞口
-        K->>G: 已准入的 OrderCommand
+        K->>G: 已准入的 ApprovedOrder
         G->>G: 生成 ClientOrderId
         G->>K: 返回 ID，登记 PendingCreate
         G->>G: 按下单规则格式化最终字节并签名
-        G->>Q: try_push(OrderIntent)，失败则标记历史缺口
+        G->>Q: try_push(PreparedOrder)，失败则标记历史缺口
         G-)I: 发起 async_write（T3）
         G-->>W: 当前 handler 返回，继续处理其他事件
         I-->>G: 写完成或失败（T4，后续回调）
@@ -200,7 +200,7 @@ sequenceDiagram
     end
 ```
 
-下单的 HTTP 响应和私有 WS 回报可能乱序到达，都在本线程处理，由 OrderTracker 按双 ID、状态机和 trade ID 核对。先完成状态与风险额度更新，再调用策略；策略返回动作后由 dispatcher 执行，避免在 OrderTracker 遍历内部状态时递归修改它。`OrderFilled` 与 `OrderCompleted` 保持不同事件；公开成交不能生成本账户的 `OnFill`。
+下单的 HTTP 响应和私有 WS 回报可能乱序到达，都在本线程处理，由 OrderTracker 按双 ID、状态机和 trade ID 核对。先完成状态与风险额度更新，再调用策略；策略返回动作后由 dispatcher 执行，避免在 OrderTracker 遍历内部状态时递归修改它。`OrderTraded` 与 `OrderFullyTraded` 保持不同事件；公开成交不能生成本账户的 `OnFill`。
 
 Python 的 `ClientOrderTracker` 在收到完成状态但成交明细未齐时会异步等待成交。这里改成明确的 `AwaitingFills` 状态和超时/补查定时器，不能在私有 WS handler 中阻塞或 `co_await` 等待。成交重复、撤单与成交竞态、先成交后接单、结果未知等仍要按原语义验证，重放夹具覆盖这些次序。
 
@@ -442,11 +442,11 @@ HistoryReader 的只读连接与 Recorder 写连接可在 WAL 模式并行，但
 
 ### 11.1 SQLite 写完以后做什么
 
-SQLite 是**后台历史库和重启检查点**，不是当前运行的订单真相，也不是发单的前置提交。分片在内存中维护最新盘口、订单、余额、风险额度和执行器状态；新单通过风控后发起网络写，同时把 `OrderIntent`、归属与检查点非阻塞 `try_push` 到本分片的 Recorder 队列。Recorder 批量 `COMMIT` 后不回调策略，也不批准或触发订单发送。持久化的数据只在以下路径被消费：
+SQLite 是**后台历史库和重启检查点**，不是当前运行的订单真相，也不是发单的前置提交。分片在内存中维护最新盘口、订单、余额、风险额度和执行器状态；新单通过风控后发起网络写，同时把 `PreparedOrder`、归属与检查点非阻塞 `try_push` 到本分片的 Recorder 队列。Recorder 批量 `COMMIT` 后不回调策略，也不批准或触发订单发送。持久化的数据只在以下路径被消费：
 
 | SQLite 记录 | 谁读取 | 具体用途 |
 | --- | --- | --- |
-| `OrderIntent`、owner、配置版本 | 启动对账、`history` | 找回本地发单意图和归属，匹配交易所订单；展示订单历史 |
+| `PreparedOrder`、owner、配置版本 | 启动对账、`history` | 找回本地发单意图和归属，匹配交易所订单；展示订单历史 |
 | 执行器检查点 | 启动对账 | 验证止盈止损、DCA 档位等本地状态后再恢复执行器 |
 | 已接收的订单/成交/费用回报 | `history`/报告、启动对账 | 历史查询与费用统计；按事件位置决定交易所补查范围 |
 | `HistoryGap`、`RunManifest` | `status`、`history`、下次启动 | 标明哪些时段的历史或执行器状态无法保证完整；上次运行是否清洁关闭 |
@@ -513,7 +513,7 @@ flowchart LR
 | T1 | 解析完成并应用到订单簿 | 解析与盘口开销 |
 | T2 | 策略返回 `ActionBatch` | 调度与策略计算 |
 | T2a | 风控通过、发送资格取得 | 风控与网关排队 |
-| T2b | `OrderIntent` 尝试入 Recorder 队列 | 非阻塞入队开销；失败仍发单 |
+| T2b | `PreparedOrder` 尝试入 Recorder 队列 | 非阻塞入队开销；失败仍发单 |
 | T3 | 发起 `async_write` | 组包与签名；T0→T3 为关键指标 |
 | T4 | 写完成回调 | socket 与事件循环排队 |
 | T5 | 收到交易所接单回报 | 网络往返与交易所处理 |

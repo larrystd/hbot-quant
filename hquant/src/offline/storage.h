@@ -37,7 +37,7 @@ struct DecisionRecord {
   std::string message;
   std::optional<ClientOrderId> client_id;
 };
-using RecordPayload = std::variant<OrderIntent, OrderUpdate, TradeUpdate,
+using RecordPayload = std::variant<PreparedOrder, OrderUpdate, TradeUpdate,
                                    Checkpoint, HistoryGap, DecisionRecord>;
 
 struct RecordEnvelope {
@@ -90,7 +90,7 @@ struct HistoryPage {
 enum class RecoveryConfidence { Verified, Partial, Unresolved };
 struct RecoveryContext {
   RunId run_id;
-  std::vector<OrderIntent> recovered_intents;
+  std::vector<PreparedOrder> recovered_prepared_orders;
   std::vector<Checkpoint> checkpoints;
   std::vector<OrderUpdate> exchange_orders;
   std::vector<TradeUpdate> exchange_trades;

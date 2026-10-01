@@ -33,7 +33,7 @@ bool SimplePmm::Active(const OrderSnapshot& order) const {
   }
 }
 
-Decimal SimplePmm::Available(const StrategyContext& context,
+Decimal SimplePmm::Available(const StrategyInput& context,
                              const AssetId& asset) const {
   for (const auto& balance : context.balances) {
     if (balance.account == config_.account && balance.asset == asset) {
@@ -44,7 +44,7 @@ Decimal SimplePmm::Available(const StrategyContext& context,
 }
 
 std::optional<Decimal> SimplePmm::ReferencePrice(
-    const StrategyContext& context) const {
+    const StrategyInput& context) const {
   if (config_.price_type == PmmPriceType::Last) return context.last_trade_price;
   const auto bid = context.book.BestBid();
   const auto ask = context.book.BestAsk();
@@ -63,7 +63,7 @@ std::optional<Decimal> SimplePmm::ReferencePrice(
   return *midpoint;
 }
 
-ActionBatch SimplePmm::OnTimer(const StrategyContext& context) {
+ActionBatch SimplePmm::OnTimer(const StrategyInput& context) {
   ActionBatch actions;
   // StrategyV2Base.tick only initializes on the first ready transition.
   if (!ready_to_trade_) {
@@ -76,7 +76,8 @@ ActionBatch SimplePmm::OnTimer(const StrategyContext& context) {
 
   for (const auto& order : context.orders) {
     if (Active(order))
-      actions.ordered.emplace_back(CancelOrder{config_.strategy_id, order.client_id});
+      actions.ordered.emplace_back(
+          CancelOrder{config_.strategy_id, order.client_id});
   }
 
   const auto reference = ReferencePrice(context);
@@ -124,8 +125,8 @@ ActionBatch SimplePmm::OnTimer(const StrategyContext& context) {
     order.time_in_force = TimeInForce::Gtc;
     return order;
   };
-  actions.ordered.emplace_back(
-      SubmitOrder{config_.strategy_id, request(Side::Buy, buy_amount, *buy_price)});
+  actions.ordered.emplace_back(SubmitOrder{
+      config_.strategy_id, request(Side::Buy, buy_amount, *buy_price)});
   actions.ordered.emplace_back(SubmitOrder{
       config_.strategy_id, request(Side::Sell, sell_amount, *sell_price)});
 

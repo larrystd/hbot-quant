@@ -62,7 +62,7 @@ struct OrderRequest {
   std::optional<TimeInForce> time_in_force;
 };
 
-struct OrderCommand {
+struct ApprovedOrder {
   StrategyId strategy_id;
   OrderRequest request;
   ReservationId reservation_id;
@@ -77,7 +77,7 @@ struct ExecutorCheckpoint {
   std::string payload;
 };
 
-struct OrderIntent {
+struct PreparedOrder {
   ClientOrderId client_id;
   StrategyId strategy_id;
   OrderRequest request;
@@ -128,14 +128,14 @@ struct OrderSnapshot {
 using MarketEvent = std::variant<BookSnapshot, BookDiff, PublicTrade>;
 using AccountEvent = std::variant<OrderUpdate, TradeUpdate, BalanceUpdate>;
 
-struct OrderCreated {
+struct OrderOpened {
   OrderSnapshot order;
 };
-struct OrderFilled {
+struct OrderTraded {
   OrderSnapshot order;
   TradeUpdate trade;
 };
-struct OrderCompleted {
+struct OrderFullyTraded {
   OrderSnapshot order;
 };
 struct OrderCanceled {
@@ -146,26 +146,28 @@ struct OrderFailed {
   std::string reason;
 };
 using TrackedOrderEvent =
-    std::variant<OrderCreated, OrderFilled, OrderCompleted, OrderCanceled,
+    std::variant<OrderOpened, OrderTraded, OrderFullyTraded, OrderCanceled,
                  OrderFailed>;
 
 // Methods are called only by the owning shard. Preparing reserves a bounded
 // send slot, fixes the client ID, and registers PendingCreate, but sends no
 // bytes. The caller attaches the RiskReservation and attempts to record the
-// OrderIntent before StartPrepared. A failed StartPrepared proves no write was
-// initiated; uncertain write outcomes arrive later as account events.
+// PreparedOrder before StartPrepared. A failed StartPrepared proves no write
+// was initiated; uncertain write outcomes arrive later as account events.
 class OrderGateway {
  public:
   virtual ~OrderGateway() = default;
-  virtual absl::StatusOr<OrderIntent> PrepareSubmit(OrderCommand command) = 0;
+  virtual absl::StatusOr<PreparedOrder> PrepareSubmit(
+      ApprovedOrder approved) = 0;
   virtual absl::Status StartPrepared(const ClientOrderId& client_id) = 0;
   virtual absl::Status AbortPrepared(const ClientOrderId& client_id) = 0;
   virtual absl::Status StartCancel(const StrategyId& strategy_id,
                                    const ClientOrderId& client_id) = 0;
 };
 
-// Local Simulated exchange port used by replay and public-market Simulated shards. The
-// runtime depends on this interface; app selects the concrete SimpleSimulatedExchange.
+// Local Simulated exchange port used by replay and public-market Simulated
+// shards. The runtime depends on this interface; app selects the concrete
+// SimpleSimulatedExchange.
 class SimulatedExchange : public OrderGateway {
  public:
   virtual absl::Status OnBookBbo(const Decimal& bid, const Decimal& ask) = 0;

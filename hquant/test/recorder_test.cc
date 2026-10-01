@@ -46,34 +46,37 @@ Decimal D(const char* text) { return *Decimal::Parse(text); }
 MarketId Market() {
   return MarketId{ExchangeId{"simulated"}, InstrumentKind::Spot, "BTCUSDT"};
 }
-StrategyId MakeStrategyId() { return StrategyId{1, StrategyName{"simple_pmm"}}; }
+StrategyId MakeStrategyId() {
+  return StrategyId{1, StrategyName{"simple_pmm"}};
+}
 
-RecordEnvelope Intent(uint64_t sequence, RunId run = RunId{11},
-                      ShardId shard = ShardId{0}) {
-  OrderIntent intent;
-  intent.client_id = ClientOrderId{"B1"};
-  intent.strategy_id = MakeStrategyId();
-  intent.request.account = AccountId{"A1"};
-  intent.request.market = Market();
-  intent.request.side = Side::Buy;
-  intent.request.type = OrderType::Limit;
-  intent.request.base_amount = D("0.01");
-  intent.request.limit_price = D("99.9");
-  intent.created_at_utc = At(1000);
-  intent.config_revision = 7;
-  intent.executor_checkpoint = ExecutorCheckpoint{1, MakeStrategyId(), 7, "checkpoint"};
+RecordEnvelope PreparedRecord(uint64_t sequence, RunId run = RunId{11},
+                              ShardId shard = ShardId{0}) {
+  PreparedOrder prepared;
+  prepared.client_id = ClientOrderId{"B1"};
+  prepared.strategy_id = MakeStrategyId();
+  prepared.request.account = AccountId{"A1"};
+  prepared.request.market = Market();
+  prepared.request.side = Side::Buy;
+  prepared.request.type = OrderType::Limit;
+  prepared.request.base_amount = D("0.01");
+  prepared.request.limit_price = D("99.9");
+  prepared.created_at_utc = At(1000);
+  prepared.config_revision = 7;
+  prepared.executor_checkpoint =
+      ExecutorCheckpoint{1, MakeStrategyId(), 7, "checkpoint"};
   RecordEnvelope record;
   record.run_id = run;
   record.shard = shard;
   record.shard_sequence = sequence;
   record.strategy_id = MakeStrategyId();
   record.received_at_utc = At(1000 + sequence);
-  record.payload = std::move(intent);
+  record.payload = std::move(prepared);
   return record;
 }
 
 RecordEnvelope Update(uint64_t sequence) {
-  RecordEnvelope record = Intent(sequence);
+  RecordEnvelope record = PreparedRecord(sequence);
   OrderUpdate update;
   update.account = AccountId{"A1"};
   update.market = Market();
@@ -88,7 +91,7 @@ RecordEnvelope Update(uint64_t sequence) {
 }
 
 RecordEnvelope Trade(uint64_t sequence) {
-  RecordEnvelope record = Intent(sequence);
+  RecordEnvelope record = PreparedRecord(sequence);
   TradeUpdate trade;
   trade.account = AccountId{"A1"};
   trade.market = Market();
@@ -117,10 +120,10 @@ TEST(StorageTest, PersistsTypedRecordsAndPagesThroughReadOnlyConnection) {
   TemporaryDatabase db;
   auto recorder = SqliteRecorder::Open({db.path(), RunId{11}, At(100), 8, 2});
   ASSERT_TRUE(recorder.ok()) << recorder.status();
-  EXPECT_TRUE((*recorder)->TryPush(Intent(1)));
+  EXPECT_TRUE((*recorder)->TryPush(PreparedRecord(1)));
   EXPECT_TRUE((*recorder)->TryPush(Update(2)));
   EXPECT_TRUE((*recorder)->TryPush(Trade(3)));
-  RecordEnvelope checkpoint = Intent(4);
+  RecordEnvelope checkpoint = PreparedRecord(4);
   checkpoint.payload =
       Checkpoint{ExecutorCheckpoint{1, MakeStrategyId(), 7, "state"}, At(1004)};
   EXPECT_TRUE((*recorder)->TryPush(std::move(checkpoint)));
@@ -135,7 +138,7 @@ TEST(StorageTest, PersistsTypedRecordsAndPagesThroughReadOnlyConnection) {
   ASSERT_TRUE(first);
   ASSERT_TRUE(first->status.ok()) << first->status;
   ASSERT_EQ(first->rows.size(), 2);
-  EXPECT_TRUE(std::holds_alternative<OrderIntent>(first->rows[0].payload));
+  EXPECT_TRUE(std::holds_alternative<PreparedOrder>(first->rows[0].payload));
   EXPECT_TRUE(std::holds_alternative<OrderUpdate>(first->rows[1].payload));
   ASSERT_TRUE(first->next_cursor);
   query.request_id = 2;
@@ -176,8 +179,8 @@ TEST(StorageTest, QueueFullCreatesDurableGapWithoutBlockingProducer) {
   auto recorder = SqliteRecorder::Open({db.path(), RunId{11}, At(100), 1, 1});
   ASSERT_TRUE(recorder.ok()) << recorder.status();
   (*recorder)->PauseWorkerForTesting(true);
-  EXPECT_TRUE((*recorder)->TryPush(Intent(1)));
-  EXPECT_FALSE((*recorder)->TryPush(Intent(2)));
+  EXPECT_TRUE((*recorder)->TryPush(PreparedRecord(1)));
+  EXPECT_FALSE((*recorder)->TryPush(PreparedRecord(2)));
   (*recorder)->PauseWorkerForTesting(false);
   ASSERT_TRUE((*recorder)->Flush().ok());
   auto health = (*recorder)->Health();
@@ -207,13 +210,13 @@ TEST(StorageTest, TwoShardProducersKeepIndependentSequenceOrder) {
   ASSERT_TRUE(recorder.ok()) << recorder.status();
   std::thread first([&] {
     for (uint64_t sequence = 1; sequence <= 100; ++sequence)
-      EXPECT_TRUE(
-          (*recorder)->TryPush(Intent(sequence, RunId{11}, ShardId{0})));
+      EXPECT_TRUE((*recorder)->TryPush(
+          PreparedRecord(sequence, RunId{11}, ShardId{0})));
   });
   std::thread second([&] {
     for (uint64_t sequence = 1; sequence <= 100; ++sequence)
-      EXPECT_TRUE(
-          (*recorder)->TryPush(Intent(sequence, RunId{11}, ShardId{1})));
+      EXPECT_TRUE((*recorder)->TryPush(
+          PreparedRecord(sequence, RunId{11}, ShardId{1})));
   });
   first.join();
   second.join();
@@ -245,7 +248,7 @@ TEST(StorageTest, DecisionRecordsPreserveActionOrderAndRejectionReason) {
   TemporaryDatabase db;
   auto recorder = SqliteRecorder::Open({db.path(), RunId{11}, At(100), 8, 8});
   ASSERT_TRUE(recorder.ok()) << recorder.status();
-  RecordEnvelope first = Intent(1);
+  RecordEnvelope first = PreparedRecord(1);
   first.payload = DecisionRecord{DecisionId{19},
                                  MakeStrategyId(),
                                  0,
@@ -254,7 +257,7 @@ TEST(StorageTest, DecisionRecordsPreserveActionOrderAndRejectionReason) {
                                  ErrorCode::kOk,
                                  "cancel requested",
                                  ClientOrderId{"B1"}};
-  RecordEnvelope second = Intent(2);
+  RecordEnvelope second = PreparedRecord(2);
   second.payload = DecisionRecord{DecisionId{19},
                                   MakeStrategyId(),
                                   1,
@@ -300,14 +303,14 @@ TEST(StorageTest, WriteFailureMarksGapAndHistoryQueryReportsErrors) {
   auto recorder = SqliteRecorder::Open({db.path(), RunId{11}, At(100), 2, 2});
   ASSERT_TRUE(recorder.ok()) << recorder.status();
   (*recorder)->SetWriteFailureForTesting(true);
-  EXPECT_TRUE((*recorder)->TryPush(Intent(1)));
+  EXPECT_TRUE((*recorder)->TryPush(PreparedRecord(1)));
   EXPECT_FALSE((*recorder)->Flush().ok());
   auto health = (*recorder)->Health();
   EXPECT_FALSE(health.last_error.empty());
   ASSERT_FALSE(health.gap_ranges.empty());
   EXPECT_EQ(health.gap_ranges[0].reason, ErrorCode::kStorageWriteFailed);
   (*recorder)->SetWriteFailureForTesting(false);
-  EXPECT_TRUE((*recorder)->TryPush(Intent(2)));
+  EXPECT_TRUE((*recorder)->TryPush(PreparedRecord(2)));
   EXPECT_FALSE((*recorder)
                    ->Flush()
                    .ok());  // historical write failure remains observable
@@ -341,8 +344,8 @@ TEST(StorageTest, ReadsAndMigratesLegacyGapReasons) {
   auto first = SqliteRecorder::Open({db.path(), RunId{11}, At(100), 1, 1});
   ASSERT_TRUE(first.ok()) << first.status();
   (*first)->PauseWorkerForTesting(true);
-  ASSERT_TRUE((*first)->TryPush(Intent(1)));
-  ASSERT_FALSE((*first)->TryPush(Intent(2)));
+  ASSERT_TRUE((*first)->TryPush(PreparedRecord(1)));
+  ASSERT_FALSE((*first)->TryPush(PreparedRecord(2)));
   (*first)->PauseWorkerForTesting(false);
   ASSERT_TRUE((*first)->Stop(At(2000)).ok());
   first->reset();

@@ -110,7 +110,7 @@
       "output": {
         "display_state": "PendingCreate",
         "events": [
-          "OrderFilled"
+          "OrderTraded"
         ],
         "cumulative_base": "0.4",
         "cumulative_quote": "40",
@@ -131,7 +131,7 @@
       "output": {
         "display_state": "Open",
         "events": [
-          "OrderCreated"
+          "OrderOpened"
         ],
         "cumulative_base": "0.4",
         "cumulative_quote": "40",

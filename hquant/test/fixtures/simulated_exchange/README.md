@@ -26,7 +26,7 @@ returns in `paper_trade_exchange.pyx:666-730,758-821`.
 Python generates random client IDs (`paper_trade_exchange.pyx:185-188`) and
 timestamp based trade IDs (`:716,:807`). Fixture `id_symbols` maps them to
 `B1`, `S1`, and `T1`. A public trade alone never counts as a Paper account
-fill: only the match emits `OrderFilled` and changes balances.
+fill: only the match emits `OrderTraded` and changes balances.
 
 The Cython Paper extension is not built in this checkout. These assertions
 are derived from the pinned source; they have not been freshly executed

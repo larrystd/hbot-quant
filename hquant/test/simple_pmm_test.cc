@@ -144,8 +144,8 @@ TEST(SimplePmmTest, ReplaysEveryPythonFixtureStep) {
                                    {}});
       }
       bool ready = event["ready"];
-      StrategyContext context{book,   scale,    rule,       last, ready,
-                              orders, balances, step.stamp, clock};
+      StrategyInput context{book,   scale,    rule,       last, ready,
+                            orders, balances, step.stamp, clock};
       ActionBatch actual = strategy.OnTimer(context);
       auto expected_actions = simdjson::dom::array(expected["actions"]);
       ASSERT_EQ(actual.ordered.size(), expected_actions.size());

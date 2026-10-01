@@ -1,5 +1,6 @@
-// 回放演示：读取 simulated_replay.yaml + replay_market.json，逐条喂给 ShardRuntime，
-// 每处理完一条行情输入就打印：输入内容 → 产生的记录 → 盘口 → 挂单 → 余额。
+// 回放演示：读取 simulated_replay.yaml + replay_market.json，逐条喂给
+// ShardRuntime， 每处理完一条行情输入就打印：输入内容 → 产生的记录 → 盘口 →
+// 挂单 → 余额。
 //
 // 运行（在仓库根目录）：
 //   bazel run //examples:replay_walkthrough
@@ -16,8 +17,8 @@
 #include "application/config.h"
 #include "base/error.h"
 #include "market/replay_feed.h"
-#include "order/simulated_exchange.h"
 #include "order/risk.h"
+#include "order/simulated_exchange.h"
 #include "service/shard.h"
 #include "strategy/simple_pmm.h"
 
@@ -56,24 +57,36 @@ Decimal D(const char* text) { return *Decimal::Parse(text); }
 
 const char* StateName(BookSyncState state) {
   switch (state) {
-    case BookSyncState::Subscribing: return "Subscribing";
-    case BookSyncState::Buffering: return "Buffering（等快照）";
-    case BookSyncState::Replaying: return "Replaying（等第一条增量）";
-    case BookSyncState::Live: return "Live（可用）";
-    case BookSyncState::Stale: return "Stale（太久没更新）";
-    case BookSyncState::Resyncing: return "Resyncing（作废，需重新订阅）";
+    case BookSyncState::Subscribing:
+      return "Subscribing";
+    case BookSyncState::Buffering:
+      return "Buffering（等快照）";
+    case BookSyncState::Replaying:
+      return "Replaying（等第一条增量）";
+    case BookSyncState::Live:
+      return "Live（可用）";
+    case BookSyncState::Stale:
+      return "Stale（太久没更新）";
+    case BookSyncState::Resyncing:
+      return "Resyncing（作废，需重新订阅）";
   }
   return "?";
 }
 
 const char* StatusName(ExchangeOrderStatus status) {
   switch (status) {
-    case ExchangeOrderStatus::Open: return "Open（挂单中）";
-    case ExchangeOrderStatus::PartiallyTraded: return "PartiallyTraded";
-    case ExchangeOrderStatus::Traded: return "Traded（全部成交）";
-    case ExchangeOrderStatus::Canceled: return "Canceled（已撤）";
-    case ExchangeOrderStatus::Rejected: return "Rejected（被拒）";
-    case ExchangeOrderStatus::Expired: return "Expired";
+    case ExchangeOrderStatus::Open:
+      return "Open（挂单中）";
+    case ExchangeOrderStatus::PartiallyTraded:
+      return "PartiallyTraded";
+    case ExchangeOrderStatus::Traded:
+      return "Traded（全部成交）";
+    case ExchangeOrderStatus::Canceled:
+      return "Canceled（已撤）";
+    case ExchangeOrderStatus::Rejected:
+      return "Rejected（被拒）";
+    case ExchangeOrderStatus::Expired:
+      return "Expired";
   }
   return "?";
 }
@@ -82,15 +95,18 @@ const char* SideName(Side side) { return side == Side::Buy ? "买" : "卖"; }
 
 // ticks/lots 是整数，乘以 BookScale 换算成真实价格/数量。
 std::string Price(const BookScale& scale, PriceTicks ticks) {
-  auto value = D(std::to_string(ticks.value).c_str()).Multiply(scale.quote_per_tick);
+  auto value =
+      D(std::to_string(ticks.value).c_str()).Multiply(scale.quote_per_tick);
   return value.ok() ? Plain(*value) : "?";
 }
 std::string Amount(const BookScale& scale, QuantityLots lots) {
-  auto value = D(std::to_string(lots.value).c_str()).Multiply(scale.base_per_lot);
+  auto value =
+      D(std::to_string(lots.value).c_str()).Multiply(scale.base_per_lot);
   return value.ok() ? Plain(*value) : "?";
 }
 
-std::string Levels(const BookScale& scale, const std::vector<BookLevel>& levels) {
+std::string Levels(const BookScale& scale,
+                   const std::vector<BookLevel>& levels) {
   if (levels.empty()) return "无变化";
   std::string text;
   for (const auto& level : levels) {
@@ -113,14 +129,14 @@ std::string Describe(const ReplayInput& input, const BookScale& scale) {
                  std::to_string(payload.stream_epoch);
         } else if constexpr (std::is_same_v<T, ReplaySnapshot>) {
           return "snapshot：完整订单簿，截至序号 " +
-                 std::to_string(payload.last_sequence) + "\n      买: " +
-                 Levels(scale, payload.bids) + "\n      卖: " +
-                 Levels(scale, payload.asks);
+                 std::to_string(payload.last_sequence) +
+                 "\n      买: " + Levels(scale, payload.bids) +
+                 "\n      卖: " + Levels(scale, payload.asks);
         } else if constexpr (std::is_same_v<T, ReplayDiff>) {
           return "diff：增量，序号 " + std::to_string(payload.first_sequence) +
-                 "~" + std::to_string(payload.last_sequence) + "\n      买: " +
-                 Levels(scale, payload.bids) + "\n      卖: " +
-                 Levels(scale, payload.asks);
+                 "~" + std::to_string(payload.last_sequence) +
+                 "\n      买: " + Levels(scale, payload.bids) +
+                 "\n      卖: " + Levels(scale, payload.asks);
         } else if constexpr (std::is_same_v<T, ReplayTimer>) {
           return "timer：定时器，叫醒策略";
         } else {
@@ -141,8 +157,8 @@ class PrintingRecorder final : public RecorderPort {
     std::visit(
         [](const auto& payload) {
           using T = std::decay_t<decltype(payload)>;
-          if constexpr (std::is_same_v<T, OrderIntent>) {
-            std::cout << "[意图] 准备发出 " << payload.client_id.value << "："
+          if constexpr (std::is_same_v<T, PreparedOrder>) {
+            std::cout << "[待发订单] " << payload.client_id.value << "："
                       << SideName(payload.request.side) << " "
                       << Plain(payload.request.base_amount) << " @ "
                       << Plain(*payload.request.limit_price);
@@ -154,7 +170,8 @@ class PrintingRecorder final : public RecorderPort {
                       << (payload.accepted ? " 已受理" : " 被拒绝");
             if (!payload.accepted || !payload.message.empty()) {
               std::cout << "（" << Info(payload.reason).name;
-              if (!payload.message.empty()) std::cout << ": " << payload.message;
+              if (!payload.message.empty())
+                std::cout << ": " << payload.message;
               std::cout << "）";
             }
             if (payload.client_id) std::cout << " " << payload.client_id->value;
@@ -188,9 +205,9 @@ absl::Status Apply(const ReplayInput& input, const MarketConfig& market,
   if (const auto* p = std::get_if<ReplaySubscribe>(&input.payload)) {
     shard.Subscribe(p->stream_epoch);
   } else if (const auto* p = std::get_if<ReplaySnapshot>(&input.payload)) {
-    return shard.OnSnapshot({market.spec.market, market.book_scale.scale_version,
-                             p->stream_epoch, p->last_sequence, p->bids,
-                             p->asks, time});
+    return shard.OnSnapshot({market.spec.market,
+                             market.book_scale.scale_version, p->stream_epoch,
+                             p->last_sequence, p->bids, p->asks, time});
   } else if (const auto* p = std::get_if<ReplayDiff>(&input.payload)) {
     return shard.OnDiff({market.spec.market, market.book_scale.scale_version,
                          p->stream_epoch, p->first_sequence, p->last_sequence,
@@ -200,13 +217,18 @@ absl::Status Apply(const ReplayInput& input, const MarketConfig& market,
     if (!results.ok()) return results.status();
     if (results->empty()) std::cout << "    （策略这次没有任何动作）\n";
   } else if (const auto* p = std::get_if<ReplayPublicTrade>(&input.payload)) {
-    return shard.OnPublicTrade({market.spec.market, {}, p->price_ticks,
-                                p->quantity_lots, p->side, time});
+    return shard.OnPublicTrade({market.spec.market,
+                                {},
+                                p->price_ticks,
+                                p->quantity_lots,
+                                p->side,
+                                time});
   }
   return absl::OkStatus();
 }
 
-void PrintState(const ShardRuntime& shard, const SimpleSimulatedExchange& sim_exchange,
+void PrintState(const ShardRuntime& shard,
+                const SimpleSimulatedExchange& sim_exchange,
                 const RiskGate& risk, const AccountId& account,
                 const MarketConfig& market) {
   const auto& scale = market.book_scale;
@@ -228,16 +250,20 @@ void PrintState(const ShardRuntime& shard, const SimpleSimulatedExchange& sim_ex
               << Plain(*order.request.limit_price) << "]";
   }
   std::cout << "\n  余额:";
-  for (const AssetId& asset : {market.spec.base_asset, market.spec.quote_asset}) {
+  for (const AssetId& asset :
+       {market.spec.base_asset, market.spec.quote_asset}) {
     auto lease = risk.Available(account, asset);
-    std::cout << " " << asset.value << " 总额 " << Plain(sim_exchange.BalanceOf(asset))
-              << " / 可用 " << Plain(sim_exchange.AvailableBalance(asset))
-              << " / 风控剩余额度 " << (lease.ok() ? Plain(*lease) : "?") << ";";
+    std::cout << " " << asset.value << " 总额 "
+              << Plain(sim_exchange.BalanceOf(asset)) << " / 可用 "
+              << Plain(sim_exchange.AvailableBalance(asset))
+              << " / 风控剩余额度 " << (lease.ok() ? Plain(*lease) : "?")
+              << ";";
   }
   std::cout << "\n";
 }
 
-absl::Status Run(const std::string& config_path, const std::string& market_path) {
+absl::Status Run(const std::string& config_path,
+                 const std::string& market_path) {
   // ---- 1. 读配置（与 hquant start 用同一个 yaml）----
   auto config = LoadConfig(config_path);
   if (!config.ok()) return config.status();
@@ -266,9 +292,14 @@ absl::Status Run(const std::string& config_path, const std::string& market_path)
                       strategy_config.refresh_interval, PmmPriceType::Mid,
                       D("0.001"), true});
   // 模拟交易所：手续费 0.1%，client ID 用默认的 P1、P2……
-  SimpleSimulatedExchange sim_exchange({account.account, market.spec, rule,
-                        account.initial_balances, D("0.001"), true, {}},
-                       clock);
+  SimpleSimulatedExchange sim_exchange({account.account,
+                                        market.spec,
+                                        rule,
+                                        account.initial_balances,
+                                        D("0.001"),
+                                        true,
+                                        {}},
+                                       clock);
   // 风控：每种资产最多能用多少。
   RiskGate risk({assignment.shard, D("0"), std::chrono::seconds(300)});
   for (const auto& lease : config->static_risk_leases) {
@@ -301,7 +332,8 @@ absl::Status Run(const std::string& config_path, const std::string& market_path)
 }  // namespace
 
 int main(int argc, char** argv) {
-  const std::string config = argc > 1 ? argv[1] : "examples/simulated_replay.yaml";
+  const std::string config =
+      argc > 1 ? argv[1] : "examples/simulated_replay.yaml";
   const std::string market = argc > 2 ? argv[2] : "examples/replay_market.json";
   auto status = Run(config, market);
   if (!status.ok()) {
