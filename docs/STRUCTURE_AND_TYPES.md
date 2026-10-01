@@ -12,7 +12,7 @@
 
 ## 2. 当前目录与文件
 
-本次目录重构的对应表和迁移顺序见 [refactor/PLAN.md](refactor/PLAN.md)。`hquant/` 只保留 `src/` 与 `test/`；每个 `src` 模块各有一个 `BUILD.bazel`，测试与夹具集中在 `hquant/test/BUILD.bazel`。G0–G4 的本地实现已建立；G4 隔离账户联机验收仍按交付关口执行。
+`hquant/` 只保留 `src/` 与 `test/`；每个 `src` 模块各有一个 `BUILD.bazel`，测试与夹具集中在 `hquant/test/BUILD.bazel`。G0–G4 的本地实现已建立；G4 隔离账户联机验收仍按交付关口执行。
 
 ```text
 hummingbot-cpp/

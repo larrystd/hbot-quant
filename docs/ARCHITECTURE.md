@@ -2,7 +2,7 @@
 
 状态：设计基线，G0–G4 的本地实现已按本文落地；性能数字待 G3/G4 实测。线程、发单、风险和恢复语义以本文为准。Python 对照基线见 [`../../hummingbot/docs/ARCHITECTURE.md`](../../hummingbot/docs/ARCHITECTURE.md)。
 
-相关文档：交付关口见 [ROADMAP.md](ROADMAP.md)，开发与排程见 [DEVELOPMENT.md](DEVELOPMENT.md)，目录和数据契约见 [STRUCTURE_AND_TYPES.md](STRUCTURE_AND_TYPES.md)，订单簿见 [ORDER_BOOK.md](ORDER_BOOK.md)，交易所通道见 [CONNECTIONS.md](CONNECTIONS.md)。
+相关文档：交付关口见 [ROADMAP.md](ROADMAP.md)，开发与验证见 [DEVELOPMENT.md](DEVELOPMENT.md)，目录和数据契约见 [STRUCTURE_AND_TYPES.md](STRUCTURE_AND_TYPES.md)，订单簿见 [ORDER_BOOK.md](ORDER_BOOK.md)，交易所通道见 [CONNECTIONS.md](CONNECTIONS.md)。
 
 核心原则：**一个分片独占其策略需要的行情、订单和资金状态。消息在该分片线程内解析、更新状态、执行符合触发条件的策略、检查风控，并发起非阻塞网络写入；热路径不跨交易线程。** 真正的 socket 写完成、交易所接单和成交是后续异步事件，不能承诺都发生在收到行情的同一调用栈内。是否等定时器由策略自己的触发策略决定；记录和日志只做非阻塞入队。
 

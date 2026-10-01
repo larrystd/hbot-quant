@@ -1,4 +1,4 @@
-# 开发指南：写法、协作与任务
+# 开发指南：写法、协作与验证
 
 本文说明怎么写代码、怎么分工与集成。关口和进度见 [ROADMAP.md](ROADMAP.md)；运行时语义以 [ARCHITECTURE.md](ARCHITECTURE.md) 为准；逐文件目录、Bazel target 与字段以 [STRUCTURE_AND_TYPES.md](STRUCTURE_AND_TYPES.md) 为准；订单簿以 [ORDER_BOOK.md](ORDER_BOOK.md) 为准。实现中发现冲突，先更新文档和对应测试，再改代码。
 
@@ -62,11 +62,11 @@
 
 ## 3. 多 Agent 协作规则
 
-1. **按模块独占写入：** `hquant/src/{base,market,order,strategy,service,application,offline,cli}/` 各有一个 `BUILD.bazel`；并行任务须指定文件所有者，避免两个 Agent 同时修改同一文件。
-2. **测试集中管理：** 单元和端到端测试平铺在 `hquant/test/`，夹具分在 `hquant/test/fixtures/{order_book,order_tracker,simple_pmm,paper,v1}/`。集成负责人统一维护 `hquant/test/BUILD.bazel` 和 fixture loader；并行实现任务写各自的新测试文件。
+1. **按模块独占写入：** `hquant/src/{base,market,order,strategy,shard,application,storage,cli}/` 各有一个 `BUILD.bazel`；并行任务须指定文件所有者，避免两个 Agent 同时修改同一文件。
+2. **测试集中管理：** 单元和端到端测试平铺在 `hquant/test/`，夹具分在 `hquant/test/fixtures/{order_book,order_tracker,simple_pmm,simulated_exchange,v1}/`。集成负责人统一维护 `hquant/test/BUILD.bazel` 和 fixture loader；并行实现任务写各自的新测试文件。
 3. **公共接口先同步：** 发现头文件或 target 依赖问题时，先说明字段、调用方和测试场景，再由该模块负责人修改。`apps/`、`dev/`、根 Bazel 文件和跨模块文档由集成负责人统一检查。
 4. **交付完整模块：** 实现、BUILD、对外 API 说明、离线单元/协议测试、运行命令和未解决问题。局部测试运行 `bazel test //hquant/test:<name>`；集成后跑 `bazel test //...`、端到端回放和相关 sanitizer。
-5. **按依赖顺序集成：** `base → market/order/offline → strategy → service → application/cli → apps`。共享 Bazel 输出目录可能串行化并发构建；重构按 [refactor/PLAN.md](refactor/PLAN.md) 的阶段检查。
+5. **按依赖顺序集成：** `base → market/order/storage → strategy → shard → application/cli → apps`。共享 Bazel 输出目录可能串行化并发构建。
 
 仓库已有 Git 基线。并行开发使用互不冲突的文件所有权或独立 worktree，并以小批次合并与验证。
 
@@ -84,119 +84,3 @@
 | G4 | 隔离账户中的接单、部分成交、撤单、写超时、`SubmissionUnknown`、进程中断与重启对账 |
 
 Sanitizer：`bazel test --config=asan //...`、`bazel test --config=tsan //...`（smoke 用 `./op.sh asan|tsan`）。性能结果附机器、核数、分片数、输入流与事件循环模式。
-
-## 4. 任务包与排程
-
-### 4.1 G0 冻结的公共契约
-
-| 契约组 | 冻结内容 | 并行实现所需的判断 |
-| --- | --- | --- |
-| 数值/身份 | `Decimal` 精度与舍入、`MarketId`、`StrategyId`、`RunId`、三种订单/成交 ID、时间类型 | 盘口步长与下单规则分开；client ID 的归属和唯一性不依赖 SQLite |
-| 行情 | `TickLotSize`、Snapshot/Diff 的序号与 ticks/lots、`OrderBookView` 生命周期、同步状态 | adapter 负责原始序号，订单簿负责连续性和状态 |
-| 订单与策略 | `OrderRequest/ApprovedOrder/OrderUpdate/TradeUpdate`、`TrackedOrder`、`ActionBatch`、`TriggerPolicy`、`AwaitingTrades` | 回报乱序/去重、动作顺序和本账户成交边界清楚 |
-| 存储与恢复 | `PreparedOrder`、`RecoveryContext`、`StorageHealth`、每分片记录序号、schema 版本、`HistoryQuery` | 非阻塞入队；提交不触发发单；缺口与不可恢复状态可见 |
-| 多分片 | 静态资金/限速额度、`ShardReport`、`OrderStrategyIndex`、私有回报转发与队列满语义 | ID 生成到索引更新之间可能先到回报：能从 ID 判定 strategy_id，或隔离补查，不能投错分片 |
-| 构建与夹具 | target 名/`visibility`、`hquant/test/fixtures/v1` 格式、输入时钟与同时间序号、差异标记 | 独立包可编译；夹具可由 C++ 离线 runner 读取 |
-
-**夹具格式：** 每例记录 `schema_version=1`、`case_id`、`baseline_commit`、`source_files`、`expectation_kind`、按 `at_us` 与 `ordinal` 排序的 `inputs`、逐步 `expected`，以及 `parity` 或 `intentional_divergence` 标记。价格、数量、余额和费用用十进制字符串；随机订单 ID 归一化为稳定符号；不含真实密钥或账户数据。Python 盘口的浮点表示与 C++ 的缺口重同步不同：有效流用 Python 输出对照，新约束按本套文档验收，差异汇总到 `hquant/test/fixtures/DIFFERENCES.md`。格式细节见 [`hquant/test/fixtures/v1/README.md`](../hquant/test/fixtures/v1/README.md)。
-
-### 4.2 任务包
-
-下表保留 G0–G4 的任务来源；重构后写入所有权按具体 target 文件分配。Agent 可以读取其他代码，共享 `BUILD.bazel` 由集成负责人修改。
-
-| ID | 独占写入目录 | 前置条件 | 局部验收 |
-| --- | --- | --- | --- |
-| F1 订单簿夹具 | `hquant/test/fixtures/order_book/**` | 夹具 v1 格式 | 快照前缓存、首条接续、连续更新/删档、重复/旧消息、跳号、交叉/无效精度；逐步 BBO、前 N 档、序号、状态 |
-| F2 订单追踪夹具 | `hquant/test/fixtures/order_tracker/**` | 夹具 v1 格式 | 接单、部分/全成交、trade ID 重复、成交先于接单、完成先于明细、撤单竞态；事件序、累计金额、费用、敞口 |
-| F3 `simple_pmm` 夹具 | `hquant/test/fixtures/simple_pmm/**` | 夹具 v1 格式 | 只以 `scripts/simple_pmm.py` 为基线：就绪门、15 秒刷新、撤旧单后报价、余额不足、量化；有序 `ActionBatch` |
-| F4 模拟盘夹具 | `hquant/test/fixtures/simulated_exchange/**` | F1–F3 的类型与时钟约定 | 限价触价、公开成交驱动撮合、撤单、余额和费用 |
-| B1 构建/CI | `dev/**`、`.github/workflows/**` | D0 smoke 已过 macOS | Linux x86_64 构建、离线测试、ASan/UBSan 与 TSan 实测 |
-| M1 Decimal/领域 | `hquant/src/base/{types,market,order}.*` | 数值/身份契约 | libmpdec RAII、强类型 ID/规则/费用；与 Python Decimal 差分 |
-| M2 订单簿 | `hquant/src/market/order_book.*` | 行情契约、M1 | L2 数组 + 溢出、快照/增量状态机、缺口与 Stale/Resyncing；F1 全部回放 |
-| M3 OrderTracker | `hquant/src/order/order_tracker.*` | 订单契约、M1 | 双 ID、trade ID 去重、`AwaitingTrades`、`SubmissionUnknown`；F2 全部回放 |
-| M4 风控/额度 | `hquant/src/order/risk.*` | 订单/额度契约、M1 | 单笔/总敞口、静态额度、未知结果占额、紧急停止 |
-| M5 网络 | `hquant/src/base/{net,rate_limit}.*` | transport 端口 | REST 复用、期限/取消、WS 重连、本地限速与熔断；本地 mock，无公网 |
-| M6 SQLite | `hquant/src/storage/{storage,record_codec,recorder,history}.*`、`schema.sql` | 意图/schema 契约 | 每分片 SPSC、WAL 批量写、HistoryReader 分页、缺口、RunManifest、恢复 |
-| M7 策略/模拟盘 | `hquant/src/strategy/{strategy,simple_pmm}.*`、`hquant/src/order/simulated_exchange.*` | 动作/视图契约、M1、F3/F4 | `simple_pmm` 定时动作、可重放撮合与费用；F3/F4 全部回放 |
-| M8 Binance 公开协议 | `hquant/src/market/binance_spot_feed.*` | 行情事件契约、M5 | 原始报文解析、序号规范化、异步快照/WS；F1 与协议 mock |
-| M9 CLI/配置 | `hquant/src/cli/cli.*`、`hquant/src/application/config.*` | 控制消息与配置版本 | `start` 配置校验，`status/history/stop` 离线测试；拒绝重复 strategy_id、错误分片依赖、隐式实盘 |
-| M10 归属与路由 | `hquant/src/shard/routing.*` | 多分片契约 | 稳定 strategy_id → 当前分片、有界转发、未知归属隔离 |
-| M11 签名/网关 | `hquant/src/order/binance_spot_gateway.*` | M5、M3 | client ID 编解码、签名、异步下/撤单、未知结果 |
-| M12 私有流/对账 | `hquant/src/order/binance_spot_account.*` | M5、M3 | 接单/成交回报、查单/成交/余额并核对 |
-
-### 4.3 依赖图与波次
-
-```mermaid
-flowchart LR
-    G0["G0 公共契约"] --> F["F1/F2/F3 夹具"]
-    F --> F4["F4 模拟盘夹具"]
-    G0 --> M1["M1 Decimal/领域"]
-    G0 --> M5["M5 网络"]
-    G0 --> M6["M6 存储"]
-    M1 --> M2["M2 订单簿"]
-    M1 --> M3["M3 OrderTracker"]
-    M1 --> M4["M4 风控"]
-    M1 --> M7["M7 策略/模拟盘"]
-    F4 --> M7
-    M2 --> G1["G1 离线 模拟盘"]
-    M3 --> G1
-    M4 --> G1
-    M6 --> G1
-    M7 --> G1
-    M9["M9 CLI/配置"] --> G1
-    B1["B1 Linux/CI"] --> G1
-    M5 --> M8["M8 Binance 公开协议"]
-    M8 --> G2["G2 公开行情模拟盘"]
-    G1 --> G2
-    G2 --> G3["G3 多分片账户边界"]
-    M10["M10 路由"] --> G3
-    G3 --> G4["G4 实盘与恢复"]
-    M11["M11 网关"] --> G4
-    M12["M12 私有流/对账"] --> G4
-```
-
-任务满足前置条件即可占用空闲槽位，不必等整波结束；交付以测试通过为准，不按日历天数宣称完成。
-
-| 波次 | 集成 Agent | Worker 1 | Worker 2 | Worker 3 | 汇合点 |
-| --- | --- | --- | --- | --- | --- |
-| W0a | 公共字段/API、夹具 v1 格式、`//dev:contract_compile` | 只读抽取 Python 订单簿行为 | 只读抽取 Tracker 行为 | 只读抽取 `simple_pmm.py` | 头文件编译、schema 定稿 |
-| W0b | M1、统一 fixture loader | F1 | F2 | F3 | G0 |
-| W1 | 单分片 runtime 骨架与回放 runner | F4 | M6 | M5 | 各包通过；B1 在空槽位补上 |
-| W2 | ActionExecutor、风控、模拟盘与 SQLite 闭环 | M2 | M3 | M7 | M4、M9 补位；G1 |
-| W3 | `hquant/app` 装配与 G2 集成 | M8 | 公开协议 mock/夹具 | 断线、缺口、429 故障注入 | G2 |
-| W4 | 控制线程与 8 分片验收 | M10 | M4 额度扩展 | M5 限速/熔断扩展 | G3 |
-| W5 | 实盘准入、恢复与最终集成 | M11 | M12 | M6 存储恢复与崩溃故障注入 | G4 |
-
-## 5. 各关口的工作单与完成命令
-
-G0–G4 的本地 target 已建立；以下保留为各关口的交付定义，继续用于回归与剩余联机验收。
-
-**G0：** 集成 Agent（C00）建立 `hquant/src/base/{types,market,order,net}.h`、`hquant/src/market/order_book.h`、`hquant/src/strategy/strategy.h`、`hquant/src/storage/storage.h`、`hquant/src/shard/shard.h`、`hquant/src/application/quant_server.h`、`dev/contract_compile_test.cc` 与 `hquant/test/{BUILD.bazel,fixture_loader.*,fixture_schema_test.cc,fixtures/v1/README.md}`；F1 至少 6 例、F2 至少 7 例、F3 至少 5 例。
-
-```bash
-bazel test //dev:dependency_smoke //dev:contract_compile //hquant/test:schema_test //hquant/test:types_test //hquant/test:order_book_test
-```
-
-**G1：** C01 Decimal 与领域类型；M2/M3/M4/M6/M7/M9 各自交付；集成 Agent 写 `hquant/src/shard/{shard,action_executor}`、`hquant/src/application/{launcher,quant_server}`、`apps/{hquant,hquant_engine}.cc`、`examples/simulated_replay.yaml` 与 `hquant/test/simulated_replay_test.cc`。回放测试断言盘口、两侧报价（mid=100、价差各 0.1%、数量 0.01 时为 99.9/100.1）、15 秒刷新撤旧单重报、成交、费用、余额、SQLite 历史与缺口，重复运行结果一致。`simulated_replay.yaml` 写明 `schema_version`、`mode: simulated`、固定行情、`BTC-USDT`、模拟盘 初始余额、`refresh_interval: 15s`、价差 `0.001`、数量 `0.01`、阻塞事件循环。
-
-```bash
-bazel test //hquant/test:simulated_replay && bazel test //...
-```
-
-**G2：** M5 传输端口运行在分片 `io_context`，不建网络线程池；M8 解析原始价格/数量文本并规范化序号；集成 Agent 添加 `examples/simulated_binance_pmm.yaml` 与 `hquant/test/simulated_binance_test.cc`，`status` 显示盘口 Live/Stale、挂单、余额和存储健康。
-
-```bash
-bazel test //hquant/src/base:net //hquant/src/base:rate_limit //hquant/src/market:binance_spot_feed //hquant/test:simulated_binance
-```
-
-**G3：** M4 补齐同账户/币种静态额度与版本核验；M10 建 `order_strategy_index` 与 `account_report_router`；M5 补本地限速与全局熔断；集成 Agent 建 `hquant/test/multi_shard_test.cc`，用两个以上活跃分片与 8 分片压力输入验证额度不重复授予、未知结果继续占额、未知归属/队列满暂停并补查。
-
-```bash
-bazel test //hquant/src/order:risk //hquant/src/shard:routing //hquant/src/base:net //hquant/src/base:rate_limit //hquant/test:multi_shard
-```
-
-**G4：** M11 做 client ID、签名、异步下/撤单与未知结果；M12 做私有回报、查单/成交与 REST 对账；M6 扩展 RunManifest、缺口与检查点恢复；集成 Agent 建 `hquant/test/recovery_test.cc`，覆盖写超时、HTTP/私有流乱序、重复成交、进程中断和 SQLite 故障。之后按 [ROADMAP.md](ROADMAP.md) 第 5 节做隔离账户验收；XEMM、V2、回测从 G5 继续，不混进首条实盘交付。
-
-```bash
-bazel test //hquant/src/order:binance_spot_gateway //hquant/src/order:binance_spot_account //hquant/test:recovery && bazel test //...
-```

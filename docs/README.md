@@ -14,10 +14,9 @@
 | [ORDER_BOOK.md](ORDER_BOOK.md) | 行情类型、同步状态机、增量应用规则、L2/L3 内存结构、策略读取方式 | 实现或调试订单簿 |
 | [STRUCTURE_AND_TYPES.md](STRUCTURE_AND_TYPES.md) | 目录与 Bazel 包、依赖方向、关键数据类型与不变量、Python/C++ 语义对照、契约测试 | 写代码前确认文件、target 和字段 |
 | [DEPENDENCIES.md](DEPENDENCIES.md) | 第三方依赖选型与版本、Bazel 约定、各库的使用边界 | 改构建、引入或升级依赖 |
-| [DEVELOPMENT.md](DEVELOPMENT.md) | C++ 写法约束、协程与关闭规则、多 Agent 协作、任务包与排程、工作单、测试命令 | 领取任务、提交与集成 |
+| [DEVELOPMENT.md](DEVELOPMENT.md) | C++ 写法约束、协程与关闭规则、多 Agent 协作和验证命令 | 写代码、提交与集成 |
 | [ERRORS.md](ERRORS.md) | 业务错误码：负数错误码、处理方式、完整注册表及兼容格式 | 新增或处理错误时 |
 | [GLOSSARY.md](GLOSSARY.md) | 当前代码与配置使用的交易术语 | 核对术语、类型和状态名 |
-| [refactor/PLAN.md](refactor/PLAN.md) | 目录重构计划：目标结构、新旧文件对应、分阶段步骤与检查项 | 执行或审查目录重构 |
 
 文档冲突时的优先级：运行时与线程语义以 `ARCHITECTURE.md` 为准；文件名、target 与字段以 `STRUCTURE_AND_TYPES.md` 为准；订单簿算法以 `ORDER_BOOK.md` 为准；依赖版本以仓库根目录的 [`MODULE.bazel`](../MODULE.bazel) 为准。实现中发现冲突，先更新文档和对应测试，再改代码。
 

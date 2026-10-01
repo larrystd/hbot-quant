@@ -1,7 +1,6 @@
-"""Step 0 of docs/refactor/RENAME_PLAN.md. Run from repo root: python3 tools/refactor/error_negative.py .
+"""Historical one-time migration for negative error numbers; already applied.
 
-Negative error numbers: helpers, payload, storage magnitude, control wire,
-plus the kCliEngineError split."""
+Do not rerun: the script expects the pre-migration source text."""
 import sys
 
 root = sys.argv[1] + "/hquant/"
