@@ -69,7 +69,7 @@ class TimeoutTransport final : public HttpTransport {
   std::string target;
 };
 
-class FakeSignedRest final : public binance_spot::SignedAccountRest {
+class FakeSignedRest final : public binance_spot::SignedRestClient {
  public:
   boost::asio::awaitable<absl::StatusOr<HttpResponse>> GetSigned(
       std::string path, std::chrono::steady_clock::time_point) override {

@@ -15,7 +15,7 @@ namespace {
 
 Decimal D(const char* text) { return *Decimal::Parse(text); }
 
-TEST(MultiShardTest, CapitalRateAndPrivateReportsStayWithinTheirShard) {
+TEST(MultiShardTest, CapitalRateAndAccountReportsStayWithinTheirShard) {
   const auto now = UtcTime(std::chrono::microseconds(1'000'000));
   const AccountId account("shared");
   const AssetId quote("USDT");
@@ -94,7 +94,7 @@ TEST(MultiShardTest, CapitalRateAndPrivateReportsStayWithinTheirShard) {
       route.RegisterClient(ClientOrderId("C1"), account, market, owner0).ok());
   ASSERT_TRUE(
       route.RegisterClient(ClientOrderId("C2"), account, market, owner1).ok());
-  auto router = PrivateReportRouter::Create({ShardId{0}, 1, 2}, route);
+  auto router = AccountReportRouter::Create({ShardId{0}, 1, 2}, route);
   ASSERT_TRUE(router.ok()) << router.status();
   OrderUpdate update;
   update.account = account;
@@ -141,7 +141,7 @@ TEST(MultiShardTest, EightShardRouterQueuesStaySeparate) {
     ASSERT_TRUE(
         route.RegisterClient(client, account, market, strategy_id).ok());
   }
-  auto router = PrivateReportRouter::Create({ShardId{0}, 2, 2}, route);
+  auto router = AccountReportRouter::Create({ShardId{0}, 2, 2}, route);
   ASSERT_TRUE(router.ok()) << router.status();
   for (uint8_t shard = 0; shard < 8; ++shard) {
     OrderUpdate update;

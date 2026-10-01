@@ -15,7 +15,7 @@
 
 namespace hquant::binance_spot {
 
-struct UserDataBatch {
+struct AccountStreamBatch {
   // For executionReport TRADE, the fill precedes its status update. The
   // OrderTracker handles duplicate trade IDs and either arrival order.
   std::vector<AccountEvent> events;
@@ -25,13 +25,13 @@ struct UserDataBatch {
 
 // Pure JSON adapter. Network subscription/reconnect and account-level routing
 // belong to their owning components; this object holds no mutable order state.
-class UserDataStream {
+class AccountStreamParser {
  public:
-  UserDataStream(AccountId account, ExchangeId exchange)
+  AccountStreamParser(AccountId account, ExchangeId exchange)
       : account_(std::move(account)), exchange_(std::move(exchange)) {}
 
-  absl::StatusOr<UserDataBatch> Parse(std::string_view json,
-                                      EventTime received) const;
+  absl::StatusOr<AccountStreamBatch> Parse(std::string_view json,
+                                           EventTime received) const;
 
  private:
   AccountId account_;
@@ -72,9 +72,9 @@ absl::StatusOr<RestartReconciliationPlan> PlanRestart(
 // The implementation adds timestamp, recvWindow, signature and API key,
 // applies rate limits, and performs GET through the existing HTTP transport.
 // The private package never logs or stores credentials.
-class SignedAccountRest {
+class SignedRestClient {
  public:
-  virtual ~SignedAccountRest() = default;
+  virtual ~SignedRestClient() = default;
   virtual boost::asio::awaitable<absl::StatusOr<HttpResponse>> GetSigned(
       std::string path_and_query,
       std::chrono::steady_clock::time_point deadline) = 0;
@@ -100,8 +100,8 @@ class ReconciliationClient {
     size_t max_response_bytes = 2 * 1024 * 1024;
   };
 
-  explicit ReconciliationClient(SignedAccountRest& rest) : rest_(rest) {}
-  ReconciliationClient(SignedAccountRest& rest, Limits limits)
+  explicit ReconciliationClient(SignedRestClient& rest) : rest_(rest) {}
+  ReconciliationClient(SignedRestClient& rest, Limits limits)
       : rest_(rest), limits_(limits) {}
 
   boost::asio::awaitable<absl::StatusOr<ReconciliationBatch>> Query(
@@ -122,7 +122,7 @@ class ReconciliationClient {
                        std::chrono::steady_clock::time_point deadline);
 
  private:
-  SignedAccountRest& rest_;
+  SignedRestClient& rest_;
   Limits limits_;
 };
 

@@ -25,36 +25,38 @@ OrderStrategyIndex::ExchangeKey OrderStrategyIndex::Key(
 }
 
 absl::Status OrderStrategyIndex::SetStrategyRoute(StrategyId strategy_id,
-                                                AccountId account,
-                                                ShardId shard) {
+                                                  AccountId account,
+                                                  ShardId shard) {
   if (!strategy_id.IsValid() || account.value.empty() || !shard.IsValid()) {
     return Error(ErrorCode::kRouteConfigInvalid, "invalid strategy_id route");
   }
   auto found = strategy_routes_.find(strategy_id.value);
   if (found != strategy_routes_.end()) {
-    if (found->second.strategy_id != strategy_id || found->second.account != account) {
+    if (found->second.strategy_id != strategy_id ||
+        found->second.account != account) {
       return Error(ErrorCode::kRouteConfigInvalid,
                    "strategy_id key identity conflict");
     }
     found->second.shard = shard;
   } else {
-    strategy_routes_.emplace(strategy_id.value,
-                    StrategyRoute{std::move(strategy_id), std::move(account), shard});
+    strategy_routes_.emplace(
+        strategy_id.value,
+        StrategyRoute{std::move(strategy_id), std::move(account), shard});
   }
   return absl::OkStatus();
 }
 
 absl::Status OrderStrategyIndex::RegisterClient(ClientOrderId client_id,
-                                                 AccountId account,
-                                                 MarketId market,
-                                                 const StrategyId& strategy_id) {
+                                                AccountId account,
+                                                MarketId market,
+                                                const StrategyId& strategy_id) {
   if (client_id.value.empty() || account.value.empty() ||
       market.exchange.value.empty() || market.native_symbol.empty()) {
-    return Error(ErrorCode::kRouteReportInvalid,
-                 "invalid client strategy key");
+    return Error(ErrorCode::kRouteReportInvalid, "invalid client strategy key");
   }
   const auto route = strategy_routes_.find(strategy_id.value);
-  if (route == strategy_routes_.end() || route->second.strategy_id != strategy_id ||
+  if (route == strategy_routes_.end() ||
+      route->second.strategy_id != strategy_id ||
       route->second.account != account) {
     return Error(ErrorCode::kRouteStrategyUnknown,
                  "client strategy_id has no matching route");
@@ -86,7 +88,8 @@ absl::Status OrderStrategyIndex::RegisterExchange(
                  "invalid exchange strategy key");
   }
   const auto route = strategy_routes_.find(strategy_id.value);
-  if (route == strategy_routes_.end() || route->second.strategy_id != strategy_id ||
+  if (route == strategy_routes_.end() ||
+      route->second.strategy_id != strategy_id ||
       route->second.account != account) {
     return Error(ErrorCode::kRouteStrategyUnknown,
                  "exchange strategy_id has no matching route");
@@ -152,12 +155,14 @@ absl::StatusOr<OrderRoute> OrderStrategyIndex::Resolve(
     }
   }
   if (!candidate)
-    return Error(ErrorCode::kRouteStrategyUnknown, "private report strategy_id unknown");
+    return Error(ErrorCode::kRouteStrategyUnknown,
+                 "private report strategy_id unknown");
   const auto route = strategy_routes_.find(*candidate);
   if (route == strategy_routes_.end())
     return Error(ErrorCode::kRouteStrategyUnknown, "strategy_id route unknown");
   if (route->second.account != account) {
-    return Error(ErrorCode::kRouteStrategyConflict, "strategy_id/account conflict");
+    return Error(ErrorCode::kRouteStrategyConflict,
+                 "strategy_id/account conflict");
   }
   return OrderRoute{route->second.strategy_id, route->second.shard};
 }
@@ -173,7 +178,7 @@ bool OrderStrategyIndex::KnowsAccount(const AccountId& account) const {
 
 namespace hquant {
 
-PrivateReportRouter::PrivateReportRouter(Options options,
+AccountReportRouter::AccountReportRouter(Options options,
                                          OrderStrategyIndex& index)
     : options_(options), index_(index) {
   for (size_t shard = 0; shard < queues_.size(); ++shard) {
@@ -184,8 +189,8 @@ PrivateReportRouter::PrivateReportRouter(Options options,
   }
 }
 
-absl::StatusOr<std::unique_ptr<PrivateReportRouter>>
-PrivateReportRouter::Create(Options options, OrderStrategyIndex& index) {
+absl::StatusOr<std::unique_ptr<AccountReportRouter>>
+AccountReportRouter::Create(Options options, OrderStrategyIndex& index) {
   if (!options.reader_shard.IsValid() ||
       options.queue_capacity_per_shard == 0 ||
       options.quarantine_capacity == 0 ||
@@ -194,11 +199,11 @@ PrivateReportRouter::Create(Options options, OrderStrategyIndex& index) {
     return Error(ErrorCode::kRouteConfigInvalid,
                  "invalid private report router capacity/shard");
   }
-  return std::unique_ptr<PrivateReportRouter>(
-      new PrivateReportRouter(options, index));
+  return std::unique_ptr<AccountReportRouter>(
+      new AccountReportRouter(options, index));
 }
 
-RouteResult PrivateReportRouter::Quarantine(PrivateReport report,
+RouteResult AccountReportRouter::Quarantine(AccountReport report,
                                             RouteResult result) {
   result.disposition = RouteDisposition::Quarantined;
   result.pause_account = true;
@@ -210,13 +215,13 @@ RouteResult PrivateReportRouter::Quarantine(PrivateReport report,
     ++dropped_quarantine_count_;
     result.quarantine_dropped = true;
   } else {
-    quarantine_.push_back(QuarantinedPrivateReport{
+    quarantine_.push_back(QuarantinedAccountReport{
         std::move(report), result.failure, result.source_sequence});
   }
   return result;
 }
 
-RouteResult PrivateReportRouter::Route(PrivateReport report) {
+RouteResult AccountReportRouter::Route(AccountReport report) {
   const AccountId& account = std::visit(
       [](const auto& value) -> const AccountId& { return value.account; },
       report);
@@ -246,7 +251,7 @@ RouteResult PrivateReportRouter::Route(PrivateReport report) {
     result.failure = CodeOf(route.status());
     return Quarantine(std::move(report), std::move(result));
   }
-  RoutedPrivateReport routed{route->strategy_id, route->current_shard,
+  RoutedAccountReport routed{route->strategy_id, route->current_shard,
                              result.source_sequence, std::move(report)};
   if (route->current_shard == options_.reader_shard) {
     result.disposition = RouteDisposition::Local;
@@ -267,7 +272,7 @@ RouteResult PrivateReportRouter::Route(PrivateReport report) {
   return result;
 }
 
-std::optional<RoutedPrivateReport> PrivateReportRouter::TryPop(
+std::optional<RoutedAccountReport> AccountReportRouter::TryPop(
     ShardId target_shard) {
   if (!target_shard.IsValid() || target_shard == options_.reader_shard) {
     return std::nullopt;
@@ -282,19 +287,19 @@ std::optional<RoutedPrivateReport> PrivateReportRouter::TryPop(
   return result;
 }
 
-std::optional<QuarantinedPrivateReport>
-PrivateReportRouter::TryPopQuarantined() {
+std::optional<QuarantinedAccountReport>
+AccountReportRouter::TryPopQuarantined() {
   if (quarantine_.empty()) return std::nullopt;
   auto result = std::move(quarantine_.front());
   quarantine_.pop_front();
   return result;
 }
 
-bool PrivateReportRouter::IsAccountPaused(const AccountId& account) const {
+bool AccountReportRouter::IsAccountPaused(const AccountId& account) const {
   return paused_accounts_.contains(account.value);
 }
 
-void PrivateReportRouter::MarkReconciled(const AccountId& account) {
+void AccountReportRouter::MarkReconciled(const AccountId& account) {
   paused_accounts_.erase(account.value);
 }
 

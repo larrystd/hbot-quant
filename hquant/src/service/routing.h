@@ -40,9 +40,11 @@ class OrderStrategyIndex {
 
   explicit OrderStrategyIndex(DecodeStrategyId decode_strategy_id = {});
 
-  // Calling again with the same strategy_id/account changes its current shard after
-  // a restart. Historical client/exchange mappings keep their logical strategy_id.
-  absl::Status SetStrategyRoute(StrategyId strategy_id, AccountId account, ShardId shard);
+  // Calling again with the same strategy_id/account changes its current shard
+  // after a restart. Historical client/exchange mappings keep their logical
+  // strategy_id.
+  absl::Status SetStrategyRoute(StrategyId strategy_id, AccountId account,
+                                ShardId shard);
   absl::Status RegisterClient(ClientOrderId client_id, AccountId account,
                               MarketId market, const StrategyId& strategy_id);
   absl::Status RegisterExchange(
@@ -78,13 +80,13 @@ class OrderStrategyIndex {
   std::map<ExchangeKey, uint64_t> exchanges_;
 };
 
-using PrivateReport = std::variant<OrderUpdate, TradeUpdate>;
+using AccountReport = std::variant<OrderUpdate, TradeUpdate>;
 
-struct RoutedPrivateReport {
+struct RoutedAccountReport {
   StrategyId strategy_id;
   ShardId target_shard;
   uint64_t source_sequence = 0;
-  PrivateReport report;
+  AccountReport report;
 };
 
 enum class RouteDisposition { Local, Forwarded, Quarantined };
@@ -94,15 +96,15 @@ struct RouteResult {
   ErrorCode failure = ErrorCode::kOk;
   AccountId account;
   uint64_t source_sequence = 0;
-  std::optional<RoutedPrivateReport> local_report;
+  std::optional<RoutedAccountReport> local_report;
   std::optional<ShardId> wake_shard;
   bool pause_account = false;
   bool request_reconcile = false;
   bool quarantine_dropped = false;
 };
 
-struct QuarantinedPrivateReport {
-  PrivateReport report;
+struct QuarantinedAccountReport {
+  AccountReport report;
   ErrorCode reason = ErrorCode::kRouteStrategyUnknown;
   uint64_t source_sequence = 0;
 };
@@ -110,7 +112,7 @@ struct QuarantinedPrivateReport {
 // Route is called only by the account private-stream reader. Each target shard
 // alone calls TryPop for its SPSC queue. The caller posts one drain handler
 // when wake_shard is set; both blocking and busy loops bound each drain.
-class PrivateReportRouter {
+class AccountReportRouter {
  public:
   struct Options {
     ShardId reader_shard;
@@ -118,14 +120,14 @@ class PrivateReportRouter {
     size_t quarantine_capacity = 1024;
   };
 
-  static absl::StatusOr<std::unique_ptr<PrivateReportRouter>> Create(
+  static absl::StatusOr<std::unique_ptr<AccountReportRouter>> Create(
       Options options, OrderStrategyIndex& index);
-  PrivateReportRouter(const PrivateReportRouter&) = delete;
-  PrivateReportRouter& operator=(const PrivateReportRouter&) = delete;
+  AccountReportRouter(const AccountReportRouter&) = delete;
+  AccountReportRouter& operator=(const AccountReportRouter&) = delete;
 
-  RouteResult Route(PrivateReport report);
-  std::optional<RoutedPrivateReport> TryPop(ShardId target_shard);
-  std::optional<QuarantinedPrivateReport> TryPopQuarantined();
+  RouteResult Route(AccountReport report);
+  std::optional<RoutedAccountReport> TryPop(ShardId target_shard);
+  std::optional<QuarantinedAccountReport> TryPopQuarantined();
   bool IsAccountPaused(const AccountId& account) const;
   // Call only after REST/order/trade reconciliation has verified the gap.
   void MarkReconciled(const AccountId& account);
@@ -135,18 +137,18 @@ class PrivateReportRouter {
  private:
   struct Queue {
     explicit Queue(size_t capacity) : slots(capacity) {}
-    std::vector<std::optional<RoutedPrivateReport>> slots;
+    std::vector<std::optional<RoutedAccountReport>> slots;
     alignas(64) std::atomic<size_t> head{0};
     alignas(64) std::atomic<size_t> tail{0};
   };
 
-  PrivateReportRouter(Options options, OrderStrategyIndex& index);
-  RouteResult Quarantine(PrivateReport report, RouteResult result);
+  AccountReportRouter(Options options, OrderStrategyIndex& index);
+  RouteResult Quarantine(AccountReport report, RouteResult result);
 
   Options options_;
   OrderStrategyIndex& index_;
   std::array<std::unique_ptr<Queue>, 8> queues_;
-  std::deque<QuarantinedPrivateReport> quarantine_;
+  std::deque<QuarantinedAccountReport> quarantine_;
   std::set<std::string> paused_accounts_;
   uint64_t next_source_sequence_ = 1;
   uint64_t dropped_quarantine_count_ = 0;

@@ -47,7 +47,7 @@ std::string Report(const char* execution, const char* status, const char* last,
          "\",\"N\":" + fee_asset_json + ",\"m\":true}";
 }
 
-class FakeRest final : public SignedAccountRest {
+class FakeRest final : public SignedRestClient {
  public:
   std::deque<HttpResponse> responses;
   std::vector<std::string> targets;
@@ -95,8 +95,8 @@ std::string TradeJson(int trade_id, const char* amount = "1",
          "\"time\":1001,\"isMaker\":true}";
 }
 
-TEST(UserDataStreamTest, EmitsTradeBeforeStatusAndTrackerDeduplicates) {
-  UserDataStream stream(AccountId("A1"), ExchangeId("binance"));
+TEST(AccountStreamParserTest, EmitsTradeBeforeStatusAndTrackerDeduplicates) {
+  AccountStreamParser stream(AccountId("A1"), ExchangeId("binance"));
   OrderTracker tracker;
   PreparedOrder prepared;
   prepared.client_id = ClientOrderId("C1");
@@ -157,8 +157,8 @@ TEST(UserDataStreamTest, EmitsTradeBeforeStatusAndTrackerDeduplicates) {
   EXPECT_EQ(completed->snapshot.display_state, OrderDisplayState::Traded);
 }
 
-TEST(UserDataStreamTest, CancelUsesOriginalIdAndGapsRequestResync) {
-  UserDataStream stream(AccountId("A1"), ExchangeId("binance"));
+TEST(AccountStreamParserTest, CancelUsesOriginalIdAndGapsRequestResync) {
+  AccountStreamParser stream(AccountId("A1"), ExchangeId("binance"));
   auto canceled = stream.Parse(Report("CANCELED", "CANCELED", "0", "0", "0",
                                       "0", -1, "cancel-request", "C1"),
                                Received());

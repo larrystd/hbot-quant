@@ -14,7 +14,8 @@ namespace hquant {
 namespace {
 
 MarketId Market(std::string symbol = "BTCUSDT") {
-  return MarketId{ExchangeId("binance"), InstrumentKind::Spot, std::move(symbol)};
+  return MarketId{ExchangeId("binance"), InstrumentKind::Spot,
+                  std::move(symbol)};
 }
 
 StrategyId MakeStrategyId(uint64_t key) {
@@ -58,8 +59,10 @@ OrderStrategyIndex Index() {
 
 TEST(OrderStrategyIndexTest, StableStrategyRoutesOldClientToCurrentShard) {
   auto index = Index();
-  ASSERT_TRUE(
-      index.SetStrategyRoute(MakeStrategyId(1), AccountId("account-a"), ShardId{1}).ok());
+  ASSERT_TRUE(index
+                  .SetStrategyRoute(MakeStrategyId(1), AccountId("account-a"),
+                                    ShardId{1})
+                  .ok());
   ASSERT_TRUE(index
                   .RegisterClient(ClientOrderId("C1-1"), AccountId("account-a"),
                                   Market(), MakeStrategyId(1))
@@ -69,8 +72,10 @@ TEST(OrderStrategyIndexTest, StableStrategyRoutesOldClientToCurrentShard) {
                                     ExchangeOrderId("E1"), MakeStrategyId(1),
                                     ClientOrderId("C1-1"))
                   .ok());
-  ASSERT_TRUE(
-      index.SetStrategyRoute(MakeStrategyId(1), AccountId("account-a"), ShardId{5}).ok());
+  ASSERT_TRUE(index
+                  .SetStrategyRoute(MakeStrategyId(1), AccountId("account-a"),
+                                    ShardId{5})
+                  .ok());
   auto from_old_client = index.Resolve(AccountId("account-a"), Market(),
                                        ClientOrderId("C1-1"), std::nullopt);
   ASSERT_TRUE(from_old_client.ok()) << from_old_client.status();
@@ -87,15 +92,22 @@ TEST(OrderStrategyIndexTest, StableStrategyRoutesOldClientToCurrentShard) {
 
 TEST(OrderStrategyIndexTest, RejectsConflictsAndWrongAccountOrMarket) {
   auto index = Index();
-  ASSERT_TRUE(
-      index.SetStrategyRoute(MakeStrategyId(1), AccountId("account-a"), ShardId{1}).ok());
-  ASSERT_TRUE(
-      index.SetStrategyRoute(MakeStrategyId(2), AccountId("account-a"), ShardId{2}).ok());
-  EXPECT_FALSE(
-      index.SetStrategyRoute(MakeStrategyId(1), AccountId("account-b"), ShardId{3}).ok());
+  ASSERT_TRUE(index
+                  .SetStrategyRoute(MakeStrategyId(1), AccountId("account-a"),
+                                    ShardId{1})
+                  .ok());
+  ASSERT_TRUE(index
+                  .SetStrategyRoute(MakeStrategyId(2), AccountId("account-a"),
+                                    ShardId{2})
+                  .ok());
+  EXPECT_FALSE(index
+                   .SetStrategyRoute(MakeStrategyId(1), AccountId("account-b"),
+                                     ShardId{3})
+                   .ok());
   EXPECT_FALSE(index
                    .RegisterClient(ClientOrderId("C2-0"),
-                                   AccountId("account-a"), Market(), MakeStrategyId(1))
+                                   AccountId("account-a"), Market(),
+                                   MakeStrategyId(1))
                    .ok());
   ASSERT_TRUE(index
                   .RegisterClient(ClientOrderId("C1-0"), AccountId("account-a"),
@@ -132,14 +144,18 @@ TEST(OrderStrategyIndexTest, RejectsConflictsAndWrongAccountOrMarket) {
           .ok());
 }
 
-TEST(PrivateReportRouterTest,
+TEST(AccountReportRouterTest,
      LocalAndRemoteDeliveryPreserveStrategyAndSourceOrder) {
   auto index = Index();
-  ASSERT_TRUE(
-      index.SetStrategyRoute(MakeStrategyId(1), AccountId("account-a"), ShardId{0}).ok());
-  ASSERT_TRUE(
-      index.SetStrategyRoute(MakeStrategyId(2), AccountId("account-a"), ShardId{2}).ok());
-  auto router_or = PrivateReportRouter::Create({ShardId{0}, 2, 2}, index);
+  ASSERT_TRUE(index
+                  .SetStrategyRoute(MakeStrategyId(1), AccountId("account-a"),
+                                    ShardId{0})
+                  .ok());
+  ASSERT_TRUE(index
+                  .SetStrategyRoute(MakeStrategyId(2), AccountId("account-a"),
+                                    ShardId{2})
+                  .ok());
+  auto router_or = AccountReportRouter::Create({ShardId{0}, 2, 2}, index);
   ASSERT_TRUE(router_or.ok());
   auto& router = **router_or;
 
@@ -165,12 +181,14 @@ TEST(PrivateReportRouterTest,
   EXPECT_FALSE(router.TryPop(ShardId{2}));
 }
 
-TEST(PrivateReportRouterTest,
+TEST(AccountReportRouterTest,
      QueueFullAndUnknownIsolatePauseAndRequireReconcile) {
   auto index = Index();
-  ASSERT_TRUE(
-      index.SetStrategyRoute(MakeStrategyId(2), AccountId("account-a"), ShardId{2}).ok());
-  auto router_or = PrivateReportRouter::Create({ShardId{0}, 1, 2}, index);
+  ASSERT_TRUE(index
+                  .SetStrategyRoute(MakeStrategyId(2), AccountId("account-a"),
+                                    ShardId{2})
+                  .ok());
+  auto router_or = AccountReportRouter::Create({ShardId{0}, 1, 2}, index);
   ASSERT_TRUE(router_or.ok());
   auto& router = **router_or;
 
@@ -194,11 +212,13 @@ TEST(PrivateReportRouterTest,
   EXPECT_FALSE(router.IsAccountPaused(AccountId("account-a")));
 }
 
-TEST(PrivateReportRouterTest, RemoteQueueIsSafeForOneReaderAndOneShard) {
+TEST(AccountReportRouterTest, RemoteQueueIsSafeForOneReaderAndOneShard) {
   auto index = Index();
-  ASSERT_TRUE(
-      index.SetStrategyRoute(MakeStrategyId(2), AccountId("account-a"), ShardId{2}).ok());
-  auto router_or = PrivateReportRouter::Create({ShardId{0}, 64, 8}, index);
+  ASSERT_TRUE(index
+                  .SetStrategyRoute(MakeStrategyId(2), AccountId("account-a"),
+                                    ShardId{2})
+                  .ok());
+  auto router_or = AccountReportRouter::Create({ShardId{0}, 64, 8}, index);
   ASSERT_TRUE(router_or.ok());
   auto& router = **router_or;
   constexpr uint64_t kCount = 10'000;
@@ -214,7 +234,8 @@ TEST(PrivateReportRouterTest, RemoteQueueIsSafeForOneReaderAndOneShard) {
         std::this_thread::yield();
         continue;
       }
-      if (report->source_sequence != expected || report->strategy_id != MakeStrategyId(2)) {
+      if (report->source_sequence != expected ||
+          report->strategy_id != MakeStrategyId(2)) {
         bad_order.store(true, std::memory_order_relaxed);
         return;
       }

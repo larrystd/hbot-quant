@@ -108,10 +108,10 @@ absl::StatusOr<EventTime> ReportTime(simdjson::dom::element data,
   return received;
 }
 
-absl::StatusOr<UserDataBatch> ExecutionReport(simdjson::dom::element data,
-                                              const AccountId& account,
-                                              const ExchangeId& exchange,
-                                              EventTime received) {
+absl::StatusOr<AccountStreamBatch> ExecutionReport(simdjson::dom::element data,
+                                                   const AccountId& account,
+                                                   const ExchangeId& exchange,
+                                                   EventTime received) {
   auto symbol = field::Text(data, "s");
   auto client = field::Text(data, "c");
   auto execution = field::Text(data, "x");
@@ -149,7 +149,7 @@ absl::StatusOr<UserDataBatch> ExecutionReport(simdjson::dom::element data,
   const ClientOrderId client_id{std::string(original)};
   std::optional<ExchangeOrderId> exchange_id;
   if (*order_id > 0) exchange_id = ExchangeOrderId(std::to_string(*order_id));
-  UserDataBatch batch;
+  AccountStreamBatch batch;
   if (*execution == "TRADE") {
     auto trade_id = field::Integer(data, "t");
     auto price = field::Amount(data, "L", true);
@@ -201,15 +201,15 @@ absl::StatusOr<UserDataBatch> ExecutionReport(simdjson::dom::element data,
   return batch;
 }
 
-absl::StatusOr<UserDataBatch> AccountPosition(simdjson::dom::element data,
-                                              const AccountId& account,
-                                              EventTime received) {
+absl::StatusOr<AccountStreamBatch> AccountPosition(simdjson::dom::element data,
+                                                   const AccountId& account,
+                                                   EventTime received) {
   auto time = ReportTime(data, received);
   if (!time.ok()) return time.status();
   simdjson::dom::array balances;
   if (data["B"].get(balances))
     return field::Invalid("missing account balances");
-  UserDataBatch batch;
+  AccountStreamBatch batch;
   for (auto item : balances) {
     auto asset = field::Text(item, "a");
     auto free = field::Amount(item, "f");
@@ -228,8 +228,8 @@ absl::StatusOr<UserDataBatch> AccountPosition(simdjson::dom::element data,
 
 }  // namespace
 
-absl::StatusOr<UserDataBatch> UserDataStream::Parse(std::string_view json,
-                                                    EventTime received) const {
+absl::StatusOr<AccountStreamBatch> AccountStreamParser::Parse(
+    std::string_view json, EventTime received) const {
   if (account_.value.empty() || exchange_.value.empty()) {
     return field::Invalid("invalid user data stream identity");
   }
@@ -251,12 +251,12 @@ absl::StatusOr<UserDataBatch> UserDataStream::Parse(std::string_view json,
     return batch;
   }
   if (*type == "eventStreamTerminated") {
-    return UserDataBatch{{}, true, true};
+    return AccountStreamBatch{{}, true, true};
   }
   if (*type == "balanceUpdate" || *type == "externalLockUpdate" ||
       *type == "listStatus") {
     // These do not carry a complete account/order state for the domain model.
-    return UserDataBatch{{}, false, true};
+    return AccountStreamBatch{{}, false, true};
   }
   return Error(ErrorCode::kAccountEventUnsupported,
                "unsupported Binance user data event");
