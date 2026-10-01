@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
-  "family": "paper",
-  "case_id": "paper/sell_limit_book_touch",
+  "family": "simulated_exchange",
+  "case_id": "simulated_exchange/public_buy_trade_fills_full_sell",
   "baseline_commit": "9af100d6822da7d2d0291a906c730ef172284ee2",
   "source_files": [
     "hummingbot/connector/exchange/paper_trade/paper_trade_exchange.pyx",
@@ -16,7 +16,7 @@
     "T1": "<timestamp-derived exchange_trade_id>"
   },
   "setup": {
-    "account": "paper",
+    "account": "simulated",
     "market": "BTC-USDT",
     "base_asset": "BTC",
     "quote_asset": "USDT",
@@ -46,18 +46,20 @@
       "at_us": 100,
       "ordinal": 0,
       "event": {
-        "kind": "book_bbo",
-        "bid": "99.9",
-        "ask": "100.1"
+        "kind": "public_trade",
+        "side": "Buy",
+        "price": "100",
+        "amount": "0.001"
       }
     },
     {
       "at_us": 200,
       "ordinal": 0,
       "event": {
-        "kind": "book_bbo",
-        "bid": "100",
-        "ask": "100.1"
+        "kind": "public_trade",
+        "side": "Buy",
+        "price": "100.01",
+        "amount": "0.001"
       }
     }
   ],

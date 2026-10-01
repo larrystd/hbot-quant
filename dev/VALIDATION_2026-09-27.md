@@ -5,7 +5,7 @@
 | 检查 | 结果 |
 | --- | --- |
 | `bazelisk --batch build --spawn_strategy=local //...` | 通过，78 个 target 完成分析与构建 |
-| `bazelisk --batch test --spawn_strategy=local --strategy=TestRunner=local //... --test_output=errors` | 35 个测试 target 全部通过；包括 `paper_replay`、`public_paper`、`multi_shard`、`recovery` |
+| `bazelisk --batch test --spawn_strategy=local --strategy=TestRunner=local //... --test_output=errors` | 35 个测试 target 全部通过；包括 `simulated_replay`、`simulated_binance`、`multi_shard`、`recovery` |
 | 固定行情 Paper CLI | `start/status/history/stop` 成功；SQLite 记录订单、成交、费用和 run ID；同一 state 目录重启可查询旧历史 |
 | 真实公开行情 Paper CLI | 使用 `data-stream.binance.vision:443` 和 `data-api.binance.vision:443`；BTCUSDT 盘口到 `Live`，挂出两侧 Paper 单；超过 15 秒刷新周期后旧两单取消、新两单挂出；历史与状态可查，`stop` 正常退出 |
 | Linux x86_64、sanitizer 和 G3 多活跃分片装配/压力 | 尚未运行；目前 G3 测试只覆盖两个独立 RiskGate 与八路由组件，见 [LINUX_VALIDATION.md](LINUX_VALIDATION.md) |

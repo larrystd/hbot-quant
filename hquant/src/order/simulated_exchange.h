@@ -14,7 +14,7 @@
 
 namespace hquant {
 
-struct PaperConfig {
+struct SimulatedExchangeConfig {
   AccountId account;
   MarketSpec market;
   TradingRule trading_rule;
@@ -24,7 +24,7 @@ struct PaperConfig {
   std::function<ClientOrderId(Side)> make_client_id;
 };
 
-struct PaperOrder {
+struct RestingOrder {
   ClientOrderId client_id;
   OwnerId owner;
   OrderRequest request;
@@ -33,9 +33,9 @@ struct PaperOrder {
 // Deterministic local spot exchange. The caller owns the shard and supplies a
 // clock; public trades are only matching triggers, never account fills by
 // themselves. All matches fill the entire resting order at its own limit.
-class PaperConnector final : public SimulatedExchange {
+class SimpleSimulatedExchange final : public SimulatedExchange {
  public:
-  PaperConnector(PaperConfig config, const Clock& clock);
+  SimpleSimulatedExchange(SimulatedExchangeConfig config, const Clock& clock);
 
   absl::StatusOr<OrderIntent> PrepareSubmit(OrderCommand command) override;
   absl::Status StartPrepared(const ClientOrderId& client_id) override;
@@ -47,7 +47,7 @@ class PaperConnector final : public SimulatedExchange {
   absl::Status OnPublicTrade(Side aggressor, const Decimal& price,
                              const Decimal& public_amount) override;
 
-  std::vector<PaperOrder> OpenOrders() const { return orders_; }
+  std::vector<RestingOrder> OpenOrders() const { return orders_; }
   Decimal BalanceOf(const AssetId& asset) const override;
   Decimal AvailableBalance(const AssetId& asset) const override;
   Decimal FeesPaid(const AssetId& asset) const;
@@ -56,13 +56,13 @@ class PaperConnector final : public SimulatedExchange {
  private:
   absl::Status Fill(size_t index);
   absl::Status ValidateAndQuantize(OrderCommand* command) const;
-  void EmitOrder(const PaperOrder& order, ExchangeOrderStatus status);
+  void EmitOrder(const RestingOrder& order, ExchangeOrderStatus status);
   void EmitBalance(const AssetId& asset);
   EventTime Now() const;
 
-  PaperConfig config_;
+  SimulatedExchangeConfig config_;
   const Clock& clock_;
-  std::vector<PaperOrder> orders_;
+  std::vector<RestingOrder> orders_;
   std::map<std::string, OrderCommand> prepared_;
   std::set<std::string> used_ids_;
   std::map<std::string, Decimal> balances_;

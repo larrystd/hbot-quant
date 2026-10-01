@@ -12,7 +12,7 @@
   "expectation_kind": "parity",
   "divergence_reason": null,
   "setup": {
-    "account": "paper",
+    "account": "simulated",
     "market": "ETH-USDT",
     "owner_key": 1,
     "config": {

@@ -14,7 +14,7 @@
 
 namespace hquant {
 
-enum class EngineMode { Paper, Live };
+enum class EngineMode { Simulated, Live };
 enum class LoopMode { Blocking, Busy };
 enum class MarketDataSource { Replay, BinancePublic };
 
@@ -65,7 +65,7 @@ struct StaticRateLeaseConfig {
 
 struct AppConfig {
   uint32_t schema_version = 1;
-  EngineMode mode = EngineMode::Paper;
+  EngineMode mode = EngineMode::Simulated;
   LoopMode loop_mode = LoopMode::Blocking;
   MarketDataSource market_data_source = MarketDataSource::Replay;
   std::vector<ShardAssignment> assignments;
@@ -78,7 +78,7 @@ struct AppConfig {
   std::optional<std::string> replay_fixture;
 };
 
-// YAML is parsed only at this boundary. G1 explicitly permits Paper mode;
+// YAML is parsed only at this boundary. G1 explicitly permits Simulated mode;
 // live admission is deferred until the isolated G4 gateway is ready.
 absl::StatusOr<AppConfig> ParseConfig(std::string_view yaml_text);
 absl::StatusOr<AppConfig> LoadConfig(const std::string& path);

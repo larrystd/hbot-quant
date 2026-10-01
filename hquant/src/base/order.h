@@ -164,8 +164,8 @@ class OrderGateway {
                                    const ClientOrderId& client_id) = 0;
 };
 
-// Local Paper exchange port used by replay and public-market Paper shards. The
-// runtime depends on this interface; app selects the concrete PaperConnector.
+// Local Simulated exchange port used by replay and public-market Simulated shards. The
+// runtime depends on this interface; app selects the concrete SimpleSimulatedExchange.
 class SimulatedExchange : public OrderGateway {
  public:
   virtual absl::Status OnBookBbo(const Decimal& bid, const Decimal& ask) = 0;

@@ -22,10 +22,10 @@ void Require(bool condition, const char* label) {
 
 int main() {
   const std::array<std::string_view, 5> start_args{
-      "start", "--config", "paper.yaml", "--state-dir", "/tmp/hquant"};
+      "start", "--config", "simulated.yaml", "--state-dir", "/tmp/hquant"};
   auto start = hquant::ParseCliArguments(start_args);
   Require(start.ok() && start->verb == hquant::CliVerb::Start &&
-              start->config_path == "paper.yaml",
+              start->config_path == "simulated.yaml",
           "parse start");
   Require(
       hquant::ControlSocketPath(start->state_dir) == "/tmp/hquant/control.sock",
@@ -100,7 +100,7 @@ int main() {
   Require(!hquant::ParseCliArguments(duplicate_option).ok(),
           "duplicate option");
   const std::array<std::string_view, 3> misplaced_option{"status", "--config",
-                                                         "paper.yaml"};
+                                                         "simulated.yaml"};
   Require(!hquant::ParseCliArguments(misplaced_option).ok(),
           "misplaced config");
   return 0;

@@ -10,7 +10,7 @@
 #include "boost/beast/websocket.hpp"
 #include "gtest/gtest.h"
 #include "market/binance_spot_feed.h"
-#include "order/paper.h"
+#include "order/simulated_exchange.h"
 #include "order/risk.h"
 #include "service/shard.h"
 #include "strategy/simple_pmm.h"
@@ -44,7 +44,7 @@ class MemoryRecorder final : public RecorderPort {
   std::vector<RecordEnvelope> rows;
 };
 
-TEST(PublicPaperTest, RestAndWebsocketDrivePaperThenDisconnectAndResync) {
+TEST(SimulatedBinanceTest, RestAndWebsocketDriveSimulatedExchangeThenDisconnectAndResync) {
   asio::io_context server_io;
   Tcp::acceptor http_acceptor(server_io, Tcp::endpoint(Tcp::v4(), 0));
   Tcp::acceptor ws_acceptor(server_io, Tcp::endpoint(Tcp::v4(), 0));
@@ -80,7 +80,7 @@ TEST(PublicPaperTest, RestAndWebsocketDrivePaperThenDisconnectAndResync) {
   });
 
   const FixedClock clock;
-  const AccountId account("paper");
+  const AccountId account("simulated");
   const MarketId market{ExchangeId("binance"), InstrumentKind::Spot, "BTCUSDT"};
   const MarketSpec spec{market, AssetId("BTC"), AssetId("USDT")};
   const OwnerId owner{1, StrategyId("simple_pmm"), std::nullopt};
@@ -90,7 +90,7 @@ TEST(PublicPaperTest, RestAndWebsocketDrivePaperThenDisconnectAndResync) {
   SimplePmm strategy({owner, account, spec, D("0.01"), D("0.001"), D("0.001"),
                       std::chrono::seconds(15), PmmPriceType::Mid, D("0.001"),
                       true});
-  PaperConnector paper({account,
+  SimpleSimulatedExchange sim_exchange({account,
                         spec,
                         rule,
                         {{"BTC", D("0.02")}, {"USDT", D("10")}},
@@ -109,7 +109,7 @@ TEST(PublicPaperTest, RestAndWebsocketDrivePaperThenDisconnectAndResync) {
           .ok());
   MemoryRecorder recorder;
   ShardRuntime shard({RunId{1}, ShardId{0}, owner, account, spec, scale, rule},
-                     clock, strategy, paper, risk, recorder);
+                     clock, strategy, sim_exchange, risk, recorder);
 
   asio::io_context io;
   HttpClient http_client(io, "127.0.0.1", http_port);
@@ -155,13 +155,13 @@ TEST(PublicPaperTest, RestAndWebsocketDrivePaperThenDisconnectAndResync) {
   ASSERT_EQ(opening->size(), 2);
   EXPECT_TRUE((*opening)[0].accepted);
   EXPECT_TRUE((*opening)[1].accepted);
-  ASSERT_EQ(paper.OpenOrders().size(), 2);
+  ASSERT_EQ(sim_exchange.OpenOrders().size(), 2);
 
   shard.MutableBookSync().OnDisconnect();
   auto paused = shard.OnTimer({15'000'001, 1});
   ASSERT_TRUE(paused.ok()) << paused.status();
   EXPECT_EQ(shard.Book().State(), BookSyncState::Resyncing);
-  EXPECT_EQ(paper.OpenOrders().size(), 0);
+  EXPECT_EQ(sim_exchange.OpenOrders().size(), 0);
   EXPECT_EQ(paused->size(),
             2);  // cancel remains allowed while new orders pause
 
@@ -175,7 +175,7 @@ TEST(PublicPaperTest, RestAndWebsocketDrivePaperThenDisconnectAndResync) {
   ASSERT_EQ(resumed->size(), 2);
   EXPECT_TRUE((*resumed)[0].accepted);
   EXPECT_TRUE((*resumed)[1].accepted);
-  EXPECT_EQ(paper.OpenOrders().size(), 2);
+  EXPECT_EQ(sim_exchange.OpenOrders().size(), 2);
   EXPECT_TRUE(shard.local_gaps().empty());
   http_server.join();
   ws_server.join();

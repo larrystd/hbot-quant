@@ -3,13 +3,13 @@ load("@rules_cc//cc:defs.bzl", "cc_binary")
 cc_binary(
     name = "hquant",
     srcs = ["hquant.cc"],
-    data = ["//examples:paper_replay.yaml", "//examples:paper_simple_pmm.yaml", "//examples:paper_market.json"],
+    data = ["//examples:simulated_replay.yaml", "//examples:simulated_binance_pmm.yaml", "//examples:replay_market.json"],
     deps = ["//hquant/src/application:launcher", "//hquant/src/cli:cli"],
 )
 
 cc_binary(
     name = "hquant_engine",
     srcs = ["hquant_engine.cc"],
-    data = ["//examples:paper_replay.yaml", "//examples:paper_simple_pmm.yaml", "//examples:paper_market.json"],
+    data = ["//examples:simulated_replay.yaml", "//examples:simulated_binance_pmm.yaml", "//examples:replay_market.json"],
     deps = ["//hquant/src/application:launcher", "//hquant/src/application:config"],
 )

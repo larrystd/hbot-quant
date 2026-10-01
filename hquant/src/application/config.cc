@@ -206,10 +206,10 @@ absl::StatusOr<AppConfig> ParseConfig(std::string_view yaml_text) {
     if (*mode == "live")
       return Error(ErrorCode::kConfigModeNotAllowed,
                    "live mode is unavailable before G4");
-    if (*mode != "paper")
+    if (*mode != "simulated")
       return Error(ErrorCode::kConfigModeNotAllowed,
-                   "mode must explicitly be paper");
-    config.mode = EngineMode::Paper;
+                   "mode must explicitly be simulated");
+    config.mode = EngineMode::Simulated;
     auto loop_mode = Scalar(root, "loop_mode");
     if (!loop_mode.ok()) return loop_mode.status();
     if (*loop_mode == "blocking")
@@ -236,7 +236,7 @@ absl::StatusOr<AppConfig> ParseConfig(std::string_view yaml_text) {
       auto replay_fixture = Scalar(root, "replay_fixture");
       if (!replay_fixture.ok()) {
         return Error(ErrorCode::kConfigFieldInvalid,
-                     "paper replay requires replay_fixture");
+                     "simulated replay requires replay_fixture");
       }
       config.replay_fixture = *replay_fixture;
     } else if (root["replay_fixture"]) {

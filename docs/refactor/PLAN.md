@@ -7,7 +7,7 @@
 现在 `hquant/` 下有 19 个目录、约 75 个非测试源文件，问题有三个：
 
 - 目录按演进过程长出来，不按职责划分。例如 `connector/` 同时放抽象接口、通用订单状态机和具体交易所；`runtime/` 和 `app/` 从名字看不出区别；`app/engine.cc` 实际只负责进程启动。
-- 小目录、小文件过多：`event/` 只有 1 个头文件，`model/fee.h` 只有 14 行，`connector/paper/` 只有 3 个文件。
+- 小目录、小文件过多：`event/` 只有 1 个头文件，`model/fee.h` 只有 14 行，`connector/simulated_exchange/` 只有 3 个文件。
 - 测试散落在各模块目录和根目录 `tests/` 两处。
 
 ## 2. 目标结构
@@ -58,7 +58,7 @@ hquant/
 │   └── cli/                           命令行：本次只换位置，内容不动
 └── test/                              所有测试，平铺
     ├── <模块>_test.cc                 单元测试，见第 3.2 节
-    ├── paper_replay_test.cc、public_paper_test.cc、multi_shard_test.cc、recovery_test.cc   端到端
+    ├── simulated_replay_test.cc、simulated_binance_test.cc、multi_shard_test.cc、recovery_test.cc   端到端
     ├── fixture_loader.h / .cc、fixture_schema_test.cc
     └── fixtures/                      Python 对照夹具（JSON）
 ```
@@ -96,7 +96,7 @@ apps        ──▶ application、cli
 | `connector/binance_spot/public/depth_parser.*`、`market_data_stream.*` | `src/market/binance_spot_feed.{h,cc}` |
 | `connector/order_tracker.*` | `src/order/order_tracker.{h,cc}` |
 | `risk/risk_gate.*`、`risk/lease.*` | `src/order/risk.{h,cc}` |
-| `connector/paper/paper_connector.*` | `src/order/paper.{h,cc}` |
+| `connector/simulated_exchange/paper_connector.*` | `src/order/paper.{h,cc}` |
 | `connector/binance_spot/order_gateway/{client_id_codec,signer,order_gateway}.*` | `src/order/binance_spot_gateway.{h,cc}` |
 | `connector/binance_spot/private/{user_data_stream,reconciliation}.*`、`json_fields.h` | `src/order/binance_spot_account.{h,cc}` |
 | `strategy/api.h` | `src/strategy/strategy.h` |
@@ -127,7 +127,7 @@ apps        ──▶ application、cli
 | `binance_spot/public/{depth_parser,market_data_stream,f1_adapter}_test.cc` | `test/binance_spot_feed_test.cc` |
 | `connector/order_tracker_test.cc` | `test/order_tracker_test.cc` |
 | `risk/risk_gate_test.cc`、`risk/multi_shard_lease_test.cc` | `test/risk_test.cc` |
-| `connector/paper/paper_test.cc` | `test/paper_test.cc` |
+| `connector/simulated_exchange/simulated_exchange_test.cc` | `test/simulated_exchange_test.cc` |
 | `binance_spot/order_gateway/order_gateway_test.cc` | `test/binance_spot_gateway_test.cc` |
 | `binance_spot/private/private_test.cc` | `test/binance_spot_account_test.cc` |
 | `strategy/simple_pmm_test.cc` | `test/simple_pmm_test.cc` |
@@ -177,7 +177,7 @@ apps        ──▶ application、cli
 
 1. `ReplayFile`、`Levels` 等回放函数移到 `src/market/replay_feed.{h,cc}`，对外给出按时间产出快照与增量的接口。
 2. `StatusJson`、`HistoryJson`、`BookStateName`、`OrderStatusName` 等输出函数移到 `src/application/control.cc`。
-3. 剩余部分成为 `src/application/launcher.{h,cc}`：`RunPaperEngine` 与 `RunPublicPaperEngine` 合并为 `Launch(const AppConfig&, const std::string& state_dir)`，内部按配置的模式和行情来源分支；`EngineConfig` 改名 `AppConfig`。
+3. 剩余部分成为 `src/application/launcher.{h,cc}`：`RunPaperEngine` 与 `RunSimulatedBinanceEngine` 合并为 `Launch(const AppConfig&, const std::string& state_dir)`，内部按配置的模式和行情来源分支；`EngineConfig` 改名 `AppConfig`。
 4. `apps/hquant_engine.cc` 只调用 `Launch`。
 
 ### 阶段 4：工具与文档
@@ -205,7 +205,7 @@ apps        ──▶ application、cli
 | 用例数 | `grep -hcE '^(TEST\|TEST_F\|TEST_P)\(' hquant/test/*.cc` 加上尚未迁移的旧测试，合计等于 65 |
 | 旧路径残留 | 旧路径（`hquant/model/`、`hquant/connector/`、`hquant/runtime/` 等）在代码、BUILD、脚本、夹具中搜索不到（`docs/refactor/` 本文除外） |
 | 依赖方向 | 用 `bazel query 'deps(//hquant/src/strategy/...)'` 等确认没有违反第 2 节的依赖 |
-| 行为 | `bazel run //apps:hquant -- start --config examples/paper_replay.yaml ...` 跑通 `start/status/history/stop`，输出与基线一致 |
+| 行为 | `bazel run //apps:hquant -- start --config examples/simulated_replay.yaml ...` 跑通 `start/status/history/stop`，输出与基线一致 |
 | Sanitizer | 最后一个阶段结束后跑 `bazel test --config=asan //...`（macOS） |
 
 ## 6. 风险与应对

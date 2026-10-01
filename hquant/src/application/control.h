@@ -98,13 +98,13 @@ class ControlServer {
 };
 
 class ShardRuntime;
-class PaperConnector;
+class SimpleSimulatedExchange;
 class SqliteRecorder;
 struct MarketSpec;
 struct HistoryPage;
 
 std::string EscapeJson(std::string_view text);
-std::string StatusJson(const ShardRuntime& shard, const PaperConnector& paper,
+std::string StatusJson(const ShardRuntime& shard, const SimpleSimulatedExchange& sim_exchange,
                        const MarketSpec& market,
                        const SqliteRecorder& recorder);
 std::string HistoryJson(const HistoryPage& page);

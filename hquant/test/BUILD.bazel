@@ -3,7 +3,7 @@ load("@rules_cc//cc:defs.bzl", "cc_library", "cc_test")
 filegroup(name = "order_book_data", srcs = glob(["fixtures/order_book/*.json"]))
 filegroup(name = "order_tracker_data", srcs = glob(["fixtures/order_tracker/*.json"]))
 filegroup(name = "simple_pmm_data", srcs = glob(["fixtures/simple_pmm/*.json"]))
-filegroup(name = "paper_data", srcs = glob(["fixtures/paper/*.json"]))
+filegroup(name = "simulated_exchange_data", srcs = glob(["fixtures/simulated_exchange/*.json"]))
 
 cc_library(
     name = "fixture_loader",
@@ -26,7 +26,7 @@ cc_test(name = "binance_spot_feed_test", srcs = ["binance_spot_feed_test.cc"], d
 
 cc_test(name = "order_tracker_test", srcs = ["order_tracker_test.cc"], data = [":order_tracker_data"], deps = [":fixture_loader", "//hquant/src/base:error", "//hquant/src/order:order_tracker", "@googletest//:gtest_main", "@simdjson//:simdjson"])
 cc_test(name = "risk_test", srcs = ["risk_test.cc"], deps = ["//hquant/src/base:error", "//hquant/src/order:risk"])
-cc_test(name = "paper_test", srcs = ["paper_test.cc"], data = [":paper_data"], deps = [":fixture_loader", "//hquant/src/base:error", "//hquant/src/order:paper", "@googletest//:gtest_main", "@simdjson//:simdjson"])
+cc_test(name = "simulated_exchange_test", srcs = ["simulated_exchange_test.cc"], data = [":simulated_exchange_data"], deps = [":fixture_loader", "//hquant/src/base:error", "//hquant/src/order:simulated_exchange", "@googletest//:gtest_main", "@simdjson//:simdjson"])
 cc_test(name = "binance_spot_gateway_test", srcs = ["binance_spot_gateway_test.cc"], deps = ["//hquant/src/base:error", "//hquant/src/order:binance_spot_gateway", "@boost.asio//:boost.asio", "@googletest//:gtest_main"])
 cc_test(name = "binance_spot_account_test", srcs = ["binance_spot_account_test.cc"], deps = ["//hquant/src/base:error", "//hquant/src/order:binance_spot_account", "//hquant/src/order:order_tracker", "@boost.asio//:boost.asio", "@googletest//:gtest_main"])
 cc_test(name = "simple_pmm_test", srcs = ["simple_pmm_test.cc"], data = [":simple_pmm_data"], deps = [":fixture_loader", "//hquant/src/strategy:simple_pmm", "@googletest//:gtest_main", "@simdjson//:simdjson"])
@@ -42,8 +42,8 @@ cc_test(name = "control_test", srcs = ["control_test.cc"], deps = ["//hquant/src
 cc_test(name = "config_test", srcs = ["config_test.cc"], deps = ["//hquant/src/application:config", "//hquant/src/base:error"])
 cc_test(name = "cli_test", srcs = ["cli_test.cc"], deps = ["//hquant/src/base:error", "//hquant/src/cli:cli"])
 
-cc_test(name = "paper_replay", srcs = ["paper_replay_test.cc"], deps = ["//hquant/src/base:error", "//hquant/src/base:types", "//hquant/src/order:paper", "//hquant/src/order:risk", "//hquant/src/service:shard", "//hquant/src/offline:history", "//hquant/src/offline:recorder", "//hquant/src/strategy:simple_pmm", "@googletest//:gtest_main"])
-cc_test(name = "public_paper", srcs = ["public_paper_test.cc"], deps = ["//hquant/src/market:binance_spot_feed", "//hquant/src/order:paper", "//hquant/src/base:net", "//hquant/src/order:risk", "//hquant/src/service:shard", "//hquant/src/strategy:simple_pmm", "@boost.asio//:boost.asio", "@boost.beast//:boost.beast", "@googletest//:gtest_main"])
+cc_test(name = "simulated_replay", srcs = ["simulated_replay_test.cc"], deps = ["//hquant/src/base:error", "//hquant/src/base:types", "//hquant/src/order:simulated_exchange", "//hquant/src/order:risk", "//hquant/src/service:shard", "//hquant/src/offline:history", "//hquant/src/offline:recorder", "//hquant/src/strategy:simple_pmm", "@googletest//:gtest_main"])
+cc_test(name = "simulated_binance", srcs = ["simulated_binance_test.cc"], deps = ["//hquant/src/market:binance_spot_feed", "//hquant/src/order:simulated_exchange", "//hquant/src/base:net", "//hquant/src/order:risk", "//hquant/src/service:shard", "//hquant/src/strategy:simple_pmm", "@boost.asio//:boost.asio", "@boost.beast//:boost.beast", "@googletest//:gtest_main"])
 cc_test(name = "multi_shard", srcs = ["multi_shard_test.cc"], deps = ["//hquant/src/base:rate_limit", "//hquant/src/order:risk", "//hquant/src/service:routing", "@googletest//:gtest_main"])
 cc_test(name = "recovery", srcs = ["recovery_test.cc"], deps = ["//hquant/src/order:binance_spot_gateway", "//hquant/src/order:binance_spot_account", "//hquant/src/order:order_tracker", "//hquant/src/order:risk", "//hquant/src/offline:history", "//hquant/src/offline:recorder", "@abseil-cpp//absl/status:status", "@boost.asio//:boost.asio", "@googletest//:gtest_main"])
 
@@ -51,15 +51,15 @@ cc_test(
     name = "schema_test",
     size = "small",
     srcs = ["fixture_schema_test.cc"],
-    data = glob(["fixtures/order_book/*.json", "fixtures/order_tracker/*.json", "fixtures/simple_pmm/*.json", "fixtures/paper/*.json"]),
+    data = glob(["fixtures/order_book/*.json", "fixtures/order_tracker/*.json", "fixtures/simple_pmm/*.json", "fixtures/simulated_exchange/*.json"]),
     deps = [":fixture_loader"],
 )
 
 cc_test(
-    name = "paper_schema_test",
+    name = "simulated_exchange_schema_test",
     size = "small",
     srcs = ["fixture_schema_test.cc"],
-    args = ["--paper"],
-    data = glob(["fixtures/order_book/*.json", "fixtures/order_tracker/*.json", "fixtures/simple_pmm/*.json", "fixtures/paper/*.json"]),
+    args = ["--simulated_exchange"],
+    data = glob(["fixtures/order_book/*.json", "fixtures/order_tracker/*.json", "fixtures/simple_pmm/*.json", "fixtures/simulated_exchange/*.json"]),
     deps = [":fixture_loader"],
 )

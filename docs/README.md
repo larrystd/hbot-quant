@@ -42,13 +42,13 @@ hquant（CLI）──Unix socket──▶ hquant_engine
 固定行情 Paper（离线）：
 
 ```bash
-bazel run //apps:hquant -- start   --config examples/paper_replay.yaml --state-dir /tmp/hquant-paper-demo
+bazel run //apps:hquant -- start   --config examples/simulated_replay.yaml --state-dir /tmp/hquant-paper-demo
 bazel run //apps:hquant -- status  --state-dir /tmp/hquant-paper-demo
 bazel run //apps:hquant -- history --state-dir /tmp/hquant-paper-demo --limit 20
 bazel run //apps:hquant -- stop    --state-dir /tmp/hquant-paper-demo
 ```
 
-真实公开行情驱动 Paper：把配置换成 `examples/paper_simple_pmm.yaml`。`start` 在前台运行，其余命令在另一个终端执行。全量测试：`bazel test //...`。
+真实公开行情驱动 Paper：把配置换成 `examples/simulated_binance_pmm.yaml`。`start` 在前台运行，其余命令在另一个终端执行。全量测试：`bazel test //...`。
 
 本机验收记录见 [`dev/VALIDATION_2026-09-27.md`](../dev/VALIDATION_2026-09-27.md)，Linux CI 状态见 [`dev/LINUX_VALIDATION.md`](../dev/LINUX_VALIDATION.md)。
 

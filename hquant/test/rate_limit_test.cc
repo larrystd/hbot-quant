@@ -14,7 +14,7 @@ namespace {
 TEST(RateLimitTest, ReservesCancellationSlotsAndResetsWindow) {
   GlobalRateBreaker breaker;
   RateLimiter limiter(&breaker);
-  RateLimitKey key{"paper", "127.0.0.1", "/orders"};
+  RateLimitKey key{"simulated", "127.0.0.1", "/orders"};
   ASSERT_TRUE(limiter.Configure(key, RateLease{3, 1, std::chrono::seconds(1)}));
   auto now = RateLimiter::Clock::now();
   EXPECT_EQ(limiter.TryAcquire(key, false, now), ErrorCode::kOk);
@@ -30,7 +30,7 @@ TEST(RateLimitTest, ReservesCancellationSlotsAndResetsWindow) {
 TEST(RateLimitTest, HttpThrottleTripsSharedBreaker) {
   GlobalRateBreaker breaker;
   RateLimiter a(&breaker), b(&breaker);
-  RateLimitKey key{"paper", "127.0.0.1", "/orders"};
+  RateLimitKey key{"simulated", "127.0.0.1", "/orders"};
   ASSERT_TRUE(a.Configure(key, RateLease{2, 1, std::chrono::seconds(1)}));
   ASSERT_TRUE(b.Configure(key, RateLease{2, 1, std::chrono::seconds(1)}));
   auto now = RateLimiter::Clock::now();

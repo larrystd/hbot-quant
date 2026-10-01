@@ -29,7 +29,7 @@
 #include "market/replay_feed.h"
 #include "offline/history.h"
 #include "offline/recorder.h"
-#include "order/paper.h"
+#include "order/simulated_exchange.h"
 #include "order/risk.h"
 #include "service/shard.h"
 #include "strategy/simple_pmm.h"
@@ -85,15 +85,15 @@ class SystemClock final : public Clock {
   }
 };
 
-absl::Status RunPublicPaperEngine(const AppConfig& config,
+absl::Status RunSimulatedBinanceEngine(const AppConfig& config,
                                   const std::string& state_dir) {
-  if (config.mode != EngineMode::Paper ||
+  if (config.mode != EngineMode::Simulated ||
       config.loop_mode != LoopMode::Blocking || config.accounts.size() != 1 ||
       config.market_specs.size() != 1 || config.strategy_configs.size() != 1 ||
       config.assignments.size() != 1) {
     return Error(
         ErrorCode::kLaunchUnsupportedTopology,
-        "public Paper v1 requires one blocking shard, account, market and "
+        "public Simulated v1 requires one blocking shard, account, market and "
         "strategy");
   }
   const auto& account = config.accounts.front();
@@ -106,7 +106,7 @@ absl::Status RunPublicPaperEngine(const AppConfig& config,
       strategy_config.markets.front() != market.spec.market ||
       assignment.shard.value >= 8) {
     return Error(ErrorCode::kLaunchUnsupportedTopology,
-                 "public Paper market or assignment mismatch");
+                 "public Simulated market or assignment mismatch");
   }
   std::error_code error;
   std::filesystem::create_directories(state_dir, error);
@@ -133,7 +133,7 @@ absl::Status RunPublicPaperEngine(const AppConfig& config,
                       strategy_config.ask_spread,
                       strategy_config.refresh_interval, PmmPriceType::Mid,
                       *Decimal::Parse("0.001"), true});
-  PaperConnector paper(
+  SimpleSimulatedExchange sim_exchange(
       {account.account, market.spec, rule, account.initial_balances,
        *Decimal::Parse("0.001"), true,
        [run, next_id = uint64_t{1}](Side) mutable {
@@ -155,7 +155,7 @@ absl::Status RunPublicPaperEngine(const AppConfig& config,
   ShardRuntime shard(
       {run, assignment.shard, strategy_config.owner, account.account,
        market.spec, market.book_scale, rule, 5'000'000},
-      clock, strategy, paper, risk, **recorder);
+      clock, strategy, sim_exchange, risk, **recorder);
   auto reader = HistoryReader::Open({storage_path.string(), 32, 500});
   if (!reader.ok()) return reader.status();
 
@@ -227,7 +227,7 @@ absl::Status RunPublicPaperEngine(const AppConfig& config,
       auto result = std::make_shared<std::promise<std::string>>();
       auto ready = result->get_future();
       boost::asio::post(io, [&, result] {
-        auto json = StatusJson(shard, paper, market.spec, **recorder);
+        auto json = StatusJson(shard, sim_exchange, market.spec, **recorder);
         if (!stream_error.ok()) {
           json.pop_back();
           const ErrorCode code = CodeOf(stream_error);
@@ -303,14 +303,14 @@ absl::Status RunPublicPaperEngine(const AppConfig& config,
 
 absl::Status Launch(const AppConfig& config, const std::string& state_dir) {
   if (config.market_data_source == MarketDataSource::BinancePublic) {
-    return RunPublicPaperEngine(config, state_dir);
+    return RunSimulatedBinanceEngine(config, state_dir);
   }
-  if (config.mode != EngineMode::Paper || config.accounts.size() != 1 ||
+  if (config.mode != EngineMode::Simulated || config.accounts.size() != 1 ||
       config.market_specs.size() != 1 || config.strategy_configs.size() != 1 ||
       config.assignments.size() != 1 || !config.replay_fixture) {
     return Error(
         ErrorCode::kLaunchUnsupportedTopology,
-        "G1 replay requires one Paper account, market, strategy and shard");
+        "G1 replay requires one Simulated account, market, strategy and shard");
   }
   const auto& account = config.accounts.front();
   const auto& market = config.market_specs.front();
@@ -350,7 +350,7 @@ absl::Status Launch(const AppConfig& config, const std::string& state_dir) {
                       strategy_config.ask_spread,
                       strategy_config.refresh_interval, PmmPriceType::Mid,
                       *Decimal::Parse("0.001"), true});
-  PaperConnector paper(
+  SimpleSimulatedExchange sim_exchange(
       {account.account, market.spec, rule, account.initial_balances,
        *Decimal::Parse("0.001"), true,
        [run, next_id = uint64_t{1}](Side) mutable {
@@ -371,7 +371,7 @@ absl::Status Launch(const AppConfig& config, const std::string& state_dir) {
   if (!recorder.ok()) return recorder.status();
   ShardRuntime shard({run, assignment.shard, strategy_config.owner,
                       account.account, market.spec, market.book_scale, rule},
-                     clock, strategy, paper, risk, **recorder);
+                     clock, strategy, sim_exchange, risk, **recorder);
   auto replay =
       ReadReplayFile(*config.replay_fixture, [&](const ReplayInput& input) {
         return ApplyReplayInput(input, market, clock, shard);
@@ -389,7 +389,7 @@ absl::Status Launch(const AppConfig& config, const std::string& state_dir) {
     response.request_id = request.request_id;
     if (std::holds_alternative<StatusRequest>(request.payload)) {
       response.payload =
-          StatusResponse{StatusJson(shard, paper, market.spec, **recorder)};
+          StatusResponse{StatusJson(shard, sim_exchange, market.spec, **recorder)};
     } else if (const auto* history =
                    std::get_if<HistoryRequest>(&request.payload)) {
       std::lock_guard lock(history_mutex);

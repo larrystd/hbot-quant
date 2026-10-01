@@ -109,7 +109,7 @@ Sanitizer：`bazel test --config=asan //...`、`bazel test --config=tsan //...`�
 | F1 订单簿夹具 | `hquant/test/fixtures/order_book/**` | 夹具 v1 格式 | 快照前缓存、首条接续、连续更新/删档、重复/旧消息、跳号、交叉/无效精度；逐步 BBO、前 N 档、序号、状态 |
 | F2 订单追踪夹具 | `hquant/test/fixtures/order_tracker/**` | 夹具 v1 格式 | 接单、部分/全成交、trade ID 重复、成交先于接单、完成先于明细、撤单竞态；事件序、累计金额、费用、敞口 |
 | F3 `simple_pmm` 夹具 | `hquant/test/fixtures/simple_pmm/**` | 夹具 v1 格式 | 只以 `scripts/simple_pmm.py` 为基线：就绪门、15 秒刷新、撤旧单后报价、余额不足、量化；有序 `ActionBatch` |
-| F4 Paper 夹具 | `hquant/test/fixtures/paper/**` | F1–F3 的类型与时钟约定 | 限价触价、公开成交驱动撮合、撤单、余额和费用 |
+| F4 Paper 夹具 | `hquant/test/fixtures/simulated_exchange/**` | F1–F3 的类型与时钟约定 | 限价触价、公开成交驱动撮合、撤单、余额和费用 |
 | B1 构建/CI | `dev/**`、`.github/workflows/**` | D0 smoke 已过 macOS | Linux x86_64 构建、离线测试、ASan/UBSan 与 TSan 实测 |
 | M1 Decimal/领域 | `hquant/src/base/{types,market,order}.*` | 数值/身份契约 | libmpdec RAII、强类型 ID/规则/费用；与 Python Decimal 差分 |
 | M2 订单簿 | `hquant/src/market/order_book.*` | 行情契约、M1 | L2 数组 + 溢出、快照/增量状态机、缺口与 Stale/Resyncing；F1 全部回放 |
@@ -177,16 +177,16 @@ G0–G4 的本地 target 已建立；以下保留为各关口的交付定义，�
 bazel test //dev:dependency_smoke //dev:contract_compile //hquant/test:schema_test //hquant/test:types_test //hquant/test:order_book_test
 ```
 
-**G1：** C01 Decimal 与领域类型；M2/M3/M4/M6/M7/M9 各自交付；集成 Agent 写 `hquant/src/service/{shard,dispatcher}`、`hquant/src/application/{launcher,control}`、`apps/{hquant,hquant_engine}.cc`、`examples/paper_replay.yaml` 与 `hquant/test/paper_replay_test.cc`。回放测试断言盘口、两侧报价（mid=100、价差各 0.1%、数量 0.01 时为 99.9/100.1）、15 秒刷新撤旧单重报、成交、费用、余额、SQLite 历史与缺口，重复运行结果一致。`paper_replay.yaml` 写明 `schema_version`、`mode: paper`、固定行情、`BTC-USDT`、Paper 初始余额、`refresh_interval: 15s`、价差 `0.001`、数量 `0.01`、阻塞事件循环。
+**G1：** C01 Decimal 与领域类型；M2/M3/M4/M6/M7/M9 各自交付；集成 Agent 写 `hquant/src/service/{shard,dispatcher}`、`hquant/src/application/{launcher,control}`、`apps/{hquant,hquant_engine}.cc`、`examples/simulated_replay.yaml` 与 `hquant/test/simulated_replay_test.cc`。回放测试断言盘口、两侧报价（mid=100、价差各 0.1%、数量 0.01 时为 99.9/100.1）、15 秒刷新撤旧单重报、成交、费用、余额、SQLite 历史与缺口，重复运行结果一致。`simulated_replay.yaml` 写明 `schema_version`、`mode: paper`、固定行情、`BTC-USDT`、Paper 初始余额、`refresh_interval: 15s`、价差 `0.001`、数量 `0.01`、阻塞事件循环。
 
 ```bash
-bazel test //hquant/test:paper_replay && bazel test //...
+bazel test //hquant/test:simulated_replay && bazel test //...
 ```
 
-**G2：** M5 传输端口运行在分片 `io_context`，不建网络线程池；M8 解析原始价格/数量文本并规范化序号；集成 Agent 添加 `examples/paper_simple_pmm.yaml` 与 `hquant/test/public_paper_test.cc`，`status` 显示盘口 Live/Stale、挂单、余额和存储健康。
+**G2：** M5 传输端口运行在分片 `io_context`，不建网络线程池；M8 解析原始价格/数量文本并规范化序号；集成 Agent 添加 `examples/simulated_binance_pmm.yaml` 与 `hquant/test/simulated_binance_test.cc`，`status` 显示盘口 Live/Stale、挂单、余额和存储健康。
 
 ```bash
-bazel test //hquant/src/base:net //hquant/src/base:rate_limit //hquant/src/market:binance_spot_feed //hquant/test:public_paper
+bazel test //hquant/src/base:net //hquant/src/base:rate_limit //hquant/src/market:binance_spot_feed //hquant/test:simulated_binance
 ```
 
 **G3：** M4 补齐同账户/币种静态租约与版本核验；M10 建 `order_ownership_index` 与 `private_report_router`；M5 补本地限速与全局熔断；集成 Agent 建 `hquant/test/multi_shard_test.cc`，用两个以上活跃分片与 8 分片压力输入验证额度不重复授予、未知结果继续占额、未知归属/队列满暂停并补查。

@@ -365,7 +365,7 @@ flowchart LR
 | `simple_pmm` 每次 Clock tick 检查 `order_refresh_time`，默认 15 秒撤旧单并报价 | `OnTimer` 按配置刷新；盘口事件只更新本地价格 | 保留刷新间隔、预算检查和报价规则；不用每条深度增量都撤单重挂 |
 | XEMM 的 maker 成交回调提交 taker 对冲 | `OnFill` 在订单与额度更新后立即返回对冲动作 | 保留按 trade ID 去重和 maker/taker 归属；移除 Python `safe_ensure_future` 排队层 |
 | V2 Controller 定期生成 ExecutorAction，经 asyncio 队列由 Orchestrator 执行 | Controller 定时器或所需数据就绪事件产生 `ActionBatch`，同分片 Orchestrator 应用 | 保留 Controller/Executor 生命周期和动作顺序；用类型化动作替代运行时 dict/asyncio 队列 |
-| 公开成交更新 `LastTrade`，模拟盘可能据此撮合 | `OnPublicTrade` 与 PaperConnector 撮合输入 | 公开成交绝不直接当成本账户 `OnFill` |
+| 公开成交更新 `LastTrade`，模拟盘可能据此撮合 | `OnPublicTrade` 与 SimpleSimulatedExchange 撮合输入 | 公开成交绝不直接当成本账户 `OnFill` |
 
 Python `Clock` 的 1 秒 tick 是原实现的调度手段，不是所有策略必须承继的业务规则；`simple_pmm` 的刷新周期、XEMM 的成交即对冲、V2 动作状态机则是需要保留的可观察行为。策略所依赖的任一盘口、账户余额、私有流或交易规则过期时，`ActionDispatcher` 拒绝受影响的新单；连接恢复后先对账，再恢复策略。参考 [`Clock`](../../hummingbot/hummingbot/core/clock.pyx)、[`simple_pmm`](../../hummingbot/scripts/simple_pmm.py)、[`StrategyV2Base`](../../hummingbot/hummingbot/strategy/strategy_v2_base.py)、[`XEMM`](../../hummingbot/hummingbot/strategy/cross_exchange_market_making/cross_exchange_market_making.py)。
 
@@ -495,7 +495,7 @@ flowchart LR
     CLOCK --> SHARD["ShardRuntime（单线程）"]
     SHARD --> STRATEGY["策略 / Controller"]
     STRATEGY --> RISK["RiskGate"]
-    RISK --> SIM["PaperConnector / ExecutorSimulator"]
+    RISK --> SIM["SimpleSimulatedExchange / ExecutorSimulator"]
     SIM --> EVENTS["OrderUpdate / TradeUpdate"]
     EVENTS --> STRATEGY
     EVENTS --> RESULT["PnL / 订单 / 成交结果"]

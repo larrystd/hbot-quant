@@ -80,7 +80,7 @@ struct ShardReport {
   StorageHealth storage_health;
 };
 
-// G1 single-thread owner of strategy, book, Paper events, tracker and risk.
+// G1 single-thread owner of strategy, book, Simulated events, tracker and risk.
 // The caller advances the clock and feeds inputs in InputStamp order.
 class ShardRuntime {
  public:
@@ -105,7 +105,7 @@ class ShardRuntime {
   // An external public stream may update this same BookSync and notify the
   // shard after each applied batch. All calls remain on the owning shard.
   BookSync& MutableBookSync() { return book_; }
-  absl::Status OnBookApplied() { return RefreshPaperBbo(); }
+  absl::Status OnBookApplied() { return UpdateSimulatedExchangeBbo(); }
   absl::StatusOr<std::vector<DispatchResult>> OnTimer(InputStamp stamp);
 
   const BookView& Book() const { return book_.View(); }
@@ -116,8 +116,8 @@ class ShardRuntime {
   uint64_t shard_sequence() const { return shard_sequence_; }
 
  private:
-  absl::Status RefreshPaperBbo();
-  absl::Status DrainPaperEvents();
+  absl::Status UpdateSimulatedExchangeBbo();
+  absl::Status DrainSimulatedExchangeEvents();
   absl::Status ProcessAccountEvent(const AccountEvent& event);
   absl::Status Record(RecordPayload payload, const OwnerId& owner);
   void AddGap(uint64_t sequence);

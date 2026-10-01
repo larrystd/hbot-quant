@@ -1,22 +1,19 @@
 {
   "schema_version": 1,
-  "family": "paper",
-  "case_id": "paper/public_sell_trade_fills_full_buy",
+  "family": "simulated_exchange",
+  "case_id": "simulated_exchange/both_sides_hold_and_release",
   "baseline_commit": "9af100d6822da7d2d0291a906c730ef172284ee2",
   "source_files": [
-    "hummingbot/connector/exchange/paper_trade/paper_trade_exchange.pyx",
-    "hummingbot/connector/exchange/binance/binance_utils.py",
-    "hummingbot/core/data_type/order_candidate.py",
-    "hummingbot/core/data_type/trade_fee.py"
+    "hummingbot/connector/exchange/paper_trade/paper_trade_exchange.pyx"
   ],
   "expectation_kind": "parity",
   "divergence_reason": null,
   "id_symbols": {
     "B1": "buy://BTC-USDT/<13 random bytes>",
-    "T1": "<timestamp-derived exchange_trade_id>"
+    "S1": "sell://BTC-USDT/<13 random bytes>"
   },
   "setup": {
-    "account": "paper",
+    "account": "simulated",
     "market": "BTC-USDT",
     "base_asset": "BTC",
     "quote_asset": "USDT",
@@ -38,7 +35,18 @@
         "kind": "submit",
         "client_id": "B1",
         "side": "Buy",
-        "price": "100",
+        "price": "99.9",
+        "amount": "0.01"
+      }
+    },
+    {
+      "at_us": 0,
+      "ordinal": 1,
+      "event": {
+        "kind": "submit",
+        "client_id": "S1",
+        "side": "Sell",
+        "price": "100.1",
         "amount": "0.01"
       }
     },
@@ -46,20 +54,16 @@
       "at_us": 100,
       "ordinal": 0,
       "event": {
-        "kind": "public_trade",
-        "side": "Sell",
-        "price": "100",
-        "amount": "0.001"
+        "kind": "cancel",
+        "client_id": "S1"
       }
     },
     {
-      "at_us": 200,
-      "ordinal": 0,
+      "at_us": 100,
+      "ordinal": 1,
       "event": {
-        "kind": "public_trade",
-        "side": "Sell",
-        "price": "99.99",
-        "amount": "0.001"
+        "kind": "cancel",
+        "client_id": "B1"
       }
     }
   ],
@@ -78,7 +82,7 @@
           {
             "client_id": "B1",
             "side": "Buy",
-            "price": "100",
+            "price": "99.9",
             "amount": "0.01"
           }
         ],
@@ -88,7 +92,42 @@
         },
         "available_balances": {
           "BTC": "1",
-          "USDT": "99"
+          "USDT": "99.001"
+        },
+        "fees_by_asset": {}
+      }
+    },
+    {
+      "at_us": 0,
+      "ordinal": 1,
+      "output": {
+        "events": [
+          {
+            "kind": "OrderCreated",
+            "client_id": "S1"
+          }
+        ],
+        "open_orders": [
+          {
+            "client_id": "B1",
+            "side": "Buy",
+            "price": "99.9",
+            "amount": "0.01"
+          },
+          {
+            "client_id": "S1",
+            "side": "Sell",
+            "price": "100.1",
+            "amount": "0.01"
+          }
+        ],
+        "balances": {
+          "BTC": "1",
+          "USDT": "100"
+        },
+        "available_balances": {
+          "BTC": "0.99",
+          "USDT": "99.001"
         },
         "fees_by_asset": {}
       }
@@ -97,12 +136,17 @@
       "at_us": 100,
       "ordinal": 0,
       "output": {
-        "events": [],
+        "events": [
+          {
+            "kind": "OrderCanceled",
+            "client_id": "S1"
+          }
+        ],
         "open_orders": [
           {
             "client_id": "B1",
             "side": "Buy",
-            "price": "100",
+            "price": "99.9",
             "amount": "0.01"
           }
         ],
@@ -112,43 +156,31 @@
         },
         "available_balances": {
           "BTC": "1",
-          "USDT": "99"
+          "USDT": "99.001"
         },
         "fees_by_asset": {}
       }
     },
     {
-      "at_us": 200,
-      "ordinal": 0,
+      "at_us": 100,
+      "ordinal": 1,
       "output": {
         "events": [
           {
-            "kind": "OrderFilled",
-            "client_id": "B1",
-            "trade_id": "T1",
-            "price": "100",
-            "amount": "0.01",
-            "fee_by_asset": {
-              "BTC": "0.00001"
-            }
-          },
-          {
-            "kind": "OrderCompleted",
+            "kind": "OrderCanceled",
             "client_id": "B1"
           }
         ],
         "open_orders": [],
         "balances": {
-          "BTC": "1.00999",
-          "USDT": "99"
+          "BTC": "1",
+          "USDT": "100"
         },
         "available_balances": {
-          "BTC": "1.00999",
-          "USDT": "99"
+          "BTC": "1",
+          "USDT": "100"
         },
-        "fees_by_asset": {
-          "BTC": "0.00001"
-        }
+        "fees_by_asset": {}
       }
     }
   ]

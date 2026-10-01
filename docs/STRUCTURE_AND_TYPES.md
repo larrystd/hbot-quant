@@ -52,8 +52,8 @@ hummingbot-cpp/
 | `//hquant/src/offline:{storage,record_codec,recorder,history}` | `storage.h`、各实现同名 `.h/.cc`、`schema.sql` | 有界入队、WAL 写入、只读分页、恢复和持久化格式 |
 | `//hquant/src/application:{config,control,launcher}` | 各 target 同名 `.h/.cc` | YAML 校验、控制消息/服务、具体组件装配与启动 |
 | `//hquant/src/cli:cli`、`//apps:{hquant,hquant_engine}` | `cli.h/.cc`、`apps/hquant.cc`、`apps/hquant_engine.cc` | 前台 `start/status/history/stop` 与引擎入口 |
-| `//hquant/test:{fixture_loader,schema_test,paper_schema_test}` | `fixture_loader.h/.cc`、`fixture_schema_test.cc`、`fixtures/` | Python 对照夹具的读取与校验 |
-| `//hquant/test:{paper_replay,public_paper,multi_shard,recovery}` | 对应 `*_test.cc` | 离线/本地 mock 端到端链路 |
+| `//hquant/test:{fixture_loader,schema_test,simulated_exchange_schema_test}` | `fixture_loader.h/.cc`、`fixture_schema_test.cc`、`fixtures/` | Python 对照夹具的读取与校验 |
+| `//hquant/test:{simulated_replay,simulated_binance,multi_shard,recovery}` | 对应 `*_test.cc` | 离线/本地 mock 端到端链路 |
 | `//dev:contract_compile` | `dev/contract_compile_test.cc` | 编译检查全部公开头文件 |
 
 所有单元测试也位于 `hquant/test/`，文件按被测模块命名；原先分散在实现包内的 65 个用例已合并，错误码与协议迁移新增了回归用例。夹具数据在 `hquant/test/fixtures/`，其 JSON、schema 和差异说明仍按各主题维护。隔离环境联机试单另记测试记录。

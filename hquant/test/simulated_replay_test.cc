@@ -13,7 +13,7 @@
 #include "gtest/gtest.h"
 #include "offline/history.h"
 #include "offline/recorder.h"
-#include "order/paper.h"
+#include "order/simulated_exchange.h"
 #include "order/risk.h"
 #include "service/shard.h"
 #include "strategy/simple_pmm.h"
@@ -27,7 +27,7 @@ class TemporaryDatabase {
  public:
   TemporaryDatabase() {
     path_ =
-        (std::filesystem::temp_directory_path() / "hquant_paper_replay_XXXXXX")
+        (std::filesystem::temp_directory_path() / "hquant_simulated_replay_XXXXXX")
             .string();
     const int fd = mkstemp(path_.data());
     if (fd < 0) throw std::runtime_error("mkstemp failed");
@@ -56,8 +56,8 @@ std::string ReplayOnce() {
   TemporaryDatabase database;
   const UtcTime origin(std::chrono::microseconds(1'000'000));
   ReplayClock clock(origin, MonoTime(std::chrono::microseconds(1'000'000)));
-  const AccountId account("PAPER");
-  const MarketId market{ExchangeId("paper"), InstrumentKind::Spot, "BTCUSDT"};
+  const AccountId account("SIMULATED");
+  const MarketId market{ExchangeId("simulated"), InstrumentKind::Spot, "BTCUSDT"};
   const MarketSpec spec{market, AssetId("BTC"), AssetId("USDT")};
   const OwnerId owner{1, StrategyId("simple_pmm"), std::nullopt};
   const BookScale scale{D("0.01"), D("0.001"), 1};
@@ -74,10 +74,10 @@ std::string ReplayOnce() {
                                   D("0.001"),
                                   true};
   SimplePmm strategy(strategy_config);
-  PaperConfig paper_config{
+  SimulatedExchangeConfig sim_exchange_config{
       account,    spec, rule, {{"BTC", D("0.02")}, {"USDT", D("10")}},
       D("0.001"), true, {}};
-  PaperConnector paper(std::move(paper_config), clock);
+  SimpleSimulatedExchange sim_exchange(std::move(sim_exchange_config), clock);
   RiskGate risk({ShardId{0}, D("0"), std::chrono::seconds(300)});
   if (!risk.SetInitialLease({account, AssetId("BTC"), ShardId{0}, 1, D("0.02"),
                              origin + std::chrono::hours(1)})
@@ -92,7 +92,7 @@ std::string ReplayOnce() {
   if (!recorder.ok())
     throw std::runtime_error(std::string(recorder.status().message()));
   ShardRuntime shard({RunId{1}, ShardId{0}, owner, account, spec, scale, rule},
-                     clock, strategy, paper, risk, **recorder);
+                     clock, strategy, sim_exchange, risk, **recorder);
 
   if (!clock.Advance({0, 1}).ok() ||
       shard.Subscribe(1).state != BookSyncState::Buffering) {
@@ -128,7 +128,7 @@ std::string ReplayOnce() {
       !(*opening)[1].accepted) {
     throw std::runtime_error("initial quote failed");
   }
-  auto open = paper.OpenOrders();
+  auto open = sim_exchange.OpenOrders();
   if (open.size() != 2 || !open[0].request.limit_price ||
       !open[1].request.limit_price ||
       *open[0].request.limit_price->Compare(D("99.9")) != 0 ||
@@ -148,7 +148,7 @@ std::string ReplayOnce() {
           "refresh action rejected: " + std::string(Info(action.reason).name) +
           ": " + action.message);
   }
-  if (paper.OpenOrders().size() != 2 || !shard.Order(first_buy) ||
+  if (sim_exchange.OpenOrders().size() != 2 || !shard.Order(first_buy) ||
       shard.Order(first_buy)->display_state != OrderDisplayState::Canceled) {
     throw std::runtime_error("cancel and requote failed");
   }
@@ -160,13 +160,13 @@ std::string ReplayOnce() {
   bridge.bids = {{{9999}, {0}}, {{9970}, {100}}};
   bridge.asks = {{{10001}, {0}}, {{9980}, {100}}};
   bridge.time = EventTime{{}, clock.UtcNow(), clock.MonoNow()};
-  if (!shard.OnDiff(bridge).ok() || paper.OpenOrders().size() != 1) {
-    throw std::runtime_error("Paper BBO fill failed");
+  if (!shard.OnDiff(bridge).ok() || sim_exchange.OpenOrders().size() != 1) {
+    throw std::runtime_error("Simulated BBO fill failed");
   }
-  if (*paper.BalanceOf(AssetId("BTC")).Compare(D("0.02999")) != 0 ||
-      *paper.BalanceOf(AssetId("USDT")).Compare(D("9.001")) != 0 ||
-      *paper.FeesPaid(AssetId("BTC")).Compare(D("0.00001")) != 0) {
-    throw std::runtime_error("Paper balances or fees wrong");
+  if (*sim_exchange.BalanceOf(AssetId("BTC")).Compare(D("0.02999")) != 0 ||
+      *sim_exchange.BalanceOf(AssetId("USDT")).Compare(D("9.001")) != 0 ||
+      *sim_exchange.FeesPaid(AssetId("BTC")).Compare(D("0.00001")) != 0) {
+    throw std::runtime_error("Simulated balances or fees wrong");
   }
   if (!(*recorder)->Flush().ok())
     throw std::runtime_error("SQLite flush failed");
@@ -200,12 +200,12 @@ std::string ReplayOnce() {
     throw std::runtime_error("SQLite stop failed");
   }
   return std::to_string(shard.shard_sequence()) + ":" +
-         paper.BalanceOf(AssetId("BTC")).ToString() + ":" +
-         paper.BalanceOf(AssetId("USDT")).ToString() + ":" +
-         paper.FeesPaid(AssetId("BTC")).ToString();
+         sim_exchange.BalanceOf(AssetId("BTC")).ToString() + ":" +
+         sim_exchange.BalanceOf(AssetId("USDT")).ToString() + ":" +
+         sim_exchange.FeesPaid(AssetId("BTC")).ToString();
 }
 
-TEST(PaperReplayTest, DeterministicBookStrategyRiskPaperTrackerAndSqlite) {
+TEST(SimulatedReplayTest, DeterministicBookStrategyRiskSimulatedExchangeTrackerAndSqlite) {
   EXPECT_EQ(ReplayOnce(), ReplayOnce());
 }
 

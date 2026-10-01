@@ -1,4 +1,4 @@
-// 回放演示：读取 paper_replay.yaml + paper_market.json，逐条喂给 ShardRuntime，
+// 回放演示：读取 simulated_replay.yaml + replay_market.json，逐条喂给 ShardRuntime，
 // 每处理完一条行情输入就打印：输入内容 → 产生的记录 → 盘口 → 挂单 → 余额。
 //
 // 运行（在仓库根目录）：
@@ -16,7 +16,7 @@
 #include "application/config.h"
 #include "base/error.h"
 #include "market/replay_feed.h"
-#include "order/paper.h"
+#include "order/simulated_exchange.h"
 #include "order/risk.h"
 #include "service/shard.h"
 #include "strategy/simple_pmm.h"
@@ -206,7 +206,7 @@ absl::Status Apply(const ReplayInput& input, const MarketConfig& market,
   return absl::OkStatus();
 }
 
-void PrintState(const ShardRuntime& shard, const PaperConnector& paper,
+void PrintState(const ShardRuntime& shard, const SimpleSimulatedExchange& sim_exchange,
                 const RiskGate& risk, const AccountId& account,
                 const MarketConfig& market) {
   const auto& scale = market.book_scale;
@@ -219,7 +219,7 @@ void PrintState(const ShardRuntime& shard, const PaperConnector& paper,
     std::cout << "  卖一 " << Price(scale, ask->price_ticks);
   }
   std::cout << "\n  挂单:";
-  const auto orders = paper.OpenOrders();
+  const auto orders = sim_exchange.OpenOrders();
   if (orders.empty()) std::cout << " 无";
   for (const auto& order : orders) {
     std::cout << " [" << order.client_id.value << " "
@@ -230,8 +230,8 @@ void PrintState(const ShardRuntime& shard, const PaperConnector& paper,
   std::cout << "\n  余额:";
   for (const AssetId& asset : {market.spec.base_asset, market.spec.quote_asset}) {
     auto lease = risk.Available(account, asset);
-    std::cout << " " << asset.value << " 总额 " << Plain(paper.BalanceOf(asset))
-              << " / 可用 " << Plain(paper.AvailableBalance(asset))
+    std::cout << " " << asset.value << " 总额 " << Plain(sim_exchange.BalanceOf(asset))
+              << " / 可用 " << Plain(sim_exchange.AvailableBalance(asset))
               << " / 风控剩余额度 " << (lease.ok() ? Plain(*lease) : "?") << ";";
   }
   std::cout << "\n";
@@ -266,7 +266,7 @@ absl::Status Run(const std::string& config_path, const std::string& market_path)
                       strategy_config.refresh_interval, PmmPriceType::Mid,
                       D("0.001"), true});
   // 模拟交易所：手续费 0.1%，client ID 用默认的 P1、P2……
-  PaperConnector paper({account.account, market.spec, rule,
+  SimpleSimulatedExchange sim_exchange({account.account, market.spec, rule,
                         account.initial_balances, D("0.001"), true, {}},
                        clock);
   // 风控：每种资产最多能用多少。
@@ -281,10 +281,10 @@ absl::Status Run(const std::string& config_path, const std::string& market_path)
   // 总管：把订单簿、策略、风控、交易所、记录器串起来。
   ShardRuntime shard({RunId{1}, assignment.shard, strategy_config.owner,
                       account.account, market.spec, market.book_scale, rule},
-                     clock, strategy, paper, risk, recorder);
+                     clock, strategy, sim_exchange, risk, recorder);
 
   std::cout << "初始状态\n";
-  PrintState(shard, paper, risk, account.account, market);
+  PrintState(shard, sim_exchange, risk, account.account, market);
 
   // ---- 3. 逐条回放 ----
   int index = 0;
@@ -293,7 +293,7 @@ absl::Status Run(const std::string& config_path, const std::string& market_path)
               << "us  " << Describe(input, market.book_scale) << "\n";
     auto status = Apply(input, market, clock, shard);
     if (!status.ok()) return status;
-    PrintState(shard, paper, risk, account.account, market);
+    PrintState(shard, sim_exchange, risk, account.account, market);
     return absl::OkStatus();
   });
 }
@@ -301,8 +301,8 @@ absl::Status Run(const std::string& config_path, const std::string& market_path)
 }  // namespace
 
 int main(int argc, char** argv) {
-  const std::string config = argc > 1 ? argv[1] : "examples/paper_replay.yaml";
-  const std::string market = argc > 2 ? argv[2] : "examples/paper_market.json";
+  const std::string config = argc > 1 ? argv[1] : "examples/simulated_replay.yaml";
+  const std::string market = argc > 2 ? argv[2] : "examples/replay_market.json";
   auto status = Run(config, market);
   if (!status.ok()) {
     std::cerr << "失败: " << status << "\n";

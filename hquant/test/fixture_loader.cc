@@ -109,7 +109,7 @@ bool ValidateSetup(const std::string& family, simdjson::dom::element setup) {
            String(config, "price_type", &price_type) &&
            OneOf(price_type, {"mid", "last"});
   }
-  if (family == "paper") {
+  if (family == "simulated_exchange") {
     std::string base, quote;
     bool buy_fee_from_returns = false;
     return String(setup, "base_asset", &base) && !base.empty() &&
@@ -192,7 +192,7 @@ bool ValidateEvent(const std::string& family, simdjson::dom::element event) {
            Array(event, "active_orders", &active) &&
            DecimalMap(event, "available_balances");
   }
-  if (family == "paper") {
+  if (family == "simulated_exchange") {
     if (kind == "tick") return true;
     if (kind == "cancel") {
       std::string id;
@@ -297,7 +297,7 @@ bool ValidateOutput(const std::string& family, simdjson::dom::element output) {
     }
     return true;
   }
-  if (family == "paper") {
+  if (family == "simulated_exchange") {
     simdjson::dom::array events, orders;
     if (!Array(output, "events", &events) ||
         !Array(output, "open_orders", &orders) ||
@@ -350,7 +350,7 @@ absl::StatusOr<FixtureCase> LoadFixture(const std::string& path) {
   if (!U64(root, "schema_version", &version) || version != 1 ||
       !String(root, "family", &result.family) ||
       !OneOf(result.family,
-             {"order_book", "order_tracker", "simple_pmm", "paper"}) ||
+             {"order_book", "order_tracker", "simple_pmm", "simulated_exchange"}) ||
       !String(root, "case_id", &result.case_id) ||
       result.case_id.rfind(result.family + "/", 0) != 0 ||
       !String(root, "baseline_commit", &result.baseline_commit) ||

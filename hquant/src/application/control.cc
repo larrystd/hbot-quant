@@ -11,7 +11,7 @@
 #include "base/order.h"
 #include "offline/history.h"
 #include "offline/recorder.h"
-#include "order/paper.h"
+#include "order/simulated_exchange.h"
 #include "service/shard.h"
 #include "simdjson.h"
 
@@ -499,25 +499,25 @@ const char* BookStateName(BookSyncState state) {
   return "Unknown";
 }
 
-std::string StatusJson(const ShardRuntime& shard, const PaperConnector& paper,
+std::string StatusJson(const ShardRuntime& shard, const SimpleSimulatedExchange& sim_exchange,
                        const MarketSpec& market,
                        const SqliteRecorder& recorder) {
   const auto health = recorder.Health();
-  return "{\"mode\":\"paper\",\"connector\":\"paper\",\"book\":" +
+  return "{\"mode\":\"simulated\",\"exchange\":\"simulated\",\"book\":" +
          EscapeJson(BookStateName(shard.Book().State())) +
          ",\"active_shards\":1,\"strategy\":\"simple_pmm\",\"open_orders\":" +
-         std::to_string(paper.OpenOrders().size()) +
+         std::to_string(sim_exchange.OpenOrders().size()) +
          ",\"recorder_dropped\":" + std::to_string(health.dropped_count) +
          ",\"history_gaps\":" + std::to_string(health.gap_ranges.size()) +
          ",\"recorder_error\":" + EscapeJson(health.last_error) +
          ",\"balances\":{" + EscapeJson(market.base_asset.value) + ":" +
-         EscapeJson(paper.BalanceOf(market.base_asset).ToString()) + "," +
+         EscapeJson(sim_exchange.BalanceOf(market.base_asset).ToString()) + "," +
          EscapeJson(market.quote_asset.value) + ":" +
-         EscapeJson(paper.BalanceOf(market.quote_asset).ToString()) +
+         EscapeJson(sim_exchange.BalanceOf(market.quote_asset).ToString()) +
          "},\"fees_paid\":{" + EscapeJson(market.base_asset.value) + ":" +
-         EscapeJson(paper.FeesPaid(market.base_asset).ToString()) + "," +
+         EscapeJson(sim_exchange.FeesPaid(market.base_asset).ToString()) + "," +
          EscapeJson(market.quote_asset.value) + ":" +
-         EscapeJson(paper.FeesPaid(market.quote_asset).ToString()) + "}}";
+         EscapeJson(sim_exchange.FeesPaid(market.quote_asset).ToString()) + "}}";
 }
 
 const char* OrderStatusName(ExchangeOrderStatus status) {

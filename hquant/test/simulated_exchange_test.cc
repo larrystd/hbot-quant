@@ -1,4 +1,4 @@
-#include "order/paper.h"
+#include "order/simulated_exchange.h"
 
 #include <cstdlib>
 #include <filesystem>
@@ -97,19 +97,19 @@ std::vector<NormalizedEvent> Normalize(std::vector<AccountEvent> events) {
   return result;
 }
 
-TEST(PaperTest, ReplaysAllPaperCasesStepByStep) {
+TEST(SimulatedExchangeTest, ReplaysAllSimulatedExchangeCasesStepByStep) {
   const char* srcdir = std::getenv("TEST_SRCDIR");
   const char* workspace = std::getenv("TEST_WORKSPACE");
   ASSERT_NE(srcdir, nullptr);
   ASSERT_NE(workspace, nullptr);
   const auto directory =
-      std::filesystem::path(srcdir) / workspace / "hquant/test/fixtures/paper";
+      std::filesystem::path(srcdir) / workspace / "hquant/test/fixtures/simulated_exchange";
   size_t case_count = 0;
   for (const auto& entry : std::filesystem::directory_iterator(directory)) {
     if (entry.path().extension() != ".json") continue;
     auto fixture = fixtures::LoadFixture(entry.path().string());
     ASSERT_TRUE(fixture.ok()) << fixture.status();
-    ASSERT_EQ(fixture->family, "paper");
+    ASSERT_EQ(fixture->family, "simulated_exchange");
     SCOPED_TRACE(fixture->case_id);
     ++case_count;
 
@@ -124,10 +124,10 @@ TEST(PaperTest, ReplaysAllPaperCasesStepByStep) {
     simdjson::dom::parser setup_parser;
     simdjson::dom::element setup =
         setup_parser.parse(fixture->setup_json).value();
-    PaperConfig config;
+    SimulatedExchangeConfig config;
     config.account = AccountId(S(setup, "account"));
     config.market = MarketSpec{
-        MarketId{ExchangeId("paper"), InstrumentKind::Spot, S(setup, "market")},
+        MarketId{ExchangeId("simulated"), InstrumentKind::Spot, S(setup, "market")},
         AssetId(S(setup, "base_asset")), AssetId(S(setup, "quote_asset"))};
     config.trading_rule = TradingRule{config.market.market,
                                       D(S(setup, "price_increment")),
@@ -147,7 +147,7 @@ TEST(PaperTest, ReplaysAllPaperCasesStepByStep) {
       return ClientOrderId(submit_ids.at(next_id++));
     };
     FakeClock clock;
-    PaperConnector paper(config, clock);
+    SimpleSimulatedExchange sim_exchange(config, clock);
     OwnerId owner{uint64_t(setup["owner_key"]), StrategyId("simple_pmm"), {}};
 
     for (const auto& step : fixture->steps) {
@@ -170,30 +170,30 @@ TEST(PaperTest, ReplaysAllPaperCasesStepByStep) {
         request.time_in_force = TimeInForce::Gtc;
         OrderCommand command{owner, request, ReservationId{1}, DecisionId{1},
                              clock.MonoNow() + std::chrono::seconds(1)};
-        auto prepared = paper.PrepareSubmit(std::move(command));
+        auto prepared = sim_exchange.PrepareSubmit(std::move(command));
         ASSERT_TRUE(prepared.ok()) << prepared.status();
         EXPECT_EQ(prepared->client_id.value, S(event, "client_id"));
-        auto started = paper.StartPrepared(prepared->client_id);
+        auto started = sim_exchange.StartPrepared(prepared->client_id);
         if (fixture->expectation_kind == "intentional_divergence") {
           EXPECT_EQ(CodeOf(started), ErrorCode::kPaperBalanceInsufficient);
         } else
           EXPECT_TRUE(started.ok()) << started;
       } else if (kind == "cancel") {
         EXPECT_TRUE(
-            paper.StartCancel(owner, ClientOrderId(S(event, "client_id")))
+            sim_exchange.StartCancel(owner, ClientOrderId(S(event, "client_id")))
                 .ok());
       } else if (kind == "book_bbo") {
         EXPECT_TRUE(
-            paper.OnBookBbo(D(S(event, "bid")), D(S(event, "ask"))).ok());
+            sim_exchange.OnBookBbo(D(S(event, "bid")), D(S(event, "ask"))).ok());
       } else if (kind == "public_trade") {
-        EXPECT_TRUE(paper
+        EXPECT_TRUE(sim_exchange
                         .OnPublicTrade(ParseSide(event), D(S(event, "price")),
                                        D(S(event, "amount")))
                         .ok());
       } else
         FAIL() << "unknown event " << kind;
 
-      const auto actual_events = Normalize(paper.DrainEvents());
+      const auto actual_events = Normalize(sim_exchange.DrainEvents());
       auto expected_events = simdjson::dom::array(expected["events"]);
       ASSERT_EQ(actual_events.size(), expected_events.size());
       size_t i = 0;
@@ -215,7 +215,7 @@ TEST(PaperTest, ReplaysAllPaperCasesStepByStep) {
         }
       }
 
-      const auto actual_orders = paper.OpenOrders();
+      const auto actual_orders = sim_exchange.OpenOrders();
       auto expected_orders = simdjson::dom::array(expected["open_orders"]);
       ASSERT_EQ(actual_orders.size(), expected_orders.size());
       i = 0;
@@ -229,12 +229,12 @@ TEST(PaperTest, ReplaysAllPaperCasesStepByStep) {
       }
       for (auto [asset, raw] : simdjson::dom::object(expected["balances"])) {
         std::string_view balance = raw;
-        ExpectDecimal(paper.BalanceOf(AssetId(std::string(asset))), balance);
+        ExpectDecimal(sim_exchange.BalanceOf(AssetId(std::string(asset))), balance);
       }
       for (auto [asset, raw] :
            simdjson::dom::object(expected["available_balances"])) {
         std::string_view available = raw;
-        ExpectDecimal(paper.AvailableBalance(AssetId(std::string(asset))),
+        ExpectDecimal(sim_exchange.AvailableBalance(AssetId(std::string(asset))),
                       available);
       }
       for (const auto& asset :
@@ -242,19 +242,19 @@ TEST(PaperTest, ReplaysAllPaperCasesStepByStep) {
         auto expected_fees = simdjson::dom::object(expected["fees_by_asset"]);
         std::string_view fee;
         if (expected_fees[asset.value].get(fee)) fee = "0";
-        ExpectDecimal(paper.FeesPaid(asset), fee);
+        ExpectDecimal(sim_exchange.FeesPaid(asset), fee);
       }
     }
   }
   EXPECT_GE(case_count, 7);
 }
 
-TEST(PaperTest, AbortedPreparationNeverCreatesAnOrder) {
+TEST(SimulatedExchangeTest, AbortedPreparationNeverCreatesAnOrder) {
   FakeClock clock;
-  PaperConfig config;
-  config.account = AccountId("paper");
+  SimulatedExchangeConfig config;
+  config.account = AccountId("simulated");
   config.market =
-      MarketSpec{MarketId{ExchangeId("paper"), InstrumentKind::Spot, "BTC-USDT"},
+      MarketSpec{MarketId{ExchangeId("simulated"), InstrumentKind::Spot, "BTC-USDT"},
                  AssetId("BTC"), AssetId("USDT")};
   config.trading_rule = TradingRule{config.market.market,
                                     D("0.01"),
@@ -266,23 +266,23 @@ TEST(PaperTest, AbortedPreparationNeverCreatesAnOrder) {
                                     {}};
   config.initial_balances = {{"BTC", D("1")}, {"USDT", D("100")}};
   config.make_client_id = [](Side) { return ClientOrderId("B1"); };
-  PaperConnector paper(std::move(config), clock);
+  SimpleSimulatedExchange sim_exchange(std::move(config), clock);
   OwnerId owner{1, StrategyId("simple_pmm"), {}};
   OrderRequest request;
-  request.account = AccountId("paper");
-  request.market = MarketId{ExchangeId("paper"), InstrumentKind::Spot, "BTC-USDT"};
+  request.account = AccountId("simulated");
+  request.market = MarketId{ExchangeId("simulated"), InstrumentKind::Spot, "BTC-USDT"};
   request.side = Side::Buy;
   request.base_amount = D("0.01");
   request.limit_price = D("100");
-  auto intent = paper.PrepareSubmit(OrderCommand{owner, request, {}, {}, {}});
+  auto intent = sim_exchange.PrepareSubmit(OrderCommand{owner, request, {}, {}, {}});
   ASSERT_TRUE(intent.ok()) << intent.status();
-  EXPECT_TRUE(paper.DrainEvents().empty());
-  EXPECT_TRUE(paper.OpenOrders().empty());
-  EXPECT_TRUE(paper.AbortPrepared(intent->client_id).ok());
-  EXPECT_EQ(CodeOf(paper.StartPrepared(intent->client_id)),
+  EXPECT_TRUE(sim_exchange.DrainEvents().empty());
+  EXPECT_TRUE(sim_exchange.OpenOrders().empty());
+  EXPECT_TRUE(sim_exchange.AbortPrepared(intent->client_id).ok());
+  EXPECT_EQ(CodeOf(sim_exchange.StartPrepared(intent->client_id)),
             ErrorCode::kOrderNotFound);
-  EXPECT_TRUE(paper.DrainEvents().empty());
-  ExpectDecimal(paper.AvailableBalance(AssetId("USDT")), "100");
+  EXPECT_TRUE(sim_exchange.DrainEvents().empty());
+  ExpectDecimal(sim_exchange.AvailableBalance(AssetId("USDT")), "100");
 }
 
 }  // namespace

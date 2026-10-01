@@ -31,9 +31,9 @@ hquant_cc_library(
 )
 
 hquant_cc_library(
-    name = "paper",
-    srcs = ["paper.cc"],
-    hdrs = ["paper.h"],
+    name = "simulated_exchange",
+    srcs = ["simulated_exchange.cc"],
+    hdrs = ["simulated_exchange.h"],
     deps = [
         "//hquant/src/base:error",
         "//hquant/src/base:market",

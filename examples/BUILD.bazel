@@ -1,17 +1,17 @@
 load("@rules_cc//cc:defs.bzl", "cc_binary")
 
-exports_files(["paper_replay.yaml", "paper_simple_pmm.yaml", "paper_market.json"], visibility = ["//visibility:public"])
+exports_files(["simulated_replay.yaml", "simulated_binance_pmm.yaml", "replay_market.json"], visibility = ["//visibility:public"])
 
 # 逐条打印回放过程的教学示例：bazel run //examples:replay_walkthrough
 cc_binary(
     name = "replay_walkthrough",
     srcs = ["replay_walkthrough.cc"],
-    data = ["paper_replay.yaml", "paper_market.json"],
+    data = ["simulated_replay.yaml", "replay_market.json"],
     deps = [
         "//hquant/src/application:config",
         "//hquant/src/base:error",
         "//hquant/src/market:replay_feed",
-        "//hquant/src/order:paper",
+        "//hquant/src/order:simulated_exchange",
         "//hquant/src/order:risk",
         "//hquant/src/service:shard",
         "//hquant/src/strategy:simple_pmm",

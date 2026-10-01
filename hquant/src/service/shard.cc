@@ -39,7 +39,7 @@ absl::StatusOr<Decimal> ShardRuntime::Amount(QuantityLots lots) const {
   return count->Multiply(config_.scale.base_per_lot);
 }
 
-absl::Status ShardRuntime::RefreshPaperBbo() {
+absl::Status ShardRuntime::UpdateSimulatedExchangeBbo() {
   if (book_.View().State() != BookSyncState::Live) return absl::OkStatus();
   const auto bid = book_.View().BestBid();
   const auto ask = book_.View().BestAsk();
@@ -50,17 +50,17 @@ absl::Status ShardRuntime::RefreshPaperBbo() {
   if (!ask_price.ok()) return ask_price.status();
   auto status = exchange_.OnBookBbo(*bid_price, *ask_price);
   if (!status.ok()) return status;
-  return DrainPaperEvents();
+  return DrainSimulatedExchangeEvents();
 }
 
 absl::Status ShardRuntime::OnSnapshot(const BookSnapshot& snapshot) {
   book_.OnSnapshot(snapshot);
-  return RefreshPaperBbo();
+  return UpdateSimulatedExchangeBbo();
 }
 
 absl::Status ShardRuntime::OnDiff(const BookDiff& diff) {
   book_.OnDiff(diff);
-  return RefreshPaperBbo();
+  return UpdateSimulatedExchangeBbo();
 }
 
 absl::Status ShardRuntime::OnPublicTrade(const PublicTrade& trade) {
@@ -75,7 +75,7 @@ absl::Status ShardRuntime::OnPublicTrade(const PublicTrade& trade) {
   last_trade_price_ = *price;
   auto status = exchange_.OnPublicTrade(*trade.side, *price, *amount);
   if (!status.ok()) return status;
-  return DrainPaperEvents();
+  return DrainSimulatedExchangeEvents();
 }
 
 std::vector<OrderSnapshot> ShardRuntime::OrderViews() const {
@@ -132,7 +132,7 @@ absl::StatusOr<std::vector<DispatchResult>> ShardRuntime::OnTimer(
                             *result.reservation_id);
     }
   }
-  auto status = DrainPaperEvents();
+  auto status = DrainSimulatedExchangeEvents();
   if (!status.ok()) return status;
   return results;
 }
@@ -167,7 +167,7 @@ absl::Status ShardRuntime::ProcessAccountEvent(const AccountEvent& event) {
   if (const auto* trade = std::get_if<TradeUpdate>(&event)) {
     if (!trade->client_id)
       return Error(ErrorCode::kShardReportUnattributed,
-                   "Paper trade without client ID");
+                   "Simulated trade without client ID");
     auto updated = tracker_.ApplyTradeUpdate(*trade);
     if (!updated.ok()) return updated.status();
     auto it = reservations_.find(trade->client_id->value);
@@ -184,7 +184,7 @@ absl::Status ShardRuntime::ProcessAccountEvent(const AccountEvent& event) {
   if (const auto* update = std::get_if<OrderUpdate>(&event)) {
     if (!update->client_id)
       return Error(ErrorCode::kShardReportUnattributed,
-                   "Paper order without client ID");
+                   "Simulated order without client ID");
     auto updated = tracker_.ApplyOrderUpdate(*update);
     if (!updated.ok()) return updated.status();
     if (update->exchange_status == ExchangeOrderStatus::Filled ||
@@ -203,7 +203,7 @@ absl::Status ShardRuntime::ProcessAccountEvent(const AccountEvent& event) {
   return absl::OkStatus();
 }
 
-absl::Status ShardRuntime::DrainPaperEvents() {
+absl::Status ShardRuntime::DrainSimulatedExchangeEvents() {
   for (const auto& event : exchange_.DrainEvents()) {
     auto status = ProcessAccountEvent(event);
     if (!status.ok()) return status;
