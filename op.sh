@@ -5,7 +5,7 @@ PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BAZEL_BIN="${BAZEL_BIN:-$(command -v bazelisk || command -v bazel || true)}"
 PYTHON_BIN="${PYTHON_BIN:-$(command -v python3 || true)}"
 LLVM_MAJOR=20
-SOURCE_ROOTS=(hbot apps tests dev)
+SOURCE_ROOTS=(hquant apps dev)
 
 cd "${PROJECT_DIR}"
 
@@ -28,7 +28,7 @@ C++ quality:
   compdb [bazel flags]    Generate compile_commands.json (e.g. compdb --config=asan)
   doctor                  Print the selected tools
 
-Overrides: BAZEL_BIN, PYTHON_BIN, HBOT_LLVM_BIN
+Overrides: BAZEL_BIN, PYTHON_BIN, HQUANT_LLVM_BIN
 HELP
 }
 
@@ -49,8 +49,8 @@ require_python() {
 # Prefer LLVM 20 so formatting is stable across machines; Homebrew keeps it keg-only.
 find_clang_format() {
     local candidates=()
-    if [[ -n "${HBOT_LLVM_BIN:-}" ]]; then
-        candidates+=("${HBOT_LLVM_BIN}/clang-format")
+    if [[ -n "${HQUANT_LLVM_BIN:-}" ]]; then
+        candidates+=("${HQUANT_LLVM_BIN}/clang-format")
     else
         candidates+=("$(command -v "clang-format-${LLVM_MAJOR}" || true)")
         candidates+=("/opt/homebrew/opt/llvm@${LLVM_MAJOR}/bin/clang-format")
@@ -66,7 +66,7 @@ find_clang_format() {
         fi
     done
     echo "clang-format ${LLVM_MAJOR} not found. On macOS: brew install llvm@${LLVM_MAJOR};" \
-         "or set HBOT_LLVM_BIN to its bin directory." >&2
+         "or set HQUANT_LLVM_BIN to its bin directory." >&2
     exit 1
 }
 

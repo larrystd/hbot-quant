@@ -1,0 +1,55 @@
+load("//:hquant_cc.bzl", "hquant_cc_library")
+
+hquant_cc_library(
+    name = "routing",
+    srcs = ["routing.cc"],
+    hdrs = ["routing.h"],
+    deps = [
+        "//hquant/src/base:error",
+        "//hquant/src/base:types",
+        "//hquant/src/base:market",
+        "//hquant/src/base:order",
+        "@abseil-cpp//absl/status:status",
+        "@abseil-cpp//absl/status:statusor",
+    ],
+    visibility = ["//visibility:public"],
+)
+
+hquant_cc_library(
+    name = "dispatcher",
+    srcs = ["dispatcher.cc"],
+    hdrs = ["dispatcher.h"],
+    deps = [
+        "//hquant/src/base:error",
+        "//hquant/src/base:types",
+        "//hquant/src/base:market",
+        "//hquant/src/base:order",
+        "//hquant/src/order:risk",
+        "//hquant/src/offline:storage",
+        "//hquant/src/strategy:strategy",
+        "@abseil-cpp//absl/status:status",
+        "@abseil-cpp//absl/status:statusor",
+    ],
+    visibility = ["//visibility:public"],
+)
+
+hquant_cc_library(
+    name = "shard",
+    srcs = ["shard.cc"],
+    hdrs = ["shard.h"],
+    deps = [
+        ":dispatcher",
+        "//hquant/src/base:error",
+        "//hquant/src/base:types",
+        "//hquant/src/base:market",
+        "//hquant/src/base:order",
+        "//hquant/src/market:order_book",
+        "//hquant/src/order:order_tracker",
+        "//hquant/src/order:risk",
+        "//hquant/src/offline:storage",
+        "//hquant/src/strategy:strategy",
+        "@abseil-cpp//absl/status:status",
+        "@abseil-cpp//absl/status:statusor",
+    ],
+    visibility = ["//visibility:public"],
+)

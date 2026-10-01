@@ -1,5 +1,5 @@
 module(
-    name = "hummingbot_cpp",
+    name = "hquant_cpp",
     version = "0.1.0",
 )
 

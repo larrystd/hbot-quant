@@ -1,0 +1,178 @@
+{
+  "schema_version": 1,
+  "family": "order_book",
+  "case_id": "order_book/crossed_book",
+  "baseline_commit": "9af100d6822da7d2d0291a906c730ef172284ee2",
+  "source_files": [
+    "hummingbot/core/data_type/order_book.pyx",
+    "hummingbot/core/cpp/OrderBookEntry.cpp",
+    "docs/ORDER_BOOK.md"
+  ],
+  "expectation_kind": "intentional_divergence",
+  "divergence_reason": "Python centralized book truncates the older crossed ask by row update ID and keeps trading; C++ treats a crossed continuous-market book as invalid and resynchronizes.",
+  "setup": {
+    "market": "BTC-USDT",
+    "quote_per_tick": "0.01",
+    "base_per_lot": "0.001",
+    "scale_version": 1,
+    "stream_epoch": 1
+  },
+  "inputs": [
+    {
+      "at_us": 0,
+      "ordinal": 0,
+      "event": {
+        "kind": "subscribe",
+        "stream_epoch": 1
+      }
+    },
+    {
+      "at_us": 100,
+      "ordinal": 0,
+      "event": {
+        "kind": "diff",
+        "stream_epoch": 1,
+        "first_sequence": 101,
+        "last_sequence": 101,
+        "bids": [],
+        "asks": []
+      }
+    },
+    {
+      "at_us": 200,
+      "ordinal": 0,
+      "event": {
+        "kind": "snapshot",
+        "stream_epoch": 1,
+        "last_sequence": 100,
+        "bids": [
+          [
+            9990,
+            1000
+          ],
+          [
+            9980,
+            2000
+          ]
+        ],
+        "asks": [
+          [
+            10010,
+            1000
+          ],
+          [
+            10030,
+            2000
+          ]
+        ]
+      }
+    },
+    {
+      "at_us": 300,
+      "ordinal": 0,
+      "event": {
+        "kind": "diff",
+        "stream_epoch": 1,
+        "first_sequence": 102,
+        "last_sequence": 102,
+        "bids": [
+          [
+            10020,
+            1000
+          ]
+        ],
+        "asks": []
+      }
+    }
+  ],
+  "expected": [
+    {
+      "at_us": 0,
+      "ordinal": 0,
+      "output": {
+        "state": "Buffering",
+        "last_sequence": null,
+        "applied": false,
+        "reason": "None",
+        "bbo": {
+          "bid": null,
+          "ask": null
+        },
+        "top_bids": [],
+        "top_asks": []
+      }
+    },
+    {
+      "at_us": 100,
+      "ordinal": 0,
+      "output": {
+        "state": "Buffering",
+        "last_sequence": null,
+        "applied": false,
+        "reason": "None",
+        "bbo": {
+          "bid": null,
+          "ask": null
+        },
+        "top_bids": [],
+        "top_asks": []
+      }
+    },
+    {
+      "at_us": 200,
+      "ordinal": 0,
+      "output": {
+        "state": "Live",
+        "last_sequence": 101,
+        "applied": true,
+        "reason": "None",
+        "bbo": {
+          "bid": [
+            9990,
+            1000
+          ],
+          "ask": [
+            10010,
+            1000
+          ]
+        },
+        "top_bids": [
+          [
+            9990,
+            1000
+          ],
+          [
+            9980,
+            2000
+          ]
+        ],
+        "top_asks": [
+          [
+            10010,
+            1000
+          ],
+          [
+            10030,
+            2000
+          ]
+        ]
+      }
+    },
+    {
+      "at_us": 300,
+      "ordinal": 0,
+      "output": {
+        "state": "Resyncing",
+        "last_sequence": 101,
+        "applied": false,
+        "reason": "CrossedBook",
+        "bbo": {
+          "bid": null,
+          "ask": null
+        },
+        "top_bids": [],
+        "top_asks": []
+      }
+    }
+  ]
+}

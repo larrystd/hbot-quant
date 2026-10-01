@@ -1,0 +1,26 @@
+load("//:hquant_cc.bzl", "hquant_cc_library")
+
+hquant_cc_library(
+    name = "strategy",
+    hdrs = ["strategy.h"],
+    deps = [
+        "//hquant/src/base:market",
+        "//hquant/src/base:order",
+        "//hquant/src/base:types",
+        "//hquant/src/market:order_book",
+    ],
+    visibility = ["//visibility:public"],
+)
+
+hquant_cc_library(
+    name = "simple_pmm",
+    srcs = ["simple_pmm.cc"],
+    hdrs = ["simple_pmm.h"],
+    deps = [
+        ":strategy",
+        "//hquant/src/base:market",
+        "//hquant/src/base:order",
+        "//hquant/src/base:types",
+    ],
+    visibility = ["//examples:__pkg__", "//hquant/src/application:__pkg__", "//hquant/test:__pkg__"],
+)

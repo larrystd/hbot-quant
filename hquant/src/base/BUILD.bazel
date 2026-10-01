@@ -1,0 +1,67 @@
+load("//:hquant_cc.bzl", "hquant_cc_library")
+
+hquant_cc_library(
+    name = "error",
+    srcs = ["error.cc"],
+    hdrs = ["error.h"],
+    deps = [
+        "@abseil-cpp//absl/status:status",
+        "@abseil-cpp//absl/strings:cord",
+    ],
+    visibility = ["//visibility:public"],
+)
+
+hquant_cc_library(
+    name = "types",
+    srcs = ["types.cc"],
+    hdrs = ["types.h"],
+    deps = [
+        ":error",
+        "@abseil-cpp//absl/status:status",
+        "@abseil-cpp//absl/status:statusor",
+        "@mpdecimal//:mpdecimal",
+    ],
+    visibility = ["//visibility:public"],
+)
+
+hquant_cc_library(
+    name = "market",
+    hdrs = ["market.h"],
+    deps = [":types"],
+    visibility = ["//visibility:public"],
+)
+
+hquant_cc_library(
+    name = "order",
+    hdrs = ["order.h"],
+    deps = [
+        ":market",
+        ":types",
+        "@abseil-cpp//absl/status:status",
+        "@abseil-cpp//absl/status:statusor",
+    ],
+    visibility = ["//visibility:public"],
+)
+
+hquant_cc_library(
+    name = "net",
+    srcs = ["net.cc"],
+    hdrs = ["net.h"],
+    deps = [
+        ":error",
+        "@abseil-cpp//absl/status:status",
+        "@abseil-cpp//absl/status:statusor",
+        "@boost.asio//:boost.asio",
+        "@boost.beast//:boost.beast",
+        "@openssl//:ssl",
+    ],
+    visibility = ["//visibility:public"],
+)
+
+hquant_cc_library(
+    name = "rate_limit",
+    srcs = ["rate_limit.cc"],
+    hdrs = ["rate_limit.h"],
+    deps = [":error", ":types", "@abseil-cpp//absl/status:status"],
+    visibility = ["//visibility:public"],
+)

@@ -34,7 +34,7 @@
 - 第三方库只通过 `@module//:target` 引入；项目代码不直接写第三方头文件路径。模块依赖方向靠 `visibility` 强制（见 [STRUCTURE_AND_TYPES.md](STRUCTURE_AND_TYPES.md) 第 2.1 节）。
 - libmpdec 不在 BCR：`MODULE.bazel` 用 `http_archive` 固定 sha256 下载，BUILD 文件在 `third_party/mpdecimal/mpdecimal.BUILD`。
 - macOS 最低部署目标 10.15（Quill 13 使用的 `std::filesystem` 在更早版本不可用）。
-- 项目代码的告警等级写在项目自己的 `copts` 里，只作用于 `//hbot/...`，不作用于第三方库。
+- 项目代码的告警等级写在项目自己的 `copts` 里，只作用于 `//hquant/...`，不作用于第三方库。
 - IDE 的 `compile_commands.json` 由 `tools/compdb.py`（`./op.sh compdb`）从 Bazel 的 `CppCompile` 动作生成。
 
 ### 2.2 `.bazelrc`
@@ -82,7 +82,7 @@ try-import %workspace%/user.bazelrc
 
 ### 3.3 GoogleTest
 
-- 测试尽量与实现同包；跨包链路测试放 `tests/integration/`，夹具放 `tests/fixtures/`，以 `data` 属性引入。
+- 单元测试与跨模块链路测试统一放在 `hquant/test/`，夹具放在 `hquant/test/fixtures/`，以 `data` 属性引入。
 - 协议测试用 GoogleMock 模拟传输端口；集成测试用 Beast 起本地 HTTP/WS mock 服务器，不访问外网。
 - 差分重放夹具由 Python 基线离线生成并入库（已脱敏）；C++ 测试只读这些文件，不在测试中运行 Python。
 - CI：`bazel test //...`，另跑 `--config=asan` 和 `--config=tsan`。
@@ -96,7 +96,7 @@ try-import %workspace%/user.bazelrc
 ### 3.5 网络：Asio + Beast + OpenSSL + zlib
 
 - **协程与线程：** 每个分片一个 `io_context`，该分片的公开 WS、私有 WS、REST 连接池、快照、重连、轮询和策略定时器都 `co_spawn` 在它上面；**不建独立的网络线程池**。`co_await` 挂起协程而不占线程，恢复后仍在同一分片线程执行。控制线程另有自己的 `io_context` 处理 Unix socket。参考 [Boost.Asio C++20 协程](https://www.boost.org/latest/doc/html/boost_asio/overview/composition/cpp20_coroutines.html)。
-- **REST：** `//hbot/net` 实现 HTTP 客户端，按 origin 与 TLS 配置维护有上限的 HTTP/1.1 keep-alive 连接池；单连接同一时间只执行一个请求。期限、取消、重试和限速规则见 [STRUCTURE_AND_TYPES.md](STRUCTURE_AND_TYPES.md) 第 7.3 节与 [ARCHITECTURE.md](ARCHITECTURE.md) 第 5.5 节。
+- **REST：** `//hquant/src/base:net` 实现 HTTP 客户端，按 origin 与 TLS 配置维护有上限的 HTTP/1.1 keep-alive 连接池；单连接同一时间只执行一个请求。期限、取消、重试和限速规则见 [STRUCTURE_AND_TYPES.md](STRUCTURE_AND_TYPES.md) 第 7.3 节与 [ARCHITECTURE.md](ARCHITECTURE.md) 第 5.5 节。
 - **WebSocket：** Beast 负责 HTTP/1.1 和 WebSocket（含 permessage-deflate）；gzip/deflate 的 REST 响应体和 WS 二进制帧用 zlib 解压。
 - **OpenSSL 3.5 的用途：**
   - TLS：校验证书链和主机名（`asio::ssl::host_name_verification`），设置 SNI（`SSL_set_tlsext_host_name`）。
@@ -113,13 +113,13 @@ try-import %workspace%/user.bazelrc
 
 ### 3.7 yaml-cpp、SQLite、CLI11
 
-- **yaml-cpp：** 只在 `//hbot/app/config` 使用。数值先以标量文本读出，再转换为强类型 `EngineConfig`；缺字段或非法值返回 `Status`。配置带 `schema_version`。
+- **yaml-cpp：** 只在 `//hquant/src/application:config` 使用。数值先以标量文本读出，再转换为强类型 `AppConfig`；缺字段或非法值返回 `Status`。配置带 `schema_version`。
 - **SQLite：**
   - C API + RAII 封装（连接、语句、事务），WAL + `PRAGMA synchronous=NORMAL`。
   - **写：** 只有 Recorder 线程持有写连接；每个分片一条有界 SPSC 队列，Recorder 轮转消费、批量提交。分片 `try_push` 失败或后台事务失败都只标记历史缺口，不阻止已通过风控的订单。
   - **读：** HistoryReader 线程持有独立只读连接，处理分页 `history` 与启动恢复查询，限制行数与耗时并及时结束读事务（长读事务会阻碍 WAL checkpoint）。控制线程不执行 SQL。
-  - 交易数值存十进制字符串；schema 带版本，迁移脚本在 `hbot/storage/migrations/`。Python 的 `SqliteDecimal(6)` 会截断精度，所以不直接读写 Python 数据库，只提供一次性导入工具。
-- **CLI11：** 只在 `//hbot/cli` 使用。
+  - 交易数值存十进制字符串；schema 带版本，建表脚本在 `hquant/src/offline/schema.sql`。Python 的 `SqliteDecimal(6)` 会截断精度，所以不直接读写 Python 数据库，只提供一次性导入工具。
+- **CLI11：** 只在 `//hquant/src/cli:cli` 使用。
 
 ## 4. 仍需实测的项目
 

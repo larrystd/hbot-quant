@@ -11,7 +11,7 @@ import sys
 
 ROOT = Path(__file__).resolve().parents[1]
 QUERY = 'mnemonic("CppCompile", //...)'
-SOURCE_ROOTS = ("hbot/", "apps/", "tests/", "dev/")
+SOURCE_ROOTS = ("hquant/", "apps/", "dev/")
 
 
 def bazel_output(bazel: str, *arguments: str) -> str:

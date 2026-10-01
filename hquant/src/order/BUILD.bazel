@@ -1,0 +1,83 @@
+load("//:hquant_cc.bzl", "hquant_cc_library")
+
+hquant_cc_library(
+    name = "order_tracker",
+    srcs = ["order_tracker.cc"],
+    hdrs = ["order_tracker.h"],
+    deps = [
+        "//hquant/src/base:error",
+        "//hquant/src/base:order",
+        "//hquant/src/base:types",
+        "@abseil-cpp//absl/status:status",
+        "@abseil-cpp//absl/status:statusor",
+    ],
+    visibility = ["//visibility:public"],
+)
+
+hquant_cc_library(
+    name = "risk",
+    srcs = ["risk.cc"],
+    hdrs = ["risk.h"],
+    deps = [
+        "//hquant/src/base:error",
+        "//hquant/src/base:market",
+        "//hquant/src/base:order",
+        "//hquant/src/base:types",
+        "@abseil-cpp//absl/container:flat_hash_map",
+        "@abseil-cpp//absl/status:status",
+        "@abseil-cpp//absl/status:statusor",
+    ],
+    visibility = ["//visibility:public"],
+)
+
+hquant_cc_library(
+    name = "paper",
+    srcs = ["paper.cc"],
+    hdrs = ["paper.h"],
+    deps = [
+        "//hquant/src/base:error",
+        "//hquant/src/base:market",
+        "//hquant/src/base:order",
+        "//hquant/src/base:types",
+        "@abseil-cpp//absl/status:status",
+        "@abseil-cpp//absl/status:statusor",
+    ],
+    visibility = ["//examples:__pkg__", "//hquant/src/application:__pkg__", "//hquant/test:__pkg__"],
+)
+
+hquant_cc_library(
+    name = "binance_spot_gateway",
+    srcs = ["binance_spot_gateway.cc"],
+    hdrs = ["binance_spot_gateway.h"],
+    deps = [
+        "//hquant/src/base:error",
+        "//hquant/src/base:market",
+        "//hquant/src/base:net",
+        "//hquant/src/base:order",
+        "//hquant/src/base:rate_limit",
+        "//hquant/src/base:types",
+        "@abseil-cpp//absl/status:status",
+        "@abseil-cpp//absl/status:statusor",
+        "@boost.asio//:boost.asio",
+        "@openssl//:crypto",
+        "@simdjson//:simdjson",
+    ],
+    visibility = ["//hquant/src/application:__pkg__", "//hquant/test:__pkg__"],
+)
+
+hquant_cc_library(
+    name = "binance_spot_account",
+    srcs = ["binance_spot_account.cc"],
+    hdrs = ["binance_spot_account.h"],
+    deps = [
+        "//hquant/src/base:error",
+        "//hquant/src/base:net",
+        "//hquant/src/base:order",
+        "//hquant/src/base:types",
+        "@abseil-cpp//absl/status:status",
+        "@abseil-cpp//absl/status:statusor",
+        "@boost.asio//:boost.asio",
+        "@simdjson//:simdjson",
+    ],
+    visibility = ["//hquant/src/application:__pkg__", "//hquant/test:__pkg__"],
+)

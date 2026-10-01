@@ -1,0 +1,192 @@
+{
+  "schema_version": 1,
+  "family": "order_tracker",
+  "case_id": "order_tracker/cancel_fill_race",
+  "baseline_commit": "9af100d6822da7d2d0291a906c730ef172284ee2",
+  "source_files": [
+    "hummingbot/connector/client_order_tracker.py",
+    "hummingbot/core/data_type/in_flight_order.py",
+    "test/hummingbot/connector/test_client_order_tracker.py",
+    "docs/STRUCTURE_AND_TYPES.md",
+    "docs/ARCHITECTURE.md"
+  ],
+  "expectation_kind": "intentional_divergence",
+  "divergence_reason": "C++ cancel_pending is orthogonal to verified fills and retains the remaining reservation until exchange cancellation. Python tracker has a PENDING_CANCEL state but no cancel_requested input or RiskReservation output.",
+  "setup": {
+    "account": "A1",
+    "market": "BTC-USDT",
+    "owner_key": 1,
+    "client_id": "B1",
+    "side": "Buy",
+    "base_amount": "1",
+    "limit_price": "100",
+    "initial_reservation_by_asset": {
+      "USDT": "100.10"
+    },
+    "reservation_policy": {
+      "fee_buffer_by_asset": {
+        "USDT": "0.10"
+      },
+      "release_rule": "proportional_to_verified_base_then_release_remainder_on_terminal_confirmation"
+    }
+  },
+  "id_symbols": {
+    "client_id": "B1",
+    "exchange_order_id": "E1",
+    "trade_ids": [
+      "T1",
+      "T2"
+    ]
+  },
+  "inputs": [
+    {
+      "at_us": 0,
+      "ordinal": 0,
+      "event": {
+        "kind": "register",
+        "client_id": "B1"
+      }
+    },
+    {
+      "at_us": 1000000,
+      "ordinal": 0,
+      "event": {
+        "kind": "order_update",
+        "client_id": "B1",
+        "exchange_order_id": "E1",
+        "exchange_status": "New"
+      }
+    },
+    {
+      "at_us": 2000000,
+      "ordinal": 0,
+      "event": {
+        "kind": "cancel_requested",
+        "client_id": "B1"
+      }
+    },
+    {
+      "at_us": 2000000,
+      "ordinal": 1,
+      "event": {
+        "kind": "trade_update",
+        "client_id": "B1",
+        "exchange_order_id": "E1",
+        "trade_id": "T1",
+        "price": "100",
+        "base_amount": "0.4",
+        "quote_amount": "40",
+        "fees_by_asset": {
+          "USDT": "0.04"
+        }
+      }
+    },
+    {
+      "at_us": 3000000,
+      "ordinal": 0,
+      "event": {
+        "kind": "order_update",
+        "client_id": "B1",
+        "exchange_order_id": "E1",
+        "exchange_status": "Canceled",
+        "cumulative_base": "0.4",
+        "cumulative_quote": "40"
+      }
+    }
+  ],
+  "expected": [
+    {
+      "at_us": 0,
+      "ordinal": 0,
+      "output": {
+        "display_state": "PendingCreate",
+        "events": [],
+        "cumulative_base": "0",
+        "cumulative_quote": "0",
+        "fees_by_asset": {},
+        "remaining_base": "1"
+      },
+      "risk_expectation": {
+        "reservation_by_asset": {
+          "USDT": "100.10"
+        }
+      }
+    },
+    {
+      "at_us": 1000000,
+      "ordinal": 0,
+      "output": {
+        "display_state": "Open",
+        "events": [
+          "OrderCreated"
+        ],
+        "cumulative_base": "0",
+        "cumulative_quote": "0",
+        "fees_by_asset": {},
+        "remaining_base": "1"
+      },
+      "risk_expectation": {
+        "reservation_by_asset": {
+          "USDT": "100.10"
+        }
+      }
+    },
+    {
+      "at_us": 2000000,
+      "ordinal": 0,
+      "output": {
+        "display_state": "PendingCancel",
+        "events": [],
+        "cumulative_base": "0",
+        "cumulative_quote": "0",
+        "fees_by_asset": {},
+        "remaining_base": "1"
+      },
+      "risk_expectation": {
+        "reservation_by_asset": {
+          "USDT": "100.10"
+        }
+      }
+    },
+    {
+      "at_us": 2000000,
+      "ordinal": 1,
+      "output": {
+        "display_state": "PendingCancel",
+        "events": [
+          "OrderFilled"
+        ],
+        "cumulative_base": "0.4",
+        "cumulative_quote": "40",
+        "fees_by_asset": {
+          "USDT": "0.04"
+        },
+        "remaining_base": "0.6"
+      },
+      "risk_expectation": {
+        "reservation_by_asset": {
+          "USDT": "60.06"
+        }
+      }
+    },
+    {
+      "at_us": 3000000,
+      "ordinal": 0,
+      "output": {
+        "display_state": "Canceled",
+        "events": [
+          "OrderCanceled"
+        ],
+        "cumulative_base": "0.4",
+        "cumulative_quote": "40",
+        "fees_by_asset": {
+          "USDT": "0.04"
+        },
+        "remaining_base": "0.6"
+      },
+      "risk_expectation": {
+        "reservation_by_asset": {}
+      }
+    }
+  ]
+}

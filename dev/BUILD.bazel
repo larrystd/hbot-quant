@@ -1,4 +1,4 @@
-# 开发期工具与依赖 smoke target 放在这里；正式业务 target 位于 //hbot/...。
+# 开发期工具与依赖 smoke target 放在这里；正式业务 target 位于 //hquant/...。
 
 load("@rules_cc//cc:defs.bzl", "cc_test")
 
@@ -28,18 +28,15 @@ cc_test(
     size = "small",
     srcs = ["contract_compile_test.cc"],
     deps = [
-        "//hbot/base:clock",
-        "//hbot/base:decimal",
-        "//hbot/base:ids",
-        "//hbot/control:protocol",
-        "//hbot/connector:api",
-        "//hbot/event:events",
-        "//hbot/market_data:book_view",
-        "//hbot/model:domain",
-        "//hbot/net:api",
-        "//hbot/runtime:shard_command",
-        "//hbot/storage:ports",
-        "//hbot/strategy:api",
+        "//hquant/src/application:control",
+        "//hquant/src/base:types",
+        "//hquant/src/base:market",
+        "//hquant/src/base:order",
+        "//hquant/src/market:order_book",
+        "//hquant/src/base:net",
+        "//hquant/src/service:shard",
+        "//hquant/src/offline:storage",
+        "//hquant/src/strategy:strategy",
     ],
 )
 

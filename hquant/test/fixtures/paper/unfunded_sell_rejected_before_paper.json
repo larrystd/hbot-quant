@@ -1,0 +1,93 @@
+{
+  "schema_version": 1,
+  "family": "paper",
+  "case_id": "paper/unfunded_sell_rejected_before_paper",
+  "baseline_commit": "9af100d6822da7d2d0291a906c730ef172284ee2",
+  "source_files": [
+    "hummingbot/connector/exchange/paper_trade/paper_trade_exchange.pyx",
+    "docs/STRUCTURE_AND_TYPES.md"
+  ],
+  "expectation_kind": "intentional_divergence",
+  "divergence_reason": "Python PaperTradeExchange creates an unfunded resting limit order and only cancels it when matching checks the total balance. The C++ RiskGate rejects insufficient BTC before Paper submission.",
+  "id_symbols": {
+    "S1": "sell://BTC-USDT/<13 random bytes>"
+  },
+  "setup": {
+    "account": "paper",
+    "market": "BTC-USDT",
+    "base_asset": "BTC",
+    "quote_asset": "USDT",
+    "owner_key": 1,
+    "initial_balances": {
+      "BTC": "0",
+      "USDT": "100"
+    },
+    "maker_fee_rate": "0.001",
+    "buy_fee_from_returns": true,
+    "price_increment": "0.01",
+    "base_increment": "0.001"
+  },
+  "inputs": [
+    {
+      "at_us": 0,
+      "ordinal": 0,
+      "event": {
+        "kind": "submit",
+        "client_id": "S1",
+        "side": "Sell",
+        "price": "100",
+        "amount": "0.01"
+      }
+    },
+    {
+      "at_us": 100,
+      "ordinal": 0,
+      "event": {
+        "kind": "book_bbo",
+        "bid": "100",
+        "ask": "100.1"
+      }
+    }
+  ],
+  "expected": [
+    {
+      "at_us": 0,
+      "ordinal": 0,
+      "output": {
+        "events": [
+          {
+            "kind": "OrderFailed",
+            "client_id": "S1"
+          }
+        ],
+        "open_orders": [],
+        "balances": {
+          "BTC": "0",
+          "USDT": "100"
+        },
+        "available_balances": {
+          "BTC": "0",
+          "USDT": "100"
+        },
+        "fees_by_asset": {}
+      }
+    },
+    {
+      "at_us": 100,
+      "ordinal": 0,
+      "output": {
+        "events": [],
+        "open_orders": [],
+        "balances": {
+          "BTC": "0",
+          "USDT": "100"
+        },
+        "available_balances": {
+          "BTC": "0",
+          "USDT": "100"
+        },
+        "fees_by_asset": {}
+      }
+    }
+  ]
+}

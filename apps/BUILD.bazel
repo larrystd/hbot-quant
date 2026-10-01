@@ -1,15 +1,15 @@
 load("@rules_cc//cc:defs.bzl", "cc_binary")
 
 cc_binary(
-    name = "hbot",
-    srcs = ["hbot.cc"],
+    name = "hquant",
+    srcs = ["hquant.cc"],
     data = ["//examples:paper_replay.yaml", "//examples:paper_simple_pmm.yaml", "//examples:paper_market.json"],
-    deps = ["//hbot/app:engine", "//hbot/cli:cli"],
+    deps = ["//hquant/src/application:launcher", "//hquant/src/cli:cli"],
 )
 
 cc_binary(
-    name = "hbot_engine",
-    srcs = ["hbot_engine.cc"],
+    name = "hquant_engine",
+    srcs = ["hquant_engine.cc"],
     data = ["//examples:paper_replay.yaml", "//examples:paper_simple_pmm.yaml", "//examples:paper_market.json"],
-    deps = ["//hbot/app:engine", "//hbot/app/config:config"],
+    deps = ["//hquant/src/application:launcher", "//hquant/src/application:config"],
 )

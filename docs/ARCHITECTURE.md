@@ -10,11 +10,11 @@
 
 ```mermaid
 flowchart LR
-    subgraph FRONT["前台进程 hbot（CLI）"]
+    subgraph FRONT["前台进程 hquant（CLI）"]
         CLI["start / status / stop / history"]
     end
 
-    subgraph ENGINE["服务进程 hbot-engine"]
+    subgraph ENGINE["服务进程 hquant_engine"]
         subgraph S1["分片线程 1（默认忙轮询 + 绑核）"]
             SH1["行情 WS + 下单连接 + 私有 WS<br/>盘口 / OrderTracker / 策略 / 分片风控"]
         end
@@ -487,7 +487,7 @@ SQLite 是**后台历史库和重启检查点**，不是当前运行的订单真
 
 ## 12. 回测与模拟盘
 
-Paper 与回测复用订单簿核心、`OrderTracker`、策略、`RiskGate` 和事件类型，只把网络网关换成可重放的模拟撮合；时间由 `ReplayClock` 注入，不启动网络组件。相同数据与配置必须得到相同的动作序列、订单状态和结果。回测（`hbot/backtest`）在 G5 才建立。
+Paper 与回测复用订单簿核心、`OrderTracker`、策略、`RiskGate` 和事件类型，只把网络网关换成可重放的模拟撮合；时间由 `ReplayClock` 注入，不启动网络组件。相同数据与配置必须得到相同的动作序列、订单状态和结果。回测模块在 G5 才建立。
 
 ```mermaid
 flowchart LR

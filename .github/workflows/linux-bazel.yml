@@ -25,6 +25,8 @@ jobs:
           uname -m
           c++ --version
           bazel version
+      - name: Check business error construction
+        run: python3 dev/check_error_construction.py
       - name: Build every target
         run: bazel build --jobs=2 //...
       - name: Test every target

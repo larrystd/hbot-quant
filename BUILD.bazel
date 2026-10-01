@@ -1,1 +1,1 @@
-# 工作区根 package。各模块的 target 位于 //hbot/...、//apps、//tests。
+# 工作区根 package。业务与测试 target 位于 //hquant/src/...、//hquant/test，入口位于 //apps。

@@ -1,0 +1,95 @@
+{
+  "schema_version": 1,
+  "family": "order_tracker",
+  "case_id": "order_tracker/submission_unknown_retains_reservation",
+  "baseline_commit": "9af100d6822da7d2d0291a906c730ef172284ee2",
+  "source_files": [
+    "hummingbot/connector/client_order_tracker.py",
+    "hummingbot/core/data_type/in_flight_order.py",
+    "test/hummingbot/connector/test_client_order_tracker.py",
+    "docs/STRUCTURE_AND_TYPES.md",
+    "docs/ARCHITECTURE.md"
+  ],
+  "expectation_kind": "intentional_divergence",
+  "divergence_reason": "C++ preserves the original client ID and full worst-case reservation after an uncertain socket write. Python ClientOrderTracker has no SubmissionUnknown reconciliation fact or RiskReservation output.",
+  "setup": {
+    "account": "A1",
+    "market": "BTC-USDT",
+    "owner_key": 1,
+    "client_id": "B1",
+    "side": "Buy",
+    "base_amount": "1",
+    "limit_price": "100",
+    "initial_reservation_by_asset": {
+      "USDT": "100.10"
+    },
+    "reservation_policy": {
+      "fee_buffer_by_asset": {
+        "USDT": "0.10"
+      },
+      "release_rule": "proportional_to_verified_base_then_release_remainder_on_terminal_confirmation"
+    }
+  },
+  "id_symbols": {
+    "client_id": "B1",
+    "exchange_order_id": "E1",
+    "trade_ids": [
+      "T1",
+      "T2"
+    ]
+  },
+  "inputs": [
+    {
+      "at_us": 0,
+      "ordinal": 0,
+      "event": {
+        "kind": "register",
+        "client_id": "B1"
+      }
+    },
+    {
+      "at_us": 1000000,
+      "ordinal": 0,
+      "event": {
+        "kind": "submission_unknown",
+        "client_id": "B1"
+      }
+    }
+  ],
+  "expected": [
+    {
+      "at_us": 0,
+      "ordinal": 0,
+      "output": {
+        "display_state": "PendingCreate",
+        "events": [],
+        "cumulative_base": "0",
+        "cumulative_quote": "0",
+        "fees_by_asset": {},
+        "remaining_base": "1"
+      },
+      "risk_expectation": {
+        "reservation_by_asset": {
+          "USDT": "100.10"
+        }
+      }
+    },
+    {
+      "at_us": 1000000,
+      "ordinal": 0,
+      "output": {
+        "display_state": "SubmissionUnknown",
+        "events": [],
+        "cumulative_base": "0",
+        "cumulative_quote": "0",
+        "fees_by_asset": {},
+        "remaining_base": "1"
+      },
+      "risk_expectation": {
+        "reservation_by_asset": {
+          "USDT": "100.10"
+        }
+      }
+    }
+  ]
+}

@@ -1,6 +1,8 @@
-# Hummingbot C++ 文档
+# HQuant C++ 文档
 
-本目录是 Hummingbot C++ 重写的唯一一套设计与开发文档。架构采用**分片线程**模型：每个分片线程独占其策略需要的行情、订单、资金状态和 socket。早期的“单交易线程 + 网络 I/O 线程池”方案已废弃，其中仍然成立的内容已并入下列文档。
+本目录是 HQuant 的设计与开发文档。项目以 Hummingbot 的 Python 实现为行为基线，使用 C++ 重写。架构采用**分片线程**模型：每个分片线程独占其策略需要的行情、订单、资金状态和 socket。早期的“单交易线程 + 网络 I/O 线程池”方案已废弃，其中仍然成立的内容已并入下列文档。
+
+当前代码按职责放在 `hquant/src/`，全部测试与夹具放在 `hquant/test/`。
 
 ## 1. 文档地图
 
@@ -13,13 +15,15 @@
 | [STRUCTURE_AND_TYPES.md](STRUCTURE_AND_TYPES.md) | 目录与 Bazel 包、依赖方向、关键数据类型与不变量、Python/C++ 语义对照、契约测试 | 写代码前确认文件、target 和字段 |
 | [DEPENDENCIES.md](DEPENDENCIES.md) | 第三方依赖选型与版本、Bazel 约定、各库的使用边界 | 改构建、引入或升级依赖 |
 | [DEVELOPMENT.md](DEVELOPMENT.md) | C++ 写法约束、协程与关闭规则、多 Agent 协作、任务包与排程、工作单、测试命令 | 领取任务、提交与集成 |
+| [ERRORS.md](ERRORS.md) | 业务错误码：编号规则（10000 起，每类一个千位段）、处理方式、完整错误码表、迁移步骤 | 新增或处理错误时 |
+| [refactor/PLAN.md](refactor/PLAN.md) | 目录重构计划：目标结构、新旧文件对应、分阶段步骤与检查项 | 执行或审查目录重构 |
 
 文档冲突时的优先级：运行时与线程语义以 `ARCHITECTURE.md` 为准；文件名、target 与字段以 `STRUCTURE_AND_TYPES.md` 为准；订单簿算法以 `ORDER_BOOK.md` 为准；依赖版本以仓库根目录的 [`MODULE.bazel`](../MODULE.bazel) 为准。实现中发现冲突，先更新文档和对应测试，再改代码。
 
 ## 2. 一句话架构
 
 ```text
-hbot（CLI）──Unix socket──▶ hbot-engine
+hquant（CLI）──Unix socket──▶ hquant_engine
                               ├─ 分片线程 × ≤8：行情 WS / 下单连接 / 私有 WS → 订单簿 / OrderTracker / 策略 / 分片风控 → 异步写
                               ├─ 控制线程：ControlServer、账户额度租约、健康汇总
                               ├─ Recorder 线程：SQLite WAL 批量写（不阻塞发单）
@@ -38,10 +42,10 @@ hbot（CLI）──Unix socket──▶ hbot-engine
 固定行情 Paper（离线）：
 
 ```bash
-bazel run //apps:hbot -- start   --config examples/paper_replay.yaml --state-dir /tmp/hbot-paper-demo
-bazel run //apps:hbot -- status  --state-dir /tmp/hbot-paper-demo
-bazel run //apps:hbot -- history --state-dir /tmp/hbot-paper-demo --limit 20
-bazel run //apps:hbot -- stop    --state-dir /tmp/hbot-paper-demo
+bazel run //apps:hquant -- start   --config examples/paper_replay.yaml --state-dir /tmp/hquant-paper-demo
+bazel run //apps:hquant -- status  --state-dir /tmp/hquant-paper-demo
+bazel run //apps:hquant -- history --state-dir /tmp/hquant-paper-demo --limit 20
+bazel run //apps:hquant -- stop    --state-dir /tmp/hquant-paper-demo
 ```
 
 真实公开行情驱动 Paper：把配置换成 `examples/paper_simple_pmm.yaml`。`start` 在前台运行，其余命令在另一个终端执行。全量测试：`bazel test //...`。

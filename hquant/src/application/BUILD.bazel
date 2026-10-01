@@ -1,0 +1,58 @@
+load("//:hquant_cc.bzl", "hquant_cc_library")
+
+hquant_cc_library(
+    name = "config",
+    srcs = ["config.cc"],
+    hdrs = ["config.h"],
+    deps = [
+        "//hquant/src/base:error",
+        "//hquant/src/base:market",
+        "//hquant/src/base:types",
+        "@abseil-cpp//absl/status:status",
+        "@abseil-cpp//absl/status:statusor",
+        "@yaml-cpp//:yaml-cpp",
+    ],
+    visibility = ["//visibility:public"],
+)
+
+hquant_cc_library(
+    name = "control",
+    srcs = ["control.cc"],
+    hdrs = ["control.h"],
+    deps = [
+        "//hquant/src/base:error",
+        "//hquant/src/base:market",
+        "//hquant/src/base:order",
+        "//hquant/src/offline:history",
+        "//hquant/src/offline:recorder",
+        "//hquant/src/order:paper",
+        "//hquant/src/service:shard",
+        "@abseil-cpp//absl/status:status",
+        "@abseil-cpp//absl/status:statusor",
+        "@simdjson//:simdjson",
+    ],
+    visibility = ["//visibility:public"],
+)
+
+hquant_cc_library(
+    name = "launcher",
+    srcs = ["launcher.cc"],
+    hdrs = ["launcher.h"],
+    deps = [
+        ":config",
+        ":control",
+        "//hquant/src/base:error",
+        "//hquant/src/base:net",
+        "//hquant/src/market:binance_spot_feed",
+        "//hquant/src/market:replay_feed",
+        "//hquant/src/offline:history",
+        "//hquant/src/offline:recorder",
+        "//hquant/src/order:paper",
+        "//hquant/src/order:risk",
+        "//hquant/src/service:shard",
+        "//hquant/src/strategy:simple_pmm",
+        "@abseil-cpp//absl/status:status",
+        "@boost.asio//:boost.asio",
+    ],
+    visibility = ["//visibility:public"],
+)
