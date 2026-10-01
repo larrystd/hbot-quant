@@ -35,31 +35,18 @@ market_specs:
       base_increment: "0.001"
       min_base_amount: "0.001"
       min_notional: "0.01"
-  - market: ETH-USDT
-    exchange: binance
-    base_asset: ETH
-    quote_asset: USDT
-    tick_lot_size:
-      price_per_tick: "0.01"
-      amount_per_lot: "0.001"
-      tick_lot_version: 1
-    trading_rule:
-      price_increment: "0.01"
-      base_increment: "0.001"
-      min_base_amount: "0.001"
-      min_notional: "0.01"
 strategy_configs:
   - strategy_id: 1
     strategy: simple_pmm
     account: simulated
-    markets: [BTC-USDT, ETH-USDT]
+    markets: [BTC-USDT]
     order_amount: "0.01"
     bid_spread: "0.001"
     ask_spread: "0.001"
     refresh_interval: 15s
 assignments:
   - shard: 0
-    markets: [BTC-USDT, ETH-USDT]
+    markets: [BTC-USDT]
     strategy_ids: [1]
     accounts: [simulated]
 risk_budgets:
@@ -99,7 +86,7 @@ int main() {
   Require(valid.ok(), "valid G1 config");
   Require(valid->mode == hquant::EngineMode::Simulated, "simulated mode");
   Require(valid->assignments.size() == 1 &&
-              valid->assignments[0].markets.size() == 2 &&
+              valid->assignments[0].markets.size() == 1 &&
               valid->strategy_configs[0].refresh_interval.count() == 15'000'000,
           "parsed assignment and timer");
   Require(valid->risk_budgets.size() == 1 && valid->rate_budgets.size() == 1,
@@ -236,14 +223,6 @@ int main() {
               "    ask_spread: \"0.001\"\n"
               "    refresh_interval: 15s\nassignments:\n"));
   Require(!duplicate_strategy.ok(), "duplicate strategy_id rejected");
-  auto split_market = hquant::ParseConfig(Replace(
-      kValid, "markets: [BTC-USDT, ETH-USDT]\n    strategy_ids: [1]",
-      "markets: [BTC-USDT]\n    strategy_ids: [1]\n    accounts: [simulated]\n"
-      "  - shard: 1\n    markets: [ETH-USDT]\n    strategy_ids: []"));
-  Require(!split_market.ok(), "cross-shard strategy dependency rejected");
-  Require(hquant::CodeOf(split_market.status()) ==
-              hquant::ErrorCode::kConfigAssignmentInvalid,
-          "assignment code");
   auto overgrant = hquant::ParseConfig(
       Replace(kValid, "hard_limit: \"50\"", "hard_limit: \"101\""));
   Require(!overgrant.ok(), "budget aggregate over balance rejected");

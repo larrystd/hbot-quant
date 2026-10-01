@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include <functional>
+#include <optional>
 #include <string>
 #include <variant>
 #include <vector>
@@ -45,11 +46,14 @@ using ReplayPayload = std::variant<ReplaySubscribe, ReplaySnapshot, ReplayDiff,
 struct ReplayInput {
   InputTime stamp;
   ReplayPayload payload;
+  std::optional<std::string> market;
+  std::optional<ShardId> shard;
 };
 
 using ReplaySink = std::function<absl::Status(const ReplayInput&)>;
 
 // Reads the fixture in input order and delivers each normalized market input.
-absl::Status ReadReplayFile(const std::string& path, const ReplaySink& sink);
+absl::Status ReadReplayFile(const std::string& path, const ReplaySink& sink,
+                            bool allow_v1 = true);
 
 }  // namespace hquant

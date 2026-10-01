@@ -57,7 +57,8 @@ absl::StatusOr<std::vector<BookLevel>> Levels(simdjson::dom::element object,
 
 }  // namespace
 
-absl::Status ReadReplayFile(const std::string& path, const ReplaySink& sink) {
+absl::Status ReadReplayFile(const std::string& path, const ReplaySink& sink,
+                            bool allow_v1) {
   simdjson::dom::parser parser;
   simdjson::padded_string json;
   if (simdjson::padded_string::load(path).get(json))
@@ -67,7 +68,8 @@ absl::Status ReadReplayFile(const std::string& path, const ReplaySink& sink) {
   if (parser.parse(json).get(root))
     return Error(ErrorCode::kReplayFileInvalid, "invalid replay JSON");
   uint64_t version = 0;
-  if (root["schema_version"].get(version) || version != 1)
+  if (root["schema_version"].get(version) ||
+      (version != 2 && (version != 1 || !allow_v1)))
     return Error(ErrorCode::kReplayFileInvalid, "unsupported replay schema");
   simdjson::dom::array inputs;
   if (root["inputs"].get(inputs))
@@ -80,6 +82,21 @@ absl::Status ReadReplayFile(const std::string& path, const ReplaySink& sink) {
     if (!ordinal.ok()) return ordinal.status();
     if (!kind.ok()) return kind.status();
     ReplayInput event{{*at, *ordinal}, ReplayTimer{}};
+    if (version == 2) {
+      if (*kind == "timer") {
+        uint64_t shard = 0;
+        if (!input["shard"].error()) {
+          if (input["shard"].get(shard) || shard >= 8)
+            return Error(ErrorCode::kReplayFileInvalid,
+                         "invalid timer shard");
+          event.shard = ShardId{static_cast<uint8_t>(shard)};
+        }
+      } else {
+        auto market = String(input, "market");
+        if (!market.ok()) return market.status();
+        event.market = std::move(*market);
+      }
+    }
     if (*kind == "subscribe") {
       auto epoch = Unsigned(input, "connection_id");
       if (!epoch.ok()) return epoch.status();

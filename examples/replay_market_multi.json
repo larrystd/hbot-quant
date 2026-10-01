@@ -1,0 +1,179 @@
+{
+  "schema_version": 2,
+  "inputs": [
+    {
+      "at_us": 0,
+      "ordinal": 1,
+      "kind": "subscribe",
+      "connection_id": 1,
+      "market": "BTC-USDT"
+    },
+    {
+      "at_us": 0,
+      "ordinal": 2,
+      "kind": "subscribe",
+      "connection_id": 1,
+      "market": "ETH-USDT"
+    },
+    {
+      "at_us": 0,
+      "ordinal": 3,
+      "kind": "snapshot",
+      "connection_id": 1,
+      "last_sequence": 10,
+      "bids": [
+        [
+          9999,
+          100
+        ]
+      ],
+      "asks": [
+        [
+          10001,
+          100
+        ]
+      ],
+      "market": "BTC-USDT"
+    },
+    {
+      "at_us": 0,
+      "ordinal": 4,
+      "kind": "snapshot",
+      "connection_id": 1,
+      "last_sequence": 10,
+      "bids": [
+        [
+          9999,
+          100
+        ]
+      ],
+      "asks": [
+        [
+          10001,
+          100
+        ]
+      ],
+      "market": "ETH-USDT"
+    },
+    {
+      "at_us": 0,
+      "ordinal": 5,
+      "kind": "diff",
+      "connection_id": 1,
+      "first_sequence": 11,
+      "last_sequence": 11,
+      "bids": [],
+      "asks": [],
+      "market": "BTC-USDT"
+    },
+    {
+      "at_us": 0,
+      "ordinal": 6,
+      "kind": "diff",
+      "connection_id": 1,
+      "first_sequence": 11,
+      "last_sequence": 11,
+      "bids": [],
+      "asks": [],
+      "market": "ETH-USDT"
+    },
+    {
+      "at_us": 0,
+      "ordinal": 7,
+      "kind": "timer"
+    },
+    {
+      "at_us": 1,
+      "ordinal": 1,
+      "kind": "timer",
+      "shard": 0
+    },
+    {
+      "at_us": 1,
+      "ordinal": 2,
+      "kind": "timer",
+      "shard": 1
+    },
+    {
+      "at_us": 15000001,
+      "ordinal": 1,
+      "kind": "timer"
+    },
+    {
+      "at_us": 15000002,
+      "ordinal": 1,
+      "kind": "diff",
+      "connection_id": 1,
+      "first_sequence": 12,
+      "last_sequence": 12,
+      "bids": [
+        [
+          9999,
+          0
+        ],
+        [
+          9970,
+          100
+        ]
+      ],
+      "asks": [
+        [
+          10001,
+          0
+        ],
+        [
+          9980,
+          100
+        ]
+      ],
+      "market": "BTC-USDT"
+    },
+    {
+      "at_us": 15000002,
+      "ordinal": 2,
+      "kind": "diff",
+      "connection_id": 1,
+      "first_sequence": 12,
+      "last_sequence": 12,
+      "bids": [
+        [
+          9999,
+          0
+        ],
+        [
+          9970,
+          100
+        ]
+      ],
+      "asks": [
+        [
+          10001,
+          0
+        ],
+        [
+          9980,
+          100
+        ]
+      ],
+      "market": "ETH-USDT"
+    },
+    {
+      "at_us": 15000003,
+      "ordinal": 1,
+      "kind": "public_trade",
+      "price_ticks": 10100,
+      "quantity_lots": 10,
+      "side": "buy",
+      "market": "BTC-USDT"
+    },
+    {
+      "at_us": 15000003,
+      "ordinal": 2,
+      "kind": "public_trade",
+      "price_ticks": 10100,
+      "quantity_lots": 10,
+      "side": "buy",
+      "market": "ETH-USDT"
+    }
+  ]
+}

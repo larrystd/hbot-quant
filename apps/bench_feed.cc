@@ -7,6 +7,7 @@
 #include <cmath>
 #include <cstdint>
 #include <map>
+#include <memory>
 #include <optional>
 #include <sstream>
 #include <string>
@@ -232,7 +233,7 @@ std::string BenchTradeFrame(std::string symbol, uint64_t trade_id,
 absl::StatusOr<FeedBenchOptions> ParseFeedBenchArguments(
     std::span<const std::string_view> args) {
   FeedBenchOptions options;
-  bool seen[12]{};
+  bool seen[13]{};
   for (size_t i = 0; i < args.size(); ++i) {
     if (args[i] == "--json") {
       if (options.json)
@@ -256,6 +257,7 @@ absl::StatusOr<FeedBenchOptions> ParseFeedBenchArguments(
                 : key == "--gap-every"        ? 9
                 : key == "--disconnect-every" ? 10
                 : key == "--http-429-rate"    ? 11
+                : key == "--symbols"          ? 12
                                               : -1;
     if (index < 0 || seen[index])
       return Error(ErrorCode::kCliUsageInvalid, "unknown or duplicate option");
@@ -274,6 +276,24 @@ absl::StatusOr<FeedBenchOptions> ParseFeedBenchArguments(
       options.state_dir = value;
     else if (index == 3)
       options.symbol = value;
+    else if (index == 12) {
+      std::string symbols(value);
+      size_t start = 0;
+      while (start < symbols.size()) {
+        const size_t comma = symbols.find(',', start);
+        const auto symbol = symbols.substr(start, comma - start);
+        if (symbol.empty() || symbol.find('"') != std::string::npos ||
+            std::find(options.symbols.begin(), options.symbols.end(), symbol) !=
+                options.symbols.end())
+          return Error(ErrorCode::kCliUsageInvalid, "invalid --symbols");
+        options.symbols.push_back(symbol);
+        if (comma == std::string::npos) break;
+        start = comma + 1;
+      }
+      if (symbols.empty() || symbols.back() == ',' ||
+          options.symbols.size() > 8)
+        return Error(ErrorCode::kCliUsageInvalid, "invalid --symbols");
+    }
     else if (index == 4)
       options.price_per_tick = value;
     else if (index == 5)
@@ -294,6 +314,9 @@ absl::StatusOr<FeedBenchOptions> ParseFeedBenchArguments(
       if (index == 11) options.http_429_rate = *number;
     }
   }
+  if (seen[3] && seen[12])
+    return Error(ErrorCode::kCliUsageInvalid,
+                 "choose --symbol or --symbols");
   if (options.address.empty() || !options.port || options.symbol.empty() ||
       options.symbol.find('"') != std::string::npos)
     return Error(ErrorCode::kCliUsageInvalid, "invalid feed options");
@@ -310,40 +333,89 @@ absl::StatusOr<std::string> RunFeedBench(const FeedBenchOptions& options) {
   auto lot = Decimal::Parse(options.amount_per_lot);
   if (!tick.ok()) return tick.status();
   if (!lot.ok()) return lot.status();
-  FeedState state(options, *tick, *lot);
+  const std::vector<std::string> symbols =
+      options.symbols.empty() ? std::vector<std::string>{options.symbol}
+                              : options.symbols;
+  if (symbols.empty() || symbols.size() > 8)
+    return Error(ErrorCode::kCliUsageInvalid, "invalid feed symbols");
   std::vector<ReplayInput> replay;
-  auto loaded = ReadReplayFile(options.fixture, [&](const ReplayInput& input) {
-    replay.push_back(input);
-    return absl::OkStatus();
-  });
+  auto loaded = ReadReplayFile(
+      options.fixture,
+      [&](const ReplayInput& input) {
+        replay.push_back(input);
+        return absl::OkStatus();
+      },
+      symbols.size() == 1);
   if (!loaded.ok()) return loaded;
-  size_t first_index = replay.size();
-  bool has_snapshot = false;
-  for (size_t i = 0; i < replay.size(); ++i) {
-    if (const auto* snapshot =
-            std::get_if<ReplaySnapshot>(&replay[i].payload)) {
-      state.snapshot = *snapshot;
-      has_snapshot = true;
-    } else if (const auto* diff = std::get_if<ReplayDiff>(&replay[i].payload)) {
-      state.first_diff = *diff;
-      first_index = i;
-      break;
+  std::map<std::string, std::unique_ptr<FeedState>> feeds;
+  for (const auto& symbol : symbols) {
+    if (feeds.contains(symbol))
+      return Error(ErrorCode::kCliUsageInvalid, "duplicate feed symbol");
+    FeedBenchOptions local = options;
+    local.symbol = symbol;
+    auto state = std::make_unique<FeedState>(local, *tick, *lot);
+    std::vector<ReplayInput> selected;
+    for (const auto& event : replay) {
+      if (event.market && *event.market != symbol) continue;
+      if (!event.market && symbols.size() != 1 &&
+          !std::holds_alternative<ReplayTimer>(event.payload))
+        return Error(ErrorCode::kReplayFileInvalid,
+                     "multi-symbol fixture needs event markets");
+      selected.push_back(event);
     }
+    size_t first_index = selected.size();
+    bool has_snapshot = false;
+    for (size_t i = 0; i < selected.size(); ++i) {
+      if (const auto* snapshot =
+              std::get_if<ReplaySnapshot>(&selected[i].payload)) {
+        state->snapshot = *snapshot;
+        has_snapshot = true;
+      } else if (const auto* diff =
+                     std::get_if<ReplayDiff>(&selected[i].payload)) {
+        state->first_diff = *diff;
+        first_index = i;
+        break;
+      }
+    }
+    if (!has_snapshot || first_index == selected.size() ||
+        state->first_diff.last_sequence != state->snapshot.last_sequence + 1)
+      return Error(ErrorCode::kReplayFileInvalid,
+                   "each symbol needs snapshot and next diff");
+    state->events.assign(selected.begin() + first_index + 1, selected.end());
+    feeds.emplace(symbol, std::move(state));
   }
-  if (!has_snapshot || first_index == replay.size() ||
-      state.first_diff.last_sequence != state.snapshot.last_sequence + 1)
-    return Error(ErrorCode::kReplayFileInvalid,
-                 "fixture needs snapshot and next diff");
-  state.events.assign(replay.begin() + first_index + 1, replay.end());
   asio::io_context io;
   auto server = HttpServer::Start(
       io, options.address, options.port,
       [&](std::string method, std::string target) {
-        return state.Http(std::move(method), std::move(target));
+        constexpr std::string_view prefix = "/api/v3/depth?symbol=";
+        if (!target.starts_with(prefix)) return HttpResponse{404, "not found"};
+        const auto start = prefix.size();
+        const auto end = target.find('&', start);
+        const auto symbol = target.substr(start, end - start);
+        auto feed = feeds.find(symbol);
+        if (feed == feeds.end()) return HttpResponse{404, "not found"};
+        return feed->second->Http(std::move(method), std::move(target));
       },
       [&](uint64_t session, uint64_t ordinal,
           std::string target) -> asio::awaitable<std::optional<std::string>> {
-        co_return co_await state.Next(session, ordinal, std::move(target));
+        constexpr std::string_view prefix = "/stream?streams=";
+        if (!target.starts_with(prefix)) co_return std::nullopt;
+        const auto start = prefix.size();
+        const auto end = target.find('@', start);
+        if (end == std::string::npos) co_return std::nullopt;
+        auto symbol = target.substr(start, end - start);
+        if (target != std::string(prefix) + symbol + "@depth/" + symbol +
+                          "@trade")
+          co_return std::nullopt;
+        std::transform(symbol.begin(), symbol.end(), symbol.begin(),
+                       [](unsigned char c) {
+                         return static_cast<char>(std::toupper(c));
+                       });
+        auto feed = feeds.find(symbol);
+        if (feed == feeds.end()) co_return std::nullopt;
+        co_return co_await feed->second->Next(session, ordinal,
+                                              std::move(target));
       });
   if (!server.ok()) return server.status();
   asio::steady_timer stop(io);
@@ -364,22 +436,32 @@ absl::StatusOr<std::string> RunFeedBench(const FeedBenchOptions& options) {
         status = value->json;
     }
   }
+  uint64_t depth_sent = 0, trades_sent = 0, ws_connections = 0;
+  uint64_t disconnects = 0, snapshots = 0, http_429 = 0;
+  for (const auto& [_, state] : feeds) {
+    depth_sent += state->sent_depth;
+    trades_sent += state->sent_trade;
+    ws_connections += state->ws_connections;
+    disconnects += state->disconnects;
+    snapshots += state->snapshots;
+    http_429 += state->http_429;
+  }
   std::ostringstream out;
   if (options.json) {
-    out << "{\"depth_sent\":" << state.sent_depth
-        << ",\"trades_sent\":" << state.sent_trade
-        << ",\"ws_connections\":" << state.ws_connections
-        << ",\"disconnects\":" << state.disconnects
-        << ",\"snapshots\":" << state.snapshots
-        << ",\"http_429\":" << state.http_429;
+    out << "{\"depth_sent\":" << depth_sent
+        << ",\"trades_sent\":" << trades_sent
+        << ",\"ws_connections\":" << ws_connections
+        << ",\"disconnects\":" << disconnects
+        << ",\"snapshots\":" << snapshots
+        << ",\"http_429\":" << http_429;
     if (!status.empty()) out << ",\"server_status\":" << status;
     out << '}';
   } else {
-    out << "feed depth_sent=" << state.sent_depth
-        << " trades_sent=" << state.sent_trade
-        << " ws_connections=" << state.ws_connections
-        << " disconnects=" << state.disconnects
-        << " snapshots=" << state.snapshots << " http_429=" << state.http_429
+    out << "feed depth_sent=" << depth_sent
+        << " trades_sent=" << trades_sent
+        << " ws_connections=" << ws_connections
+        << " disconnects=" << disconnects
+        << " snapshots=" << snapshots << " http_429=" << http_429
         << '\n';
     if (!status.empty()) out << "server_status=" << status << '\n';
   }

@@ -7,7 +7,9 @@ hquant_cc_library(
     deps = [
         "//hquant/src/base:error",
         "//hquant/src/base:market",
+        "//hquant/src/base:rate_limit",
         "//hquant/src/base:types",
+        "//hquant/src/order:risk",
         "//hquant/src/strategy:simple_pmm",
         "@abseil-cpp//absl/status:status",
         "@abseil-cpp//absl/status:statusor",
@@ -45,6 +47,7 @@ hquant_cc_library(
         ":config",
         ":control_server",
         "//hquant/src/base:error",
+        "//hquant/src/base:rate_limit",
         "//hquant/src/base:net",
         "//hquant/src/market:market_data_stream",
         "//hquant/src/market:replay_feed",

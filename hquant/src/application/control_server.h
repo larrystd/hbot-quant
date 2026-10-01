@@ -105,6 +105,9 @@ std::string StatusJson(const Shard& shard,
                        const SimpleSimulatedExchange& sim_exchange,
                        const MarketSpec& market,
                        const SqliteOrderHistoryWriter& recorder);
+std::string ShardStatusJson(const Shard& shard,
+                            const SimpleSimulatedExchange& sim_exchange,
+                            bool live);
 std::string OrderHistoryJson(const OrderHistoryPage& page);
 
 }  // namespace hquant

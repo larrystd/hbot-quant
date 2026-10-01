@@ -5,12 +5,15 @@
 #include <memory>
 #include <mutex>
 #include <optional>
+#include <set>
+#include <thread>
 #include <string>
 #include <utility>
 #include <variant>
 
 #include "application/control_server.h"
 #include "base/error.h"
+#include "base/rate_limit.h"
 #include "boost/asio/post.hpp"
 #include "boost/asio/steady_timer.hpp"
 #include "boost/asio/this_coro.hpp"
@@ -41,8 +44,6 @@ class SystemClock final : public Clock {
 absl::Status ApplyReplayInput(const ReplayInput& input,
                               const MarketConfig& market, ReplayClock& clock,
                               Shard& shard) {
-  auto advanced = clock.Advance(input.stamp);
-  if (!advanced.ok()) return advanced;
   const EventTime time{{}, clock.UtcNow(), clock.MonoNow()};
   if (const auto* subscribe = std::get_if<ReplaySubscribe>(&input.payload)) {
     shard.Subscribe(subscribe->connection_id);
@@ -72,13 +73,36 @@ absl::Status ApplyReplayInput(const ReplayInput& input,
   return absl::OkStatus();
 }
 
+absl::StatusOr<std::unique_ptr<Strategy>> MakeStrategy(
+    const StrategyConfig& config, const AccountConfig& account,
+    const MarketConfig& market) {
+  if (config.strategy_id.name.value != "simple_pmm")
+    return Error(ErrorCode::kConfigFieldInvalid, "unknown strategy name");
+  return std::make_unique<SimplePmm>(SimplePmmConfig{
+      config.strategy_id, account.account, market.spec, config.order_amount,
+      config.bid_spread, config.ask_spread, config.refresh_interval,
+      config.price_type, config.maker_fee_rate, true, config.timer_period});
+}
+
+std::string AggregateStatusJson(const std::vector<std::string>& entries,
+                                const SqliteOrderHistoryWriter& writer) {
+  const auto health = writer.Health();
+  std::string json =
+      "{\"mode\":\"simulated\",\"exchange\":\"simulated\",\"shards\":[";
+  for (size_t index = 0; index < entries.size(); ++index) {
+    if (index) json += ',';
+    json += entries[index];
+  }
+  json += "],\"active_shards\":" + std::to_string(entries.size()) +
+          ",\"recorder_dropped\":" + std::to_string(health.dropped_count) +
+          ",\"history_gaps\":" + std::to_string(health.gap_ranges.size()) +
+          ",\"recorder_error\":" + EscapeJson(health.last_error) + "}";
+  return json;
+}
+
 }  // namespace
 
 absl::Status QuantServer::CreateComponents() {
-  const auto& account = config.accounts.front();
-  const auto& market = config.market_specs.front();
-  const auto& strategy_config = config.strategy_configs.front();
-  const auto& assignment = config.assignments.front();
   live = config.market_data_source == MarketDataSource::BinancePublic;
   if (live) {
     clock = std::make_unique<SystemClock>();
@@ -94,67 +118,101 @@ absl::Status QuantServer::CreateComponents() {
       std::chrono::duration_cast<std::chrono::microseconds>(
           std::chrono::system_clock::now().time_since_epoch())
           .count())};
-  auto rule = market.trading_rule;
-  rule.revision = 1;
-  rule.observed_at = started;
-  auto strategy = std::make_unique<SimplePmm>(SimplePmmConfig{
-      strategy_config.strategy_id, account.account, market.spec,
-      strategy_config.order_amount, strategy_config.bid_spread,
-      strategy_config.ask_spread, strategy_config.refresh_interval,
-      strategy_config.price_type, strategy_config.maker_fee_rate, true,
-      strategy_config.timer_period});
-  auto exchange = std::make_unique<SimpleSimulatedExchange>(
-      SimulatedExchangeConfig{
-          account.account, market.spec, rule, account.initial_balances,
-          config.simulated_exchange.maker_fee_rate, true,
-          [run = run, shard = assignment.shard,
-           next_id = uint64_t{1}](Side) mutable {
-            return ClientOrderId("S" + std::to_string(run.value) + "-" +
-                                 std::to_string(shard.value) + "-" +
-                                 std::to_string(next_id++));
-          }},
-      *clock);
-  auto risk = std::make_unique<RiskGate>(RiskGate::Settings{
-      assignment.shard, config.risk.fee_buffer_rate,
-      std::chrono::duration_cast<std::chrono::seconds>(
-          *config.risk.max_rule_age)});
-  for (const auto& budget : config.risk_budgets) {
-    auto status = risk->SetInitialBudget(
-        {budget.account, budget.asset, budget.shard, 1, budget.hard_limit,
-         started + *budget.valid_for});
-    if (!status.ok()) return status;
-  }
   auto opened = SqliteOrderHistoryWriter::Open({storage_path, run, started,
                                                config.storage.writer_queue,
                                                config.storage.writer_batch});
   if (!opened.ok()) return opened.status();
   writer = std::move(*opened);
-  Shard::Config shard_config{run,
-                             assignment.shard,
-                             strategy_config.strategy_id,
-                             account.account,
-                             market.spec,
-                             market.tick_lot_size,
-                             rule};
-  shard_config.stale_after_us = market.stale_after->count();
-  shards.push_back(std::make_unique<Shard>(
-      shard_config, *clock, std::move(strategy), std::move(exchange),
-      std::move(risk), *writer));
-  auto read =
-      SqliteOrderHistoryReader::Open({storage_path, config.storage.reader_queue,
-                                     config.storage.reader_page_limit});
+  for (const auto& assignment : config.assignments) {
+    const auto& market_id = assignment.markets.front();
+    const auto& strategy_id = assignment.strategy_ids.front();
+    const auto& account_id = assignment.accounts.front();
+    const auto& account = *std::find_if(
+        config.accounts.begin(), config.accounts.end(),
+        [&](const auto& item) { return item.account == account_id; });
+    const auto& market = *std::find_if(
+        config.market_specs.begin(), config.market_specs.end(),
+        [&](const auto& item) { return item.spec.market == market_id; });
+    const auto& strategy_config = *std::find_if(
+        config.strategy_configs.begin(), config.strategy_configs.end(),
+        [&](const auto& item) { return item.strategy_id == strategy_id; });
+    auto rule = market.trading_rule;
+    rule.revision = 1;
+    rule.observed_at = started;
+    auto strategy = MakeStrategy(strategy_config, account, market);
+    if (!strategy.ok()) return strategy.status();
+    auto exchange = std::make_unique<SimpleSimulatedExchange>(
+        SimulatedExchangeConfig{
+            account.account, market.spec, rule, account.initial_balances,
+            config.simulated_exchange.maker_fee_rate, true,
+            [run = run, shard = assignment.shard,
+             next_id = uint64_t{1}](Side) mutable {
+              return ClientOrderId("S" + std::to_string(run.value) + "-" +
+                                   std::to_string(shard.value) + "-" +
+                                   std::to_string(next_id++));
+            }},
+        *clock);
+    auto risk = std::make_unique<RiskGate>(RiskGate::Settings{
+        assignment.shard, config.risk.fee_buffer_rate,
+        std::chrono::duration_cast<std::chrono::seconds>(
+            *config.risk.max_rule_age)});
+    for (const auto& budget : config.risk_budgets) {
+      if (budget.shard != assignment.shard) continue;
+      auto status = risk->SetInitialBudget(
+          {budget.account, budget.asset, budget.shard, 1, budget.hard_limit,
+           started + *budget.valid_for});
+      if (!status.ok()) return status;
+    }
+    Shard::Config shard_config{run, assignment.shard,
+                               strategy_config.strategy_id, account.account,
+                               market.spec, market.tick_lot_size, rule};
+    shard_config.stale_after_us = market.stale_after->count();
+    shards.push_back(std::make_unique<Shard>(
+        shard_config, *clock, std::move(*strategy), std::move(exchange),
+        std::move(risk), *writer));
+  }
+  auto read = SqliteOrderHistoryReader::Open(
+      {storage_path, config.storage.reader_queue,
+       config.storage.reader_page_limit});
   if (!read.ok()) return read.status();
   reader = std::move(*read);
   return absl::OkStatus();
 }
 
 absl::Status QuantServer::RunReplay() {
-  const auto& market = config.market_specs.front();
-  auto replay = ReadReplayFile(*config.replay_fixture,
-                               [&](const ReplayInput& input) {
-                                 return ApplyReplayInput(input, market,
-                                                         *replay_clock, *shards.front());
-                               });
+  auto replay = ReadReplayFile(
+      *config.replay_fixture,
+      [&](const ReplayInput& input) -> absl::Status {
+        auto advanced = replay_clock->Advance(input.stamp);
+        if (!advanced.ok()) return advanced;
+        if (std::holds_alternative<ReplayTimer>(input.payload)) {
+          bool found = false;
+          for (auto& shard : shards) {
+            if (input.shard && *input.shard != shard->id()) continue;
+            found = true;
+            auto result = shard->OnTimer(input.stamp);
+            if (!result.ok()) return result.status();
+          }
+          if (!found)
+            return Error(ErrorCode::kReplayFileInvalid,
+                         "timer targets an unknown shard");
+          return absl::OkStatus();
+        }
+        for (auto& shard : shards) {
+          if (input.market &&
+              *input.market != shard->market().market.native_symbol)
+            continue;
+          const auto market = std::find_if(
+              config.market_specs.begin(), config.market_specs.end(),
+              [&](const auto& item) {
+                return item.spec.market == shard->market().market;
+              });
+          return ApplyReplayInput(input, *market, *replay_clock, *shard);
+        }
+        return Error(ErrorCode::kReplayFileInvalid,
+                     "input targets an unknown market");
+      },
+      shards.size() == 1);
   if (!replay.ok()) return replay;
   return writer->Flush();
 }
@@ -169,29 +227,123 @@ absl::StatusOr<std::unique_ptr<QuantServer>> QuantServer::Create(
     const AppConfig& config, std::string state_dir) {
   const bool live =
       config.market_data_source == MarketDataSource::BinancePublic;
-  if (config.mode != EngineMode::Simulated || config.accounts.size() != 1 ||
-      config.market_specs.size() != 1 || config.strategy_configs.size() != 1 ||
-      config.assignments.size() != 1 ||
+  if (config.mode != EngineMode::Simulated ||
       (live && config.loop_mode != LoopMode::Blocking) ||
       (!live && !config.replay_fixture)) {
     return Error(ErrorCode::kLaunchMultipleNotSupported,
-                 live ? "public Simulated v1 requires one blocking shard, "
-                        "account, market and strategy"
-                      : "G1 replay requires one Simulated account, market, "
-                        "strategy and shard");
+                 "unsupported trading mode or missing replay fixture");
   }
-  const auto& account = config.accounts.front();
-  const auto& market = config.market_specs.front();
-  const auto& strategy = config.strategy_configs.front();
-  const auto& assignment = config.assignments.front();
-  if ((live && market.spec.market.exchange != ExchangeId("binance")) ||
-      strategy.account != account.account || strategy.markets.size() != 1 ||
-      strategy.markets.front() != market.spec.market ||
-      assignment.shard.value >= 8) {
+  if (config.assignments.empty() || config.assignments.size() > 8) {
+    return Error(ErrorCode::kConfigAssignmentInvalid,
+                 "shard count must be in [1,8]");
+  }
+  if (live && config.assignments.size() >
+                  std::max(1u, std::thread::hardware_concurrency())) {
     return Error(ErrorCode::kLaunchMultipleNotSupported,
-                 live ? "public Simulated market or assignment mismatch"
-                      : "G1 account, market or shard assignment mismatch");
+                 "reduce shards to available CPU cores");
   }
+  std::set<uint8_t> shard_ids;
+  std::set<std::string> markets;
+  std::set<std::string> accounts;
+  std::set<uint64_t> strategies;
+  for (const auto& assignment : config.assignments) {
+    if (!assignment.shard.IsValid() ||
+        !shard_ids.insert(assignment.shard.value).second)
+      return Error(ErrorCode::kConfigAssignmentInvalid,
+                   "invalid or duplicate shard ID");
+    if (assignment.markets.size() != 1 ||
+        assignment.strategy_ids.size() != 1 ||
+        assignment.accounts.size() != 1)
+      return Error(ErrorCode::kLaunchMultipleNotSupported,
+                   "each shard needs one market, strategy and account");
+    const auto& market_id = assignment.markets.front();
+    const auto& account_id = assignment.accounts.front();
+    const auto& strategy_id = assignment.strategy_ids.front();
+    if (!markets.insert(market_id.native_symbol).second)
+      return Error(ErrorCode::kConfigAssignmentInvalid,
+                   "market assigned twice");
+    if (!accounts.insert(account_id.value).second)
+      return Error(ErrorCode::kLaunchMultipleNotSupported,
+                   "account assigned twice");
+    if (!strategies.insert(strategy_id.value).second)
+      return Error(ErrorCode::kConfigAssignmentInvalid,
+                   "strategy assigned twice");
+    const auto market = std::find_if(
+        config.market_specs.begin(), config.market_specs.end(),
+        [&](const auto& item) { return item.spec.market == market_id; });
+    const auto account = std::find_if(
+        config.accounts.begin(), config.accounts.end(),
+        [&](const auto& item) { return item.account == account_id; });
+    const auto strategy = std::find_if(
+        config.strategy_configs.begin(), config.strategy_configs.end(),
+        [&](const auto& item) { return item.strategy_id == strategy_id; });
+    if (market == config.market_specs.end() ||
+        account == config.accounts.end() ||
+        strategy == config.strategy_configs.end() ||
+        strategy->account != account_id || strategy->markets.size() != 1 ||
+        strategy->markets.front() != market_id ||
+        (live && market_id.exchange != ExchangeId("binance")))
+      return Error(ErrorCode::kConfigReferenceInvalid,
+                   "shard strategy, market or account mismatch");
+    if (strategy_id.name.value != "simple_pmm")
+      return Error(ErrorCode::kConfigFieldInvalid, "unknown strategy name");
+  }
+  if (markets.size() != config.market_specs.size() ||
+      accounts.size() != config.accounts.size() ||
+      strategies.size() != config.strategy_configs.size())
+    return Error(ErrorCode::kConfigAssignmentInvalid,
+                 "incomplete shard assignment");
+  if (!config.risk.max_rule_age ||
+      std::any_of(config.market_specs.begin(), config.market_specs.end(),
+                  [](const auto& market) { return !market.stale_after; }) ||
+      std::any_of(config.risk_budgets.begin(), config.risk_budgets.end(),
+                  [](const auto& budget) { return !budget.valid_for; }))
+    return Error(ErrorCode::kConfigFieldInvalid,
+                 "configuration defaults are missing");
+  RiskBudgetAllocator allocator;
+  for (const auto& account : config.accounts) {
+    for (const auto& [asset, balance] : account.initial_balances) {
+      auto status = allocator.SetConservativeLimit(account.account,
+                                                   AssetId(asset), balance);
+      if (!status.ok())
+        return Error(ErrorCode::kConfigBudgetInvalid, status.message());
+    }
+  }
+  const UtcTime budget_now{std::chrono::microseconds(0)};
+  for (const auto& budget : config.risk_budgets) {
+    auto assignment = std::find_if(
+        config.assignments.begin(), config.assignments.end(),
+        [&](const auto& item) { return item.shard == budget.shard; });
+    if (assignment == config.assignments.end() ||
+        assignment->accounts.front() != budget.account)
+      return Error(ErrorCode::kConfigBudgetInvalid,
+                   "risk budget does not belong to its shard");
+    auto status = allocator.GrantInitial(
+        {budget.account, budget.asset, budget.shard, 1, budget.hard_limit,
+         budget_now + *budget.valid_for}, budget_now);
+    if (!status.ok())
+      return Error(ErrorCode::kConfigBudgetInvalid, status.message());
+  }
+  if (config.assignments.size() > 1 && !config.rate_budgets.empty() &&
+      config.rate_capacities.empty())
+    return Error(ErrorCode::kConfigBudgetInvalid,
+                 "multi-shard rate capacities are required");
+  std::vector<RateBudgetAssignment> rate_grants;
+  for (const auto& budget : config.rate_budgets) {
+    const auto assignment = std::find_if(
+        config.assignments.begin(), config.assignments.end(),
+        [&](const auto& item) { return item.shard == budget.shard; });
+    if (assignment == config.assignments.end() ||
+        assignment->accounts.front() != budget.account)
+      return Error(ErrorCode::kConfigBudgetInvalid,
+                   "rate budget does not belong to its shard");
+    rate_grants.push_back(
+        {{budget.account.value, budget.ip, budget.endpoint}, budget.shard, 1,
+         {budget.limit, budget.cancel_reserve, budget.window, 0}});
+  }
+  auto rate_status = ValidateRateBudgets(config.rate_capacities, rate_grants);
+  if (!rate_status.ok())
+    return Error(ErrorCode::kConfigBudgetInvalid, rate_status.message());
   std::error_code error;
   std::filesystem::create_directories(state_dir, error);
   if (error)
@@ -223,8 +375,9 @@ absl::Status QuantServer::Start() {
   if (live) {
     const auto& rest = config.binance_endpoints.rest;
     const auto& ws = config.binance_endpoints.websocket;
-    shards.front()->StartFeed({rest.host, rest.port, rest.tls},
-                              {ws.host, ws.port, ws.tls});
+    for (auto& shard : shards)
+      shard->StartFeed({rest.host, rest.port, rest.tls},
+                       {ws.host, ws.port, ws.tls});
   } else {
     status = RunReplay();
     if (!status.ok()) return status;
@@ -298,6 +451,51 @@ void QuantServer::RequestStop() {
 }
 
 boost::asio::awaitable<absl::StatusOr<std::string>> QuantServer::StatusAsync() {
+  if (shards.size() > 1) {
+    std::vector<std::string> entries(shards.size());
+    if (!live) {
+      for (size_t index = 0; index < shards.size(); ++index)
+        entries[index] = ShardStatusJson(
+            *shards[index], shards[index]->OwnedExchange(), false);
+      co_return AggregateStatusJson(entries, *writer);
+    }
+    auto executor = co_await boost::asio::this_coro::executor;
+    auto ready = std::make_shared<boost::asio::steady_timer>(executor);
+    auto results = std::make_shared<std::vector<std::optional<std::string>>>(
+        shards.size());
+    auto remaining = std::make_shared<size_t>(shards.size());
+    ready->expires_after(std::chrono::seconds(2));
+    for (size_t index = 0; index < shards.size(); ++index) {
+      Shard* shard = shards[index].get();
+      boost::asio::post(*shard->LiveIo(),
+                        [shard, index, executor, results, remaining, ready] {
+                          auto json = ShardStatusJson(
+                              *shard, shard->OwnedExchange(), true);
+                          boost::asio::post(
+                              executor,
+                              [index, results, remaining, ready,
+                               json = std::move(json)]() mutable {
+                                (*results)[index] = std::move(json);
+                                if (--*remaining == 0) ready->cancel();
+                              });
+                        });
+    }
+    boost::system::error_code ec;
+    co_await ready->async_wait(
+        boost::asio::redirect_error(boost::asio::use_awaitable, ec));
+    for (size_t index = 0; index < shards.size(); ++index) {
+      if ((*results)[index]) {
+        entries[index] = std::move(*(*results)[index]);
+      } else {
+        entries[index] =
+            "{\"shard\":" + std::to_string(shards[index]->id().value) +
+            ",\"market\":" +
+            EscapeJson(shards[index]->market().market.native_symbol) +
+            ",\"error\":\"CONTROL_TIMEOUT\"}";
+      }
+    }
+    co_return AggregateStatusJson(entries, *writer);
+  }
   const auto& market = config.market_specs.front();
   if (!live) {
     co_return StatusJson(*shards.front(), shards.front()->OwnedExchange(),

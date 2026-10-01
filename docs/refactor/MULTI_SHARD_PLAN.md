@@ -152,6 +152,7 @@ std::unique_ptr<ControlServer> control_server_;      // 全局共享，最后声
 | 实时模式：分片数不超过可用 CPU 核数（`std::thread::hardware_concurrency()`） | 启动失败，提示减少分片 |
 
 去掉 `QuantServer::Create` 中"账户、交易对、策略、分片各只能 1 个"的限制，改为上表规则。
+多分片配置显式提供 `rate_capacities[]`（`account`、`ip`、`endpoint`、`limit`、`window_us`），用它作为 `ValidateRateBudgets` 的全局上限；单分片旧配置可省略。
 
 ### 6.2 创建
 
@@ -165,7 +166,7 @@ std::unique_ptr<ControlServer> control_server_;      // 全局共享，最后声
 | 模式 | 做法 |
 |---|---|
 | 实时 | 每个分片一个 `io_context` 和一个线程；每个分片为自己的交易对创建 `HttpClient`、`WebSocketClient`、`MarketDataStream`（交易所地址用全局的 `binance_endpoints` 配置）；每个分片一个 `TimerLoop` |
-| 回放 | **仍在主线程上按顺序执行**，不开分片线程，保证结果可复现。回放文件格式升级到 `schema_version: 2`：每条输入增加 `market` 字段，按交易对找到所属分片后交给它；`timer` 输入可带 `shard` 字段，不带则发给所有分片。`schema_version: 1` 的文件只在单分片配置下接受 |
+| 回放 | **仍在主线程上按顺序执行**，不开分片线程，保证结果可复现。回放文件格式升级到 `schema_version: 2`：行情输入增加 `market` 字段，按交易对找到所属分片后交给它；`timer` 输入可带 `shard` 字段，不带则发给所有分片。`schema_version: 1` 的文件只在单分片配置下接受 |
 
 ### 6.4 停止
 

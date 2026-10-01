@@ -11,6 +11,7 @@
 
 #include "absl/status/statusor.h"
 #include "base/market.h"
+#include "base/rate_limit.h"
 #include "base/types.h"
 #include "strategy/simple_pmm.h"
 
@@ -108,6 +109,7 @@ struct AppConfig {
   std::vector<StrategyConfig> strategy_configs;
   std::vector<StaticRiskBudgetConfig> risk_budgets;
   std::vector<StaticRateBudgetConfig> rate_budgets;
+  std::vector<RateCapacity> rate_capacities;
   RiskConfig risk;
   SimulatedExchangeOptions simulated_exchange;
   StorageOptions storage;

@@ -424,6 +424,41 @@ std::string StatusJson(const Shard& shard,
          "}}";
 }
 
+std::string ShardStatusJson(const Shard& shard,
+                            const SimpleSimulatedExchange& sim_exchange,
+                            bool live) {
+  const auto& market = shard.market();
+  std::string json =
+      "{\"shard\":" + std::to_string(shard.id().value) +
+      ",\"market\":" + EscapeJson(market.market.native_symbol) +
+      ",\"book\":" + EscapeJson(BookStateName(shard.Book().State())) +
+      ",\"strategy\":\"simple_pmm\",\"open_orders\":" +
+      std::to_string(sim_exchange.OpenOrders().size()) +
+      ",\"balances\":{" + EscapeJson(market.base_asset.value) + ":" +
+      EscapeJson(sim_exchange.BalanceOf(market.base_asset).ToString()) +
+      "," + EscapeJson(market.quote_asset.value) + ":" +
+      EscapeJson(sim_exchange.BalanceOf(market.quote_asset).ToString()) +
+      "},\"fees_paid\":{" + EscapeJson(market.base_asset.value) + ":" +
+      EscapeJson(sim_exchange.FeesPaid(market.base_asset).ToString()) +
+      "," + EscapeJson(market.quote_asset.value) + ":" +
+      EscapeJson(sim_exchange.FeesPaid(market.quote_asset).ToString()) +
+      "},\"strategy_invocations\":" +
+      std::to_string(shard.strategy_invocations());
+  if (live) {
+    json += ",\"applied_diffs\":" + std::to_string(shard.AppliedDiffs()) +
+            ",\"resyncs\":" + std::to_string(shard.Resyncs());
+    if (!shard.stream_error().ok()) {
+      const ErrorCode code = CodeOf(shard.stream_error());
+      json += ",\"market_stream_error\":{\"code\":" +
+              std::to_string(ErrorNumber(code)) +
+              ",\"name\":" + EscapeJson(Info(code).name) +
+              ",\"message\":" + EscapeJson(shard.stream_error().message()) +
+              "}";
+    }
+  }
+  return json + "}";
+}
+
 const char* OrderStatusName(ExchangeOrderStatus status) {
   switch (status) {
     case ExchangeOrderStatus::Open:

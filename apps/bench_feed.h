@@ -18,6 +18,7 @@ struct FeedBenchOptions {
   std::string fixture = "examples/replay_market.json";
   std::string state_dir;
   std::string symbol = "BTCUSDT";
+  std::vector<std::string> symbols;
   std::string price_per_tick = "0.01";
   std::string amount_per_lot = "0.001";
   uint32_t rate = 10;

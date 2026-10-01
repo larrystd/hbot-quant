@@ -15,6 +15,7 @@
 
 #include "absl/status/status.h"
 #include "base/error.h"
+#include "order/risk.h"
 #include "yaml-cpp/yaml.h"
 
 namespace hquant {
@@ -235,34 +236,23 @@ absl::StatusOr<std::vector<MarketId>> MarketList(
 }
 
 absl::Status CheckBudgetTotals(const AppConfig& config) {
-  std::map<std::pair<std::string, std::string>, Decimal> totals;
-  for (const auto& budget : config.risk_budgets) {
-    const auto key = std::pair{budget.account.value, budget.asset.value};
-    const auto found = totals.find(key);
-    if (found == totals.end()) {
-      totals.emplace(key, budget.hard_limit);
-    } else {
-      auto sum = found->second.Add(budget.hard_limit);
-      if (!sum.ok()) return sum.status();
-      found->second = *sum;
+  RiskBudgetAllocator allocator;
+  for (const auto& account : config.accounts) {
+    for (const auto& [asset, balance] : account.initial_balances) {
+      auto status = allocator.SetConservativeLimit(account.account,
+                                                   AssetId(asset), balance);
+      if (!status.ok())
+        return Error(ErrorCode::kConfigBudgetInvalid, status.message());
     }
   }
-  for (const auto& [key, granted] : totals) {
-    const auto account = std::find_if(
-        config.accounts.begin(), config.accounts.end(),
-        [&](const auto& item) { return item.account.value == key.first; });
-    if (account == config.accounts.end())
-      return Error(ErrorCode::kConfigBudgetInvalid, "budget account unknown");
-    const auto balance = account->initial_balances.find(key.second);
-    if (balance == account->initial_balances.end()) {
-      return Error(ErrorCode::kConfigBudgetInvalid,
-                   "budget asset has no conservative balance");
+  const UtcTime now{std::chrono::microseconds(0)};
+  for (const auto& budget : config.risk_budgets) {
+    auto status = allocator.GrantInitial(
+        {budget.account, budget.asset, budget.shard, 1, budget.hard_limit,
+         now + *budget.valid_for}, now);
+    if (!status.ok()) {
+      return Error(ErrorCode::kConfigBudgetInvalid, status.message());
     }
-    auto compare = granted.Compare(balance->second);
-    if (!compare.ok()) return compare.status();
-    if (*compare > 0)
-      return Error(ErrorCode::kConfigBudgetInvalid,
-                   "static risk budgets exceed account balance");
   }
   return absl::OkStatus();
 }
@@ -511,10 +501,12 @@ absl::StatusOr<AppConfig> ParseConfig(std::string_view yaml_text) {
         return Error(ErrorCode::kConfigReferenceInvalid,
                      "invalid or duplicate strategy_id");
       }
-      if (*strategy != "simple_pmm" || !accounts_by_name.contains(*account)) {
+      if (*strategy != "simple_pmm")
+        return Error(ErrorCode::kConfigFieldInvalid,
+                     "unsupported strategy");
+      if (!accounts_by_name.contains(*account))
         return Error(ErrorCode::kConfigReferenceInvalid,
-                     "unsupported strategy or unknown account");
-      }
+                     "unknown strategy account");
       auto dependencies = MarketList(item, "markets", markets_by_name);
       if (!dependencies.ok()) return dependencies.status();
       if (dependencies->empty())
@@ -577,6 +569,7 @@ absl::StatusOr<AppConfig> ParseConfig(std::string_view yaml_text) {
     std::map<std::string, uint8_t> market_shard;
     std::map<uint64_t, uint8_t> strategy_shard;
     std::set<uint8_t> shard_ids;
+    std::set<std::string> assigned_accounts;
     auto assignments = Sequence(root, "assignments");
     if (!assignments.ok()) return assignments.status();
     for (const auto& item : *assignments) {
@@ -591,9 +584,9 @@ absl::StatusOr<AppConfig> ParseConfig(std::string_view yaml_text) {
       assignment.shard = *shard;
       auto markets = MarketList(item, "markets", markets_by_name);
       if (!markets.ok()) return markets.status();
-      if (markets->empty())
-        return Error(ErrorCode::kConfigAssignmentInvalid,
-                     "empty shard markets");
+      if (markets->size() != 1)
+        return Error(ErrorCode::kLaunchMultipleNotSupported,
+                     "each shard requires exactly one market");
       for (auto& market : *markets) {
         if (!market_shard.emplace(market.native_symbol, shard->value).second) {
           return Error(ErrorCode::kConfigAssignmentInvalid,
@@ -635,11 +628,19 @@ absl::StatusOr<AppConfig> ParseConfig(std::string_view yaml_text) {
         }
         assignment.accounts.emplace_back(account_node.Scalar());
       }
+      if (assignment.strategy_ids.size() != 1 ||
+          assignment.accounts.size() != 1)
+        return Error(ErrorCode::kLaunchMultipleNotSupported,
+                     "each shard requires one strategy and one account");
+      if (!assigned_accounts.insert(assignment.accounts.front().value).second)
+        return Error(ErrorCode::kLaunchMultipleNotSupported,
+                     "account assigned to more than one shard");
       config.assignments.push_back(std::move(assignment));
     }
     if (config.assignments.empty() || config.assignments.size() > 8 ||
         market_shard.size() != markets_by_name.size() ||
-        strategy_shard.size() != strategies_by_id.size()) {
+        strategy_shard.size() != strategies_by_id.size() ||
+        assigned_accounts.size() != accounts_by_name.size()) {
       return Error(ErrorCode::kConfigAssignmentInvalid,
                    "incomplete or oversized shard assignment");
     }
@@ -650,15 +651,17 @@ absl::StatusOr<AppConfig> ParseConfig(std::string_view yaml_text) {
           [&](const auto& item) { return item.shard.value == shard; });
       if (assignment == config.assignments.end())
         return Error(ErrorCode::kConfigAssignmentInvalid, "missing shard");
-      if (std::none_of(
-              assignment->accounts.begin(), assignment->accounts.end(),
-              [&](const auto& item) { return item == strategy.account; })) {
-        return Error(ErrorCode::kConfigAssignmentInvalid,
+      if (assignment->accounts.front() != strategy.account) {
+        return Error(ErrorCode::kConfigReferenceInvalid,
                      "strategy account not assigned to shard");
       }
+      if (strategy.markets.size() != 1 ||
+          strategy.markets.front() != assignment->markets.front())
+        return Error(ErrorCode::kConfigReferenceInvalid,
+                     "strategy must use its shard market");
       for (const auto& market : strategy.markets) {
         if (market_shard.at(market.native_symbol) != shard) {
-          return Error(ErrorCode::kConfigAssignmentInvalid,
+          return Error(ErrorCode::kConfigReferenceInvalid,
                        "strategy market on another shard");
         }
       }
@@ -704,6 +707,13 @@ absl::StatusOr<AppConfig> ParseConfig(std::string_view yaml_text) {
         config.risk_budgets.push_back(std::move(entry));
       }
     }
+    for (auto& budget : config.risk_budgets) {
+      if (!budget.valid_for)
+        budget.valid_for =
+            config.market_data_source == MarketDataSource::BinancePublic
+                ? std::chrono::hours(24)
+                : std::chrono::hours(1);
+    }
     auto budget_status = CheckBudgetTotals(config);
     if (!budget_status.ok()) return budget_status;
 
@@ -739,6 +749,56 @@ absl::StatusOr<AppConfig> ParseConfig(std::string_view yaml_text) {
              std::chrono::microseconds(static_cast<int64_t>(*window))});
       }
     }
+    if (root["rate_capacities"]) {
+      auto capacities = Sequence(root, "rate_capacities");
+      if (!capacities.ok()) return capacities.status();
+      for (const auto& item : *capacities) {
+        auto account = Scalar(item, "account");
+        auto ip = Scalar(item, "ip");
+        auto endpoint = Scalar(item, "endpoint");
+        auto limit = Unsigned(item, "limit");
+        auto window = Unsigned(item, "window_us");
+        if (!account.ok()) return account.status();
+        if (!ip.ok()) return ip.status();
+        if (!endpoint.ok()) return endpoint.status();
+        if (!limit.ok() || *limit == 0 || *limit > UINT32_MAX ||
+            !window.ok() || *window == 0 || *window > INT64_MAX)
+          return Error(ErrorCode::kConfigBudgetInvalid,
+                       "invalid rate capacity");
+        config.rate_capacities.push_back(
+            {{*account, *ip, *endpoint}, static_cast<uint32_t>(*limit),
+             std::chrono::microseconds(static_cast<int64_t>(*window))});
+      }
+    }
+    std::vector<RateBudgetAssignment> rate_grants;
+    std::map<RateLimitKey, RateCapacity> inferred_capacities;
+    for (const auto& budget : config.rate_budgets) {
+      RateLimitKey key{budget.account.value, budget.ip, budget.endpoint};
+      rate_grants.push_back({key, budget.shard, 1,
+                             {budget.limit, budget.cancel_reserve,
+                              budget.window, 0}});
+      auto [entry, inserted] = inferred_capacities.emplace(
+          key, RateCapacity{key, 0, budget.window});
+      if (!inserted && entry->second.window != budget.window)
+        return Error(ErrorCode::kConfigBudgetInvalid,
+                     "rate budget window mismatch");
+      if (entry->second.global_limit > UINT32_MAX - budget.limit)
+        return Error(ErrorCode::kConfigBudgetInvalid,
+                     "rate budget total overflow");
+      entry->second.global_limit += budget.limit;
+    }
+    if (config.assignments.size() > 1 && !rate_grants.empty() &&
+        config.rate_capacities.empty())
+      return Error(ErrorCode::kConfigBudgetInvalid,
+                   "multi-shard rate_capacities are required");
+    if (config.rate_capacities.empty()) {
+      for (const auto& [_, capacity] : inferred_capacities)
+        config.rate_capacities.push_back(capacity);
+    }
+    auto rate_status =
+        ValidateRateBudgets(config.rate_capacities, rate_grants);
+    if (!rate_status.ok())
+      return Error(ErrorCode::kConfigBudgetInvalid, rate_status.message());
     const bool live =
         config.market_data_source == MarketDataSource::BinancePublic;
     if (!config.risk.max_rule_age)
@@ -748,11 +808,6 @@ absl::StatusOr<AppConfig> ParseConfig(std::string_view yaml_text) {
       if (!market.stale_after)
         market.stale_after = live ? std::chrono::seconds(5)
                                   : std::chrono::seconds(60);
-    }
-    for (auto& budget : config.risk_budgets) {
-      if (!budget.valid_for)
-        budget.valid_for = live ? std::chrono::hours(24)
-                                : std::chrono::hours(1);
     }
     return config;
   } catch (const YAML::Exception&) {
