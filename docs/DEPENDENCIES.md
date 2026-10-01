@@ -91,7 +91,7 @@ try-import %workspace%/user.bazelrc
 
 - C++ `Decimal` 封装 C API，状态标志转为 `absl::Status`；默认上下文与 Python 一致（详见 [STRUCTURE_AND_TYPES.md](STRUCTURE_AND_TYPES.md) 第 7.1 节）。
 - `mpdecimal.BUILD` 用 `genrule` 生成 `mpdecimal.h`（替换 `@MPD_HEADER_CONFIG@`），采用 `CONFIG_64 + ANSI`，同一份代码覆盖 arm64 与 x86_64。许可证 BSD-2，一并收录 `COPYRIGHT.txt`。
-- 订单簿不在热路径做 Decimal 运算：adapter 按行情 `BookScale` 把价格/数量精确转成 `int64` ticks/lots，不能整除或越界的报文是协议错误。
+- 订单簿不在热路径做 Decimal 运算：adapter 按行情 `TickLotSize` 把价格/数量精确转成 `int64` ticks/lots，不能整除或越界的报文是协议错误。
 
 ### 3.5 网络：Asio + Beast + OpenSSL + zlib
 
@@ -118,7 +118,7 @@ try-import %workspace%/user.bazelrc
   - C API + RAII 封装（连接、语句、事务），WAL + `PRAGMA synchronous=NORMAL`。
   - **写：** 只有 Recorder 线程持有写连接；每个分片一条有界 SPSC 队列，Recorder 轮转消费、批量提交。分片 `try_push` 失败或后台事务失败都只标记历史缺口，不阻止已通过风控的订单。
   - **读：** HistoryReader 线程持有独立只读连接，处理分页 `history` 与启动恢复查询，限制行数与耗时并及时结束读事务（长读事务会阻碍 WAL checkpoint）。控制线程不执行 SQL。
-  - 交易数值存十进制字符串；schema 带版本，建表脚本在 `hquant/src/offline/schema.sql`。Python 的 `SqliteDecimal(6)` 会截断精度，所以不直接读写 Python 数据库，只提供一次性导入工具。
+  - 交易数值存十进制字符串；schema 带版本，建表脚本在 `hquant/src/storage/schema.sql`。Python 的 `SqliteDecimal(6)` 会截断精度，所以不直接读写 Python 数据库，只提供一次性导入工具。
 - **CLI11：** 只在 `//hquant/src/cli:cli` 使用。
 
 ## 4. 仍需实测的项目
@@ -131,4 +131,4 @@ try-import %workspace%/user.bazelrc
 
 ## 5. 后续按需引入的依赖
 
-链上签名（secp256k1）、HTTP/2、FIX、Parquet（回测历史数据；首版回测只读 CSV）等，由具体连接器或阶段声明为可选依赖，不进入首批现货/Paper 构建。引入门槛：许可证、BCR 是否有模块（没有则固定哈希并自带 BUILD）、macOS/Linux 都支持、维护活跃、有故障恢复方案。
+链上签名（secp256k1）、HTTP/2、FIX、Parquet（回测历史数据；首版回测只读 CSV）等，由具体连接器或阶段声明为可选依赖，不进入首批现货模拟盘构建。引入门槛：许可证、BCR 是否有模块（没有则固定哈希并自带 BUILD）、macOS/Linux 都支持、维护活跃、有故障恢复方案。

@@ -23,7 +23,7 @@ flowchart LR
 ```
 
 - **交易所序号字段由 adapter 规范化。** 例如 Binance 的首条增量必须覆盖 `lastUpdateId + 1`；adapter 给核心完整的“首序号 / 末序号”区间，核心按区间覆盖关系检查连续性。价位数量是绝对覆盖值，重叠区间可重放。
-- **价格和数量在 adapter 里就转成整数。** 价格按该行情流的最小价格单位（`BookScale`）换算成 ticks，数量换算成 lots；不能整除的报价是协议错误，触发重新同步。
+- **价格和数量在 adapter 里就转成整数。** 价格按该行情流的最小价格单位（`TickLotSize`）换算成 ticks，数量换算成 lots；不能整除的报价是协议错误，触发重新同步。
 - **公开成交**只更新"最近成交价"并产生 `PublicTrade` 事件，绝不当作本账户成交。
 
 ## 2. 同步状态机：每本订单簿一个
@@ -31,21 +31,21 @@ flowchart LR
 ```mermaid
 stateDiagram-v2
     [*] --> Subscribing
-    Subscribing --> Buffering: WS 订阅成功，开始缓存增量
-    Buffering --> Replaying: 快照到达（本线程异步 REST）
-    Replaying --> Live: 丢弃旧增量，其余按序号回放完毕
-    Replaying --> Buffering: 缓存里找不到能接上快照的增量，重取快照
+    Subscribing --> WaitingSnapshot: WS 订阅成功，开始缓存增量
+    WaitingSnapshot --> CatchingUp: 快照到达（本线程异步 REST）
+    CatchingUp --> Live: 丢弃旧增量，其余按序号回放完毕
+    CatchingUp --> WaitingSnapshot: 缓存里找不到能接上快照的增量，重取快照
     Live --> Resyncing: 序号缺口 / 校验和不符 / 买卖价交叉 / 缓存溢出
     Live --> Stale: 超过阈值没有收到任何更新
     Stale --> Live: 恢复收到连续更新
     Stale --> Resyncing: 超时仍无更新
-    Resyncing --> Buffering: 清空盘口，重新缓存并取快照
+    Resyncing --> WaitingSnapshot: 清空盘口，重新缓存并取快照
     Live --> [*]: 退订
 ```
 
 | 状态 | 盘口能否使用 | 策略是否被触发 | 该市场能否下新单 |
 | --- | --- | --- | --- |
-| Subscribing / Buffering / Replaying | 否 | 否 | 否 |
+| Subscribing / WaitingSnapshot / CatchingUp | 否 | 否 | 否 |
 | Live | 是 | 是 | 是 |
 | Stale | 可读，但标记过期 | 否 | 按配置，默认否 |
 | Resyncing | 否 | 否 | 否，撤单照常 |
@@ -85,7 +85,7 @@ sequenceDiagram
 ```
 
 - **一次读取收到多条消息时**，先全部应用，再按策略的触发规则通知一次，避免策略对中间状态反复决策。
-- `last_sequence ≤ current_sequence` 的旧 Diff 直接丢弃；其余 Diff 必须覆盖 `current_sequence + 1`。这个条件同时适用于快照后的第一条和 Live 时的后续增量。不同 `stream_epoch` 的序号不可比较；相对数量增减消息不能直接使用重叠区间规则。
+- `last_sequence ≤ current_sequence` 的旧 Diff 直接丢弃；其余 Diff 必须覆盖 `current_sequence + 1`。这个条件同时适用于快照后的第一条和 Live 时的后续增量。不同 `connection_id` 的序号不可比较；相对数量增减消息不能直接使用重叠区间规则。
 - **买一 ≥ 卖一**（交叉）在连续交易时段视为数据错误，触发重新同步；集合竞价时段允许交叉（见第 6 节）。
 - 提供校验和的交易所（如 OKX、Kraken），应用后按交易所规则校验，不符就重新同步。
 

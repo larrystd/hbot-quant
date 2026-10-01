@@ -60,19 +60,19 @@ tools/refactor/rename.sh /tmp/x.map 'cc|h'
 - 改名、拆分的调用点和测试断言都已更新（拆分对照见附录 A）。
 - `tools/refactor/error_negative.py` **已经执行过，不要再运行**（再跑会因为原文已变而报错退出）。它做了下面这些事，供审查时对照：
 1. `error.h` 新增：
-   - `ErrorNumber(code)`：返回负数，给用户看、走控制协议；
+   - `ErrorNumber(code)`：返回负数，给用户看、走服务接口协议；
    - `ErrorFromNumber(int64)`；
    - `StoredErrorNumber(code)`：返回正的绝对值，用于存储；
    - `ErrorFromStoredNumber(uint64)`。
 2. 新增 `kCliEngineError = -19010`：`cli.cc` 里"引擎返回了错误"用它，"stop not accepted"仍用 `kCliStopRejected`。
 3. Status 里携带的编号改为带符号，`CodeOf` 能解析负数。
 4. **SQLite 和 record codec 继续存正的绝对值**，读出时取负。这样旧数据仍能读，存储格式不变。
-5. 控制协议、CLI 输出、launcher 的 `market_stream_error` 改为输出负数，比如 `HISTORY_QUEUE_FULL (-17007)`。
+5. 服务接口协议、CLI 输出、launcher 的 `market_stream_error` 改为输出负数，比如 `HISTORY_QUEUE_FULL (-17007)`。
 6. 测试：`error_test` 期望 125 个码，并检查全部为负；`cli_test` 期望 `kCliEngineError` 和 `(-17007)`。
 
 **还要做的：改 2 个测试的期望值**（已在副本上验证，改完 30/30 通过，示例程序余额不变）：
 
-1. `hquant/test/control_test.cc` 第 22 行：控制协议现在输出负数。
+1. `hquant/test/control_test.cc` 第 22 行：服务接口协议现在输出负数。
    ```diff
    - reply->find("\"code\":19008,\"name\":\"CONTROL_BUSY\"")
    + reply->find("\"code\":-19008,\"name\":\"CONTROL_BUSY\"")
@@ -182,7 +182,29 @@ grep -rn 'static_cast<uint16_t>' hquant | grep -i 'code\|reason'   # 应为空
 | `PrivateReportRouter` | `AccountReportRouter` |
 | `SignedAccountRest` | `SignedRestClient` |
 
-## 第 7 步：目录和总管（原第 11 组）
+## 第 7 步：服务接口（原 ControlServer）
+
+`hquant_server` 对外只有这一个服务入口（查状态、查历史、停止，以后还有撤单、停止下单）。它是正常的服务请求，不是"控制面"，所以去掉 control 这个词。
+
+| 现在 | 改成 |
+|---|---|
+| `ControlServer` | `QuantServer` |
+| `ControlRequest` / `ControlResponse` / `ControlError` | `ServerRequest` / `ServerResponse` / `ServerError` |
+| `ControlRequestPayload` / `ControlResponsePayload` | `ServerRequestPayload` / `ServerResponsePayload` |
+| `EncodeControlRequest` / `DecodeControlRequest` / `EncodeControlResponse` / `DecodeControlResponse` | `EncodeServerRequest` / `DecodeServerRequest` / `EncodeServerResponse` / `DecodeServerResponse` |
+| `SendControlRequest` / `MakeControlRequest` / `FormatControlResponse` | `SendServerRequest` / `MakeServerRequest` / `FormatServerResponse` |
+| `ControlSocketPath`，socket 文件 `<state_dir>/control.sock` | `ServerSocketPath`，`<state_dir>/quant_server.sock` |
+| 文件 `application/control.{h,cc}`、目标 `:control` | `application/quant_server.{h,cc}`、`:quant_server` |
+| 测试 `control_test.cc`、`ControlServerTest`、`ControlHistoryTest`、临时目录 `hquant_control_test_XXXXXX` | `quant_server_test.cc`、`QuantServerTest`、`QuantServerHistoryTest`、`hquant_quant_server_test_XXXXXX` |
+| 错误码 `kControlMessageInvalid` / `kControlBusy` / `kControlTimeout` / `kControlSocketFailed` / `kControlSocketInUse` | `kServerMessageInvalid` / `kServerBusy` / `kServerTimeout` / `kServerSocketFailed` / `kServerSocketInUse`（**数字不变**，名称字符串同步改为 `SERVER_MESSAGE_INVALID` 等） |
+| 局部变量、注释里的 control | server（例如 `control socket` → `server socket`） |
+
+注意：
+- `ShardCommand`（`StopNewOrders`、`CancelOwnedOrders`、`RequestShardReport`）是服务线程发给分片的**内部命令**，不属于对外接口，不在本步改名范围。
+- 协议报文格式不变，只是 socket 文件名变了。`cli/cli.cc` 和 server 必须一起改，否则连不上。
+- `control.cc` 里的 `LegacyErrorName` / `LegacyErrorCode` 处理的是旧版协议的错误名字符串（`bad_request`、`busy` 等），这些是**线上协议值，不改**。
+
+## 第 8 步：目录和总管（原第 11 组）
 
 | 现在 | 改成 |
 |---|---|
@@ -192,7 +214,7 @@ grep -rn 'static_cast<uint16_t>' hquant | grep -i 'code\|reason'   # 应为空
 
 用 `git mv` 移目录，然后统一替换 `#include "offline/` → `"storage/`、`"service/` → `"shard/"`，以及 Bazel 路径 `//hquant/src/offline` → `//hquant/src/storage`、`//hquant/src/service` → `//hquant/src/shard`。别忘了 `examples/BUILD.bazel`、`apps/BUILD.bazel`、`hquant/test/BUILD.bazel` 和各 BUILD 里的 `visibility`。
 
-## 第 8 步：收尾
+## 第 9 步：收尾
 
 1. `docs/` 里的结构体名、目录名按以上全部更新。
 2. 新建 `docs/GLOSSARY.md`：术语表，内容见附录 B。
@@ -281,5 +303,6 @@ grep -rn 'static_cast<uint16_t>' hquant | grep -i 'code\|reason'   # 应为空
 | risk budget | 风控额度 | 不再使用 lease |
 | funds hold | 资金冻结 | 不再使用 reservation |
 | shard | 分片 | 一个线程，独占一组交易对的全部状态 |
+| QuantServer | 服务接口 | `hquant_server` 唯一的对外入口；不再使用 control |
 | reconciliation | 对账 | 向交易所查询，核对本地和真实状态 |
 | submission unknown | 结果未知 | 请求已发出，但不知道交易所是否收到 |

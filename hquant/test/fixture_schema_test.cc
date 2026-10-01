@@ -15,7 +15,8 @@ int main(int argc, char** argv) {
       std::filesystem::path(test_srcdir) / workspace / "hquant/test/fixtures";
   std::map<std::string, size_t> minimums{
       {"order_book", 6}, {"order_tracker", 7}, {"simple_pmm", 5}};
-  if (argc > 1 && std::string(argv[1]) == "--simulated_exchange") minimums["simulated_exchange"] = 6;
+  if (argc > 1 && std::string(argv[1]) == "--simulated_exchange")
+    minimums["simulated_exchange"] = 6;
   std::set<std::string> case_ids;
   for (const auto& [family, minimum] : minimums) {
     size_t count = 0;

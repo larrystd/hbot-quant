@@ -1,26 +1,26 @@
 # 路线图：目标、关口与进度
 
-状态（2026-09-27）：**G0 已通过；G1 macOS 离线链路和 CLI 已通过，Linux x86_64 待 CI；G2 本地 mock 与真实公开行情 Paper 短跑已通过；G3 静态租约、限速和路由组件的两分片/八路由测试已通过，多活跃分片装配、压力和 Linux 结果待验证；G4 网关、私有回报与恢复的本地 mock 测试已通过，隔离账户联机试单尚未进行，`mode=live` 仍拒绝启动。** 本机记录见 [`dev/VALIDATION_2026-09-27.md`](../dev/VALIDATION_2026-09-27.md)。
+状态（2026-09-27）：**G0 已通过；G1 macOS 离线链路和 CLI 已通过，Linux x86_64 待 CI；G2 本地 mock 与真实公开行情模拟盘短跑已通过；G3 静态额度、限速和路由组件的两分片/八路由测试已通过，多活跃分片装配、压力和 Linux 结果待验证；G4 网关、私有回报与恢复的本地 mock 测试已通过，隔离账户联机试单尚未进行，`mode=live` 仍拒绝启动。** 本机记录见 [`dev/VALIDATION_2026-09-27.md`](../dev/VALIDATION_2026-09-27.md)。
 
 ## 1. 目标与基线
 
 - **源码基线：** `../../hummingbot` 的 `9af100d6822da7d2d0291a906c730ef172284ee2`，包版本 `2.17.0`。源仓库后续更新须单独评估，避免迁移目标漂移。保留源项目 Apache-2.0 许可证及必要的来源说明。
 - **最终目标：** 不依赖 Python/Cython 运行时的 C++20 交易引擎，覆盖实时交易、模拟盘、V2 Controller 回测、持久化和命令行操作：能接行情、运行策略、控制资金与订单、记录历史、断线和重启后对账。
 - **首条链路：** Binance 现货公开行情 → 订单簿 → `simple_pmm` 定时刷新 → 风控 → SimpleSimulatedExchange → 订单/成交事件 → SQLite 历史 → `hquant status/history/stop`。先用录制行情和本地协议服务器验证，再连真实公开行情；此阶段不发实盘订单。
-- **首版实盘范围：** 一个现货连接器、固定策略与市场配置、静态账户额度和限速切分；实盘验收必须覆盖**多个活跃分片和同账户共享资源**。配置显式区分 `paper` 与 `live`，启动日志和 `status` 显示模式、账户、市场及是否允许新单。
+- **首版实盘范围：** 一个现货连接器、固定策略与市场配置、静态账户额度和限速切分；实盘验收必须覆盖**多个活跃分片和同账户共享资源**。配置显式区分 `simulated` 与 `live`，启动日志和 `status` 显示模式、账户、市场及是否允许新单。
 - 各阶段按可观察行为验收：配置、事件、订单状态、余额、费用和结果。策略收益不是工程验收指标。
 
 ## 2. 可交付版本
 
 | 版本 | 用户实际能做什么 | 完成结果 |
 | --- | --- | --- |
-| V0 离线模拟盘（G1） | 用固定行情和虚拟时间运行 `simple_pmm`，查看 Paper 订单、成交、余额、费用与 SQLite 历史 | 同一夹具重复运行，动作、归一化订单 ID、余额、费用完全相同；异常退出/存储故障用例有明确状态 |
-| V1 在线行情模拟盘（G2） | 订阅 Binance 现货公开盘口，在本地 Paper 账户报价、成交，执行 `status/history/stop` | 公开行情断线、缺口、过期时停止相关新单；恢复同步后继续；全程不发实盘订单 |
+| V0 离线模拟盘（G1） | 用固定行情和虚拟时间运行 `simple_pmm`，查看 模拟订单、成交、余额、费用与 SQLite 历史 | 同一夹具重复运行，动作、归一化订单 ID、余额、费用完全相同；异常退出/存储故障用例有明确状态 |
+| V1 在线行情模拟盘（G2） | 订阅 Binance 现货公开盘口，在本地 模拟账户报价、成交，执行 `status/history/stop` | 公开行情断线、缺口、过期时停止相关新单；恢复同步后继续；全程不发实盘订单 |
 | V2 隔离环境实盘（G4） | 用隔离账户发送和撤销真实测试订单，查看私有回报与重启对账 | 多分片资金/限速/路由先通过 G3；HTTP 与私有流乱序、写超时、SQLite 故障和重启仍不重复下单 |
 
 `status` 至少显示 `mode`、连接器/盘口状态、活跃分片数、策略状态、挂单数、Recorder 健康与历史缺口；`history` 分页显示订单、成交与手续费，并标注不完整区间。V2 只在隔离环境验收后开放显式 `mode=live`；能收真实行情不代表默认允许实盘。
 
-运行命令见 [README.md](README.md) 第 4 节。2026-09-27 真实公开行情短跑中，盘口从 `Buffering`、`Replaying` 到 `Live`，Paper 挂出两侧模拟单，超过 15 秒刷新周期后撤旧两单、重报两单，`stop` 正常退出。生产域名对当前网络位置返回 HTTP 451，使用的是公开数据专用域名（[WS](https://github.com/binance/binance-spot-api-docs/blob/master/web-socket-streams.md)、[REST](https://github.com/binance/binance-spot-api-docs/blob/master/faqs/market_data_only.md)）；这不构成长期运行或实盘验收。
+运行命令见 [README.md](README.md) 第 4 节。2026-09-27 真实公开行情短跑中，盘口从 `WaitingSnapshot`、`CatchingUp` 到 `Live`，模拟盘挂出两侧模拟单，超过 15 秒刷新周期后撤旧两单、重报两单，`stop` 正常退出。生产域名对当前网络位置返回 HTTP 451，使用的是公开数据专用域名（[WS](https://github.com/binance/binance-spot-api-docs/blob/master/web-socket-streams.md)、[REST](https://github.com/binance/binance-spot-api-docs/blob/master/faqs/market_data_only.md)）；这不构成长期运行或实盘验收。
 
 ## 3. 开发关口
 
@@ -29,9 +29,9 @@
 | 关口 | 阶段 | 主要内容 | 进入下一关的证据 |
 | --- | --- | --- | --- |
 | G0 契约与基线 | D0 工程与基线 | `//dev:dependency_smoke` 链接全部首批依赖；公共头文件、模块 API、夹具 v1 schema 与 loader；从 Python 提取脱敏盘口、订单、`simple_pmm` 夹具 | `//dev:contract_compile`、`//hquant/test:schema_test` 通过；Python 版本固定；macOS 依赖 smoke 通过 |
-| G1 单分片离线 Paper | D1 领域内核、D2 分片与模拟撮合、D3 存储与进程控制 | Decimal、ID/规则/事件、OrderTracker、L2 订单簿；`ShardRuntime`、两种事件循环、`TriggerPolicy`、dispatcher、RiskGate、Paper、ReplayClock；Recorder、HistoryReader、`hquant-engine` 与 CLI | `//hquant/test:simulated_replay`：同一输入得到确定的动作顺序、余额、费用；无公网可运行；`history` 大查询不阻塞 `stop`；Linux 构建与 CLI 通过 |
-| G2 公开行情 Paper | D4 | Asio/Beast 传输、Binance 公开 WS/REST 快照、重连、同步状态机、Paper 端到端 | `//hquant/test:simulated_binance` 覆盖快照/增量、缺口重同步、重连、超时；不可用市场停止新单 |
-| G3 多分片账户边界 | D5 | 多活跃分片、静态资金/限速租约、归属索引、账户级私有流路由、全局熔断、CPU 模式与绑核 | `//hquant/test:multi_shard` 证明额度不重复授予、未知单占额、未知归属/队列满降级；8 分片故障与延迟数据齐全 |
+| G1 单分片离线模拟盘 | D1 领域内核、D2 分片与模拟撮合、D3 存储与进程控制 | Decimal、ID/规则/事件、OrderTracker、L2 订单簿；`Shard`、两种事件循环、`TriggerPolicy`、ActionExecutor、RiskGate、模拟盘、ReplayClock；Recorder、HistoryReader、`hquant_engine` 与 CLI | `//hquant/test:simulated_replay`：同一输入得到确定的动作顺序、余额、费用；无公网可运行；`history` 大查询不阻塞 `stop`；Linux 构建与 CLI 通过 |
+| G2 公开行情模拟盘 | D4 | Asio/Beast 传输、Binance 公开 WS/REST 快照、重连、同步状态机、模拟盘端到端 | `//hquant/test:simulated_binance` 覆盖快照/增量、缺口重同步、重连、超时；不可用市场停止新单 |
+| G3 多分片账户边界 | D5 | 多活跃分片、静态资金/限速额度、归属索引、账户级私有流路由、全局熔断、CPU 模式与绑核 | `//hquant/test:multi_shard` 证明额度不重复授予、未知单占额、未知归属/队列满降级；8 分片故障与延迟数据齐全 |
 | G4 首个实盘连接器 | D6 | Binance 现货只读余额/规则、签名下单/撤单、私有流、查询对账、client ID 规则 | `//hquant/test:recovery` 与隔离环境试单通过；结果未知不盲重发；崩溃与 SQLite 故障有明确结果 |
 | G5 扩展 | D7 | XEMM、V2 Controller/Executor、回测及更多现货/永续/Gateway 连接器、TUI/远程接口 | 每个新增能力有独立 Python 对照、契约测试和故障测试；功能矩阵列明剩余差异 |
 
@@ -49,7 +49,7 @@ G5 按实际使用的连接器和策略逐项排期；源码目录数量不能�
 | Python/C++ 行为漂移 | 规范化行情、定时器和私有回报夹具 | 动作、订单状态、余额、费用一致；差异显式列出 |
 | 订单簿错误 | 快照前增量、重叠序号、重复、缺口、交叉、过期、缓存溢出 | 状态正确；不可用市场不放新单；重同步后恢复确定 |
 | 网络不确定性 | 连接复用、超时、取消、HTTP/WS 乱序、429/418、TLS 失败 | 资源有界；未知结果不盲重发；全局熔断生效 |
-| 账户过量下单 | 两个以上分片同账户/币种，注入未知订单和延迟回报 | 租约总额不超保守上限；未知结果持续占额 |
+| 账户过量下单 | 两个以上分片同账户/币种，注入未知订单和延迟回报 | 额度总额不超保守上限；未知结果持续占额 |
 | 历史缺失与恢复 | 发单后落盘前终止、Recorder 队列满/磁盘失败、检查点缺失 | 运行中不等写库；缺口可见；无法验证的状态型执行器不自动运行 |
 
 ## 5. 实盘启用门槛
@@ -63,6 +63,6 @@ G5 按实际使用的连接器和策略逐项排期；源码目录数量不能�
 ## 6. 下一步
 
 1. 首次 Linux CI 运行，补入 [`dev/LINUX_VALIDATION.md`](../dev/LINUX_VALIDATION.md)，并在 Linux 上跑业务目标的 ASan/TSan。
-2. G3：多活跃分片装配进 `hquant-engine`，跑 8 分片压力与忙轮询/阻塞模式延迟对比。
+2. G3：多活跃分片装配进 `hquant_engine`，跑 8 分片压力与忙轮询/阻塞模式延迟对比。
 3. G4：隔离账户联机试单与重启对账（按第 5 节）。
 4. 建立 Git 基线，之后各 Agent 使用独立 worktree（见 [DEVELOPMENT.md](DEVELOPMENT.md) 第 3 节）。

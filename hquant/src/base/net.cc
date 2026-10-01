@@ -168,7 +168,8 @@ asio::awaitable<absl::Status> HttpClient::Connect(
 asio::awaitable<absl::StatusOr<HttpResponse>> HttpClient::Send(
     HttpRequest request) {
   if (in_flight_)
-    co_return hquant::Error(ErrorCode::kNetConcurrentCall, "concurrent HTTP Send");
+    co_return hquant::Error(ErrorCode::kNetConcurrentCall,
+                            "concurrent HTTP Send");
   in_flight_ = true;
   struct Reset {
     bool& value;

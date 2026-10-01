@@ -22,10 +22,10 @@ flowchart LR
             SH2["其他标的组"]
         end
         subgraph CTRL["控制线程"]
-            CONTROL["ControlServer<br/>额度管理 / 健康汇总"]
+            CONTROL["QuantServer<br/>额度管理 / 健康汇总"]
         end
         subgraph REC["Recorder 线程"]
-            RECORDER["SQLiteRecorder<br/>批量写入"]
+            RECORDER["SqliteHistoryWriter<br/>批量写入"]
             DB[("SQLite WAL")]
         end
         subgraph HIST["HistoryReader 线程"]
@@ -138,7 +138,7 @@ sequenceDiagram
     participant W as 行情 WS / 分片线程
     participant B as 盘口
     participant S as 策略
-    participant A as ActionDispatcher
+    participant A as ActionExecutor
     participant K as 分片风控 / OrderTracker
     participant Q as Recorder SPSC 队列
     participant G as OrderGateway
@@ -169,7 +169,7 @@ sequenceDiagram
 - 图中是网关已准入的即时发送分支。HTTP/1.1 同一连接的异步写未完成前不能再对它发起另一写；OrderGateway 先取得空闲连接或有界、带截止时间的本地等待槽，满时同步拒绝并撤销风控预留。请求及签名字节缓冲区要活到写完成。发单排队、限速等待和写完成分别计时，不能把进入网关当成已写到 socket。[Boost.Beast 异步写约束](https://www.boost.org/latest/libs/beast/doc/html/beast/ref/boost__beast__http__async_write_some.html)
 - 订单意图在发起网络写入前**尝试**非阻塞入队，绝不等 SQLite 提交。入队失败只更新存储健康状态，继续发送；这种情况下进程崩溃后可能丢失本地归属/执行器检查点，需要重启对账。
 - 若交易规则校验、最终字节组包、签名或网络命令准入在实际发起写入前失败，则生成本地失败事件、撤销 RiskGate 预留，不把该订单留在 `PendingCreate`；写入是否已开始不明时改走 `SubmissionUnknown` 对账。
-- 盘口使用经过验证的整数 ticks/lots；**资金、手续费、名义价值和下单规则仍采用精确十进制或可证明无溢出的定点运算**。行情 `BookScale` 与交易所下单 `TradingRule` 的价格/数量步长分别定义，网关按最终请求字节签名。预分配是优化目标，不承诺所有路径都不分配堆内存。
+- 盘口使用经过验证的整数 ticks/lots；**资金、手续费、名义价值和下单规则仍采用精确十进制或可证明无溢出的定点运算**。行情 `TickLotSize` 与交易所下单 `TradingRule` 的价格/数量步长分别定义，网关按最终请求字节签名。预分配是优化目标，不承诺所有路径都不分配堆内存。
 - 延迟分开统计：T0→T2（解析、盘口、策略）、T2→T3（风控、组包、异步写发起）、T3→T4（写完成），另记交易所确认时间。T0→T4 会受限速、TLS/socket 就绪和事件循环排队影响，不能描述为单一调用栈延迟。
 
 ## 4. 回报路径：成交到策略
@@ -182,7 +182,7 @@ sequenceDiagram
     participant T as OrderTracker
     participant K as 分片风控
     participant S as 策略
-    participant A as ActionDispatcher
+    participant A as ActionExecutor
     participant G as OrderGateway
     participant Q as 记录队列
 
@@ -200,9 +200,9 @@ sequenceDiagram
     end
 ```
 
-下单的 HTTP 响应和私有 WS 回报可能乱序到达，都在本线程处理，由 OrderTracker 按双 ID、状态机和 trade ID 核对。先完成状态与风险额度更新，再调用策略；策略返回动作后由 dispatcher 执行，避免在 OrderTracker 遍历内部状态时递归修改它。`OrderTraded` 与 `OrderFullyTraded` 保持不同事件；公开成交不能生成本账户的 `OnFill`。
+下单的 HTTP 响应和私有 WS 回报可能乱序到达，都在本线程处理，由 OrderTracker 按双 ID、状态机和 trade ID 核对。先完成状态与风险额度更新，再调用策略；策略返回动作后由 ActionExecutor 执行，避免在 OrderTracker 遍历内部状态时递归修改它。`OrderTraded` 与 `OrderFullyTraded` 保持不同事件；公开成交不能生成本账户的 `OnFill`。
 
-Python 的 `ClientOrderTracker` 在收到完成状态但成交明细未齐时会异步等待成交。这里改成明确的 `AwaitingFills` 状态和超时/补查定时器，不能在私有 WS handler 中阻塞或 `co_await` 等待。成交重复、撤单与成交竞态、先成交后接单、结果未知等仍要按原语义验证，重放夹具覆盖这些次序。
+Python 的 `ClientOrderTracker` 在收到完成状态但成交明细未齐时会异步等待成交。这里改成明确的 `AwaitingTrades` 状态和超时/补查定时器，不能在私有 WS handler 中阻塞或 `co_await` 等待。成交重复、撤单与成交竞态、先成交后接单、结果未知等仍要按原语义验证，重放夹具覆盖这些次序。
 
 ## 5. 分片划分与账户共享资源
 
@@ -265,8 +265,8 @@ flowchart LR
 ```
 
 - 下单前只检查本分片已经获授的额度；首版额度不足就拒绝，不把等待控制线程放进时效性发单路径。`PendingCreate`、撤单结果未知等均按最坏敞口占用额度。
-- 控制线程按交易所余额、持仓、保证金和外部挂单算出保守的账户级可交易上限，再把额度租约分给各分片并留安全缓冲。分片本地将新单、在途未知结果和成交消耗计入租约；控制线程持续用交易所事实校准，账户状态过期或不一致时暂停新单。不能直接把当前 `available` 与原授予额度比较：交易所的 `available` 可能已扣除本系统刚提交的挂单，会造成重复扣减。
-- 首版静态租约的额度不足时拒绝新单；“请求下一次授予”仅适用于后续动态再分配。动态再分配需要版本号与确认：旧分片先停止使用并确认释放额度，控制线程随后才授予新分片；超时不得重复授予。原稿的“从全局池一次原子借款”不足以表达多币种、在途订单和额度回收时序。未来若确需共享原子池，按资源分别设计 CAS 预留、失败回滚与对账，并以 TSan 和故障注入验证。
+- 控制线程按交易所余额、持仓、保证金和外部挂单算出保守的账户级可交易上限，再把额度额度分给各分片并留安全缓冲。分片本地将新单、在途未知结果和成交消耗计入额度；控制线程持续用交易所事实校准，账户状态过期或不一致时暂停新单。不能直接把当前 `available` 与原授予额度比较：交易所的 `available` 可能已扣除本系统刚提交的挂单，会造成重复扣减。
+- 首版静态额度的额度不足时拒绝新单；“请求下一次授予”仅适用于后续动态再分配。动态再分配需要版本号与确认：旧分片先停止使用并确认释放额度，控制线程随后才授予新分片；超时不得重复授予。原稿的“从全局池一次原子借款”不足以表达多币种、在途订单和额度回收时序。未来若确需共享原子池，按资源分别设计 CAS 预留、失败回滚与对账，并以 TSan 和故障注入验证。
 
 ### 5.3 只有一条账户级私有流时的回报转发
 
@@ -292,7 +292,7 @@ sequenceDiagram
     end
 ```
 
-客户端订单 ID 优先编码稳定的策略/执行器归属和跨重启唯一部分；**数字分片号只是可选路由提示，不能当持久归属**，因为重启后标的分片可能变化，交易所也可能限制或改写 ID。启动时由配置、可用 SQLite 意图和交易所历史重建 `OrderOwnershipIndex`（本地 ID、交易所 ID、市场 → 逻辑 owner → 当前分片）。未能归属的账户事件隔离并补查，不能投给任意分片或静默丢弃。
+客户端订单 ID 优先编码稳定的策略/执行器归属和跨重启唯一部分；**数字分片号只是可选路由提示，不能当持久归属**，因为重启后标的分片可能变化，交易所也可能限制或改写 ID。启动时由配置、可用 SQLite 意图和交易所历史重建 `OrderStrategyIndex`（本地 ID、交易所 ID、市场 → 策略 ID → 当前分片）。未能归属的账户事件隔离并补查，不能投给任意分片或静默丢弃。
 
 ### 5.4 跨分片读行情
 
@@ -352,11 +352,11 @@ flowchart LR
     FILL["本账户订单与成交"] -->|"OnOrderUpdate / OnFill"| STRAT
     TIMER["策略注册的定时器"] -->|"OnTimer"| STRAT
     CMD["控制命令"] -->|"OnCommand"| STRAT
-    STRAT -->|"返回 ActionBatch"| DISPATCH["ActionDispatcher"]
+    STRAT -->|"返回 ActionBatch"| DISPATCH["ActionExecutor"]
     DISPATCH --> RISK["分片风控 → 网关异步写"]
 ```
 
-各策略声明 `TriggerPolicy`、依赖市场、最大回调耗时和最小动作间隔；盘口更新先维护市场状态，再按订阅策略选择是否回调。所有直接回调在分片线程执行，不能做同步 I/O、SQLite 查询或阻塞等待；返回有序 `ActionBatch`，由 dispatcher 在回调结束后统一检查就绪、风控、重复动作和限速准入。策略返回错误或返回后发现耗时超限，就停止该策略的新动作，账户回报与撤单仍继续处理。
+各策略声明 `TriggerPolicy`、依赖市场、最大回调耗时和最小动作间隔；盘口更新先维护市场状态，再按订阅策略选择是否回调。所有直接回调在分片线程执行，不能做同步 I/O、SQLite 查询或阻塞等待；返回有序 `ActionBatch`，由 ActionExecutor 在回调结束后统一检查就绪、风控、重复动作和限速准入。策略返回错误或返回后发现耗时超限，就停止该策略的新动作，账户回报与撤单仍继续处理。
 
 轻量策略可在分片线程直接计算。V2 Controller 的历史特征、长窗口指标等若超过回调预算，改由有界计算工作池处理**不可变、带版本的快照**；结果回分片后检查数据版本和有效期，再转成动作。计算线程不访问分片状态，也不直接下单。同步回调一旦卡死，线程内计时器无法抢占它；对不可信插件或可能无限循环的用户策略，需要进程隔离或明确的执行超时机制，不能仅靠记录“回调超时”。
 
@@ -367,7 +367,7 @@ flowchart LR
 | V2 Controller 定期生成 ExecutorAction，经 asyncio 队列由 Orchestrator 执行 | Controller 定时器或所需数据就绪事件产生 `ActionBatch`，同分片 Orchestrator 应用 | 保留 Controller/Executor 生命周期和动作顺序；用类型化动作替代运行时 dict/asyncio 队列 |
 | 公开成交更新 `LastTrade`，模拟盘可能据此撮合 | `OnPublicTrade` 与 SimpleSimulatedExchange 撮合输入 | 公开成交绝不直接当成本账户 `OnFill` |
 
-Python `Clock` 的 1 秒 tick 是原实现的调度手段，不是所有策略必须承继的业务规则；`simple_pmm` 的刷新周期、XEMM 的成交即对冲、V2 动作状态机则是需要保留的可观察行为。策略所依赖的任一盘口、账户余额、私有流或交易规则过期时，`ActionDispatcher` 拒绝受影响的新单；连接恢复后先对账，再恢复策略。参考 [`Clock`](../../hummingbot/hummingbot/core/clock.pyx)、[`simple_pmm`](../../hummingbot/scripts/simple_pmm.py)、[`StrategyV2Base`](../../hummingbot/hummingbot/strategy/strategy_v2_base.py)、[`XEMM`](../../hummingbot/hummingbot/strategy/cross_exchange_market_making/cross_exchange_market_making.py)。
+Python `Clock` 的 1 秒 tick 是原实现的调度手段，不是所有策略必须承继的业务规则；`simple_pmm` 的刷新周期、XEMM 的成交即对冲、V2 动作状态机则是需要保留的可观察行为。策略所依赖的任一盘口、账户余额、私有流或交易规则过期时，`ActionExecutor` 拒绝受影响的新单；连接恢复后先对账，再恢复策略。参考 [`Clock`](../../hummingbot/hummingbot/core/clock.pyx)、[`simple_pmm`](../../hummingbot/scripts/simple_pmm.py)、[`StrategyV2Base`](../../hummingbot/hummingbot/strategy/strategy_v2_base.py)、[`XEMM`](../../hummingbot/hummingbot/strategy/cross_exchange_market_making/cross_exchange_market_making.py)。
 
 ## 7. 状态机：按连接器划分
 
@@ -393,7 +393,7 @@ stateDiagram-v2
 
 连接器状态按连接器维护，策略状态按**依赖集合**计算：单市场策略只受自己的连接器影响；套利/XEMM 依赖任一侧降级时，暂停该策略在两侧的新单。其他无依赖关系的策略可继续运行。`Degraded` 期间允许已知订单的撤单；私有回报不可靠、余额或盘口过期时不能放行新单。停止流程先停止策略新动作，再按配置处理执行器与挂单；不隐式平掉全部持仓。
 
-下单返回本地 `ClientOrderId` 只表示本地接受，异步写完成也不表示交易所接单。`OrderTracker` 分开保存已核实的生命周期、撤单在途、提交/对账结果和成交明细完整性；对外可显示 `PendingCreate`、`Open`、`PartiallyFilled`、`PendingCancel`、`SubmissionUnknown`、`AwaitingFills` 与终态，具体字段见 [STRUCTURE_AND_TYPES.md](STRUCTURE_AND_TYPES.md)。HTTP 与私有流可能先后颠倒。写超时或连接中断后，如果不能证明交易所未收到请求，就保留最坏敞口预留，用原 ID 查询订单与成交，**不换 ID 自动重发**。重启时先读取可用的本地意图/执行器检查点，再按交易所支持的窗口补查挂单、历史订单、成交和余额；无法核实的状态型执行器不自动恢复。SQLite 故障影响历史和恢复能力，不在当前运行中阻止已通过风控的订单发送。
+下单返回本地 `ClientOrderId` 只表示本地接受，异步写完成也不表示交易所接单。`OrderTracker` 分开保存已核实的生命周期、撤单在途、提交/对账结果和成交明细完整性；对外可显示 `PendingCreate`、`Open`、`PartiallyTraded`、`PendingCancel`、`SubmissionUnknown`、`AwaitingTrades` 与终态，具体字段见 [STRUCTURE_AND_TYPES.md](STRUCTURE_AND_TYPES.md)。HTTP 与私有流可能先后颠倒。写超时或连接中断后，如果不能证明交易所未收到请求，就保留最坏敞口预留，用原 ID 查询订单与成交，**不换 ID 自动重发**。重启时先读取可用的本地意图/执行器检查点，再按交易所支持的窗口补查挂单、历史订单、成交和余额；无法核实的状态型执行器不自动恢复。SQLite 故障影响历史和恢复能力，不在当前运行中阻止已通过风控的订单发送。
 
 ## 8. 线程间通信汇总
 
@@ -408,9 +408,9 @@ stateDiagram-v2
 | 控制线程 | HistoryReader | 有界异步查询队列；结果 `asio::post` 回控制线程 | 否 |
 | CLI | 控制线程 | Unix socket | 否 |
 
-唤醒方式随事件循环模式不同：忙轮询分片每轮循环直接检查各入站队列，不需要唤醒；阻塞模式下 `io_context::run()` 会睡眠，控制线程或读流分片向空队列写入后，向目标 `io_context` 投递一次 drain handler。两种模式下每次都只取有上限条数的消息，剩余的留到下一轮，避免长时间饿死 socket。Recorder 可用条件变量/信号量唤醒；写入队列依旧不等待。跨分片消息带源序号和逻辑 owner，不能仅依靠到达顺序推断交易所顺序。
+唤醒方式随事件循环模式不同：忙轮询分片每轮循环直接检查各入站队列，不需要唤醒；阻塞模式下 `io_context::run()` 会睡眠，控制线程或读流分片向空队列写入后，向目标 `io_context` 投递一次 drain handler。两种模式下每次都只取有上限条数的消息，剩余的留到下一轮，避免长时间饿死 socket。Recorder 可用条件变量/信号量唤醒；写入队列依旧不等待。跨分片消息带源序号和策略 ID，不能仅依靠到达顺序推断交易所顺序。
 
-每条 Recorder 记录带 `run_id`、逻辑 owner、分片本地递增序号及交易所/接收时间。Recorder 保持**每个分片内部**的入队顺序，并轮转消费各分片队列；不同分片没有天然全局总序。历史查询可按时间展示，但重建订单状态仍按订单 ID、交易所序号和分片本地序号核对，不能只按数据库自增行号推断先后。
+每条 Recorder 记录带 `run_id`、策略 ID、分片本地递增序号及交易所/接收时间。Recorder 保持**每个分片内部**的入队顺序，并轮转消费各分片队列；不同分片没有天然全局总序。历史查询可按时间展示，但重建订单状态仍按订单 ID、交易所序号和分片本地序号核对，不能只按数据库自增行号推断先后。
 
 HistoryReader 的只读连接与 Recorder 写连接可在 WAL 模式并行，但 `history` 必须分页、限制行数和查询时间，及时结束读事务；长时间读事务会阻碍 WAL checkpoint。[SQLite WAL 文档](https://www.sqlite.org/wal.html) 控制线程不直接执行 SQL，`stop`/紧急停止不会被历史查询阻塞。SQLite 只用于历史查询、本地归属/检查点和重启对账；策略状态由分片内存持有，提交完成不触发策略或发单。
 
@@ -446,7 +446,7 @@ SQLite 是**后台历史库和重启检查点**，不是当前运行的订单真
 
 | SQLite 记录 | 谁读取 | 具体用途 |
 | --- | --- | --- |
-| `PreparedOrder`、owner、配置版本 | 启动对账、`history` | 找回本地发单意图和归属，匹配交易所订单；展示订单历史 |
+| `PreparedOrder`、strategy_id、配置版本 | 启动对账、`history` | 找回本地发单意图和归属，匹配交易所订单；展示订单历史 |
 | 执行器检查点 | 启动对账 | 验证止盈止损、DCA 档位等本地状态后再恢复执行器 |
 | 已接收的订单/成交/费用回报 | `history`/报告、启动对账 | 历史查询与费用统计；按事件位置决定交易所补查范围 |
 | `HistoryGap`、`RunManifest` | `status`、`history`、下次启动 | 标明哪些时段的历史或执行器状态无法保证完整；上次运行是否清洁关闭 |
@@ -462,7 +462,7 @@ SQLite 是**后台历史库和重启检查点**，不是当前运行的订单真
 | Quill 诊断日志 | 不需要补回 | 可丢弃并计数告警 |
 | 公开盘口增量 | 可重新取快照 | 有缺口时暂停使用旧盘口，重新同步 |
 | 本账户订单状态、成交、余额 | 受市场、时间窗口、分页、历史保留和限速约束，不能保证完整 | 后台批量记录；缺口必须对账，无法核实的历史保持不完整 |
-| 下单意图、owner、配置版本、执行器状态 | 交易所不提供；订单 ID 只能辅助归属 | 运行时保留在分片内存并尽力异步记录；缺失检查点会限制重启后的自动恢复 |
+| 下单意图、strategy_id、配置版本、执行器状态 | 交易所不提供；订单 ID 只能辅助归属 | 运行时保留在分片内存并尽力异步记录；缺失检查点会限制重启后的自动恢复 |
 | Recorder 队列满或写入失败 | 已接收的交易所事实可能补查，本地控制状态无法保证补回 | 告警、累计丢失计数、标记 `HistoryGap`；当前进程继续交易，重启时暂停无法恢复的状态型执行器 |
 
 写库失败可能来自磁盘满、权限或 I/O 错误、数据库损坏，或写入长期慢于事件产生导致队列满。它不会让当前进程的内存订单状态消失；主要后果是历史与执行器快照留下缺口。数据库坏掉时继续发单并告警，是本设计已选的风险取舍。
@@ -474,7 +474,7 @@ SQLite 是**后台历史库和重启检查点**，不是当前运行的订单真
 1. 读取 `RunManifest`，判断上次是否清洁关闭、历史是否完整；读取可用的意图、配置版本、执行器检查点和每分片最后已提交序号。
 2. 从最后已落盘位置加安全回看区间开始，按交易所支持的市场和时间窗口分页查询挂单、历史订单、成交及余额。不能只查当前挂单，因为订单可能已全部成交或取消。
 3. 本地有意图的订单按状态机核对，补录可验证的缺失成交。数据库中有意图但交易所暂时查不到的订单保持待核对，**绝不直接重发**。
-4. 交易所有订单但本地没有完整意图时，用 client ID 解出的 owner 辅助识别归属。无状态策略在挂单、余额和风险额度核实后可重建；状态型执行器只有配置及内部状态均可验证时才自动恢复，否则暂停，由配置或人工决定撤单、接管或关闭。
+4. 交易所有订单但本地没有完整意图时，用 client ID 解出的 strategy_id 辅助识别归属。无状态策略在挂单、余额和风险额度核实后可重建；状态型执行器只有配置及内部状态均可验证时才自动恢复，否则暂停，由配置或人工决定撤单、接管或关闭。
 5. 对账完成后，已核实的策略进入 Trading；无法补齐的历史保持不完整，未核实的订单或执行器不得自动运行。数据库仍不可写时可按相同规则启动无状态策略，持续显示存储告警。
 
 客户端订单 ID 的唯一部分来自每次启动的随机 `RunId` 与分片本地序号，不依赖数据库（编码见 [STRUCTURE_AND_TYPES.md](STRUCTURE_AND_TYPES.md) 第 3 节）。部分交易所只要求 ID 在未完成订单中唯一，即使用原 ID 重发也可能在前单成交后产生第二笔订单；写请求超时后只能查询和对账。
@@ -487,12 +487,12 @@ SQLite 是**后台历史库和重启检查点**，不是当前运行的订单真
 
 ## 12. 回测与模拟盘
 
-Paper 与回测复用订单簿核心、`OrderTracker`、策略、`RiskGate` 和事件类型，只把网络网关换成可重放的模拟撮合；时间由 `ReplayClock` 注入，不启动网络组件。相同数据与配置必须得到相同的动作序列、订单状态和结果。回测模块在 G5 才建立。
+模拟盘 与回测复用订单簿核心、`OrderTracker`、策略、`RiskGate` 和事件类型，只把网络网关换成可重放的模拟撮合；时间由 `ReplayClock` 注入，不启动网络组件。相同数据与配置必须得到相同的动作序列、订单状态和结果。回测模块在 G5 才建立。
 
 ```mermaid
 flowchart LR
     DATA["历史 Candle / 脱敏重放夹具"] --> CLOCK["ReplayClock"]
-    CLOCK --> SHARD["ShardRuntime（单线程）"]
+    CLOCK --> SHARD["Shard（单线程）"]
     SHARD --> STRATEGY["策略 / Controller"]
     STRATEGY --> RISK["RiskGate"]
     RISK --> SIM["SimpleSimulatedExchange / ExecutorSimulator"]
@@ -501,7 +501,7 @@ flowchart LR
     EVENTS --> RESULT["PnL / 订单 / 成交结果"]
 ```
 
-公开成交只作为 Paper 撮合输入，只有满足自己的撮合规则时才生成本账户 `TradeUpdate`。
+公开成交只作为 模拟盘 撮合输入，只有满足自己的撮合规则时才生成本账户 `TradeUpdate`。
 
 ## 13. 延迟测量点
 

@@ -15,7 +15,8 @@
 | [STRUCTURE_AND_TYPES.md](STRUCTURE_AND_TYPES.md) | 目录与 Bazel 包、依赖方向、关键数据类型与不变量、Python/C++ 语义对照、契约测试 | 写代码前确认文件、target 和字段 |
 | [DEPENDENCIES.md](DEPENDENCIES.md) | 第三方依赖选型与版本、Bazel 约定、各库的使用边界 | 改构建、引入或升级依赖 |
 | [DEVELOPMENT.md](DEVELOPMENT.md) | C++ 写法约束、协程与关闭规则、多 Agent 协作、任务包与排程、工作单、测试命令 | 领取任务、提交与集成 |
-| [ERRORS.md](ERRORS.md) | 业务错误码：编号规则（10000 起，每类一个千位段）、处理方式、完整错误码表、迁移步骤 | 新增或处理错误时 |
+| [ERRORS.md](ERRORS.md) | 业务错误码：负数错误码、处理方式、完整注册表及兼容格式 | 新增或处理错误时 |
+| [GLOSSARY.md](GLOSSARY.md) | 当前代码与配置使用的交易术语 | 核对术语、类型和状态名 |
 | [refactor/PLAN.md](refactor/PLAN.md) | 目录重构计划：目标结构、新旧文件对应、分阶段步骤与检查项 | 执行或审查目录重构 |
 
 文档冲突时的优先级：运行时与线程语义以 `ARCHITECTURE.md` 为准；文件名、target 与字段以 `STRUCTURE_AND_TYPES.md` 为准；订单簿算法以 `ORDER_BOOK.md` 为准；依赖版本以仓库根目录的 [`MODULE.bazel`](../MODULE.bazel) 为准。实现中发现冲突，先更新文档和对应测试，再改代码。
@@ -25,30 +26,30 @@
 ```text
 hquant（CLI）──Unix socket──▶ hquant_engine
                               ├─ 分片线程 × ≤8：行情 WS / 下单连接 / 私有 WS → 订单簿 / OrderTracker / 策略 / 分片风控 → 异步写
-                              ├─ 控制线程：ControlServer、账户额度租约、健康汇总
-                              ├─ Recorder 线程：SQLite WAL 批量写（不阻塞发单）
-                              ├─ HistoryReader 线程：只读分页查询（history / 启动恢复）
+                              ├─ 服务线程：QuantServer、账户额度、健康汇总
+                              ├─ SqliteHistoryWriter 线程：SQLite WAL 批量写（不阻塞发单）
+                              ├─ SqliteHistoryReader 线程：只读分页查询（history / 启动恢复）
                               └─ Quill 线程：诊断日志
 ```
 
 ## 3. 基线与范围
 
 - Python 行为基线：`../../hummingbot` 的 `9af100d6822da7d2d0291a906c730ef172284ee2`（包版本 `2.17.0`）。迁移的是**可观察交易行为**（订单状态、资金、费用、策略触发、动作顺序、恢复结果），不迁移 GIL、`asyncio`、每秒 `Clock` 轮询或 SQLAlchemy 对象。
-- 首条链路：Binance 现货 + `simple_pmm` + Paper，随后是多分片下的隔离环境实盘。XEMM、V2 Controller/Executor、回测和更多连接器在其后逐项迁移。
+- 首条链路：Binance 现货 + `simple_pmm` + 模拟盘，随后是多分片下的隔离环境实盘。XEMM、V2 Controller/Executor、回测和更多连接器在其后逐项迁移。
 - 构建：C++20、Bazel 9.2.0（Bzlmod），依赖见 [DEPENDENCIES.md](DEPENDENCIES.md)。
 
 ## 4. 快速运行
 
-固定行情 Paper（离线）：
+固定行情模拟盘（离线）：
 
 ```bash
-bazel run //apps:hquant -- start   --config examples/simulated_replay.yaml --state-dir /tmp/hquant-paper-demo
-bazel run //apps:hquant -- status  --state-dir /tmp/hquant-paper-demo
-bazel run //apps:hquant -- history --state-dir /tmp/hquant-paper-demo --limit 20
-bazel run //apps:hquant -- stop    --state-dir /tmp/hquant-paper-demo
+bazel run //apps:hquant -- start   --config examples/simulated_replay.yaml --state-dir /tmp/hquant-simulated-demo
+bazel run //apps:hquant -- status  --state-dir /tmp/hquant-simulated-demo
+bazel run //apps:hquant -- history --state-dir /tmp/hquant-simulated-demo --limit 20
+bazel run //apps:hquant -- stop    --state-dir /tmp/hquant-simulated-demo
 ```
 
-真实公开行情驱动 Paper：把配置换成 `examples/simulated_binance_pmm.yaml`。`start` 在前台运行，其余命令在另一个终端执行。全量测试：`bazel test //...`。
+真实公开行情驱动模拟盘：把配置换成 `examples/simulated_binance_pmm.yaml`。`start` 在前台运行，其余命令在另一个终端执行。全量测试：`bazel test //...`。
 
 本机验收记录见 [`dev/VALIDATION_2026-09-27.md`](../dev/VALIDATION_2026-09-27.md)，Linux CI 状态见 [`dev/LINUX_VALIDATION.md`](../dev/LINUX_VALIDATION.md)。
 
@@ -57,10 +58,10 @@ bazel run //apps:hquant -- stop    --state-dir /tmp/hquant-paper-demo
 | 术语 | 含义 |
 | --- | --- |
 | 分片（shard） | 一个 OS 线程 + 一个 `io_context`，独占若干市场的行情、订单、策略、风控与 socket |
-| owner | 稳定的策略/执行器归属 `{strategy_id, strategy_id, executor_id?}`；跨重启不变，分片号不是 owner |
-| `BookScale` | 行情流的价格/数量步长，用于把盘口转成整数 ticks/lots；不同于下单规则 `TradingRule` |
-| `ActionBatch` | 策略回调返回的有序动作列表，由 `ActionDispatcher` 在回调结束后逐个验证执行 |
+| `strategy_id` | 稳定的数字策略 ID，编入客户端订单号；分片号可在重启后改变 |
+| `TickLotSize` | 行情流的价格/数量步长，用于把盘口转成整数 ticks/lots；不同于下单规则 `TradingRule` |
+| `ActionBatch` | 策略回调返回的有序动作列表，由 `ActionExecutor` 在回调结束后逐个验证执行 |
 | `SubmissionUnknown` | 写请求结果不明；保留最坏敞口，用原 client ID 补查，绝不换 ID 重发 |
-| `AwaitingFills` | 交易所已报 Filled 但成交明细未齐，由定时器/REST 补查 |
-| 租约（lease） | 控制线程静态分给各分片的资金/限速额度；热路径只查本分片租约 |
+| `AwaitingTrades` | 交易所已报 Filled 但成交明细未齐，由定时器/REST 补查 |
+| 风控额度（risk budget） | 服务线程静态分给各分片的资金/限速额度；热路径只查本分片额度 |
 | 历史缺口 | Recorder 入队或写入失败造成的记录缺失；继续交易，但 `status/history` 显示不完整 |
