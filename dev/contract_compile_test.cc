@@ -1,6 +1,6 @@
 #include <type_traits>
 
-#include "application/quant_server.h"
+#include "application/control_server.h"
 #include "base/market.h"
 #include "base/net.h"
 #include "base/order.h"
@@ -31,7 +31,7 @@ int main() {
       hquant::SubmitOrder{hquant::StrategyId{}, request});
   hquant::HistoryRecord record;
   record.payload = hquant::PreparedOrder{};
-  hquant::ServerRequest server_request;
+  hquant::ControlRequest server_request;
   server_request.payload = hquant::StatusRequest{};
   hquant::ShardReport report;
   return batch.ordered.size() == 1 && report.report_version == 0 ? 0 : 4;

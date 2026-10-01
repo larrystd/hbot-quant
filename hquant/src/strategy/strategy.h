@@ -28,6 +28,7 @@ struct ActionBatch {
 };
 
 enum class BookTriggerMode { None, BboChanged, EveryAppliedBatch };
+enum class Trigger { BookChanged, PublicTraded, OrderUpdated, Traded, Timer };
 struct TriggerPolicy {
   BookTriggerMode book_mode = BookTriggerMode::None;
   bool on_public_trade = false;
@@ -54,7 +55,7 @@ class Strategy {
  public:
   virtual ~Strategy() = default;
   virtual TriggerPolicy Triggers() const = 0;
-  virtual ActionBatch OnTimer(const StrategyInput& context) = 0;
+  virtual ActionBatch Decide(const StrategyInput& context, Trigger why) = 0;
 };
 
 }  // namespace hquant

@@ -46,9 +46,9 @@ hquant_cc_library(
 )
 
 hquant_cc_library(
-    name = "binance_spot_gateway",
-    srcs = ["binance_spot_gateway.cc"],
-    hdrs = ["binance_spot_gateway.h"],
+    name = "order_gateway",
+    srcs = ["order_gateway.cc"],
+    hdrs = ["order_gateway.h"],
     deps = [
         "//hquant/src/base:error",
         "//hquant/src/base:market",
@@ -66,9 +66,9 @@ hquant_cc_library(
 )
 
 hquant_cc_library(
-    name = "binance_spot_account",
-    srcs = ["binance_spot_account.cc"],
-    hdrs = ["binance_spot_account.h"],
+    name = "account_reports",
+    srcs = ["account_reports.cc"],
+    hdrs = ["account_reports.h"],
     deps = [
         "//hquant/src/base:error",
         "//hquant/src/base:net",

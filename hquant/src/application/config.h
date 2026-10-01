@@ -1,6 +1,7 @@
 #pragma once
 
 #include <chrono>
+#include <cstddef>
 #include <cstdint>
 #include <map>
 #include <optional>
@@ -11,6 +12,7 @@
 #include "absl/status/statusor.h"
 #include "base/market.h"
 #include "base/types.h"
+#include "strategy/simple_pmm.h"
 
 namespace hquant {
 
@@ -27,6 +29,7 @@ struct MarketConfig {
   MarketSpec spec;
   TickLotSize tick_lot_size;
   TradingRule trading_rule;
+  std::optional<std::chrono::microseconds> stale_after;
 };
 
 struct StrategyConfig {
@@ -37,6 +40,9 @@ struct StrategyConfig {
   Decimal bid_spread;
   Decimal ask_spread;
   std::chrono::microseconds refresh_interval{0};
+  Decimal maker_fee_rate = *Decimal::Parse("0.001");
+  PmmPriceType price_type = PmmPriceType::Mid;
+  std::chrono::microseconds timer_period{std::chrono::seconds(1)};
 };
 
 struct ShardAssignment {
@@ -51,6 +57,23 @@ struct StaticRiskBudgetConfig {
   AssetId asset;
   ShardId shard;
   Decimal hard_limit;
+  std::optional<std::chrono::microseconds> valid_for;
+};
+
+struct RiskConfig {
+  Decimal fee_buffer_rate = *Decimal::Parse("0");
+  std::optional<std::chrono::microseconds> max_rule_age;
+};
+
+struct SimulatedExchangeOptions {
+  Decimal maker_fee_rate = *Decimal::Parse("0.001");
+};
+
+struct StorageOptions {
+  size_t writer_queue = 1024;
+  size_t writer_batch = 64;
+  size_t reader_queue = 32;
+  uint32_t reader_page_limit = 500;
 };
 
 struct StaticRateBudgetConfig {
@@ -74,6 +97,9 @@ struct AppConfig {
   std::vector<StrategyConfig> strategy_configs;
   std::vector<StaticRiskBudgetConfig> risk_budgets;
   std::vector<StaticRateBudgetConfig> rate_budgets;
+  RiskConfig risk;
+  SimulatedExchangeOptions simulated_exchange;
+  StorageOptions storage;
   std::string storage_path;
   std::optional<std::string> replay_fixture;
 };

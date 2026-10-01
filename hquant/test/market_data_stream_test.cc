@@ -1,4 +1,4 @@
-#include "market/binance_spot_feed.h"
+#include "market/market_data_stream.h"
 
 #include <atomic>
 #include <chrono>

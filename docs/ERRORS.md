@@ -6,7 +6,7 @@
 
 改造前，`hquant/src` 与 `apps` 约有 380 处直接构造 absl 错误，其中 `InvalidArgument` 196 处、`FailedPrecondition` 69 处。absl 的错误码只是通用分类，同一个 `InvalidArgument` 既可能是配置写错，也可能是一条行情报文损坏，还可能是下单数量不合法。它无法回答两个业务问题：**出了什么事**，**该怎么处理**。
 
-改造前曾出现实际问题：`market/binance_spot_feed.cc` 的 `Run()` 遇到 `InvalidArgument` 或 `OutOfRange` 会永久停止行情流。配置错误应该停止，但一条损坏的 WebSocket 报文同样返回 `InvalidArgument`，当时行情流不再重连，该市场一直停在不可用状态。`shard/routing.cc` 也曾靠 absl 错误码反推路由失败原因，其他错误码会被静默归为"归属冲突"。
+改造前曾出现实际问题：`market/market_data_stream.cc` 的 `Run()` 遇到 `InvalidArgument` 或 `OutOfRange` 会永久停止行情流。配置错误应该停止，但一条损坏的 WebSocket 报文同样返回 `InvalidArgument`，当时行情流不再重连，该市场一直停在不可用状态。`shard/routing.cc` 也曾靠 absl 错误码反推路由失败原因，其他错误码会被静默归为"归属冲突"。
 
 ## 2. 编号规则
 
@@ -21,9 +21,9 @@
 | 10000 | 通用 | `base/types`，各模块共用的序号耗尽、取消、内部错误 |
 | 11000 | 网络与限速 | `base/net`、`base/rate_limit` |
 | 12000 | 行情 | `market/*` |
-| 13000 | 订单 | `order/order_tracker`、`order/simulated_exchange`、`order/binance_spot_gateway` |
+| 13000 | 订单 | `order/order_tracker`、`order/simulated_exchange`、`order/order_gateway` |
 | 14000 | 风控与额度 | `order/risk` |
-| 15000 | 账户回报、对账与路由 | `order/binance_spot_account`、`shard/routing` |
+| 15000 | 账户回报、对账与路由 | `order/account_reports`、`shard/routing` |
 | 16000 | 分片服务 | `shard/shard`、`shard/action_executor` |
 | 17000 | 存储 | `storage/*` |
 | 18000 | 配置与进程 | `application/config`、`application/launcher` |
@@ -90,7 +90,7 @@ payload 中的业务码以十进制 ASCII 编码；读取到未知编号、非�
 | --- | --- | --- | --- | --- | --- |
 | -10001 | `DECIMAL_INVALID` | Reject | InvalidArgument | 十进制解析失败：空、非法字符、非正步长、比较失败 | `base/types` |
 | -10002 | `DECIMAL_PRECISION_EXCEEDED` | Reject | OutOfRange | 超过 28 位有效数字 | `base/types` |
-| -10003 | `SEQUENCE_EXHAUSTED` | Halt | ResourceExhausted | 本地递增序号耗尽：分片记录序号、冻结 ID、客户端订单号序号、行情连接编号 | `shard/shard`、`order/risk`、`order/binance_spot_gateway`、`market/binance_spot_feed` |
+| -10003 | `SEQUENCE_EXHAUSTED` | Halt | ResourceExhausted | 本地递增序号耗尽：分片记录序号、冻结 ID、客户端订单号序号、行情连接编号 | `shard/shard`、`order/risk`、`order/order_gateway`、`market/market_data_stream` |
 | -10004 | `NET_CANCELLED` | Reject | Cancelled | 网络 I/O 被取消 | `base/net` |
 | -10006 | `DECIMAL_ARITHMETIC_FAILED` | Halt | OutOfRange | 十进制运算失败：溢出、非法量化或除零 | `base/types` |
 | -10900 | `INTERNAL` | Halt | Internal | 程序不变量被破坏，属于缺陷 | `order/risk`（预留对应的额度消失）及未转换的第三方错误 |
@@ -105,12 +105,12 @@ payload 中的业务码以十进制 ASCII 编码；读取到未知编号、非�
 | -11004 | `NET_UNAVAILABLE` | Retry | Unavailable | 连接断开、不可达、陈旧连接重试耗尽 | `base/net` |
 | -11005 | `NET_CONCURRENT_CALL` | Halt | FailedPrecondition | 网络连接被并发调用，违反串行使用约束 | `base/net` |
 | -11006 | `NET_TLS_VERIFY_FAILED` | Halt | Unavailable | 证书链或主机名校验失败；不得携带凭据重试 | `base/net` |
-| -11007 | `FEED_SNAPSHOT_HTTP_ERROR` | Retry | Unavailable | 行情快照 HTTP 请求失败 | `market/binance_spot_feed` |
-| -11008 | `EXCHANGE_RATE_LIMITED` | Retry | ResourceExhausted | 交易所限速（429）或快照被限流；按 `Retry-After` 退避 | `market/binance_spot_feed` |
-| -11009 | `EXCHANGE_IP_BANNED` | Halt | ResourceExhausted | 交易所封禁（418）；触发全局熔断 | `market/binance_spot_feed` |
+| -11007 | `FEED_SNAPSHOT_HTTP_ERROR` | Retry | Unavailable | 行情快照 HTTP 请求失败 | `market/market_data_stream` |
+| -11008 | `EXCHANGE_RATE_LIMITED` | Retry | ResourceExhausted | 交易所限速（429）或快照被限流；按 `Retry-After` 退避 | `market/market_data_stream` |
+| -11009 | `EXCHANGE_IP_BANNED` | Halt | ResourceExhausted | 交易所封禁（418）；触发全局熔断 | `market/market_data_stream` |
 | -11010 | `RATE_BREAKER_OPEN` | Reject | Unavailable | 全局熔断中，暂停该类请求 | `ErrorCode` |
 | -11011 | `RATE_BUDGET_MISSING` | Reject | FailedPrecondition | 分片没有该类请求的限速额度 | `ErrorCode`、`base/rate_limit` |
-| -11012 | `RATE_BUDGET_EXHAUSTED` | Reject | ResourceExhausted | 分片限速额度用完 | `ErrorCode`、`order/binance_spot_gateway` |
+| -11012 | `RATE_BUDGET_EXHAUSTED` | Reject | ResourceExhausted | 分片限速额度用完 | `ErrorCode`、`order/order_gateway` |
 | -11013 | `RATE_CONFIG_INVALID` | Halt | InvalidArgument | 限速容量、额度授予或请求权重非法、重复或超过全局容量 | `base/rate_limit`、`ErrorCode` |
 | -11014 | `NET_NOT_CONNECTED` | Retry | Unavailable | WebSocket 尚未连接，操作暂不可执行 | `base/net` |
 
@@ -118,43 +118,43 @@ payload 中的业务码以十进制 ASCII 编码；读取到未知编号、非�
 
 | 码 | 名称 | 处理 | absl | 含义 | 来源 |
 | --- | --- | --- | --- | --- | --- |
-| -12001 | `FEED_CONFIG_INVALID` | Halt | InvalidArgument | 行情流配置、`TickLotSize` 或 connection_id 非法 | `market/binance_spot_feed` |
-| -12002 | `FEED_MESSAGE_INVALID` | Resync | InvalidArgument | 报文无法解析或字段非法：JSON、事件类型、价位、序号区间、成交字段 | `market/binance_spot_feed`、`ErrorCode` |
-| -12003 | `FEED_TICK_SIZE_MISMATCH` | Resync | OutOfRange | 价格或数量不能按 TickLotSize 整除或超出 64 位范围 | `market/binance_spot_feed`、`market/order_book` |
-| -12004 | `FEED_WRONG_MARKET` | Resync | InvalidArgument | 报文不属于该行情流配置的市场 | `market/binance_spot_feed` |
-| -12005 | `BOOK_SEQUENCE_GAP` | Resync | Aborted | 增量序号缺口、缓冲增量无效、快照接不上首条增量 | `market/binance_spot_feed`、`ErrorCode` |
+| -12001 | `FEED_CONFIG_INVALID` | Halt | InvalidArgument | 行情流配置、`TickLotSize` 或 connection_id 非法 | `market/market_data_stream` |
+| -12002 | `FEED_MESSAGE_INVALID` | Resync | InvalidArgument | 报文无法解析或字段非法：JSON、事件类型、价位、序号区间、成交字段 | `market/market_data_stream`、`ErrorCode` |
+| -12003 | `FEED_TICK_SIZE_MISMATCH` | Resync | OutOfRange | 价格或数量不能按 TickLotSize 整除或超出 64 位范围 | `market/market_data_stream`、`market/order_book` |
+| -12004 | `FEED_WRONG_MARKET` | Resync | InvalidArgument | 报文不属于该行情流配置的市场 | `market/market_data_stream` |
+| -12005 | `BOOK_SEQUENCE_GAP` | Resync | Aborted | 增量序号缺口、缓冲增量无效、快照接不上首条增量 | `market/market_data_stream`、`ErrorCode` |
 | -12006 | `BOOK_CROSSED` | Resync | Aborted | 连续交易时段买一 ≥ 卖一 | `ErrorCode` |
 | -12007 | `BOOK_BUFFER_OVERFLOW` | Resync | ResourceExhausted | 快照到达前缓存的增量超过上限 | `ErrorCode` |
 | -12008 | `BOOK_STALE` | Degrade | Unavailable | 超过阈值没有更新；该市场暂停新单 | `market/order_book` 的 Stale 状态 |
 | -12009 | `FEED_DISCONNECTED` | Retry | Unavailable | 行情连接断开 | `ErrorCode` |
 | -12010 | `REPLAY_FILE_NOT_FOUND` | Halt | NotFound | 回放行情文件无法读取 | `market/replay_feed` |
 | -12011 | `REPLAY_FILE_INVALID` | Halt | InvalidArgument | 回放文件 JSON、schema、字段或输入类型非法 | `market/replay_feed` |
-| -12012 | `FEED_STOPPED` | Reject | Cancelled | 行情流被主动停止 | `market/binance_spot_feed` |
+| -12012 | `FEED_STOPPED` | Reject | Cancelled | 行情流被主动停止 | `market/market_data_stream` |
 | -12013 | `PUBLIC_TRADE_INVALID` | Reject | InvalidArgument | 公开成交的交易对或方向非法 | `shard/shard` |
 
 ### 13000 订单
 
 | 码 | 名称 | 处理 | absl | 含义 | 来源 |
 | --- | --- | --- | --- | --- | --- |
-| -13003 | `ORDER_DUPLICATE` | Reject | AlreadyExists | 客户端订单号已被跟踪或发生碰撞 | `order/order_tracker`、`order/simulated_exchange`、`order/binance_spot_gateway` |
-| -13004 | `ORDER_NOT_FOUND` | Reject | NotFound | 订单未被跟踪，或预备发送的订单已不存在 | `order/order_tracker`、`order/simulated_exchange`、`order/binance_spot_gateway` |
-| -13005 | `ORDER_NOT_CANCELABLE` | Reject | FailedPrecondition | 订单已是终态，或当前状态不可撤销、不可中止 | `order/order_tracker`、`order/binance_spot_gateway` |
-| -13006 | `ORDER_CANCEL_PENDING` | Reject | AlreadyExists | 撤单请求已在途 | `order/binance_spot_gateway` |
-| -13007 | `ORDER_SEND_QUEUE_FULL` | Reject | ResourceExhausted | 下单或撤单发送槽已满 | `order/binance_spot_gateway` |
-| -13008 | `ORDER_EXPIRED_BEFORE_SEND` | Reject | DeadlineExceeded | 订单在写入网络前已过期 | `order/binance_spot_gateway` |
-| -13009 | `ORDER_SUBMISSION_UNKNOWN` | Reconcile | Unavailable | 请求可能已发出但结果未知；保留敞口，按原 ID 补查 | `order/binance_spot_gateway` |
-| -13010 | `ORDER_REJECTED_BY_EXCHANGE` | Reject | FailedPrecondition | 交易所明确拒绝该订单 | `order/binance_spot_gateway` |
-| -13011 | `ORDER_REPORT_INVALID` | Reconcile | InvalidArgument | 订单或成交回报缺少订单 ID、状态未知、字段非法、缺手续费资产 | `order/order_tracker`、`order/binance_spot_gateway` |
+| -13003 | `ORDER_DUPLICATE` | Reject | AlreadyExists | 客户端订单号已被跟踪或发生碰撞 | `order/order_tracker`、`order/simulated_exchange`、`order/order_gateway` |
+| -13004 | `ORDER_NOT_FOUND` | Reject | NotFound | 订单未被跟踪，或预备发送的订单已不存在 | `order/order_tracker`、`order/simulated_exchange`、`order/order_gateway` |
+| -13005 | `ORDER_NOT_CANCELABLE` | Reject | FailedPrecondition | 订单已是终态，或当前状态不可撤销、不可中止 | `order/order_tracker`、`order/order_gateway` |
+| -13006 | `ORDER_CANCEL_PENDING` | Reject | AlreadyExists | 撤单请求已在途 | `order/order_gateway` |
+| -13007 | `ORDER_SEND_QUEUE_FULL` | Reject | ResourceExhausted | 下单或撤单发送槽已满 | `order/order_gateway` |
+| -13008 | `ORDER_EXPIRED_BEFORE_SEND` | Reject | DeadlineExceeded | 订单在写入网络前已过期 | `order/order_gateway` |
+| -13009 | `ORDER_SUBMISSION_UNKNOWN` | Reconcile | Unavailable | 请求可能已发出但结果未知；保留敞口，按原 ID 补查 | `order/order_gateway` |
+| -13010 | `ORDER_REJECTED_BY_EXCHANGE` | Reject | FailedPrecondition | 交易所明确拒绝该订单 | `order/order_gateway` |
+| -13011 | `ORDER_REPORT_INVALID` | Reconcile | InvalidArgument | 订单或成交回报缺少订单 ID、状态未知、字段非法、缺手续费资产 | `order/order_tracker`、`order/order_gateway` |
 | -13013 | `REPORT_ORDER_UNKNOWN` | Reconcile | NotFound | 回报找不到所属订单 | `order/order_tracker` |
-| -13014 | `CLIENT_ORDER_ID_INVALID` | Reject | InvalidArgument | 客户端订单号编码或解码失败、格式不支持、字段溢出 | `order/binance_spot_gateway` |
-| -13015 | `SIGNING_FAILED` | Halt | Internal | 签名输入非法或 HMAC 计算失败 | `order/binance_spot_gateway` |
-| -13016 | `ORDER_RECOVERY_INVALID` | Reconcile | FailedPrecondition | 重启时恢复的历史订单非法或与当前状态冲突 | `order/binance_spot_gateway` |
+| -13014 | `CLIENT_ORDER_ID_INVALID` | Reject | InvalidArgument | 客户端订单号编码或解码失败、格式不支持、字段溢出 | `order/order_gateway` |
+| -13015 | `SIGNING_FAILED` | Halt | Internal | 签名输入非法或 HMAC 计算失败 | `order/order_gateway` |
+| -13016 | `ORDER_RECOVERY_INVALID` | Reconcile | FailedPrecondition | 重启时恢复的历史订单非法或与当前状态冲突 | `order/order_gateway` |
 | -13017 | `SIMULATED_BALANCE_INSUFFICIENT` | Reject | ResourceExhausted | 模拟交易所可用余额不足 | `order/simulated_exchange` |
 | -13018 | `SIMULATED_MARKET_DATA_INVALID` | Reject | InvalidArgument | 模拟交易所输入的市场数据非法 | `order/simulated_exchange` |
 | -13019 | `ORDER_STRATEGY_ID_INVALID` | Reject | InvalidArgument | 策略 ID 无效或与当前分片不匹配 | `shard/action_executor`、`order/risk` |
 | -13020 | `ORDER_ACCOUNT_INVALID` | Reject | InvalidArgument | 订单账户为空或与当前账户不符 | `order/risk`、`order/simulated_exchange` |
 | -13021 | `ORDER_MARKET_INVALID` | Reject | InvalidArgument | 订单交易对为空或与当前交易对不符 | `order/risk`、`order/simulated_exchange` |
-| -13022 | `ORDER_TYPE_UNSUPPORTED` | Reject | InvalidArgument | 不支持的订单类型或 timeInForce 组合 | `shard/action_executor`、`order/binance_spot_gateway` |
+| -13022 | `ORDER_TYPE_UNSUPPORTED` | Reject | InvalidArgument | 不支持的订单类型或 timeInForce 组合 | `shard/action_executor`、`order/order_gateway` |
 | -13023 | `ORDER_PRICE_OR_AMOUNT_INVALID` | Reject | InvalidArgument | 价格或数量不为正，或缺少限价 | `shard/action_executor`、`order/risk` |
 | -13024 | `ORDER_BELOW_MIN_AMOUNT` | Reject | FailedPrecondition | 订单数量低于交易规则下限 | `order/risk` |
 | -13025 | `ORDER_BELOW_MIN_NOTIONAL` | Reject | FailedPrecondition | 订单名义金额低于交易规则下限 | `order/risk` |
@@ -165,7 +165,7 @@ payload 中的业务码以十进制 ASCII 编码；读取到未知编号、非�
 | -13030 | `ORDER_STATUS_CONFLICT` | Reconcile | FailedPrecondition | 订单状态转移矛盾 | `order/order_tracker` |
 | -13031 | `TRADE_ID_ON_OTHER_ORDER` | Reconcile | FailedPrecondition | 成交编号已属于另一张订单 | `order/order_tracker` |
 | -13032 | `TRADE_EXCEEDS_ORDER_AMOUNT` | Reconcile | FailedPrecondition | 成交累计量超过订单数量 | `order/order_tracker` |
-| -13033 | `GATEWAY_CONFIG_INVALID` | Halt | InvalidArgument | 下单网关配置非法 | `order/binance_spot_gateway` |
+| -13033 | `GATEWAY_CONFIG_INVALID` | Halt | InvalidArgument | 下单网关配置非法 | `order/order_gateway` |
 
 ### 14000 风控与额度
 
@@ -189,13 +189,13 @@ payload 中的业务码以十进制 ASCII 编码；读取到未知编号、非�
 
 | 码 | 名称 | 处理 | absl | 含义 | 来源 |
 | --- | --- | --- | --- | --- | --- |
-| -15001 | `ACCOUNT_MESSAGE_INVALID` | Reconcile | InvalidArgument | 私有回报报文非法：JSON、时间戳、订单身份、成交 ID、手续费资产、余额字段 | `order/binance_spot_account` |
-| -15002 | `ACCOUNT_EVENT_UNSUPPORTED` | Reject | Unimplemented | 不支持的私有事件类型；记录后忽略 | `order/binance_spot_account` |
-| -15003 | `RECONCILE_RESPONSE_INVALID` | Reconcile | InvalidArgument | 查单、查成交、查挂单的 REST 响应非法 | `order/binance_spot_account` |
-| -15004 | `RECONCILE_IDENTITY_MISMATCH` | Reconcile | FailedPrecondition | 查询结果与目标订单身份不符，或同一订单号出现在两个市场 | `order/binance_spot_account` |
-| -15005 | `RECONCILE_QUERY_FAILED` | Retry | Unavailable | 对账查询请求失败 | `order/binance_spot_account` |
-| -15006 | `RECONCILE_RESPONSE_TOO_LARGE` | Reconcile | ResourceExhausted | 查询结果超过上限；缩小时间窗口后重查 | `order/binance_spot_account` |
-| -15007 | `RECONCILE_TARGET_INVALID` | Halt | InvalidArgument | 对账目标、市场集合或时间窗口参数非法 | `order/binance_spot_account` |
+| -15001 | `ACCOUNT_MESSAGE_INVALID` | Reconcile | InvalidArgument | 私有回报报文非法：JSON、时间戳、订单身份、成交 ID、手续费资产、余额字段 | `order/account_reports` |
+| -15002 | `ACCOUNT_EVENT_UNSUPPORTED` | Reject | Unimplemented | 不支持的私有事件类型；记录后忽略 | `order/account_reports` |
+| -15003 | `RECONCILE_RESPONSE_INVALID` | Reconcile | InvalidArgument | 查单、查成交、查挂单的 REST 响应非法 | `order/account_reports` |
+| -15004 | `RECONCILE_IDENTITY_MISMATCH` | Reconcile | FailedPrecondition | 查询结果与目标订单身份不符，或同一订单号出现在两个市场 | `order/account_reports` |
+| -15005 | `RECONCILE_QUERY_FAILED` | Retry | Unavailable | 对账查询请求失败 | `order/account_reports` |
+| -15006 | `RECONCILE_RESPONSE_TOO_LARGE` | Reconcile | ResourceExhausted | 查询结果超过上限；缩小时间窗口后重查 | `order/account_reports` |
+| -15007 | `RECONCILE_TARGET_INVALID` | Halt | InvalidArgument | 对账目标、市场集合或时间窗口参数非法 | `order/account_reports` |
 | -15008 | `ROUTE_STRATEGY_UNKNOWN` | Reconcile | NotFound | 回报找不到对应策略或路由；隔离并补查 | `shard/routing` |
 | -15009 | `ROUTE_STRATEGY_CONFLICT` | Reconcile | FailedPrecondition | 订单 ID、交易所 ID、策略与账户归属冲突；隔离并补查 | `shard/routing` |
 | -15010 | `ROUTE_REPORT_INVALID` | Reconcile | InvalidArgument | 回报身份字段非法或源序号耗尽 | `shard/routing`、`ErrorCode` |

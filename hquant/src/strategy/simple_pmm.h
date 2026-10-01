@@ -22,6 +22,7 @@ struct SimplePmmConfig {
   PmmPriceType price_type = PmmPriceType::Mid;
   Decimal maker_fee_rate;
   bool buy_fee_from_returns = true;
+  std::chrono::microseconds timer_period{std::chrono::seconds(1)};
 };
 
 class SimplePmm final : public Strategy {
@@ -29,7 +30,7 @@ class SimplePmm final : public Strategy {
   explicit SimplePmm(SimplePmmConfig config) : config_(std::move(config)) {}
 
   TriggerPolicy Triggers() const override;
-  ActionBatch OnTimer(const StrategyInput& context) override;
+  ActionBatch Decide(const StrategyInput& context, Trigger why) override;
   std::optional<int64_t> NextRefreshAtUs() const { return next_refresh_at_us_; }
 
  private:

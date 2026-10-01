@@ -6,6 +6,31 @@
 
 核心原则：**一个分片独占其策略需要的行情、订单和资金状态。消息在该分片线程内解析、更新状态、执行符合触发条件的策略、检查风控，并发起非阻塞网络写入；热路径不跨交易线程。** 真正的 socket 写完成、交易所接单和成交是后续异步事件，不能承诺都发生在收到行情的同一调用栈内。是否等定时器由策略自己的触发策略决定；记录和日志只做非阻塞入队。
 
+### 当前单分片实现
+
+`QuantServer` 拥有并组装整条交易链；`ControlServer` 只处理本机的 `status`、`history`、`stop` 请求。回放和 Binance 公开行情共用策略、风控、模拟交易所、分片及历史组件。
+
+```mermaid
+flowchart LR
+    REPLAY["回放文件"] --> Q
+    BINANCE["Binance 公开行情"] --> Q
+    subgraph Q["QuantServer（交易核心）"]
+        BOOK["OrderBookSync"] --> SHARD["Shard：策略 / ActionExecutor / RiskGate / OrderTracker"]
+        SHARD <--> SIM["SimpleSimulatedExchange"]
+        SHARD --> WRITER["SqliteHistoryWriter"]
+        READER["SqliteHistoryReader"] --> CONTROL["ControlServer"]
+        SHARD --> CONTROL
+    end
+```
+
+1. **行情到撮合：** 深度增量先更新 `OrderBookSync`；`Shard` 用最新买一卖一撮合已有挂单，处理订单与成交回报，更新 `OrderTracker` 和 `RiskGate`，并将记录送给 Writer。
+2. **触发到动作：** 盘口变化、公开成交、自己的订单或成交回报、定时器按 `TriggerPolicy` 触发策略；`Shard` 合并及限频后组装 `StrategyInput`，`ActionExecutor` 依次冻结额度、准备订单、记录并执行动作。撮合及回报处理先于策略决策；执行期间的触发最多补跑一次。
+3. **回报到状态：** 模拟交易所的账户事件由 `Shard` 提取，先经 `OrderTracker` 去重及状态转移，再做风险记账和记录；管理查询通过 `ControlServer` 读取状态或由 Reader 查询历史。
+
+当前回放模式在 `Start()` 同步跑完输入，再开放管理入口；实时模式在一个分片 `io_context` 线程运行行情和定时器。管理入口目前使用 accept 线程和每请求一个工作线程；下一阶段按 [Asio 计划](refactor/ASIO_BENCH_PLAN.md)改为独立 `io_context` 管理线程。Writer 和 Reader 各有一个线程。
+
+以下多分片、私有交易通道及线程图描述目标架构；当前可运行范围以上述单分片实现为准。
+
 ## 1. 进程与线程总览
 
 ```mermaid
@@ -22,7 +47,7 @@ flowchart LR
             SH2["其他标的组"]
         end
         subgraph CTRL["控制线程"]
-            CONTROL["QuantServer<br/>额度管理 / 健康汇总"]
+            CONTROL["ControlServer<br/>状态 / 历史 / 停止"]
         end
         subgraph REC["Recorder 线程"]
             RECORDER["SqliteHistoryWriter<br/>批量写入"]
@@ -54,7 +79,7 @@ flowchart LR
 | 线程 | 数量 | 延迟要求 | 做什么 |
 | --- | --- | --- | --- |
 | 分片线程 | 默认 8，可配置 | 最高 | 独占策略依赖的连接、账户风险状态、订单和盘口；处理行情、回报、决策与异步写入发起 |
-| 控制线程 | 1 | `stop`/紧急停止需及时 | CLI 请求、健康汇总、额度再分配；只通过命令队列影响分片 |
+| 控制线程（目标架构为 ControlServer 管理线程） | 1 | `stop`/紧急停止需及时 | CLI 请求、健康汇总、额度再分配；只通过命令队列影响分片 |
 | Recorder 线程 | 1 | 无 | 从各分片的记录队列取事件，攒批写 SQLite |
 | HistoryReader 线程 | 1 | 无 | 独立只读连接处理分页 `history` 与启动恢复查询，结果异步返回控制线程 |
 | Quill 线程 | 1 | 无 | 日志格式化与写文件 |

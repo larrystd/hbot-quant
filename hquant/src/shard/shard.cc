@@ -1,5 +1,6 @@
 #include "shard/shard.h"
 
+#include <algorithm>
 #include <limits>
 #include <string>
 #include <utility>
@@ -21,7 +22,9 @@ Shard::Shard(Config config, const Clock& clock, Strategy& strategy,
       book_(config_.market.market, config_.scale.tick_lot_version, 8192, 1024,
             config_.stale_after_us),
       action_executor_(risk_, exchange_, recorder_, config_.run, config_.shard,
-                       shard_sequence_) {}
+                       shard_sequence_) {
+  origin_mono_ = clock_.MonoNow();
+}
 
 BookApplyResult Shard::Subscribe(uint64_t connection_id) {
   return book_.Subscribe(connection_id);
@@ -54,13 +57,27 @@ absl::Status Shard::UpdateSimulatedExchangeBbo() {
 }
 
 absl::Status Shard::OnSnapshot(const BookSnapshot& snapshot) {
-  book_.OnSnapshot(snapshot);
-  return UpdateSimulatedExchangeBbo();
+  return AfterBookApply(book_.OnSnapshot(snapshot));
 }
 
 absl::Status Shard::OnDiff(const BookDiff& diff) {
-  book_.OnDiff(diff);
-  return UpdateSimulatedExchangeBbo();
+  return AfterBookApply(book_.OnDiff(diff));
+}
+
+absl::Status Shard::OnBookApplied(const BookApplyResult& result) {
+  return AfterBookApply(result);
+}
+
+absl::Status Shard::AfterBookApply(const BookApplyResult& result) {
+  auto matched = UpdateSimulatedExchangeBbo();
+  if (!matched.ok()) return matched;
+  const auto policy = strategy_.Triggers();
+  const bool book_trigger =
+      result.applied &&
+      (policy.book_mode == BookTriggerMode::EveryAppliedBatch ||
+       (policy.book_mode == BookTriggerMode::BboChanged && result.top_changed));
+  return RunPendingTrigger(book_trigger ? std::optional<Trigger>(Trigger::BookChanged)
+                                        : std::nullopt);
 }
 
 absl::Status Shard::OnPublicTrade(const PublicTrade& trade) {
@@ -75,7 +92,11 @@ absl::Status Shard::OnPublicTrade(const PublicTrade& trade) {
   last_trade_price_ = *price;
   auto status = exchange_.OnPublicTrade(*trade.side, *price, *amount);
   if (!status.ok()) return status;
-  return DrainSimulatedExchangeEvents();
+  status = DrainSimulatedExchangeEvents();
+  if (!status.ok()) return status;
+  return RunPendingTrigger(strategy_.Triggers().on_public_trade
+                               ? std::optional<Trigger>(Trigger::PublicTraded)
+                               : std::nullopt);
 }
 
 std::vector<OrderSnapshot> Shard::OrderViews() const {
@@ -103,36 +124,72 @@ absl::StatusOr<std::vector<ActionResult>> Shard::OnTimer(InputTime stamp) {
     return Error(ErrorCode::kInputTimeInvalid, "negative input time");
   const auto now_us = clock_.MonoNow().time_since_epoch().count();
   book_.OnTimer(now_us > 0 ? static_cast<uint64_t>(now_us) : 0);
-  auto orders = OrderViews();
-  auto balances = BalanceViews();
-  StrategyInput strategy_input{book_.View(),
-                               config_.scale,
-                               config_.rule,
-                               last_trade_price_,
-                               book_.View().State() == BookSyncState::Live,
-                               orders,
-                               balances,
-                               stamp,
-                               clock_};
-  auto batch = strategy_.OnTimer(strategy_input);
-  ActionContext action_context{
-      config_.strategy_id,  ActionBatchId{next_action_batch_id_++},
-      config_.market,       config_.rule,
-      clock_.UtcNow(),      clock_.MonoNow(),
-      strategy_input.ready, true};
-  auto results = action_executor_.Execute(batch, action_context);
-  for (const auto& result : results) {
-    if (!result.prepared) continue;
-    auto registered = tracker_.Register(*result.prepared);
-    if (!registered.ok()) return registered.status();
-    order_ids_.push_back(result.prepared->client_id);
-    if (result.hold_id) {
-      holds_.emplace(result.prepared->client_id.value, *result.hold_id);
-    }
+  return RunStrategy(Trigger::Timer, stamp);
+}
+
+absl::Status Shard::RunPendingTrigger(std::optional<Trigger> explicit_trigger) {
+  if (!pending_trigger_ && !explicit_trigger) return absl::OkStatus();
+  const Trigger why = pending_trigger_ ? *pending_trigger_ : *explicit_trigger;
+  pending_trigger_.reset();
+  const auto elapsed = clock_.MonoNow() - origin_mono_;
+  InputTime stamp{std::max<int64_t>(0, elapsed.count()), ++event_ordinal_};
+  auto result = RunStrategy(why, stamp);
+  return result.ok() ? absl::OkStatus() : result.status();
+}
+
+absl::StatusOr<std::vector<ActionResult>> Shard::RunStrategy(
+    Trigger why, InputTime stamp, bool allow_followup) {
+  if (in_strategy_) {
+    pending_trigger_ = why;
+    return std::vector<ActionResult>{};
   }
-  auto status = DrainSimulatedExchangeEvents();
-  if (!status.ok()) return status;
-  return results;
+  std::vector<ActionResult> all_results;
+  for (int pass = 0; pass < (allow_followup ? 2 : 1); ++pass) {
+    const auto policy = strategy_.Triggers();
+    const MonoTime now = clock_.MonoNow();
+    if (last_strategy_at_) {
+      const auto elapsed = now - *last_strategy_at_;
+      if ((policy.coalesce_window && elapsed < *policy.coalesce_window) ||
+          elapsed < policy.min_action_interval)
+        break;
+    }
+    last_strategy_at_ = now;
+    in_strategy_ = true;
+    auto execute = [&]() -> absl::StatusOr<std::vector<ActionResult>> {
+      auto orders = OrderViews();
+      auto balances = BalanceViews();
+      StrategyInput strategy_input{book_.View(), config_.scale, config_.rule,
+                                   last_trade_price_,
+                                   book_.View().State() == BookSyncState::Live,
+                                   orders, balances, stamp, clock_};
+      auto batch = strategy_.Decide(strategy_input, why);
+      ActionContext action_context{
+          config_.strategy_id, ActionBatchId{next_action_batch_id_++},
+          config_.market, config_.rule, clock_.UtcNow(), clock_.MonoNow(),
+          strategy_input.ready, true};
+      auto results = action_executor_.Execute(batch, action_context);
+      for (const auto& result : results) {
+        if (!result.prepared) continue;
+        auto registered = tracker_.Register(*result.prepared);
+        if (!registered.ok()) return registered.status();
+        order_ids_.push_back(result.prepared->client_id);
+        if (result.hold_id)
+          holds_.emplace(result.prepared->client_id.value, *result.hold_id);
+      }
+      auto status = DrainSimulatedExchangeEvents();
+      if (!status.ok()) return status;
+      return results;
+    };
+    auto results = execute();
+    in_strategy_ = false;
+    if (!results.ok()) return results.status();
+    all_results.insert(all_results.end(), results->begin(), results->end());
+    if (!pending_trigger_) break;
+    why = *pending_trigger_;
+    pending_trigger_.reset();
+  }
+  pending_trigger_.reset();
+  return all_results;
 }
 
 absl::Status Shard::Record(HistoryRecordPayload payload,
@@ -178,7 +235,10 @@ absl::Status Shard::ProcessAccountEvent(const AccountEvent& event) {
           buy ? trade->quote_amount : trade->base_amount, Decimal());
       if (!status.ok()) return status;
     }
-    return Record(*trade, updated->snapshot.strategy_id);
+    auto status = Record(*trade, updated->snapshot.strategy_id);
+    if (status.ok() && strategy_.Triggers().on_fill)
+      pending_trigger_ = Trigger::Traded;
+    return status;
   }
   if (const auto* update = std::get_if<OrderUpdate>(&event)) {
     if (!update->client_id)
@@ -197,7 +257,11 @@ absl::Status Shard::ProcessAccountEvent(const AccountEvent& event) {
         holds_.erase(it);
       }
     }
-    return Record(*update, updated->snapshot.strategy_id);
+    auto status = Record(*update, updated->snapshot.strategy_id);
+    if (status.ok() && strategy_.Triggers().on_order_update &&
+        !pending_trigger_)
+      pending_trigger_ = Trigger::OrderUpdated;
+    return status;
   }
   return absl::OkStatus();
 }

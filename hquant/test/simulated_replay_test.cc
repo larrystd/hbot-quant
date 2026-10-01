@@ -121,14 +121,13 @@ std::string ReplayOnce() {
     throw std::runtime_error("bridge failed");
   }
   auto first = shard.OnTimer({0, 1});
-  if (!first.ok() || !first->empty())
-    throw std::runtime_error("ready tick failed");
+  if (!first.ok() || first->size() != 2 || !(*first)[0].accepted ||
+      !(*first)[1].accepted)
+    throw std::runtime_error("book-triggered initial quote failed");
   if (!clock.Advance({1, 1}).ok()) throw std::runtime_error("clock failed");
   auto opening = shard.OnTimer({1, 1});
-  if (!opening.ok() || opening->size() != 2 || !(*opening)[0].accepted ||
-      !(*opening)[1].accepted) {
-    throw std::runtime_error("initial quote failed");
-  }
+  if (!opening.ok() || !opening->empty())
+    throw std::runtime_error("refresh interval ignored");
   auto open = sim_exchange.OpenOrders();
   if (open.size() != 2 || !open[0].request.limit_price ||
       !open[1].request.limit_price ||

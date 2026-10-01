@@ -26,6 +26,7 @@
 | risk budget | 风控额度 | `RiskBudget`：分片的资金上限和有效期 |
 | funds hold | 资金冻结 | `FundsHold`：订单占用的最坏敞口 |
 | shard | 分片 | 一个线程独占一组交易对的交易状态 |
-| QuantServer | 服务接口 | `hquant_engine` 的对外入口；通过 `<state_dir>/quant_server.sock` 提供状态、历史和停止请求 |
+| QuantServer | 交易核心 | 负责组装和运行行情、分片、策略、风控、成交、历史记录与管理入口 |
+| ControlServer | 管理入口 | 通过 `<state_dir>/control.sock` 提供状态、历史和停止请求 |
 | reconciliation | 对账 | 向交易所查询，核对本地和真实状态 |
 | submission unknown | 结果未知 | 请求已发出，但不知道交易所是否收到；按原 ID 对账 |

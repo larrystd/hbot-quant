@@ -27,10 +27,10 @@ int main() {
   Require(start.ok() && start->verb == hquant::CliVerb::Start &&
               start->config_path == "simulated.yaml",
           "parse start");
-  Require(hquant::ServerSocketPath(start->state_dir) ==
-              "/tmp/hquant/quant_server.sock",
+  Require(hquant::ControlSocketPath(start->state_dir) ==
+              "/tmp/hquant/control.sock",
           "server socket path");
-  Require(!hquant::MakeServerRequest(*start, 1).ok(),
+  Require(!hquant::MakeControlRequest(*start, 1).ok(),
           "start has no server request");
 
   const std::array<std::string_view, 7> history_args{
@@ -40,27 +40,27 @@ int main() {
   Require(history.ok() && history->history_limit == 100 &&
               history->history_cursor == "next",
           "parse history");
-  auto request = hquant::MakeServerRequest(*history, 17);
+  auto request = hquant::MakeControlRequest(*history, 17);
   Require(request.ok() && request->request_id == 17 &&
               std::holds_alternative<hquant::HistoryRequest>(request->payload),
           "history request");
   const auto& payload = std::get<hquant::HistoryRequest>(request->payload);
   Require(payload.limit == 100 && payload.cursor == "next",
           "history pagination");
-  hquant::ServerResponse history_response;
+  hquant::ControlResponse history_response;
   history_response.request_id = 17;
   history_response.payload =
       hquant::HistoryResponse{"{\"orders\":[],\"next\":null}"};
-  auto formatted = hquant::FormatServerResponse(*history, history_response, 17);
+  auto formatted = hquant::FormatControlResponse(*history, history_response, 17);
   Require(formatted.ok() && formatted->find("orders") != std::string::npos,
           "history response");
-  Require(!hquant::FormatServerResponse(*history, history_response, 18).ok(),
+  Require(!hquant::FormatControlResponse(*history, history_response, 18).ok(),
           "request ID mismatch");
-  hquant::ServerResponse engine_error;
+  hquant::ControlResponse engine_error;
   engine_error.request_id = 17;
-  engine_error.payload = hquant::ServerError{
+  engine_error.payload = hquant::ControlError{
       hquant::ErrorCode::kHistoryQueueFull, "reader queue full"};
-  auto command_error = hquant::FormatServerResponse(*history, engine_error, 17);
+  auto command_error = hquant::FormatControlResponse(*history, engine_error, 17);
   Require(!command_error.ok() &&
               hquant::CodeOf(command_error.status()) ==
                   hquant::ErrorCode::kCliEngineError &&
@@ -72,12 +72,12 @@ int main() {
                                                   "/tmp/hquant"};
   auto stop = hquant::ParseCliArguments(stop_args);
   Require(stop.ok() && std::holds_alternative<hquant::StopRequest>(
-                           hquant::MakeServerRequest(*stop, 18)->payload),
+                           hquant::MakeControlRequest(*stop, 18)->payload),
           "stop request");
-  hquant::ServerResponse stop_response;
+  hquant::ControlResponse stop_response;
   stop_response.request_id = 18;
   stop_response.payload = hquant::StopResponse{true};
-  Require(hquant::FormatServerResponse(*stop, stop_response, 18).ok(),
+  Require(hquant::FormatControlResponse(*stop, stop_response, 18).ok(),
           "stop accepted");
 
   const std::array<std::string_view, 5> invalid_limit{

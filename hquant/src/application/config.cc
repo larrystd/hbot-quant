@@ -124,6 +124,64 @@ absl::StatusOr<std::chrono::microseconds> RefreshInterval(
   return std::chrono::microseconds(static_cast<int64_t>(us));
 }
 
+absl::StatusOr<std::chrono::microseconds> Duration(const YAML::Node& node,
+                                                    const char* field) {
+  auto scalar = Scalar(node, field);
+  if (!scalar.ok()) return scalar.status();
+  std::string_view value(*scalar);
+  uint64_t multiplier = 0;
+  if (value.ends_with("us")) {
+    value.remove_suffix(2);
+    multiplier = 1;
+  } else if (value.ends_with("ms")) {
+    value.remove_suffix(2);
+    multiplier = 1'000;
+  } else if (value.ends_with('s')) {
+    value.remove_suffix(1);
+    multiplier = 1'000'000;
+  } else if (value.ends_with('m')) {
+    value.remove_suffix(1);
+    multiplier = 60'000'000;
+  } else if (value.ends_with('h')) {
+    value.remove_suffix(1);
+    multiplier = 3'600'000'000;
+  } else {
+    return Error(ErrorCode::kConfigFieldInvalid,
+                 std::string("invalid duration unit: ") + field);
+  }
+  uint64_t count = 0;
+  auto [end, error] =
+      std::from_chars(value.data(), value.data() + value.size(), count);
+  if (error != std::errc{} || end != value.data() + value.size() ||
+      count == 0 ||
+      count > static_cast<uint64_t>(std::numeric_limits<int64_t>::max()) /
+                  multiplier) {
+    return Error(ErrorCode::kConfigFieldInvalid,
+                 std::string("invalid duration: ") + field);
+  }
+  return std::chrono::microseconds(static_cast<int64_t>(count * multiplier));
+}
+
+absl::StatusOr<size_t> PositiveSize(const YAML::Node& node,
+                                    const char* field) {
+  auto value = Unsigned(node, field);
+  if (!value.ok()) return value.status();
+  if (*value == 0 || *value > std::numeric_limits<uint32_t>::max())
+    return Error(ErrorCode::kConfigFieldInvalid,
+                 std::string("invalid queue size: ") + field);
+  return static_cast<size_t>(*value);
+}
+
+absl::Status CheckRate(const Decimal& rate, const char* field) {
+  auto one = Decimal::Parse("1");
+  auto compare = rate.Compare(*one);
+  if (!compare.ok()) return compare.status();
+  if (*compare >= 0)
+    return Error(ErrorCode::kConfigFieldInvalid,
+                 std::string("rate must be below one: ") + field);
+  return absl::OkStatus();
+}
+
 absl::StatusOr<MarketId> NamedMarket(
     const YAML::Node& node, const std::map<std::string, MarketId>& markets) {
   if (!node.IsScalar())
@@ -221,6 +279,63 @@ absl::StatusOr<AppConfig> ParseConfig(std::string_view yaml_text) {
     auto storage_path = Scalar(root, "storage_path");
     if (!storage_path.ok()) return storage_path.status();
     config.storage_path = *storage_path;
+    if (root["storage"]) {
+      auto storage = Mapping(root, "storage");
+      if (!storage.ok()) return storage.status();
+      if ((*storage)["writer_queue"]) {
+        auto value = PositiveSize(*storage, "writer_queue");
+        if (!value.ok()) return value.status();
+        config.storage.writer_queue = *value;
+      }
+      if ((*storage)["writer_batch"]) {
+        auto value = PositiveSize(*storage, "writer_batch");
+        if (!value.ok()) return value.status();
+        config.storage.writer_batch = *value;
+      }
+      if ((*storage)["reader_queue"]) {
+        auto value = PositiveSize(*storage, "reader_queue");
+        if (!value.ok()) return value.status();
+        config.storage.reader_queue = *value;
+      }
+      if ((*storage)["reader_page_limit"]) {
+        auto value = PositiveSize(*storage, "reader_page_limit");
+        if (!value.ok()) return value.status();
+        config.storage.reader_page_limit = static_cast<uint32_t>(*value);
+      }
+      if (config.storage.writer_batch > config.storage.writer_queue)
+        return Error(ErrorCode::kConfigFieldInvalid,
+                     "writer_batch exceeds writer_queue");
+    }
+    if (root["simulated_exchange"]) {
+      auto exchange = Mapping(root, "simulated_exchange");
+      if (!exchange.ok()) return exchange.status();
+      if ((*exchange)["maker_fee_rate"]) {
+        auto rate = Number(*exchange, "maker_fee_rate", false);
+        if (!rate.ok()) return rate.status();
+        auto valid = CheckRate(*rate, "maker_fee_rate");
+        if (!valid.ok()) return valid;
+        config.simulated_exchange.maker_fee_rate = *rate;
+      }
+    }
+    if (root["risk"]) {
+      auto risk = Mapping(root, "risk");
+      if (!risk.ok()) return risk.status();
+      if ((*risk)["fee_buffer_rate"]) {
+        auto rate = Number(*risk, "fee_buffer_rate", false);
+        if (!rate.ok()) return rate.status();
+        auto valid = CheckRate(*rate, "fee_buffer_rate");
+        if (!valid.ok()) return valid;
+        config.risk.fee_buffer_rate = *rate;
+      }
+      if ((*risk)["max_rule_age"]) {
+        auto age = Duration(*risk, "max_rule_age");
+        if (!age.ok()) return age.status();
+        if (age->count() < 1'000'000 || age->count() % 1'000'000 != 0)
+          return Error(ErrorCode::kConfigFieldInvalid,
+                       "max_rule_age must be whole seconds");
+        config.risk.max_rule_age = *age;
+      }
+    }
     if (root["market_data_source"]) {
       auto source = Scalar(root, "market_data_source");
       if (!source.ok()) return source.status();
@@ -329,6 +444,11 @@ absl::StatusOr<AppConfig> ParseConfig(std::string_view yaml_text) {
       market.trading_rule.base_increment = *base_increment;
       market.trading_rule.min_base_amount = *min_base;
       market.trading_rule.min_notional = *min_notional;
+      if (item["stale_after"]) {
+        auto age = Duration(item, "stale_after");
+        if (!age.ok()) return age.status();
+        market.stale_after = *age;
+      }
       markets_by_name.emplace(*name, market.spec.market);
       config.market_specs.push_back(std::move(market));
     }
@@ -386,6 +506,26 @@ absl::StatusOr<AppConfig> ParseConfig(std::string_view yaml_text) {
       config_entry.bid_spread = *bid_spread;
       config_entry.ask_spread = *ask_spread;
       config_entry.refresh_interval = *refresh;
+      if (item["maker_fee_rate"]) {
+        auto rate = Number(item, "maker_fee_rate", false);
+        if (!rate.ok()) return rate.status();
+        auto valid = CheckRate(*rate, "maker_fee_rate");
+        if (!valid.ok()) return valid;
+        config_entry.maker_fee_rate = *rate;
+      }
+      if (item["price_type"]) {
+        auto value = Scalar(item, "price_type");
+        if (!value.ok()) return value.status();
+        if (*value == "mid") config_entry.price_type = PmmPriceType::Mid;
+        else if (*value == "last") config_entry.price_type = PmmPriceType::Last;
+        else return Error(ErrorCode::kConfigFieldInvalid,
+                          "price_type must be mid or last");
+      }
+      if (item["timer_period"]) {
+        auto period = Duration(item, "timer_period");
+        if (!period.ok()) return period.status();
+        config_entry.timer_period = *period;
+      }
       strategies_by_id.emplace(*key, config_entry.strategy_id);
       config.strategy_configs.push_back(std::move(config_entry));
     }
@@ -513,8 +653,14 @@ absl::StatusOr<AppConfig> ParseConfig(std::string_view yaml_text) {
           return Error(ErrorCode::kConfigBudgetInvalid,
                        "invalid static risk budget");
         }
-        config.risk_budgets.push_back(
-            {AccountId(*account), AssetId(*asset), *shard, *limit});
+        StaticRiskBudgetConfig entry{AccountId(*account), AssetId(*asset),
+                                     *shard, *limit};
+        if (item["valid_for"]) {
+          auto duration = Duration(item, "valid_for");
+          if (!duration.ok()) return duration.status();
+          entry.valid_for = *duration;
+        }
+        config.risk_budgets.push_back(std::move(entry));
       }
     }
     auto budget_status = CheckBudgetTotals(config);

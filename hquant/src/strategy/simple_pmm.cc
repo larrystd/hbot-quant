@@ -13,7 +13,8 @@ Decimal D(std::string_view value) { return *Decimal::Parse(value); }
 
 TriggerPolicy SimplePmm::Triggers() const {
   TriggerPolicy policy;
-  policy.timer_period = config_.refresh_interval;
+  policy.book_mode = BookTriggerMode::BboChanged;
+  policy.timer_period = config_.timer_period;
   return policy;
 }
 
@@ -63,7 +64,7 @@ std::optional<Decimal> SimplePmm::ReferencePrice(
   return *midpoint;
 }
 
-ActionBatch SimplePmm::OnTimer(const StrategyInput& context) {
+ActionBatch SimplePmm::Decide(const StrategyInput& context, Trigger /*why*/) {
   ActionBatch actions;
   // StrategyV2Base.tick only initializes on the first ready transition.
   if (!ready_to_trade_) {

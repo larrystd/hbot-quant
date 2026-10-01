@@ -17,6 +17,7 @@
 #include "order/order_tracker.h"
 #include "shard/action_executor.h"
 #include "storage/storage.h"
+#include "strategy/strategy.h"
 
 namespace hquant {
 
@@ -105,7 +106,7 @@ class Shard {
   // An external public stream may update this same OrderBookSync and notify the
   // shard after each applied batch. All calls remain on the owning shard.
   OrderBookSync& MutableBookSync() { return book_; }
-  absl::Status OnBookApplied() { return UpdateSimulatedExchangeBbo(); }
+  absl::Status OnBookApplied(const BookApplyResult& result);
   absl::StatusOr<std::vector<ActionResult>> OnTimer(InputTime stamp);
 
   const OrderBookView& Book() const { return book_.View(); }
@@ -117,6 +118,11 @@ class Shard {
 
  private:
   absl::Status UpdateSimulatedExchangeBbo();
+  absl::Status AfterBookApply(const BookApplyResult& result);
+  absl::Status RunPendingTrigger(std::optional<Trigger> explicit_trigger);
+  absl::StatusOr<std::vector<ActionResult>> RunStrategy(Trigger why,
+                                                       InputTime stamp,
+                                                       bool allow_followup = true);
   absl::Status DrainSimulatedExchangeEvents();
   absl::Status ProcessAccountEvent(const AccountEvent& event);
   absl::Status Record(HistoryRecordPayload payload,
@@ -142,6 +148,11 @@ class Shard {
   std::map<std::string, HoldId> holds_;
   std::vector<HistoryGap> local_gaps_;
   std::optional<Decimal> last_trade_price_;
+  MonoTime origin_mono_{};
+  uint64_t event_ordinal_ = 0;
+  bool in_strategy_ = false;
+  std::optional<Trigger> pending_trigger_;
+  std::optional<MonoTime> last_strategy_at_;
 };
 
 }  // namespace hquant

@@ -9,7 +9,7 @@
 #include "boost/beast/http.hpp"
 #include "boost/beast/websocket.hpp"
 #include "gtest/gtest.h"
-#include "market/binance_spot_feed.h"
+#include "market/market_data_stream.h"
 #include "order/risk.h"
 #include "order/simulated_exchange.h"
 #include "shard/shard.h"
@@ -124,8 +124,8 @@ TEST(SimulatedBinanceTest,
   binance_spot::MarketDataStream stream(
       stream_config, binance_spot::DepthParser(market, scale), http_client,
       websocket, shard.MutableBookSync(), clock,
-      {[&](const BookApplyResult&) {
-         auto status = shard.OnBookApplied();
+      {[&](const BookApplyResult& result) {
+         auto status = shard.OnBookApplied(result);
          if (!status.ok()) callback_status = status;
        },
        [&](const PublicTrade& trade) {
@@ -150,12 +150,13 @@ TEST(SimulatedBinanceTest,
   ASSERT_TRUE(first.ok()) << first;
   ASSERT_TRUE(callback_status.ok()) << callback_status;
   ASSERT_EQ(shard.Book().State(), BookSyncState::Live);
-  ASSERT_TRUE(shard.OnTimer({0, 1}).ok());
+  ASSERT_EQ(sim_exchange.OpenOrders().size(), 2);
+  auto initial = shard.OnTimer({0, 1});
+  ASSERT_TRUE(initial.ok()) << initial.status();
+  ASSERT_TRUE(initial->empty());
   auto opening = shard.OnTimer({1, 1});
   ASSERT_TRUE(opening.ok()) << opening.status();
-  ASSERT_EQ(opening->size(), 2);
-  EXPECT_TRUE((*opening)[0].accepted);
-  EXPECT_TRUE((*opening)[1].accepted);
+  ASSERT_TRUE(opening->empty());
   ASSERT_EQ(sim_exchange.OpenOrders().size(), 2);
 
   shard.MutableBookSync().OnDisconnect();

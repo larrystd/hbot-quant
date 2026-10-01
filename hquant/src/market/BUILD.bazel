@@ -13,9 +13,9 @@ hquant_cc_library(
 )
 
 hquant_cc_library(
-    name = "binance_spot_feed",
-    srcs = ["binance_spot_feed.cc"],
-    hdrs = ["binance_spot_feed.h"],
+    name = "market_data_stream",
+    srcs = ["market_data_stream.cc"],
+    hdrs = ["market_data_stream.h"],
     deps = [
         ":order_book",
         "//hquant/src/base:error",

@@ -44,13 +44,13 @@ hummingbot-cpp/
 | --- | --- | --- |
 | `//hquant/src/base:{error,types,market,order}` | `error.h/.cc`、`types.h/.cc`、`market.h`、`order.h` | 业务错误码、恢复方式、Decimal、强 ID/时间、行情/订单/账户拥有值和订单网关端口 |
 | `//hquant/src/base:{net,rate_limit}` | `net.h/.cc`、`rate_limit.h/.cc` | HTTP、WebSocket、TLS、本地限速和全局熔断 |
-| `//hquant/src/market:{order_book,replay_feed,binance_spot_feed}` | 各 target 同名 `.h/.cc` | L2 簿与同步/只读视图、固定行情回放、Binance 公开行情 |
+| `//hquant/src/market:{order_book,replay_feed,market_data_stream}` | 各 target 同名 `.h/.cc` | L2 簿与同步/只读视图、固定行情回放、Binance 公开行情 |
 | `//hquant/src/order:{order_tracker,risk,simulated_exchange}` | 各 target 同名 `.h/.cc` | 双 ID 和成交去重、额度/准入/资金冻结、模拟盘 |
-| `//hquant/src/order:{binance_spot_gateway,binance_spot_account}` | 各 target 同名 `.h/.cc` | Binance ID/签名/下撤单与私有回报/对账 |
+| `//hquant/src/order:{order_gateway,account_reports}` | 各 target 同名 `.h/.cc` | Binance ID/签名/下撤单与私有回报/对账 |
 | `//hquant/src/strategy:{strategy,simple_pmm}` | `strategy.h`、`simple_pmm.h/.cc` | 同步策略回调、触发规则、有序动作和 15 秒刷新策略 |
 | `//hquant/src/shard:{shard,action_executor,routing}` | 各 target 同名 `.h/.cc` | 分片状态和时钟、动作顺序、跨分片账户回报路由 |
 | `//hquant/src/storage:{storage,record_codec,recorder,history}` | `storage.h`、各实现同名 `.h/.cc`、`schema.sql` | 有界入队、WAL 写入、只读分页、恢复和持久化格式 |
-| `//hquant/src/application:{config,quant_server,launcher}` | 各 target 同名 `.h/.cc` | YAML 校验、控制消息/服务、具体组件装配与启动 |
+| `//hquant/src/application:{config,control_server,quant_server,launcher}` | 各 target 同名 `.h/.cc` | YAML 校验、管理消息/服务、交易链组件装配与启动 |
 | `//hquant/src/cli:cli`、`//apps:{hquant,hquant_engine}` | `cli.h/.cc`、`apps/hquant.cc`、`apps/hquant_engine.cc` | 前台 `start/status/history/stop` 与引擎入口 |
 | `//hquant/test:{fixture_loader,schema_test,simulated_exchange_schema_test}` | `fixture_loader.h/.cc`、`fixture_schema_test.cc`、`fixtures/` | Python 对照夹具的读取与校验 |
 | `//hquant/test:{simulated_replay,simulated_binance,multi_shard,recovery}` | 对应 `*_test.cc` | 离线/本地 mock 端到端链路 |
@@ -149,7 +149,7 @@ flowchart LR
 | `AppConfig`、`ShardAssignment` / `application/config.h` | `AppConfig={schema_version, mode: Simulated/Live, loop_mode, market_data_source, assignments, accounts, market_specs, strategy_configs, risk_budgets, rate_budgets, storage_path, replay_fixture?}`；`ShardAssignment={shard, markets, strategy_ids, accounts}`。解析 YAML 后验证 strategy_id 唯一、一个策略的全部依赖市场在同一分片、活跃槽位不超过 8、同账户/资产额度总和不超上限；凭据引用不能进入 status/日志。 |
 | `Shard` / `shard/shard.h` | 非可复制的线程私有聚合：`OrderBookSync`、Tracker、策略、`RiskGate`、网关和输入时钟；所属线程独占可变成员。 |
 | `ShardCommand` / `shard/shard.h` | `{command_id, target_shard, payload: variant<StopNewOrders,CancelOwnedOrders,RequestShardReport,...>, issued_at, deadline}`；控制线程向分片发拥有值消息，分片按本地输入顺序处理。 |
-| `ServerRequest/ServerResponse` / `application/quant_server.h` | 前台到已运行引擎的 `status/history/stop` 消息，带 `{schema_version, request_id, payload}`；`start` 由 CLI 解析配置并启动引擎进程，不依赖已有服务 socket。wire codec 显式编码字段，不直接序列化 C++ variant 布局，也不暴露内部 `Shard`。 |
+| `ControlRequest/ControlResponse` / `application/control_server.h` | 前台到已运行引擎的 `status/history/stop` 消息，带 `{schema_version, request_id, payload}`；`start` 由 CLI 解析配置并启动引擎进程，不依赖已有服务 socket。wire codec 显式编码字段，不直接序列化 C++ variant 布局，也不暴露内部 `Shard`。 |
 | `ShardReport` / `shard/shard.h` | `{shard, report_version, observed_at, budget_usage_by_asset, market_readiness, account_freshness, queue_watermarks, storage_health}`；由拥有线程生成拥有值消息给控制线程，控制线程不读 shard 可变对象。 |
 
 ## 6. 风控、跨分片、存储与恢复

@@ -2,6 +2,20 @@
 
 本文说明怎么写代码、怎么分工与集成。关口和进度见 [ROADMAP.md](ROADMAP.md)；运行时语义以 [ARCHITECTURE.md](ARCHITECTURE.md) 为准；逐文件目录、Bazel target 与字段以 [STRUCTURE_AND_TYPES.md](STRUCTURE_AND_TYPES.md) 为准；订单簿以 [ORDER_BOOK.md](ORDER_BOOK.md) 为准。实现中发现冲突，先更新文档和对应测试，再改代码。
 
+当前可从仓库根目录运行回放服务，并在另一终端查询或停止：
+
+```sh
+bazelisk build //apps:hquant
+bazel-bin/apps/hquant start --config examples/simulated_replay.yaml --state-dir /tmp/hquant-demo
+bazel-bin/apps/hquant status --state-dir /tmp/hquant-demo
+bazel-bin/apps/hquant history --state-dir /tmp/hquant-demo --limit 20
+bazel-bin/apps/hquant stop --state-dir /tmp/hquant-demo
+```
+
+管理请求使用 `<state_dir>/control.sock`。`start` 在前台运行；其余三个命令连接已启动的进程。
+
+可选配置项包括 `strategy_configs[].maker_fee_rate`、`price_type`（`mid`/`last`）和 `timer_period`，`simulated_exchange.maker_fee_rate`，`risk.fee_buffer_rate`、`max_rule_age`，`risk_budgets[].valid_for`，`market_specs[].stale_after`，以及 `storage.writer_queue`、`writer_batch`、`reader_queue`、`reader_page_limit`。时间项使用 `us`、`ms`、`s`、`m`、`h` 单位；省略时保持原行为。订单簿过期时间在实时模式默认 5 秒、回放模式默认 60 秒。
+
 ## 1. C++ 语言与实现约束
 
 **全项目以 `-std=c++20` 编译。** 普通领域代码优先用简明的 C++17/20 写法；网络协程需要 C++20，不承诺能用 `-std=c++17` 编译；不得引入 C++23 作为构建要求。
@@ -25,13 +39,13 @@
 | --- | --- | --- |
 | `//hquant/src/base:{error,types,market,order}` | 业务错误码与恢复方式、Decimal、强 ID/时间、行情与订单拥有值、网关端口 | socket 操作、SQLite、策略逻辑 |
 | `//hquant/src/base:{net,rate_limit}` | HTTP、WS、TLS、本地限速与全局熔断 | 策略决策、订单归属 |
-| `//hquant/src/market:{order_book,replay_feed,binance_spot_feed}` | L2 簿和只读视图、固定行情回放、Binance 公开行情 | 下单与账户私有回报 |
+| `//hquant/src/market:{order_book,replay_feed,market_data_stream}` | L2 簿和只读视图、固定行情回放、Binance 公开行情 | 下单与账户私有回报 |
 | `//hquant/src/order:{order_tracker,risk,simulated_exchange}` | 双 ID 跟踪、成交去重、风险额度、模拟盘 | 分片线程调度 |
-| `//hquant/src/order:{binance_spot_gateway,binance_spot_account}` | Binance 签名/下撤单与私有回报/对账 | 跨交易所通用状态机 |
+| `//hquant/src/order:{order_gateway,account_reports}` | Binance 签名/下撤单与私有回报/对账 | 跨交易所通用状态机 |
 | `//hquant/src/strategy:{strategy,simple_pmm}` | `TriggerPolicy`、`ActionBatch`、`simple_pmm` | 修改订单簿或执行 SQL |
 | `//hquant/src/shard:{shard,action_executor,routing}` | 分片 `io_context`、动作执行、账户级回报路由 | 全局 SQLite 连接与具体组件装配 |
 | `//hquant/src/storage:{storage,record_codec,recorder,history}` | 入队端口、WAL 写入、分页查询、恢复与 schema | 决定策略何时发单 |
-| `//hquant/src/application:{config,quant_server,launcher}` | YAML 配置、控制协议/服务、线程启动与组件装配 | 策略算法 |
+| `//hquant/src/application:{config,control_server,quant_server,launcher}` | YAML 配置、控制协议/服务、线程启动与组件装配 | 策略算法 |
 | `//hquant/src/cli:cli`、`//apps:{hquant,hquant_engine}` | 前台命令和进程入口 | 交易状态 |
 | `//hquant/test/...`、`//dev/...` | 单元、协议、夹具、端到端和契约编译 | 正式运行链路 |
 
