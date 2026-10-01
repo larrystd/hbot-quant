@@ -1,9 +1,12 @@
 #pragma once
 
+#include <atomic>
 #include <cstdint>
 #include <map>
+#include <memory>
 #include <optional>
 #include <string>
+#include <thread>
 #include <variant>
 #include <vector>
 
@@ -13,13 +16,22 @@
 #include "base/market.h"
 #include "base/order.h"
 #include "base/types.h"
+#include "boost/asio/awaitable.hpp"
+#include "boost/asio/io_context.hpp"
 #include "market/order_book.h"
 #include "order/order_tracker.h"
-#include "shard/action_executor.h"
 #include "order_history/order_history.h"
+#include "shard/action_executor.h"
 #include "strategy/strategy.h"
 
 namespace hquant {
+
+class SimpleSimulatedExchange;
+class HttpClient;
+class WebSocketClient;
+namespace binance_spot {
+class MarketDataStream;
+}
 
 // Owns both time domains used by the same deterministic input stream.
 class ReplayClock final : public Clock {
@@ -85,6 +97,11 @@ struct ShardReport {
 // The caller advances the clock and feeds inputs in InputTime order.
 class Shard {
  public:
+  struct FeedEndpoint {
+    std::string host;
+    uint16_t port = 443;
+    bool tls = true;
+  };
   struct Config {
     RunId run;
     ShardId shard;
@@ -98,6 +115,24 @@ class Shard {
 
   Shard(Config config, const Clock& clock, Strategy& strategy,
         SimulatedExchange& exchange, RiskGate& risk, OrderHistoryWriter& recorder);
+  Shard(Config config, const Clock& clock,
+        std::unique_ptr<Strategy> strategy,
+        std::unique_ptr<SimpleSimulatedExchange> exchange,
+        std::unique_ptr<RiskGate> risk, OrderHistoryWriter& recorder);
+  ~Shard();
+  Shard(const Shard&) = delete;
+  Shard& operator=(const Shard&) = delete;
+
+  void StartFeed(FeedEndpoint rest, FeedEndpoint websocket);
+  void RequestStop();
+  void Join();
+  boost::asio::io_context* LiveIo() const { return io_.get(); }
+  const SimpleSimulatedExchange& OwnedExchange() const;
+  uint64_t AppliedDiffs() const;
+  uint64_t Resyncs() const;
+  const absl::Status& stream_error() const { return stream_error_; }
+  ShardId id() const { return config_.shard; }
+  const MarketSpec& market() const { return config_.market; }
 
   BookApplyResult Subscribe(uint64_t connection_id);
   absl::Status OnSnapshot(const BookSnapshot& snapshot);
@@ -132,8 +167,12 @@ class Shard {
   std::vector<Balance> BalanceViews() const;
   absl::StatusOr<Decimal> Price(PriceTicks ticks) const;
   absl::StatusOr<Decimal> Amount(QuantityLots lots) const;
+  boost::asio::awaitable<void> TimerLoop();
 
   Config config_;
+  std::unique_ptr<Strategy> owned_strategy_;
+  std::unique_ptr<SimpleSimulatedExchange> owned_exchange_;
+  std::unique_ptr<RiskGate> owned_risk_;
   const Clock& clock_;
   Strategy& strategy_;
   SimulatedExchange& exchange_;
@@ -154,6 +193,13 @@ class Shard {
   uint64_t strategy_invocations_ = 0;
   std::optional<Trigger> pending_trigger_;
   std::optional<MonoTime> last_strategy_at_;
+  std::unique_ptr<boost::asio::io_context> io_;
+  std::unique_ptr<HttpClient> http_;
+  std::unique_ptr<WebSocketClient> websocket_;
+  std::unique_ptr<binance_spot::MarketDataStream> stream_;
+  std::thread thread_;
+  std::atomic<bool> stopping_{false};
+  absl::Status stream_error_;
 };
 
 }  // namespace hquant

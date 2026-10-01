@@ -1,12 +1,22 @@
 #include "shard/shard.h"
 
 #include <algorithm>
+#include <cctype>
+#include <chrono>
 #include <limits>
 #include <string>
 #include <utility>
 #include <variant>
 
 #include "absl/status/status.h"
+#include "base/net.h"
+#include "boost/asio/co_spawn.hpp"
+#include "boost/asio/detached.hpp"
+#include "boost/asio/post.hpp"
+#include "boost/asio/steady_timer.hpp"
+#include "boost/asio/use_awaitable.hpp"
+#include "market/market_data_stream.h"
+#include "order/simulated_exchange.h"
 
 namespace hquant {
 
@@ -24,6 +34,117 @@ Shard::Shard(Config config, const Clock& clock, Strategy& strategy,
       action_executor_(risk_, exchange_, recorder_, config_.run, config_.shard,
                        shard_sequence_) {
   origin_mono_ = clock_.MonoNow();
+}
+
+Shard::Shard(Config config, const Clock& clock,
+             std::unique_ptr<Strategy> strategy,
+             std::unique_ptr<SimpleSimulatedExchange> exchange,
+             std::unique_ptr<RiskGate> risk, OrderHistoryWriter& recorder)
+    : config_(std::move(config)),
+      owned_strategy_(std::move(strategy)),
+      owned_exchange_(std::move(exchange)),
+      owned_risk_(std::move(risk)),
+      clock_(clock),
+      strategy_(*owned_strategy_),
+      exchange_(*owned_exchange_),
+      risk_(*owned_risk_),
+      recorder_(recorder),
+      book_(config_.market.market, config_.scale.tick_lot_version, 8192, 1024,
+            config_.stale_after_us),
+      action_executor_(risk_, exchange_, recorder_, config_.run, config_.shard,
+                       shard_sequence_) {
+  origin_mono_ = clock_.MonoNow();
+}
+
+Shard::~Shard() {
+  RequestStop();
+  Join();
+}
+
+const SimpleSimulatedExchange& Shard::OwnedExchange() const {
+  return *owned_exchange_;
+}
+
+uint64_t Shard::AppliedDiffs() const {
+  return stream_ ? stream_->AppliedDiffs() : 0;
+}
+
+uint64_t Shard::Resyncs() const {
+  return stream_ ? stream_->Resyncs() : 0;
+}
+
+boost::asio::awaitable<void> Shard::TimerLoop() {
+  boost::asio::steady_timer timer(*io_);
+  uint64_t ordinal = 0;
+  while (!stopping_) {
+    timer.expires_after(*strategy_.Triggers().timer_period);
+    boost::system::error_code ec;
+    co_await timer.async_wait(
+        boost::asio::redirect_error(boost::asio::use_awaitable, ec));
+    if (ec || stopping_) break;
+    const auto at_us = (clock_.MonoNow() - origin_mono_).count();
+    auto result = OnTimer({at_us, ++ordinal});
+    if (!result.ok()) {
+      stream_error_ = result.status();
+      risk_.EmergencyStop();
+    }
+  }
+}
+
+void Shard::StartFeed(FeedEndpoint rest, FeedEndpoint websocket) {
+  io_ = std::make_unique<boost::asio::io_context>();
+  const TlsConfig rest_tls{rest.tls, true, {}, rest.host};
+  const TlsConfig ws_tls{websocket.tls, true, {}, websocket.host};
+  http_ = std::make_unique<HttpClient>(*io_, rest.host,
+                                       std::to_string(rest.port), rest_tls);
+  std::string symbol = config_.market.market.native_symbol;
+  std::transform(symbol.begin(), symbol.end(), symbol.begin(),
+                 [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+  websocket_ = std::make_unique<WebSocketClient>(
+      *io_, websocket.host, std::to_string(websocket.port),
+      "/stream?streams=" + symbol + "@depth/" + symbol + "@trade", ws_tls);
+  binance_spot::StreamConfig stream_config;
+  stream_config.symbol = config_.market.market.native_symbol;
+  stream_ = std::make_unique<binance_spot::MarketDataStream>(
+      stream_config,
+      binance_spot::DepthParser(config_.market.market, config_.scale),
+      *http_, *websocket_, MutableBookSync(), clock_,
+      binance_spot::StreamCallbacks{
+          [this](const BookApplyResult& result) {
+            if (result.state == BookSyncState::Live)
+              stream_error_ = absl::OkStatus();
+            auto status = OnBookApplied(result);
+            if (!status.ok()) {
+              stream_error_ = status;
+              risk_.EmergencyStop();
+            }
+          },
+          [this](const PublicTrade& trade) {
+            auto status = OnPublicTrade(trade);
+            if (!status.ok()) {
+              stream_error_ = status;
+              risk_.EmergencyStop();
+            }
+          },
+          [this](const absl::Status& status) { stream_error_ = status; }});
+  boost::asio::co_spawn(*io_, stream_->Run(), boost::asio::detached);
+  if (strategy_.Triggers().timer_period)
+    boost::asio::co_spawn(*io_, TimerLoop(), boost::asio::detached);
+  thread_ = std::thread([this] { io_->run(); });
+}
+
+void Shard::RequestStop() {
+  if (stopping_.exchange(true)) return;
+  if (io_) {
+    boost::asio::post(*io_, [this] {
+      if (stream_) stream_->Stop();
+      io_->stop();
+    });
+  }
+}
+
+void Shard::Join() {
+  if (thread_.joinable()) thread_.join();
 }
 
 BookApplyResult Shard::Subscribe(uint64_t connection_id) {

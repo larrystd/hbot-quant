@@ -1,35 +1,26 @@
 #include "application/quant_server.h"
 
-#include <algorithm>
-#include <atomic>
-#include <cctype>
 #include <chrono>
-#include <condition_variable>
 #include <filesystem>
 #include <memory>
 #include <mutex>
 #include <optional>
 #include <string>
-#include <thread>
 #include <utility>
 #include <variant>
 
 #include "application/control_server.h"
 #include "base/error.h"
-#include "base/net.h"
-#include "boost/asio/co_spawn.hpp"
-#include "boost/asio/detached.hpp"
 #include "boost/asio/post.hpp"
 #include "boost/asio/steady_timer.hpp"
 #include "boost/asio/this_coro.hpp"
 #include "boost/asio/use_awaitable.hpp"
-#include "market/market_data_stream.h"
 #include "market/replay_feed.h"
+#include "order_history/order_history_reader.h"
+#include "order_history/order_history_writer.h"
 #include "order/risk.h"
 #include "order/simulated_exchange.h"
 #include "shard/shard.h"
-#include "order_history/order_history_reader.h"
-#include "order_history/order_history_writer.h"
 #include "strategy/simple_pmm.h"
 
 namespace hquant {
@@ -99,7 +90,6 @@ absl::Status QuantServer::CreateComponents() {
     clock = std::move(replay);
   }
   started = clock->UtcNow();
-  started_mono = clock->MonoNow();
   run = RunId{static_cast<uint64_t>(
       std::chrono::duration_cast<std::chrono::microseconds>(
           std::chrono::system_clock::now().time_since_epoch())
@@ -107,22 +97,24 @@ absl::Status QuantServer::CreateComponents() {
   auto rule = market.trading_rule;
   rule.revision = 1;
   rule.observed_at = started;
-  strategy = std::make_unique<SimplePmm>(SimplePmmConfig{
+  auto strategy = std::make_unique<SimplePmm>(SimplePmmConfig{
       strategy_config.strategy_id, account.account, market.spec,
       strategy_config.order_amount, strategy_config.bid_spread,
       strategy_config.ask_spread, strategy_config.refresh_interval,
       strategy_config.price_type, strategy_config.maker_fee_rate, true,
       strategy_config.timer_period});
-  exchange = std::make_unique<SimpleSimulatedExchange>(
+  auto exchange = std::make_unique<SimpleSimulatedExchange>(
       SimulatedExchangeConfig{
           account.account, market.spec, rule, account.initial_balances,
           config.simulated_exchange.maker_fee_rate, true,
-          [run = run, next_id = uint64_t{1}](Side) mutable {
-            return ClientOrderId("P" + std::to_string(run.value) + "-" +
+          [run = run, shard = assignment.shard,
+           next_id = uint64_t{1}](Side) mutable {
+            return ClientOrderId("S" + std::to_string(run.value) + "-" +
+                                 std::to_string(shard.value) + "-" +
                                  std::to_string(next_id++));
           }},
       *clock);
-  risk = std::make_unique<RiskGate>(RiskGate::Settings{
+  auto risk = std::make_unique<RiskGate>(RiskGate::Settings{
       assignment.shard, config.risk.fee_buffer_rate,
       std::chrono::duration_cast<std::chrono::seconds>(
           *config.risk.max_rule_age)});
@@ -133,8 +125,8 @@ absl::Status QuantServer::CreateComponents() {
     if (!status.ok()) return status;
   }
   auto opened = SqliteOrderHistoryWriter::Open({storage_path, run, started,
-                                           config.storage.writer_queue,
-                                           config.storage.writer_batch});
+                                               config.storage.writer_queue,
+                                               config.storage.writer_batch});
   if (!opened.ok()) return opened.status();
   writer = std::move(*opened);
   Shard::Config shard_config{run,
@@ -145,11 +137,12 @@ absl::Status QuantServer::CreateComponents() {
                              market.tick_lot_size,
                              rule};
   shard_config.stale_after_us = market.stale_after->count();
-  shard = std::make_unique<Shard>(shard_config, *clock, *strategy, *exchange,
-                                  *risk, *writer);
+  shards.push_back(std::make_unique<Shard>(
+      shard_config, *clock, std::move(strategy), std::move(exchange),
+      std::move(risk), *writer));
   auto read =
       SqliteOrderHistoryReader::Open({storage_path, config.storage.reader_queue,
-                                 config.storage.reader_page_limit});
+                                     config.storage.reader_page_limit});
   if (!read.ok()) return read.status();
   reader = std::move(*read);
   return absl::OkStatus();
@@ -160,74 +153,10 @@ absl::Status QuantServer::RunReplay() {
   auto replay = ReadReplayFile(*config.replay_fixture,
                                [&](const ReplayInput& input) {
                                  return ApplyReplayInput(input, market,
-                                                         *replay_clock, *shard);
+                                                         *replay_clock, *shards.front());
                                });
   if (!replay.ok()) return replay;
   return writer->Flush();
-}
-
-boost::asio::awaitable<void> QuantServer::TimerLoop() {
-  boost::asio::steady_timer timer(*io);
-  uint64_t ordinal = 0;
-  while (!stopping) {
-    timer.expires_after(*strategy->Triggers().timer_period);
-    boost::system::error_code ec;
-    co_await timer.async_wait(
-        boost::asio::redirect_error(boost::asio::use_awaitable, ec));
-    if (ec || stopping) break;
-    const auto at_us = (clock->MonoNow() - started_mono).count();
-    auto result = shard->OnTimer({at_us, ++ordinal});
-    if (!result.ok()) {
-      stream_error = result.status();
-      risk->EmergencyStop();
-    }
-  }
-}
-
-void QuantServer::StartFeed() {
-  const auto& market = config.market_specs.front();
-  io = std::make_unique<boost::asio::io_context>();
-  const auto& rest = config.binance_endpoints.rest;
-  const auto& ws = config.binance_endpoints.websocket;
-  const TlsConfig rest_tls{rest.tls, true, {}, rest.host};
-  const TlsConfig ws_tls{ws.tls, true, {}, ws.host};
-  http = std::make_unique<HttpClient>(*io, rest.host,
-                                      std::to_string(rest.port), rest_tls);
-  std::string symbol = market.spec.market.native_symbol;
-  std::transform(
-      symbol.begin(), symbol.end(), symbol.begin(),
-      [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
-  websocket = std::make_unique<WebSocketClient>(
-      *io, ws.host, std::to_string(ws.port),
-      "/stream?streams=" + symbol + "@depth/" + symbol + "@trade", ws_tls);
-  binance_spot::StreamConfig stream_config;
-  stream_config.symbol = market.spec.market.native_symbol;
-  stream = std::make_unique<binance_spot::MarketDataStream>(
-      stream_config,
-      binance_spot::DepthParser(market.spec.market, market.tick_lot_size),
-      *http, *websocket, shard->MutableBookSync(), *clock,
-      binance_spot::StreamCallbacks{
-          [&](const BookApplyResult& result) {
-            if (result.state == BookSyncState::Live)
-              stream_error = absl::OkStatus();
-            auto status = shard->OnBookApplied(result);
-            if (!status.ok()) {
-              stream_error = status;
-              risk->EmergencyStop();
-            }
-          },
-          [&](const PublicTrade& trade) {
-            auto status = shard->OnPublicTrade(trade);
-            if (!status.ok()) {
-              stream_error = status;
-              risk->EmergencyStop();
-            }
-          },
-          [&](const absl::Status& status) { stream_error = status; }});
-  boost::asio::co_spawn(*io, stream->Run(), boost::asio::detached);
-  if (strategy->Triggers().timer_period)
-    boost::asio::co_spawn(*io, TimerLoop(), boost::asio::detached);
-  shard_thread = std::thread([&] { io->run(); });
 }
 
 QuantServer::QuantServer(AppConfig config, std::string state_dir,
@@ -285,14 +214,17 @@ QuantServer::~QuantServer() {
     RequestStop();
     (void)Wait();
   }
-  if (shard_thread.joinable()) shard_thread.join();
+  for (auto& shard : shards) shard->Join();
 }
 
 absl::Status QuantServer::Start() {
   auto status = CreateComponents();
   if (!status.ok()) return status;
   if (live) {
-    StartFeed();
+    const auto& rest = config.binance_endpoints.rest;
+    const auto& ws = config.binance_endpoints.websocket;
+    shards.front()->StartFeed({rest.host, rest.port, rest.tls},
+                              {ws.host, ws.port, ws.tls});
   } else {
     status = RunReplay();
     if (!status.ok()) return status;
@@ -331,7 +263,7 @@ absl::Status QuantServer::Start() {
                                      handler, [this](int) { RequestStop(); });
   if (!opened.ok()) {
     RequestStop();
-    if (shard_thread.joinable()) shard_thread.join();
+    for (auto& shard : shards) shard->Join();
     return opened.status();
   }
   control_server = std::move(*opened);
@@ -345,7 +277,7 @@ absl::Status QuantServer::Wait() {
   stop_cv.wait(lock, [&] { return stopping.load(); });
   lock.unlock();
   if (control_server) control_server->Stop(false);
-  if (shard_thread.joinable()) shard_thread.join();
+  for (auto& shard : shards) shard->Join();
   auto stopped = writer->Stop(clock->UtcNow());
   reader.reset();
   if (control_server) {
@@ -361,42 +293,39 @@ void QuantServer::RequestStop() {
     std::lock_guard lock(stop_mutex);
     if (stopping.exchange(true)) return;
   }
-  if (io) {
-    boost::asio::post(*io, [this] {
-      if (stream) stream->Stop();
-      io->stop();
-    });
-  }
+  for (auto& shard : shards) shard->RequestStop();
   stop_cv.notify_all();
 }
 
 boost::asio::awaitable<absl::StatusOr<std::string>> QuantServer::StatusAsync() {
   const auto& market = config.market_specs.front();
   if (!live) {
-    co_return StatusJson(*shard, *exchange, market.spec,
-                         *writer);
+    co_return StatusJson(*shards.front(), shards.front()->OwnedExchange(),
+                         market.spec, *writer);
   }
   auto executor = co_await boost::asio::this_coro::executor;
   auto ready = std::make_shared<boost::asio::steady_timer>(executor);
   auto result = std::make_shared<std::optional<absl::StatusOr<std::string>>>();
   ready->expires_after(std::chrono::seconds(2));
-  boost::asio::post(*io, [this, ready, result, executor] {
+  boost::asio::post(*shards.front()->LiveIo(), [this, ready, result, executor] {
     auto json =
-        StatusJson(*shard, *exchange,
+        StatusJson(*shards.front(), shards.front()->OwnedExchange(),
                    config.market_specs.front().spec, *writer);
     json.pop_back();
     json +=
-        ",\"applied_diffs\":" + std::to_string(stream->AppliedDiffs()) +
-        ",\"resyncs\":" + std::to_string(stream->Resyncs()) +
+        ",\"applied_diffs\":" +
+        std::to_string(shards.front()->AppliedDiffs()) +
+        ",\"resyncs\":" + std::to_string(shards.front()->Resyncs()) +
         ",\"strategy_invocations\":" +
-        std::to_string(shard->strategy_invocations()) + "}";
-    if (!stream_error.ok()) {
+        std::to_string(shards.front()->strategy_invocations()) + "}";
+    if (!shards.front()->stream_error().ok()) {
       json.pop_back();
-      const ErrorCode code = CodeOf(stream_error);
+      const ErrorCode code = CodeOf(shards.front()->stream_error());
       json += ",\"market_stream_error\":{\"code\":" +
               std::to_string(ErrorNumber(code)) +
               ",\"name\":" + EscapeJson(Info(code).name) +
-              ",\"message\":" + EscapeJson(stream_error.message()) +
+              ",\"message\":" +
+              EscapeJson(shards.front()->stream_error().message()) +
               "}}";
     }
     boost::asio::post(executor,

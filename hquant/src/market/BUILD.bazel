@@ -27,7 +27,7 @@ hquant_cc_library(
         "@boost.asio//:boost.asio",
         "@simdjson//:simdjson",
     ],
-    visibility = ["//hquant/src/application:__pkg__", "//hquant/test:__pkg__"],
+    visibility = ["//hquant/src/application:__pkg__", "//hquant/src/shard:__pkg__", "//hquant/test:__pkg__"],
 )
 
 hquant_cc_library(
