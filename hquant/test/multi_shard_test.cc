@@ -102,7 +102,7 @@ TEST(MultiShardTest, CapitalRateAndPrivateReportsStayWithinTheirShard) {
   update.account = account;
   update.market = market;
   update.client_id = ClientOrderId("C2");
-  update.exchange_status = ExchangeOrderStatus::New;
+  update.exchange_status = ExchangeOrderStatus::Open;
   auto routed = (*router)->Route(update);
   EXPECT_EQ(routed.disposition, RouteDisposition::Forwarded);
   ASSERT_TRUE(routed.wake_shard);

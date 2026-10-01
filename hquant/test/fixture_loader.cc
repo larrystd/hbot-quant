@@ -255,9 +255,9 @@ bool ValidateOutput(const std::string& family, simdjson::dom::element output) {
     std::string state, base, quote, remaining;
     simdjson::dom::array events;
     if (!String(output, "display_state", &state) ||
-        !OneOf(state, {"Absent", "PendingCreate", "Open", "PartiallyFilled",
-                       "PendingCancel", "SubmissionUnknown", "AwaitingFills",
-                       "Filled", "Canceled", "Failed", "Expired"}) ||
+        !OneOf(state, {"Absent", "PendingCreate", "Open", "PartiallyTraded",
+                       "PendingCancel", "SubmissionUnknown", "AwaitingTrades",
+                       "Traded", "Canceled", "Failed", "Expired"}) ||
         !DecimalString(output, "cumulative_base") ||
         !DecimalString(output, "cumulative_quote") ||
         !DecimalString(output, "remaining_base") ||

@@ -522,12 +522,12 @@ std::string StatusJson(const ShardRuntime& shard, const SimpleSimulatedExchange&
 
 const char* OrderStatusName(ExchangeOrderStatus status) {
   switch (status) {
-    case ExchangeOrderStatus::New:
-      return "New";
-    case ExchangeOrderStatus::PartiallyFilled:
-      return "PartiallyFilled";
-    case ExchangeOrderStatus::Filled:
-      return "Filled";
+    case ExchangeOrderStatus::Open:
+      return "Open";
+    case ExchangeOrderStatus::PartiallyTraded:
+      return "PartiallyTraded";
+    case ExchangeOrderStatus::Traded:
+      return "Traded";
     case ExchangeOrderStatus::Canceled:
       return "Canceled";
     case ExchangeOrderStatus::Rejected:

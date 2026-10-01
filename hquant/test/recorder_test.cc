@@ -79,7 +79,7 @@ RecordEnvelope Update(uint64_t sequence) {
   update.market = Market();
   update.client_id = ClientOrderId{"B1"};
   update.exchange_order_id = ExchangeOrderId{"E1"};
-  update.exchange_status = ExchangeOrderStatus::PartiallyFilled;
+  update.exchange_status = ExchangeOrderStatus::PartiallyTraded;
   update.cumulative_base = D("0.004");
   update.cumulative_quote = D("0.3996");
   update.time = EventTime{At(999), At(1000 + sequence), MonoAt(42)};

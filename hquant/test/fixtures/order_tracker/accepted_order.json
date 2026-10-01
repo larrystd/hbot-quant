@@ -54,7 +54,7 @@
         "kind": "order_update",
         "client_id": "B1",
         "exchange_order_id": "E1",
-        "exchange_status": "New"
+        "exchange_status": "Open"
       }
     }
   ],

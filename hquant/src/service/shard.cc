@@ -187,7 +187,7 @@ absl::Status ShardRuntime::ProcessAccountEvent(const AccountEvent& event) {
                    "Simulated order without client ID");
     auto updated = tracker_.ApplyOrderUpdate(*update);
     if (!updated.ok()) return updated.status();
-    if (update->exchange_status == ExchangeOrderStatus::Filled ||
+    if (update->exchange_status == ExchangeOrderStatus::Traded ||
         update->exchange_status == ExchangeOrderStatus::Canceled ||
         update->exchange_status == ExchangeOrderStatus::Rejected ||
         update->exchange_status == ExchangeOrderStatus::Expired) {

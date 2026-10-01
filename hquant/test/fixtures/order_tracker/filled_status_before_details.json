@@ -54,7 +54,7 @@
         "kind": "order_update",
         "client_id": "B1",
         "exchange_order_id": "E1",
-        "exchange_status": "New"
+        "exchange_status": "Open"
       }
     },
     {
@@ -64,7 +64,7 @@
         "kind": "order_update",
         "client_id": "B1",
         "exchange_order_id": "E1",
-        "exchange_status": "Filled",
+        "exchange_status": "Traded",
         "cumulative_base": "1",
         "cumulative_quote": "100"
       }
@@ -127,7 +127,7 @@
       "at_us": 2000000,
       "ordinal": 0,
       "output": {
-        "display_state": "AwaitingFills",
+        "display_state": "AwaitingTrades",
         "events": [],
         "cumulative_base": "0",
         "cumulative_quote": "0",
@@ -144,7 +144,7 @@
       "at_us": 3000000,
       "ordinal": 0,
       "output": {
-        "display_state": "Filled",
+        "display_state": "Traded",
         "events": [
           "OrderFilled",
           "OrderCompleted"

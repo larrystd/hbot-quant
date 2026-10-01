@@ -54,7 +54,7 @@
         "kind": "order_update",
         "client_id": "B1",
         "exchange_order_id": "E1",
-        "exchange_status": "New"
+        "exchange_status": "Open"
       }
     },
     {
@@ -80,7 +80,7 @@
         "kind": "order_update",
         "client_id": "B1",
         "exchange_order_id": "E1",
-        "exchange_status": "PartiallyFilled",
+        "exchange_status": "PartiallyTraded",
         "cumulative_base": "0.4",
         "cumulative_quote": "40"
       }
@@ -148,7 +148,7 @@
       "at_us": 3000000,
       "ordinal": 0,
       "output": {
-        "display_state": "PartiallyFilled",
+        "display_state": "PartiallyTraded",
         "events": [],
         "cumulative_base": "0.4",
         "cumulative_quote": "40",

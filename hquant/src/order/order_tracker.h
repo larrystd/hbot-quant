@@ -16,8 +16,8 @@ namespace hquant {
 enum class OrderLifecycle {
   PendingCreate,
   Open,
-  PartiallyFilled,
-  Filled,
+  PartiallyTraded,
+  Traded,
   Canceled,
   Failed,
   Expired

@@ -170,9 +170,9 @@ bool AtLeast(const Decimal& value, const Decimal& minimum) {
 }
 
 absl::StatusOr<ExchangeOrderStatus> ParseStatus(std::string_view text) {
-  if (text == "NEW") return ExchangeOrderStatus::New;
-  if (text == "PARTIALLY_FILLED") return ExchangeOrderStatus::PartiallyFilled;
-  if (text == "FILLED") return ExchangeOrderStatus::Filled;
+  if (text == "NEW") return ExchangeOrderStatus::Open;
+  if (text == "PARTIALLY_FILLED") return ExchangeOrderStatus::PartiallyTraded;
+  if (text == "FILLED") return ExchangeOrderStatus::Traded;
   if (text == "CANCELED") return ExchangeOrderStatus::Canceled;
   if (text == "REJECTED") return ExchangeOrderStatus::Rejected;
   if (text == "EXPIRED") return ExchangeOrderStatus::Expired;
@@ -587,7 +587,7 @@ boost::asio::awaitable<void> BinanceOrderGateway::ProcessQueue() {
             ErrorCode::kOrderSubmissionUnknown});
       continue;
     }
-    if (work.cancel || update->exchange_status == ExchangeOrderStatus::Filled ||
+    if (work.cancel || update->exchange_status == ExchangeOrderStatus::Traded ||
         update->exchange_status == ExchangeOrderStatus::Canceled ||
         update->exchange_status == ExchangeOrderStatus::Expired ||
         update->exchange_status == ExchangeOrderStatus::Rejected) {

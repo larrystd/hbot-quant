@@ -76,10 +76,10 @@ std::vector<NormalizedEvent> Normalize(std::vector<AccountEvent> events) {
       NormalizedEvent event;
       event.client_id = update->client_id->value;
       switch (update->exchange_status) {
-        case ExchangeOrderStatus::New:
+        case ExchangeOrderStatus::Open:
           event.kind = "OrderCreated";
           break;
-        case ExchangeOrderStatus::Filled:
+        case ExchangeOrderStatus::Traded:
           event.kind = "OrderCompleted";
           break;
         case ExchangeOrderStatus::Canceled:

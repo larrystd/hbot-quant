@@ -68,9 +68,9 @@ const char* StateName(BookSyncState state) {
 
 const char* StatusName(ExchangeOrderStatus status) {
   switch (status) {
-    case ExchangeOrderStatus::New: return "New（已挂上）";
-    case ExchangeOrderStatus::PartiallyFilled: return "PartiallyFilled";
-    case ExchangeOrderStatus::Filled: return "Filled（全部成交）";
+    case ExchangeOrderStatus::Open: return "Open（挂单中）";
+    case ExchangeOrderStatus::PartiallyTraded: return "PartiallyTraded";
+    case ExchangeOrderStatus::Traded: return "Traded（全部成交）";
     case ExchangeOrderStatus::Canceled: return "Canceled（已撤）";
     case ExchangeOrderStatus::Rejected: return "Rejected（被拒）";
     case ExchangeOrderStatus::Expired: return "Expired";

@@ -32,9 +32,9 @@ using BalanceUpdate = Balance;
 enum class OrderType { Limit, LimitMaker };
 enum class TimeInForce { Gtc, Ioc, Fok };
 enum class ExchangeOrderStatus {
-  New,
-  PartiallyFilled,
-  Filled,
+  Open,
+  PartiallyTraded,
+  Traded,
   Canceled,
   Rejected,
   Expired
@@ -42,11 +42,11 @@ enum class ExchangeOrderStatus {
 enum class OrderDisplayState {
   PendingCreate,
   Open,
-  PartiallyFilled,
+  PartiallyTraded,
   PendingCancel,
   SubmissionUnknown,
-  AwaitingFills,
-  Filled,
+  AwaitingTrades,
+  Traded,
   Canceled,
   Failed,
   Expired
@@ -91,7 +91,7 @@ struct OrderUpdate {
   MarketId market;
   std::optional<ClientOrderId> client_id;
   std::optional<ExchangeOrderId> exchange_order_id;
-  ExchangeOrderStatus exchange_status = ExchangeOrderStatus::New;
+  ExchangeOrderStatus exchange_status = ExchangeOrderStatus::Open;
   std::optional<Decimal> cumulative_base;
   std::optional<Decimal> cumulative_quote;
   EventTime time;

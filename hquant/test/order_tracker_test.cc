@@ -58,16 +58,16 @@ std::string State(OrderDisplayState state) {
       return "PendingCreate";
     case OrderDisplayState::Open:
       return "Open";
-    case OrderDisplayState::PartiallyFilled:
-      return "PartiallyFilled";
+    case OrderDisplayState::PartiallyTraded:
+      return "PartiallyTraded";
     case OrderDisplayState::PendingCancel:
       return "PendingCancel";
     case OrderDisplayState::SubmissionUnknown:
       return "SubmissionUnknown";
-    case OrderDisplayState::AwaitingFills:
-      return "AwaitingFills";
-    case OrderDisplayState::Filled:
-      return "Filled";
+    case OrderDisplayState::AwaitingTrades:
+      return "AwaitingTrades";
+    case OrderDisplayState::Traded:
+      return "Traded";
     case OrderDisplayState::Canceled:
       return "Canceled";
     case OrderDisplayState::Failed:
@@ -85,9 +85,9 @@ std::string EventName(const TrackedOrderEvent& event) {
   return "OrderFailed";
 }
 ExchangeOrderStatus Status(const std::string& text) {
-  if (text == "New") return ExchangeOrderStatus::New;
-  if (text == "PartiallyFilled") return ExchangeOrderStatus::PartiallyFilled;
-  if (text == "Filled") return ExchangeOrderStatus::Filled;
+  if (text == "Open") return ExchangeOrderStatus::Open;
+  if (text == "PartiallyTraded") return ExchangeOrderStatus::PartiallyTraded;
+  if (text == "Traded") return ExchangeOrderStatus::Traded;
   if (text == "Canceled") return ExchangeOrderStatus::Canceled;
   if (text == "Rejected") return ExchangeOrderStatus::Rejected;
   if (text == "Expired") return ExchangeOrderStatus::Expired;
@@ -260,7 +260,7 @@ TEST(OrderTrackerTest,
   ack.market = first.request.market;
   ack.client_id = first.client_id;
   ack.exchange_order_id = ExchangeOrderId{"E1"};
-  ack.exchange_status = ExchangeOrderStatus::New;
+  ack.exchange_status = ExchangeOrderStatus::Open;
   ASSERT_TRUE(tracker.ApplyOrderUpdate(ack).ok());
   ack.client_id = second.client_id;
   EXPECT_EQ(CodeOf(tracker.ApplyOrderUpdate(ack).status()),
@@ -303,7 +303,7 @@ TEST(OrderTrackerTest, ReconcilesUnknownSubmissionUsingOriginalClientId) {
   recovered.market = intent.request.market;
   recovered.client_id = intent.client_id;
   recovered.exchange_order_id = ExchangeOrderId{"E1"};
-  recovered.exchange_status = ExchangeOrderStatus::New;
+  recovered.exchange_status = ExchangeOrderStatus::Open;
   auto reconciled = tracker.Reconcile(recovered);
   ASSERT_TRUE(reconciled.ok()) << reconciled.status();
   EXPECT_EQ(reconciled->reconciliation, ReconciliationState::Confirmed);
@@ -332,18 +332,18 @@ TEST(OrderTrackerTest, RoutesExchangeOnlyReportAndDoesNotRegressOnStaleStatus) {
   update.market = intent.request.market;
   update.client_id = intent.client_id;
   update.exchange_order_id = ExchangeOrderId{"E1"};
-  update.exchange_status = ExchangeOrderStatus::New;
+  update.exchange_status = ExchangeOrderStatus::Open;
   ASSERT_TRUE(tracker.ApplyOrderUpdate(update).ok());
   update.client_id.reset();
-  update.exchange_status = ExchangeOrderStatus::PartiallyFilled;
+  update.exchange_status = ExchangeOrderStatus::PartiallyTraded;
   auto partial = tracker.ApplyOrderUpdate(update);
   ASSERT_TRUE(partial.ok());
   EXPECT_EQ(partial->snapshot.display_state,
-            OrderDisplayState::PartiallyFilled);
-  update.exchange_status = ExchangeOrderStatus::New;
+            OrderDisplayState::PartiallyTraded);
+  update.exchange_status = ExchangeOrderStatus::Open;
   auto stale = tracker.ApplyOrderUpdate(update);
   ASSERT_TRUE(stale.ok());
-  EXPECT_EQ(stale->snapshot.display_state, OrderDisplayState::PartiallyFilled);
+  EXPECT_EQ(stale->snapshot.display_state, OrderDisplayState::PartiallyTraded);
   EXPECT_TRUE(stale->events.empty());
 }
 

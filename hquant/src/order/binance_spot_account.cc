@@ -86,9 +86,9 @@ namespace {
 namespace field = private_detail;
 
 absl::StatusOr<ExchangeOrderStatus> Status(std::string_view raw) {
-  if (raw == "NEW" || raw == "PENDING_CANCEL") return ExchangeOrderStatus::New;
-  if (raw == "PARTIALLY_FILLED") return ExchangeOrderStatus::PartiallyFilled;
-  if (raw == "FILLED") return ExchangeOrderStatus::Filled;
+  if (raw == "NEW" || raw == "PENDING_CANCEL") return ExchangeOrderStatus::Open;
+  if (raw == "PARTIALLY_FILLED") return ExchangeOrderStatus::PartiallyTraded;
+  if (raw == "FILLED") return ExchangeOrderStatus::Traded;
   if (raw == "CANCELED") return ExchangeOrderStatus::Canceled;
   if (raw == "REJECTED") return ExchangeOrderStatus::Rejected;
   if (raw == "EXPIRED" || raw == "EXPIRED_IN_MATCH") {
@@ -304,9 +304,9 @@ std::string Encode(std::string_view raw) {
 }
 
 absl::StatusOr<ExchangeOrderStatus> ParseStatus(std::string_view raw) {
-  if (raw == "NEW" || raw == "PENDING_CANCEL") return ExchangeOrderStatus::New;
-  if (raw == "PARTIALLY_FILLED") return ExchangeOrderStatus::PartiallyFilled;
-  if (raw == "FILLED") return ExchangeOrderStatus::Filled;
+  if (raw == "NEW" || raw == "PENDING_CANCEL") return ExchangeOrderStatus::Open;
+  if (raw == "PARTIALLY_FILLED") return ExchangeOrderStatus::PartiallyTraded;
+  if (raw == "FILLED") return ExchangeOrderStatus::Traded;
   if (raw == "CANCELED") return ExchangeOrderStatus::Canceled;
   if (raw == "REJECTED") return ExchangeOrderStatus::Rejected;
   if (raw == "EXPIRED" || raw == "EXPIRED_IN_MATCH") {

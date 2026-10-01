@@ -245,7 +245,7 @@ TEST(RecoveryIntegrationTest, UnknownWriteAndCrashUseOriginalIdWithoutResend) {
   ASSERT_TRUE(tracker.ApplyTradeUpdate(reconciled->trades[0]).ok());
   auto final = tracker.Reconcile(*reconciled->order);
   ASSERT_TRUE(final.ok()) << final.status();
-  EXPECT_EQ(final->snapshot.display_state, OrderDisplayState::Filled);
+  EXPECT_EQ(final->snapshot.display_state, OrderDisplayState::Traded);
   EXPECT_EQ(*final->snapshot.cumulative_base.Compare(D("0.01")), 0);
   ASSERT_TRUE(restored_risk
                   .ApplyFill(restored_hold->reservation_id, AssetId("USDT"),

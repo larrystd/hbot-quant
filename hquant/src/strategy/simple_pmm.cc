@@ -25,7 +25,7 @@ bool SimplePmm::Active(const OrderSnapshot& order) const {
   switch (order.display_state) {
     case OrderDisplayState::PendingCreate:
     case OrderDisplayState::Open:
-    case OrderDisplayState::PartiallyFilled:
+    case OrderDisplayState::PartiallyTraded:
     case OrderDisplayState::PendingCancel:
       return true;
     default:

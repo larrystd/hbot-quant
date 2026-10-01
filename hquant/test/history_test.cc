@@ -79,7 +79,7 @@ TEST(RecoveryTest, CleanRunLoadsTypedContextAndOpenClientIds) {
   update.account = AccountId{"A1"};
   update.market = Market();
   update.client_id = ClientOrderId{"B1"};
-  update.exchange_status = ExchangeOrderStatus::Filled;
+  update.exchange_status = ExchangeOrderStatus::Traded;
   filled.payload = update;
   ASSERT_TRUE((*recorder)->TryPush(std::move(filled)));
   ASSERT_TRUE((*recorder)->TryPush(Intent(3, "B2")));

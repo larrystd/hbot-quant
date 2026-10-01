@@ -137,15 +137,15 @@ TEST(UserDataStreamTest, EmitsTradeBeforeStatusAndTrackerDeduplicates) {
   ASSERT_TRUE(
       tracker.ApplyOrderUpdate(std::get<OrderUpdate>(stale->events[0])).ok());
   EXPECT_EQ(tracker.Snapshot(ClientOrderId("C1"))->display_state,
-            OrderDisplayState::PartiallyFilled);
+            OrderDisplayState::PartiallyTraded);
 
   OrderUpdate filled = std::get<OrderUpdate>(first->events[1]);
-  filled.exchange_status = ExchangeOrderStatus::Filled;
+  filled.exchange_status = ExchangeOrderStatus::Traded;
   filled.cumulative_base = D("1");
   filled.cumulative_quote = D("100");
   auto awaiting = tracker.ApplyOrderUpdate(filled);
   ASSERT_TRUE(awaiting.ok());
-  EXPECT_EQ(awaiting->snapshot.display_state, OrderDisplayState::AwaitingFills);
+  EXPECT_EQ(awaiting->snapshot.display_state, OrderDisplayState::AwaitingTrades);
   auto second = stream.Parse(
       Report("TRADE", "FILLED", "0.6", "1", "60", "100", 8), Received());
   ASSERT_TRUE(second.ok());
@@ -153,7 +153,7 @@ TEST(UserDataStreamTest, EmitsTradeBeforeStatusAndTrackerDeduplicates) {
       tracker.ApplyTradeUpdate(std::get<TradeUpdate>(second->events[0]));
   ASSERT_TRUE(completed.ok()) << completed.status();
   EXPECT_EQ(completed->events.size(), 2);
-  EXPECT_EQ(completed->snapshot.display_state, OrderDisplayState::Filled);
+  EXPECT_EQ(completed->snapshot.display_state, OrderDisplayState::Traded);
 }
 
 TEST(UserDataStreamTest, CancelUsesOriginalIdAndGapsRequestResync) {

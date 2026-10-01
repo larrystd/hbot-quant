@@ -75,7 +75,7 @@ void SimpleSimulatedExchange::EmitOrder(const RestingOrder& order,
   update.client_id = order.client_id;
   update.exchange_status = status;
   update.time = Now();
-  if (status == ExchangeOrderStatus::Filled) {
+  if (status == ExchangeOrderStatus::Traded) {
     update.cumulative_base = order.request.base_amount;
     auto quote = order.request.base_amount.Multiply(*order.request.limit_price);
     if (quote.ok()) update.cumulative_quote = *quote;
@@ -190,7 +190,7 @@ absl::Status SimpleSimulatedExchange::StartPrepared(const ClientOrderId& client_
                  "Simulated available balance insufficient");
   }
   orders_.push_back(order);
-  EmitOrder(order, ExchangeOrderStatus::New);
+  EmitOrder(order, ExchangeOrderStatus::Open);
   EmitBalance(collateral);
   return absl::OkStatus();
 }
@@ -274,7 +274,7 @@ absl::Status SimpleSimulatedExchange::Fill(size_t index) {
   trade.maker = true;
   trade.time = Now();
   events_.emplace_back(std::move(trade));
-  EmitOrder(order, ExchangeOrderStatus::Filled);
+  EmitOrder(order, ExchangeOrderStatus::Traded);
   EmitBalance(config_.market.base_asset);
   EmitBalance(config_.market.quote_asset);
   return absl::OkStatus();

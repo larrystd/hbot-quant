@@ -17,9 +17,9 @@ int Rank(OrderLifecycle lifecycle) {
       return 0;
     case OrderLifecycle::Open:
       return 1;
-    case OrderLifecycle::PartiallyFilled:
+    case OrderLifecycle::PartiallyTraded:
       return 2;
-    case OrderLifecycle::Filled:
+    case OrderLifecycle::Traded:
     case OrderLifecycle::Canceled:
     case OrderLifecycle::Failed:
     case OrderLifecycle::Expired:
@@ -30,12 +30,12 @@ int Rank(OrderLifecycle lifecycle) {
 
 OrderLifecycle Lifecycle(ExchangeOrderStatus status) {
   switch (status) {
-    case ExchangeOrderStatus::New:
+    case ExchangeOrderStatus::Open:
       return OrderLifecycle::Open;
-    case ExchangeOrderStatus::PartiallyFilled:
-      return OrderLifecycle::PartiallyFilled;
-    case ExchangeOrderStatus::Filled:
-      return OrderLifecycle::Filled;
+    case ExchangeOrderStatus::PartiallyTraded:
+      return OrderLifecycle::PartiallyTraded;
+    case ExchangeOrderStatus::Traded:
+      return OrderLifecycle::Traded;
     case ExchangeOrderStatus::Canceled:
       return OrderLifecycle::Canceled;
     case ExchangeOrderStatus::Rejected:
@@ -69,12 +69,12 @@ bool OrderTracker::Terminal(OrderLifecycle lifecycle) {
 }
 
 OrderDisplayState OrderTracker::Display(const TrackedOrder& order) const {
-  if (order.lifecycle == OrderLifecycle::Filled &&
+  if (order.lifecycle == OrderLifecycle::Traded &&
       order.completion_pending_fills)
-    return OrderDisplayState::AwaitingFills;
+    return OrderDisplayState::AwaitingTrades;
   switch (order.lifecycle) {
-    case OrderLifecycle::Filled:
-      return OrderDisplayState::Filled;
+    case OrderLifecycle::Traded:
+      return OrderDisplayState::Traded;
     case OrderLifecycle::Canceled:
       return OrderDisplayState::Canceled;
     case OrderLifecycle::Failed:
@@ -92,8 +92,8 @@ OrderDisplayState OrderTracker::Display(const TrackedOrder& order) const {
       return OrderDisplayState::PendingCreate;
     case OrderLifecycle::Open:
       return OrderDisplayState::Open;
-    case OrderLifecycle::PartiallyFilled:
-      return OrderDisplayState::PartiallyFilled;
+    case OrderLifecycle::PartiallyTraded:
+      return OrderDisplayState::PartiallyTraded;
     default:
       return OrderDisplayState::Failed;
   }
@@ -334,7 +334,7 @@ absl::StatusOr<TrackerResult> OrderTracker::Update(const OrderUpdate& update,
     order.cancel_pending = false;
     changed = true;
   }
-  if (order.lifecycle == OrderLifecycle::Filled) {
+  if (order.lifecycle == OrderLifecycle::Traded) {
     auto comparison =
         order.cumulative_base.Compare(order.intent.request.base_amount);
     if (!comparison.ok())
@@ -346,7 +346,7 @@ absl::StatusOr<TrackerResult> OrderTracker::Update(const OrderUpdate& update,
   }
   if (changed) order.last_update_time = update.time;
   if (created_now) events.emplace_back(OrderCreated{MakeSnapshot(order)});
-  if (next == OrderLifecycle::Filled && !order.completion_pending_fills &&
+  if (next == OrderLifecycle::Traded && !order.completion_pending_fills &&
       !order.terminal_emitted) {
     order.terminal_emitted = true;
     events.emplace_back(OrderCompleted{MakeSnapshot(order)});
@@ -422,7 +422,7 @@ absl::StatusOr<TrackerResult> OrderTracker::ApplyTradeUpdate(
   seen_trades_[key] = order.intent.client_id.value;
   std::vector<TrackedOrderEvent> events;
   events.emplace_back(OrderFilled{MakeSnapshot(order), trade});
-  if (order.lifecycle == OrderLifecycle::Filled &&
+  if (order.lifecycle == OrderLifecycle::Traded &&
       order.completion_pending_fills && *overfill == 0 &&
       !order.terminal_emitted) {
     order.completion_pending_fills = false;

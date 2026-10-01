@@ -368,7 +368,7 @@ absl::StatusOr<RecoveryStatement> PrepareRecovery(sqlite3* db, const char* sql,
 }
 
 bool Terminal(ExchangeOrderStatus status) {
-  return status == ExchangeOrderStatus::Filled ||
+  return status == ExchangeOrderStatus::Traded ||
          status == ExchangeOrderStatus::Canceled ||
          status == ExchangeOrderStatus::Rejected ||
          status == ExchangeOrderStatus::Expired;
