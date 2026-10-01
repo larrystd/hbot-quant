@@ -31,21 +31,21 @@ cc_test(name = "binance_spot_gateway_test", srcs = ["binance_spot_gateway_test.c
 cc_test(name = "binance_spot_account_test", srcs = ["binance_spot_account_test.cc"], deps = ["//hquant/src/base:error", "//hquant/src/order:binance_spot_account", "//hquant/src/order:order_tracker", "@boost.asio//:boost.asio", "@googletest//:gtest_main"])
 cc_test(name = "simple_pmm_test", srcs = ["simple_pmm_test.cc"], data = [":simple_pmm_data"], deps = [":fixture_loader", "//hquant/src/strategy:simple_pmm", "@googletest//:gtest_main", "@simdjson//:simdjson"])
 
-cc_test(name = "recorder_test", srcs = ["recorder_test.cc"], deps = ["//hquant/src/base:error", "//hquant/src/offline:history", "//hquant/src/offline:recorder", "@googletest//:gtest_main"])
-cc_test(name = "history_test", srcs = ["history_test.cc"], deps = ["//hquant/src/base:error", "//hquant/src/offline:history", "//hquant/src/offline:recorder", "@googletest//:gtest_main"])
-cc_test(name = "record_codec_test", srcs = ["record_codec_test.cc"], deps = ["//hquant/src/base:error", "//hquant/src/offline:record_codec", "@googletest//:gtest_main"])
-cc_test(name = "shard_test", srcs = ["shard_test.cc"], deps = ["//hquant/src/service:shard"])
-cc_test(name = "action_executor_test", srcs = ["action_executor_test.cc"], deps = ["//hquant/src/service:action_executor"])
-cc_test(name = "routing_test", srcs = ["routing_test.cc"], deps = ["//hquant/src/service:routing", "@googletest//:gtest_main"])
+cc_test(name = "recorder_test", srcs = ["recorder_test.cc"], deps = ["//hquant/src/base:error", "//hquant/src/storage:history", "//hquant/src/storage:recorder", "@googletest//:gtest_main"])
+cc_test(name = "history_test", srcs = ["history_test.cc"], deps = ["//hquant/src/base:error", "//hquant/src/storage:history", "//hquant/src/storage:recorder", "@googletest//:gtest_main"])
+cc_test(name = "record_codec_test", srcs = ["record_codec_test.cc"], deps = ["//hquant/src/base:error", "//hquant/src/storage:record_codec", "@googletest//:gtest_main"])
+cc_test(name = "shard_test", srcs = ["shard_test.cc"], deps = ["//hquant/src/shard:shard"])
+cc_test(name = "action_executor_test", srcs = ["action_executor_test.cc"], deps = ["//hquant/src/shard:action_executor"])
+cc_test(name = "routing_test", srcs = ["routing_test.cc"], deps = ["//hquant/src/shard:routing", "@googletest//:gtest_main"])
 
-cc_test(name = "quant_server_test", srcs = ["quant_server_test.cc"], deps = ["//hquant/src/application:quant_server", "//hquant/src/cli:cli", "//hquant/src/offline:storage", "@googletest//:gtest_main"])
+cc_test(name = "quant_server_test", srcs = ["quant_server_test.cc"], deps = ["//hquant/src/application:quant_server", "//hquant/src/cli:cli", "//hquant/src/storage:storage", "@googletest//:gtest_main"])
 cc_test(name = "config_test", srcs = ["config_test.cc"], deps = ["//hquant/src/application:config", "//hquant/src/base:error"])
 cc_test(name = "cli_test", srcs = ["cli_test.cc"], deps = ["//hquant/src/base:error", "//hquant/src/cli:cli"])
 
-cc_test(name = "simulated_replay", srcs = ["simulated_replay_test.cc"], deps = ["//hquant/src/base:error", "//hquant/src/base:types", "//hquant/src/order:simulated_exchange", "//hquant/src/order:risk", "//hquant/src/service:shard", "//hquant/src/offline:history", "//hquant/src/offline:recorder", "//hquant/src/strategy:simple_pmm", "@googletest//:gtest_main"])
-cc_test(name = "simulated_binance", srcs = ["simulated_binance_test.cc"], deps = ["//hquant/src/market:binance_spot_feed", "//hquant/src/order:simulated_exchange", "//hquant/src/base:net", "//hquant/src/order:risk", "//hquant/src/service:shard", "//hquant/src/strategy:simple_pmm", "@boost.asio//:boost.asio", "@boost.beast//:boost.beast", "@googletest//:gtest_main"])
-cc_test(name = "multi_shard", srcs = ["multi_shard_test.cc"], deps = ["//hquant/src/base:rate_limit", "//hquant/src/order:risk", "//hquant/src/service:routing", "@googletest//:gtest_main"])
-cc_test(name = "recovery", srcs = ["recovery_test.cc"], deps = ["//hquant/src/order:binance_spot_gateway", "//hquant/src/order:binance_spot_account", "//hquant/src/order:order_tracker", "//hquant/src/order:risk", "//hquant/src/offline:history", "//hquant/src/offline:recorder", "@abseil-cpp//absl/status:status", "@boost.asio//:boost.asio", "@googletest//:gtest_main"])
+cc_test(name = "simulated_replay", srcs = ["simulated_replay_test.cc"], deps = ["//hquant/src/base:error", "//hquant/src/base:types", "//hquant/src/order:simulated_exchange", "//hquant/src/order:risk", "//hquant/src/shard:shard", "//hquant/src/storage:history", "//hquant/src/storage:recorder", "//hquant/src/strategy:simple_pmm", "@googletest//:gtest_main"])
+cc_test(name = "simulated_binance", srcs = ["simulated_binance_test.cc"], deps = ["//hquant/src/market:binance_spot_feed", "//hquant/src/order:simulated_exchange", "//hquant/src/base:net", "//hquant/src/order:risk", "//hquant/src/shard:shard", "//hquant/src/strategy:simple_pmm", "@boost.asio//:boost.asio", "@boost.beast//:boost.beast", "@googletest//:gtest_main"])
+cc_test(name = "multi_shard", srcs = ["multi_shard_test.cc"], deps = ["//hquant/src/base:rate_limit", "//hquant/src/order:risk", "//hquant/src/shard:routing", "@googletest//:gtest_main"])
+cc_test(name = "recovery", srcs = ["recovery_test.cc"], deps = ["//hquant/src/order:binance_spot_gateway", "//hquant/src/order:binance_spot_account", "//hquant/src/order:order_tracker", "//hquant/src/order:risk", "//hquant/src/storage:history", "//hquant/src/storage:recorder", "@abseil-cpp//absl/status:status", "@boost.asio//:boost.asio", "@googletest//:gtest_main"])
 
 cc_test(
     name = "schema_test",

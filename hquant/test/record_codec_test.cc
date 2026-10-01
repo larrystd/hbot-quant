@@ -1,4 +1,4 @@
-#include "offline/record_codec.h"
+#include "storage/record_codec.h"
 
 #include <string>
 

@@ -97,14 +97,14 @@ class QuantServer {
   std::vector<Worker> workers_;
 };
 
-class ShardRuntime;
+class Shard;
 class SimpleSimulatedExchange;
 class SqliteHistoryWriter;
 struct MarketSpec;
 struct HistoryPage;
 
 std::string EscapeJson(std::string_view text);
-std::string StatusJson(const ShardRuntime& shard,
+std::string StatusJson(const Shard& shard,
                        const SimpleSimulatedExchange& sim_exchange,
                        const MarketSpec& market,
                        const SqliteHistoryWriter& recorder);

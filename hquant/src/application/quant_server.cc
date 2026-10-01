@@ -9,11 +9,11 @@
 #include "base/error.h"
 #include "base/market.h"
 #include "base/order.h"
-#include "offline/history.h"
-#include "offline/recorder.h"
 #include "order/simulated_exchange.h"
-#include "service/shard.h"
+#include "shard/shard.h"
 #include "simdjson.h"
+#include "storage/history.h"
+#include "storage/recorder.h"
 
 namespace hquant {
 namespace {
@@ -495,7 +495,7 @@ const char* BookStateName(BookSyncState state) {
   return "Unknown";
 }
 
-std::string StatusJson(const ShardRuntime& shard,
+std::string StatusJson(const Shard& shard,
                        const SimpleSimulatedExchange& sim_exchange,
                        const MarketSpec& market,
                        const SqliteHistoryWriter& recorder) {

@@ -1,4 +1,4 @@
-#include "offline/history.h"
+#include "storage/history.h"
 
 #include <unistd.h>
 
@@ -11,8 +11,8 @@
 #include "base/error.h"
 #include "base/types.h"
 #include "gtest/gtest.h"
-#include "offline/recorder.h"
 #include "sqlite3.h"
+#include "storage/recorder.h"
 
 namespace hquant {
 namespace {

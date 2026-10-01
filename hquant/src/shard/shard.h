@@ -14,9 +14,9 @@
 #include "base/order.h"
 #include "base/types.h"
 #include "market/order_book.h"
-#include "offline/storage.h"
 #include "order/order_tracker.h"
-#include "service/action_executor.h"
+#include "shard/action_executor.h"
+#include "storage/storage.h"
 
 namespace hquant {
 
@@ -82,7 +82,7 @@ struct ShardReport {
 
 // G1 single-thread owner of strategy, book, Simulated events, tracker and risk.
 // The caller advances the clock and feeds inputs in InputTime order.
-class ShardRuntime {
+class Shard {
  public:
   struct Config {
     RunId run;
@@ -95,9 +95,8 @@ class ShardRuntime {
     uint64_t stale_after_us = 60'000'000;
   };
 
-  ShardRuntime(Config config, const Clock& clock, Strategy& strategy,
-               SimulatedExchange& exchange, RiskGate& risk,
-               HistoryWriter& recorder);
+  Shard(Config config, const Clock& clock, Strategy& strategy,
+        SimulatedExchange& exchange, RiskGate& risk, HistoryWriter& recorder);
 
   BookApplyResult Subscribe(uint64_t connection_id);
   absl::Status OnSnapshot(const BookSnapshot& snapshot);

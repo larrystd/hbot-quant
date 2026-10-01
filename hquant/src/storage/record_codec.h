@@ -5,7 +5,7 @@
 #include <string_view>
 
 #include "absl/status/statusor.h"
-#include "offline/storage.h"
+#include "storage/storage.h"
 
 namespace hquant::storage_internal {
 

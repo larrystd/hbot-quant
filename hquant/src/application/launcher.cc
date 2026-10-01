@@ -27,11 +27,11 @@
 #include "boost/asio/use_awaitable.hpp"
 #include "market/binance_spot_feed.h"
 #include "market/replay_feed.h"
-#include "offline/history.h"
-#include "offline/recorder.h"
 #include "order/risk.h"
 #include "order/simulated_exchange.h"
-#include "service/shard.h"
+#include "shard/shard.h"
+#include "storage/history.h"
+#include "storage/recorder.h"
 #include "strategy/simple_pmm.h"
 
 namespace hquant {
@@ -39,7 +39,7 @@ namespace {
 
 absl::Status ApplyReplayInput(const ReplayInput& input,
                               const MarketConfig& market, ReplayClock& clock,
-                              ShardRuntime& shard) {
+                              Shard& shard) {
   auto advanced = clock.Advance(input.stamp);
   if (!advanced.ok()) return advanced;
   const EventTime time{{}, clock.UtcNow(), clock.MonoNow()};
@@ -152,7 +152,7 @@ absl::Status RunSimulatedBinanceEngine(const AppConfig& config,
   auto recorder = SqliteHistoryWriter::Open(
       {storage_path.string(), run, started, 1024, 64});
   if (!recorder.ok()) return recorder.status();
-  ShardRuntime shard(
+  Shard shard(
       {run, assignment.shard, strategy_config.strategy_id, account.account,
        market.spec, market.tick_lot_size, rule, 5'000'000},
       clock, strategy, sim_exchange, risk, **recorder);
@@ -369,9 +369,9 @@ absl::Status Launch(const AppConfig& config, const std::string& state_dir) {
   auto recorder =
       SqliteHistoryWriter::Open({storage_path.string(), run, origin, 1024, 64});
   if (!recorder.ok()) return recorder.status();
-  ShardRuntime shard({run, assignment.shard, strategy_config.strategy_id,
-                      account.account, market.spec, market.tick_lot_size, rule},
-                     clock, strategy, sim_exchange, risk, **recorder);
+  Shard shard({run, assignment.shard, strategy_config.strategy_id,
+               account.account, market.spec, market.tick_lot_size, rule},
+              clock, strategy, sim_exchange, risk, **recorder);
   auto replay =
       ReadReplayFile(*config.replay_fixture, [&](const ReplayInput& input) {
         return ApplyReplayInput(input, market, clock, shard);

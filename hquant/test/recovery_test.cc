@@ -13,12 +13,12 @@
 #include "boost/asio/io_context.hpp"
 #include "boost/asio/use_future.hpp"
 #include "gtest/gtest.h"
-#include "offline/history.h"
-#include "offline/recorder.h"
 #include "order/binance_spot_account.h"
 #include "order/binance_spot_gateway.h"
 #include "order/order_tracker.h"
 #include "order/risk.h"
+#include "storage/history.h"
+#include "storage/recorder.h"
 
 namespace hquant {
 namespace {

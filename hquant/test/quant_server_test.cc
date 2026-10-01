@@ -72,7 +72,7 @@ int ProtocolContract() {
 
 #include "cli/cli.h"
 #include "gtest/gtest.h"
-#include "offline/storage.h"
+#include "storage/storage.h"
 
 namespace hquant {
 namespace {

@@ -11,11 +11,11 @@
 
 #include "base/error.h"
 #include "gtest/gtest.h"
-#include "offline/history.h"
-#include "offline/recorder.h"
 #include "order/risk.h"
 #include "order/simulated_exchange.h"
-#include "service/shard.h"
+#include "shard/shard.h"
+#include "storage/history.h"
+#include "storage/recorder.h"
 #include "strategy/simple_pmm.h"
 
 namespace hquant {
@@ -92,9 +92,8 @@ std::string ReplayOnce() {
       SqliteHistoryWriter::Open({database.path(), RunId{1}, origin, 64, 8});
   if (!recorder.ok())
     throw std::runtime_error(std::string(recorder.status().message()));
-  ShardRuntime shard(
-      {RunId{1}, ShardId{0}, strategy_id, account, spec, scale, rule}, clock,
-      strategy, sim_exchange, risk, **recorder);
+  Shard shard({RunId{1}, ShardId{0}, strategy_id, account, spec, scale, rule},
+              clock, strategy, sim_exchange, risk, **recorder);
 
   if (!clock.Advance({0, 1}).ok() ||
       shard.Subscribe(1).state != BookSyncState::WaitingSnapshot) {

@@ -8,7 +8,7 @@
 #include "base/rate_limit.h"
 #include "gtest/gtest.h"
 #include "order/risk.h"
-#include "service/routing.h"
+#include "shard/routing.h"
 
 namespace hquant {
 namespace {

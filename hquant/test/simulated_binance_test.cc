@@ -12,7 +12,7 @@
 #include "market/binance_spot_feed.h"
 #include "order/risk.h"
 #include "order/simulated_exchange.h"
-#include "service/shard.h"
+#include "shard/shard.h"
 #include "strategy/simple_pmm.h"
 
 namespace hquant {
@@ -109,9 +109,8 @@ TEST(SimulatedBinanceTest,
                              clock.UtcNow() + std::chrono::hours(1)})
           .ok());
   MemoryRecorder recorder;
-  ShardRuntime shard(
-      {RunId{1}, ShardId{0}, strategy_id, account, spec, scale, rule}, clock,
-      strategy, sim_exchange, risk, recorder);
+  Shard shard({RunId{1}, ShardId{0}, strategy_id, account, spec, scale, rule},
+              clock, strategy, sim_exchange, risk, recorder);
 
   asio::io_context io;
   HttpClient http_client(io, "127.0.0.1", http_port);

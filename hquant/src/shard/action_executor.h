@@ -8,8 +8,8 @@
 #include "base/market.h"
 #include "base/order.h"
 #include "base/types.h"
-#include "offline/storage.h"
 #include "order/risk.h"
+#include "storage/storage.h"
 #include "strategy/strategy.h"
 
 namespace hquant {

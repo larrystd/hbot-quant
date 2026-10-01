@@ -14,7 +14,7 @@
 
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
-#include "offline/storage.h"
+#include "storage/storage.h"
 
 struct sqlite3;
 

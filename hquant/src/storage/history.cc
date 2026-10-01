@@ -1,4 +1,4 @@
-#include "offline/history.h"
+#include "storage/history.h"
 
 #include <algorithm>
 #include <array>
@@ -14,8 +14,8 @@
 
 #include "absl/status/status.h"
 #include "base/error.h"
-#include "offline/record_codec.h"
 #include "sqlite3.h"
+#include "storage/record_codec.h"
 
 namespace hquant {
 namespace {

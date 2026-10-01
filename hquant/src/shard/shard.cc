@@ -1,4 +1,4 @@
-#include "service/shard.h"
+#include "shard/shard.h"
 
 #include <limits>
 #include <string>
@@ -9,9 +9,9 @@
 
 namespace hquant {
 
-ShardRuntime::ShardRuntime(Config config, const Clock& clock,
-                           Strategy& strategy, SimulatedExchange& exchange,
-                           RiskGate& risk, HistoryWriter& recorder)
+Shard::Shard(Config config, const Clock& clock, Strategy& strategy,
+             SimulatedExchange& exchange, RiskGate& risk,
+             HistoryWriter& recorder)
     : config_(std::move(config)),
       clock_(clock),
       strategy_(strategy),
@@ -23,23 +23,23 @@ ShardRuntime::ShardRuntime(Config config, const Clock& clock,
       action_executor_(risk_, exchange_, recorder_, config_.run, config_.shard,
                        shard_sequence_) {}
 
-BookApplyResult ShardRuntime::Subscribe(uint64_t connection_id) {
+BookApplyResult Shard::Subscribe(uint64_t connection_id) {
   return book_.Subscribe(connection_id);
 }
 
-absl::StatusOr<Decimal> ShardRuntime::Price(PriceTicks ticks) const {
+absl::StatusOr<Decimal> Shard::Price(PriceTicks ticks) const {
   auto count = Decimal::Parse(std::to_string(ticks.value));
   if (!count.ok()) return count.status();
   return count->Multiply(config_.scale.price_per_tick);
 }
 
-absl::StatusOr<Decimal> ShardRuntime::Amount(QuantityLots lots) const {
+absl::StatusOr<Decimal> Shard::Amount(QuantityLots lots) const {
   auto count = Decimal::Parse(std::to_string(lots.value));
   if (!count.ok()) return count.status();
   return count->Multiply(config_.scale.amount_per_lot);
 }
 
-absl::Status ShardRuntime::UpdateSimulatedExchangeBbo() {
+absl::Status Shard::UpdateSimulatedExchangeBbo() {
   if (book_.View().State() != BookSyncState::Live) return absl::OkStatus();
   const auto bid = book_.View().BestBid();
   const auto ask = book_.View().BestAsk();
@@ -53,17 +53,17 @@ absl::Status ShardRuntime::UpdateSimulatedExchangeBbo() {
   return DrainSimulatedExchangeEvents();
 }
 
-absl::Status ShardRuntime::OnSnapshot(const BookSnapshot& snapshot) {
+absl::Status Shard::OnSnapshot(const BookSnapshot& snapshot) {
   book_.OnSnapshot(snapshot);
   return UpdateSimulatedExchangeBbo();
 }
 
-absl::Status ShardRuntime::OnDiff(const BookDiff& diff) {
+absl::Status Shard::OnDiff(const BookDiff& diff) {
   book_.OnDiff(diff);
   return UpdateSimulatedExchangeBbo();
 }
 
-absl::Status ShardRuntime::OnPublicTrade(const PublicTrade& trade) {
+absl::Status Shard::OnPublicTrade(const PublicTrade& trade) {
   if (trade.market != config_.market.market || !trade.side) {
     return Error(ErrorCode::kPublicTradeInvalid,
                  "public trade market or side invalid");
@@ -78,7 +78,7 @@ absl::Status ShardRuntime::OnPublicTrade(const PublicTrade& trade) {
   return DrainSimulatedExchangeEvents();
 }
 
-std::vector<OrderSnapshot> ShardRuntime::OrderViews() const {
+std::vector<OrderSnapshot> Shard::OrderViews() const {
   std::vector<OrderSnapshot> result;
   for (const auto& id : order_ids_) {
     auto snapshot = tracker_.Snapshot(id);
@@ -87,7 +87,7 @@ std::vector<OrderSnapshot> ShardRuntime::OrderViews() const {
   return result;
 }
 
-std::vector<Balance> ShardRuntime::BalanceViews() const {
+std::vector<Balance> Shard::BalanceViews() const {
   std::vector<Balance> result;
   for (const AssetId& asset :
        {config_.market.base_asset, config_.market.quote_asset}) {
@@ -98,8 +98,7 @@ std::vector<Balance> ShardRuntime::BalanceViews() const {
   return result;
 }
 
-absl::StatusOr<std::vector<ActionResult>> ShardRuntime::OnTimer(
-    InputTime stamp) {
+absl::StatusOr<std::vector<ActionResult>> Shard::OnTimer(InputTime stamp) {
   if (stamp.at_us < 0)
     return Error(ErrorCode::kInputTimeInvalid, "negative input time");
   const auto now_us = clock_.MonoNow().time_since_epoch().count();
@@ -136,8 +135,8 @@ absl::StatusOr<std::vector<ActionResult>> ShardRuntime::OnTimer(
   return results;
 }
 
-absl::Status ShardRuntime::Record(HistoryRecordPayload payload,
-                                  const StrategyId& strategy_id) {
+absl::Status Shard::Record(HistoryRecordPayload payload,
+                           const StrategyId& strategy_id) {
   if (shard_sequence_ == std::numeric_limits<uint64_t>::max()) {
     risk_.EmergencyStop();
     return Error(ErrorCode::kSequenceExhausted, "shard sequence exhausted");
@@ -154,7 +153,7 @@ absl::Status ShardRuntime::Record(HistoryRecordPayload payload,
   return absl::OkStatus();
 }
 
-void ShardRuntime::AddGap(uint64_t sequence) {
+void Shard::AddGap(uint64_t sequence) {
   if (!local_gaps_.empty() && local_gaps_.back().last_seq + 1 == sequence) {
     local_gaps_.back().last_seq = sequence;
   } else {
@@ -163,7 +162,7 @@ void ShardRuntime::AddGap(uint64_t sequence) {
   }
 }
 
-absl::Status ShardRuntime::ProcessAccountEvent(const AccountEvent& event) {
+absl::Status Shard::ProcessAccountEvent(const AccountEvent& event) {
   if (const auto* trade = std::get_if<TradeUpdate>(&event)) {
     if (!trade->client_id)
       return Error(ErrorCode::kShardReportOrderUnknown,
@@ -203,7 +202,7 @@ absl::Status ShardRuntime::ProcessAccountEvent(const AccountEvent& event) {
   return absl::OkStatus();
 }
 
-absl::Status ShardRuntime::DrainSimulatedExchangeEvents() {
+absl::Status Shard::DrainSimulatedExchangeEvents() {
   for (const auto& event : exchange_.DrainEvents()) {
     auto status = ProcessAccountEvent(event);
     if (!status.ok()) return status;

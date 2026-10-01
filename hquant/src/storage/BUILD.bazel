@@ -23,7 +23,7 @@ hquant_cc_library(
         "@abseil-cpp//absl/status:status",
         "@abseil-cpp//absl/status:statusor",
     ],
-    visibility = ["//hquant/src/offline:__pkg__", "//hquant/test:__pkg__"],
+    visibility = ["//hquant/src/storage:__pkg__", "//hquant/test:__pkg__"],
 )
 
 hquant_cc_library(

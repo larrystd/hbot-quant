@@ -1,5 +1,5 @@
 // 回放演示：读取 simulated_replay.yaml + replay_market.json，逐条喂给
-// ShardRuntime， 每处理完一条行情输入就打印：输入内容 → 产生的记录 → 盘口 →
+// Shard， 每处理完一条行情输入就打印：输入内容 → 产生的记录 → 盘口 →
 // 挂单 → 余额。
 //
 // 运行（在仓库根目录）：
@@ -19,7 +19,7 @@
 #include "market/replay_feed.h"
 #include "order/risk.h"
 #include "order/simulated_exchange.h"
-#include "service/shard.h"
+#include "shard/shard.h"
 #include "strategy/simple_pmm.h"
 
 namespace {
@@ -197,7 +197,7 @@ class PrintingRecorder final : public HistoryWriter {
 
 // 与 launcher.cc 中 ApplyReplayInput 相同：先拨时钟，再按类型交给 shard。
 absl::Status Apply(const ReplayInput& input, const MarketConfig& market,
-                   ReplayClock& clock, ShardRuntime& shard) {
+                   ReplayClock& clock, Shard& shard) {
   auto advanced = clock.Advance(input.stamp);
   if (!advanced.ok()) return advanced;
   const EventTime time{{}, clock.UtcNow(), clock.MonoNow()};
@@ -227,8 +227,7 @@ absl::Status Apply(const ReplayInput& input, const MarketConfig& market,
   return absl::OkStatus();
 }
 
-void PrintState(const ShardRuntime& shard,
-                const SimpleSimulatedExchange& sim_exchange,
+void PrintState(const Shard& shard, const SimpleSimulatedExchange& sim_exchange,
                 const RiskGate& risk, const AccountId& account,
                 const MarketConfig& market) {
   const auto& scale = market.tick_lot_size;
@@ -310,9 +309,9 @@ absl::Status Run(const std::string& config_path,
   }
   PrintingRecorder recorder;
   // 总管：把订单簿、策略、风控、交易所、记录器串起来。
-  ShardRuntime shard({RunId{1}, assignment.shard, strategy_config.strategy_id,
-                      account.account, market.spec, market.tick_lot_size, rule},
-                     clock, strategy, sim_exchange, risk, recorder);
+  Shard shard({RunId{1}, assignment.shard, strategy_config.strategy_id,
+               account.account, market.spec, market.tick_lot_size, rule},
+              clock, strategy, sim_exchange, risk, recorder);
 
   std::cout << "初始状态\n";
   PrintState(shard, sim_exchange, risk, account.account, market);

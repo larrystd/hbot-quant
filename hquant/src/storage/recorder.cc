@@ -1,4 +1,4 @@
-#include "offline/recorder.h"
+#include "storage/recorder.h"
 
 #include <algorithm>
 #include <chrono>
@@ -10,8 +10,8 @@
 #include <vector>
 
 #include "base/error.h"
-#include "offline/record_codec.h"
 #include "sqlite3.h"
+#include "storage/record_codec.h"
 
 namespace hquant {
 namespace {
