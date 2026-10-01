@@ -260,7 +260,7 @@ TEST(StorageTest, DecisionRecordsPreserveActionOrderAndRejectionReason) {
                                   1,
                                   DecisionActionKind::Submit,
                                   false,
-                                  ErrorCode::kRiskLeaseExhausted,
+                                  ErrorCode::kRiskBudgetExhausted,
                                   "InsufficientBalance",
                                   std::nullopt};
   EXPECT_TRUE((*recorder)->TryPush(std::move(first)));
@@ -289,7 +289,7 @@ TEST(StorageTest, DecisionRecordsPreserveActionOrderAndRejectionReason) {
   EXPECT_EQ(submit.action_index, 1);
   EXPECT_EQ(submit.action_kind, DecisionActionKind::Submit);
   EXPECT_FALSE(submit.accepted);
-  EXPECT_EQ(submit.reason, ErrorCode::kRiskLeaseExhausted);
+  EXPECT_EQ(submit.reason, ErrorCode::kRiskBudgetExhausted);
   EXPECT_EQ(submit.message, "InsufficientBalance");
   EXPECT_FALSE(submit.client_id);
   EXPECT_TRUE((*recorder)->Stop(At(2000)).ok());
@@ -382,7 +382,7 @@ TEST(StorageTest, ReadsAndMigratesLegacyGapReasons) {
             SQLITE_OK);
   ASSERT_EQ(sqlite3_step(statement), SQLITE_ROW);
   EXPECT_EQ(sqlite3_column_int(statement, 0),
-            static_cast<int>(ErrorCode::kStorageQueueFull));
+            static_cast<int>(StoredErrorNumber(ErrorCode::kStorageQueueFull)));
   sqlite3_finalize(statement);
   ASSERT_EQ(
       sqlite3_prepare_v2(raw, "SELECT MAX(version) FROM schema_migrations", -1,

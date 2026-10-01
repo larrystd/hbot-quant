@@ -37,12 +37,12 @@ absl::StatusOr<uint64_t> ParseBase32(std::string_view text, uint64_t max) {
   for (char ch : text) {
     const auto digit = kAlphabet.find(ch);
     if (digit == std::string_view::npos || value > (max >> 5)) {
-      return Error(ErrorCode::kClientIdInvalid,
+      return Error(ErrorCode::kClientOrderIdInvalid,
                    "invalid client ID base32 digit/overflow");
     }
     value = (value << 5) | digit;
     if (value > max)
-      return Error(ErrorCode::kClientIdInvalid, "client ID field overflow");
+      return Error(ErrorCode::kClientOrderIdInvalid, "client ID field overflow");
   }
   return value;
 }
@@ -53,7 +53,7 @@ absl::StatusOr<ClientOrderId> EncodeClientId(const StrategyId& strategy_id, RunI
                                              uint32_t shard_sequence) {
   if (!strategy_id.IsValid() || !run.IsValid() || !shard.IsValid() ||
       shard_sequence == 0 || shard_sequence > kMaxShardSequence) {
-    return Error(ErrorCode::kClientIdInvalid, "invalid client ID components");
+    return Error(ErrorCode::kClientOrderIdInvalid, "invalid client ID components");
   }
   const uint32_t suffix =
       (static_cast<uint32_t>(shard.value) << 29) | shard_sequence;
@@ -68,7 +68,7 @@ absl::StatusOr<ClientOrderId> EncodeClientId(const StrategyId& strategy_id, RunI
 
 absl::StatusOr<DecodedClientId> DecodeClientId(const ClientOrderId& id) {
   if (id.value.size() != 31 || id.value[0] != 'H') {
-    return Error(ErrorCode::kClientIdInvalid, "unsupported client ID format");
+    return Error(ErrorCode::kClientOrderIdInvalid, "unsupported client ID format");
   }
   auto strategy_id = ParseBase32(std::string_view(id.value).substr(1, 10),
                            (uint64_t{1} << 48) - 1);
@@ -83,7 +83,7 @@ absl::StatusOr<DecodedClientId> DecodeClientId(const ClientOrderId& id) {
                          static_cast<uint32_t>(*suffix & kMaxShardSequence)};
   if (result.strategy_id == 0 || !result.run.IsValid() ||
       result.shard_sequence == 0) {
-    return Error(ErrorCode::kClientIdInvalid, "invalid client ID identity");
+    return Error(ErrorCode::kClientOrderIdInvalid, "invalid client ID identity");
   }
   return result;
 }
@@ -206,17 +206,27 @@ absl::Status BinanceOrderGateway::ValidateAndQuantize(
       config_.recv_window_ms == 0 || config_.recv_window_ms > 60'000 ||
       config_.request_timeout <= std::chrono::milliseconds::zero() ||
       config_.max_pending_submits == 0 || config_.max_pending_cancels == 0 ||
-      !command->strategy_id.IsValid() || request.account != config_.account ||
-      request.market != config_.market ||
-      config_.trading_rule.market != config_.market || !request.limit_price ||
-      !request.limit_price->IsStrictlyPositive() ||
-      !request.base_amount.IsStrictlyPositive() ||
-      clock_.MonoNow() >= command->expires_at_mono) {
-    return Error(ErrorCode::kOrderInvalid,
-                 "invalid or expired Binance order command");
+      config_.trading_rule.market != config_.market) {
+    return Error(ErrorCode::kGatewayConfigInvalid,
+                 "invalid Binance gateway config");
   }
+  if (!command->strategy_id.IsValid())
+    return Error(ErrorCode::kOrderStrategyIdInvalid, "invalid strategy ID");
+  if (request.account != config_.account)
+    return Error(ErrorCode::kOrderAccountInvalid,
+                 "order account is not the gateway account");
+  if (request.market != config_.market)
+    return Error(ErrorCode::kOrderMarketInvalid,
+                 "order market is not the gateway market");
+  if (!request.limit_price || !request.limit_price->IsStrictlyPositive() ||
+      !request.base_amount.IsStrictlyPositive())
+    return Error(ErrorCode::kOrderPriceOrAmountInvalid,
+                 "limit price and amount must be positive");
+  if (clock_.MonoNow() >= command->expires_at_mono)
+    return Error(ErrorCode::kOrderExpiredBeforeSend,
+                 "Binance order command expired before preparation");
   if (request.type == OrderType::LimitMaker && request.time_in_force) {
-    return Error(ErrorCode::kOrderInvalid,
+    return Error(ErrorCode::kOrderTypeUnsupported,
                  "LIMIT_MAKER cannot specify timeInForce");
   }
   auto amount = request.base_amount.Quantize(
@@ -224,26 +234,30 @@ absl::Status BinanceOrderGateway::ValidateAndQuantize(
   auto price = request.limit_price->Quantize(
       config_.trading_rule.price_increment, RoundingMode::Down);
   if (!amount.ok())
-    return Error(ErrorCode::kOrderRuleViolation,
+    return Error(ErrorCode::kDecimalArithmeticFailed,
                  "Binance quantity cannot be quantized to trading rule");
   if (!price.ok())
-    return Error(ErrorCode::kOrderRuleViolation,
+    return Error(ErrorCode::kDecimalArithmeticFailed,
                  "Binance price cannot be quantized to trading rule");
-  if (!amount->IsStrictlyPositive() || !price->IsStrictlyPositive() ||
+  if (!price->IsStrictlyPositive())
+    return Error(ErrorCode::kOrderPriceOrAmountInvalid,
+                 "price is below one price increment");
+  if (!amount->IsStrictlyPositive() ||
       !AtLeast(*amount, config_.trading_rule.min_base_amount)) {
-    return Error(ErrorCode::kOrderRuleViolation,
-                 "Binance quantity below trading rule");
+    return Error(ErrorCode::kOrderBelowMinAmount,
+                 "Binance quantity below minimum amount");
   }
   auto notional = amount->Multiply(*price);
   if (!notional.ok())
-    return Error(ErrorCode::kOrderRuleViolation,
+    return Error(ErrorCode::kDecimalArithmeticFailed,
                  "Binance order notional cannot be calculated");
-  if (!AtLeast(*notional, config_.trading_rule.min_notional) ||
-      (config_.trading_rule.max_base_amount &&
-       !AtLeast(*config_.trading_rule.max_base_amount, *amount))) {
-    return Error(ErrorCode::kOrderRuleViolation,
-                 "Binance notional/quantity outside rule");
-  }
+  if (!AtLeast(*notional, config_.trading_rule.min_notional))
+    return Error(ErrorCode::kOrderBelowMinNotional,
+                 "Binance order below minimum notional");
+  if (config_.trading_rule.max_base_amount &&
+      !AtLeast(*config_.trading_rule.max_base_amount, *amount))
+    return Error(ErrorCode::kOrderAboveMaxAmount,
+                 "Binance quantity above maximum amount");
   request.base_amount = *amount;
   request.limit_price = *price;
   return absl::OkStatus();
@@ -256,7 +270,7 @@ absl::StatusOr<OrderIntent> BinanceOrderGateway::PrepareSubmit(
                  "run ID collides with recovered order");
   }
   if (pending_submits_ >= config_.max_pending_submits) {
-    return Error(ErrorCode::kOrderSlotsFull, "Binance submit slots full");
+    return Error(ErrorCode::kOrderSendQueueFull, "Binance submit slots full");
   }
   auto status = ValidateAndQuantize(&command);
   if (!status.ok()) return status;
@@ -383,7 +397,7 @@ absl::Status BinanceOrderGateway::StartCancel(const StrategyId& strategy_id,
                  "Binance cancel already pending");
   }
   if (pending_cancels_ >= config_.max_pending_cancels) {
-    return Error(ErrorCode::kOrderSlotsFull, "Binance cancel slots full");
+    return Error(ErrorCode::kOrderSendQueueFull, "Binance cancel slots full");
   }
   auto request = MakeCancelRequest(found->second);
   if (!request.ok()) return request.status();
@@ -405,7 +419,7 @@ absl::Status BinanceOrderGateway::StartCancel(const StrategyId& strategy_id,
 absl::Status BinanceOrderGateway::ObserveHistoricalClientId(
     const ClientOrderId& client_id) {
   if (client_id.value.empty())
-    return Error(ErrorCode::kClientIdInvalid, "empty historical client ID");
+    return Error(ErrorCode::kClientOrderIdInvalid, "empty historical client ID");
   historical_ids_.insert(client_id.value);
   auto decoded = DecodeClientId(client_id);
   if (decoded.ok() && decoded->run == config_.run) {
@@ -445,7 +459,7 @@ absl::StatusOr<OrderUpdate> BinanceOrderGateway::ParseSuccess(
   if (doc["clientOrderId"].get(client) || doc["status"].get(status_text) ||
       doc["symbol"].get(symbol) || client != order.intent.client_id.value ||
       symbol != order.intent.request.market.native_symbol) {
-    return Error(ErrorCode::kOrderReportConflict,
+    return Error(ErrorCode::kExchangeOrderIdConflict,
                  "Binance response identity/status mismatch");
   }
   auto status = ParseStatus(status_text);
@@ -560,9 +574,9 @@ boost::asio::awaitable<void> BinanceOrderGateway::ProcessQueue() {
         rejected = std::move(update);
       }
       const ErrorCode rejection_code =
-          response->status == 418   ? ErrorCode::kVenueIpBanned
-          : response->status == 429 ? ErrorCode::kVenueRateLimited
-                                    : ErrorCode::kOrderVenueRejected;
+          response->status == 418   ? ErrorCode::kExchangeIpBanned
+          : response->status == 429 ? ErrorCode::kExchangeRateLimited
+                                    : ErrorCode::kOrderRejectedByExchange;
       Emit({work.cancel ? GatewayEventKind::CancelRejected
                         : GatewayEventKind::SubmitRejected,
             work.client_id, std::move(rejected),

@@ -233,9 +233,9 @@ absl::StatusOr<std::string> FormatControlResponse(
       return Error(ErrorCode::kCliResponseInvalid,
                    "unknown control error code");
     }
-    return Error(ErrorCode::kCliCommandFailed,
+    return Error(ErrorCode::kCliEngineError,
                  std::string(Info(error->code).name) + " (" +
-                     std::to_string(static_cast<uint16_t>(error->code)) +
+                     std::to_string(ErrorNumber(error->code)) +
                      "): " + error->message);
   }
   if (options.verb == CliVerb::Status) {
@@ -255,7 +255,7 @@ absl::StatusOr<std::string> FormatControlResponse(
   if (options.verb == CliVerb::Stop) {
     const auto* value = std::get_if<StopResponse>(&response.payload);
     if (!value || !value->accepted)
-      return Error(ErrorCode::kCliCommandFailed, "stop not accepted");
+      return Error(ErrorCode::kCliStopRejected, "stop not accepted");
     return std::string("stop requested\n");
   }
   return Error(ErrorCode::kCliUsageInvalid, "start has no control response");

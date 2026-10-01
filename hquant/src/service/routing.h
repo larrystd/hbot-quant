@@ -103,7 +103,7 @@ struct RouteResult {
 
 struct QuarantinedPrivateReport {
   PrivateReport report;
-  ErrorCode reason = ErrorCode::kRouteOwnerUnknown;
+  ErrorCode reason = ErrorCode::kRouteStrategyUnknown;
   uint64_t source_sequence = 0;
 };
 

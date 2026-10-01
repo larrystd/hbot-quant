@@ -59,15 +59,15 @@ int main() {
           "request ID mismatch");
   hquant::ControlResponse engine_error;
   engine_error.request_id = 17;
-  engine_error.payload = hquant::ControlError{hquant::ErrorCode::kHistoryBusy,
+  engine_error.payload = hquant::ControlError{hquant::ErrorCode::kHistoryQueueFull,
                                               "reader queue full"};
   auto command_error =
       hquant::FormatControlResponse(*history, engine_error, 17);
   Require(!command_error.ok() &&
               hquant::CodeOf(command_error.status()) ==
-                  hquant::ErrorCode::kCliCommandFailed &&
+                  hquant::ErrorCode::kCliEngineError &&
               std::string(command_error.status().message())
-                      .find("HISTORY_BUSY (17007)") != std::string::npos,
+                      .find("HISTORY_QUEUE_FULL (-17007)") != std::string::npos,
           "engine error name and number");
 
   const std::array<std::string_view, 3> stop_args{"stop", "--state-dir",

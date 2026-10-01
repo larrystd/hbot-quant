@@ -65,7 +65,7 @@ absl::Status ShardRuntime::OnDiff(const BookDiff& diff) {
 
 absl::Status ShardRuntime::OnPublicTrade(const PublicTrade& trade) {
   if (trade.market != config_.market.market || !trade.side) {
-    return Error(ErrorCode::kShardInputInvalid,
+    return Error(ErrorCode::kPublicTradeInvalid,
                  "public trade market or side invalid");
   }
   auto price = Price(trade.price_ticks);
@@ -101,7 +101,7 @@ std::vector<Balance> ShardRuntime::BalanceViews() const {
 absl::StatusOr<std::vector<DispatchResult>> ShardRuntime::OnTimer(
     InputStamp stamp) {
   if (stamp.at_us < 0)
-    return Error(ErrorCode::kShardInputInvalid, "negative input time");
+    return Error(ErrorCode::kInputTimeInvalid, "negative input time");
   const auto now_us = clock_.MonoNow().time_since_epoch().count();
   book_.OnTimer(now_us > 0 ? static_cast<uint64_t>(now_us) : 0);
   auto orders = OrderViews();
@@ -166,7 +166,7 @@ void ShardRuntime::AddGap(uint64_t sequence) {
 absl::Status ShardRuntime::ProcessAccountEvent(const AccountEvent& event) {
   if (const auto* trade = std::get_if<TradeUpdate>(&event)) {
     if (!trade->client_id)
-      return Error(ErrorCode::kShardReportUnattributed,
+      return Error(ErrorCode::kShardReportOrderUnknown,
                    "Simulated trade without client ID");
     auto updated = tracker_.ApplyTradeUpdate(*trade);
     if (!updated.ok()) return updated.status();
@@ -183,7 +183,7 @@ absl::Status ShardRuntime::ProcessAccountEvent(const AccountEvent& event) {
   }
   if (const auto* update = std::get_if<OrderUpdate>(&event)) {
     if (!update->client_id)
-      return Error(ErrorCode::kShardReportUnattributed,
+      return Error(ErrorCode::kShardReportOrderUnknown,
                    "Simulated order without client ID");
     auto updated = tracker_.ApplyOrderUpdate(*update);
     if (!updated.ok()) return updated.status();

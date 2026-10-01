@@ -39,7 +39,7 @@ absl::Status StaticRiskLeaseBook::GrantInitial(RiskLease lease, UtcTime now) {
   const auto account_asset = Key(lease.account, lease.asset);
   const auto limit = limits_.find(account_asset);
   if (limit == limits_.end()) {
-    return Error(ErrorCode::kRiskLeaseMissing,
+    return Error(ErrorCode::kRiskBudgetMissing,
                  "conservative account limit missing");
   }
   if (leases_.contains(Key(lease))) {
@@ -70,16 +70,16 @@ absl::Status StaticRiskLeaseBook::RenewAfterReconciliation(RiskLease lease,
                                                            UtcTime now,
                                                            bool account_fresh) {
   if (!account_fresh) {
-    return Error(ErrorCode::kRiskLeaseStale,
+    return Error(ErrorCode::kRiskAccountStale,
                  "account facts stale for lease renewal");
   }
   auto existing = leases_.find(Key(lease));
   if (existing == leases_.end())
-    return Error(ErrorCode::kRiskLeaseMissing, "risk lease missing");
+    return Error(ErrorCode::kRiskBudgetMissing, "risk lease missing");
   if (lease.lease_version <= existing->second.lease_version ||
       lease.valid_until_utc <= now ||
       lease.valid_until_utc <= existing->second.valid_until_utc) {
-    return Error(ErrorCode::kRiskLeaseStale,
+    return Error(ErrorCode::kRiskBudgetRenewalStale,
                  "risk lease version or expiry stale");
   }
   auto same_limit = lease.hard_limit.Compare(existing->second.hard_limit);
@@ -98,7 +98,7 @@ absl::StatusOr<RiskLease> StaticRiskLeaseBook::FindLease(
     const AccountId& account, const AssetId& asset, ShardId shard) const {
   const auto it = leases_.find({account.value, asset.value, shard.value});
   if (it == leases_.end())
-    return Error(ErrorCode::kRiskLeaseMissing, "risk lease missing");
+    return Error(ErrorCode::kRiskBudgetMissing, "risk lease missing");
   return it->second;
 }
 
@@ -106,7 +106,7 @@ absl::StatusOr<Decimal> StaticRiskLeaseBook::GrantedTotal(
     const AccountId& account, const AssetId& asset) const {
   const auto key = Key(account, asset);
   if (!limits_.contains(key)) {
-    return Error(ErrorCode::kRiskLeaseMissing,
+    return Error(ErrorCode::kRiskBudgetMissing,
                  "conservative account limit missing");
   }
   const auto it = totals_.find(key);
@@ -139,8 +139,10 @@ absl::Status RiskGate::SetInitialLease(RiskLease lease) {
 
 absl::Status RiskGate::RenewAfterReconciliation(RiskLease lease, UtcTime now,
                                                 bool account_fresh) {
-  if (emergency_stop_ || !account_fresh) {
-    return Error(ErrorCode::kRiskLeaseStale,
+  if (emergency_stop_)
+    return Error(ErrorCode::kRiskEmergencyStopped, "emergency stop");
+  if (!account_fresh) {
+    return Error(ErrorCode::kRiskAccountStale,
                  "account not ready for lease renewal");
   }
   if (lease.shard != settings_.shard) {
@@ -149,11 +151,11 @@ absl::Status RiskGate::RenewAfterReconciliation(RiskLease lease, UtcTime now,
   }
   auto it = leases_.find(Key(lease.account, lease.asset));
   if (it == leases_.end())
-    return Error(ErrorCode::kRiskLeaseMissing, "risk lease missing");
+    return Error(ErrorCode::kRiskBudgetMissing, "risk lease missing");
   if (lease.lease_version <= it->second.lease.lease_version ||
       lease.valid_until_utc <= now ||
       lease.valid_until_utc <= it->second.lease.valid_until_utc) {
-    return Error(ErrorCode::kRiskLeaseStale,
+    return Error(ErrorCode::kRiskBudgetRenewalStale,
                  "risk lease version or expiry stale");
   }
   auto same_limit = lease.hard_limit.Compare(it->second.lease.hard_limit);
@@ -196,110 +198,116 @@ ErrorCode RiskGate::TryReserveCode(
       settings_.max_rule_age.count() < 0) {
     return reject(ErrorCode::kRiskConfigInvalid, "invalid risk settings");
   }
-  if (!market_live || !account_fresh) {
-    return reject(ErrorCode::kRiskNotReady, "market or account not ready");
-  }
-  if (!strategy_id.IsValid() || request.account.value.empty() ||
-      request.market != market.market || request.market != rule.market ||
-      (request.type != OrderType::Limit &&
-       request.type != OrderType::LimitMaker)) {
-    return reject(ErrorCode::kOrderInvalid, "invalid order identity or type");
-  }
+  if (!market_live)
+    return reject(ErrorCode::kRiskMarketNotLive, "order book is not live");
+  if (!account_fresh)
+    return reject(ErrorCode::kRiskAccountStale, "account facts are stale");
+  if (!strategy_id.IsValid())
+    return reject(ErrorCode::kOrderStrategyIdInvalid, "invalid strategy ID");
+  if (request.account.value.empty())
+    return reject(ErrorCode::kOrderAccountInvalid, "empty order account");
+  if (request.market != market.market || request.market != rule.market)
+    return reject(ErrorCode::kOrderMarketInvalid,
+                  "order market does not match market spec or trading rule");
+  if (request.type != OrderType::Limit && request.type != OrderType::LimitMaker)
+    return reject(ErrorCode::kOrderTypeUnsupported, "only limit orders");
   if (rule.revision == 0 || now < rule.observed_at ||
       now - rule.observed_at > settings_.max_rule_age ||
       !rule.price_increment.IsStrictlyPositive() ||
       !rule.base_increment.IsStrictlyPositive()) {
-    return reject(ErrorCode::kRiskNotReady, "trading rule stale or invalid");
+    return reject(ErrorCode::kRiskTradingRuleStale,
+                  "trading rule stale or invalid");
   }
   if (!request.limit_price || !request.limit_price->IsStrictlyPositive() ||
       !request.base_amount.IsStrictlyPositive()) {
-    return reject(ErrorCode::kOrderInvalid, "invalid limit order values");
+    return reject(ErrorCode::kOrderPriceOrAmountInvalid,
+                  "limit price and amount must be positive");
   }
   auto price =
       request.limit_price->Quantize(rule.price_increment, RoundingMode::Down);
   auto amount =
       request.base_amount.Quantize(rule.base_increment, RoundingMode::Down);
   if (!price.ok())
-    return reject(ErrorCode::kOrderRuleViolation, "price quantization failed");
+    return reject(ErrorCode::kDecimalArithmeticFailed, "price quantization failed");
   if (!amount.ok())
-    return reject(ErrorCode::kOrderRuleViolation, "amount quantization failed");
+    return reject(ErrorCode::kDecimalArithmeticFailed, "amount quantization failed");
   auto price_cmp = price->Compare(*request.limit_price);
   auto amount_cmp = amount->Compare(request.base_amount);
   if (!price_cmp.ok() || !amount_cmp.ok() || *price_cmp != 0 ||
       *amount_cmp != 0) {
-    return reject(ErrorCode::kOrderRuleViolation,
+    return reject(ErrorCode::kOrderNotOnTick,
                   "order not aligned with trading rule");
   }
   auto min_amount = request.base_amount.Compare(rule.min_base_amount);
   if (!min_amount.ok())
-    return reject(ErrorCode::kOrderRuleViolation,
+    return reject(ErrorCode::kDecimalArithmeticFailed,
                   "minimum amount comparison failed");
   if (*min_amount < 0)
-    return reject(ErrorCode::kOrderRuleViolation, "below minimum amount");
+    return reject(ErrorCode::kOrderBelowMinAmount, "below minimum amount");
   if (rule.max_base_amount) {
     auto max_amount = request.base_amount.Compare(*rule.max_base_amount);
     if (!max_amount.ok())
-      return reject(ErrorCode::kOrderRuleViolation,
+      return reject(ErrorCode::kDecimalArithmeticFailed,
                     "maximum amount comparison failed");
     if (*max_amount > 0)
-      return reject(ErrorCode::kOrderRuleViolation, "above maximum amount");
+      return reject(ErrorCode::kOrderAboveMaxAmount, "above maximum amount");
   }
   auto notional = request.base_amount.Multiply(*request.limit_price);
   if (!notional.ok())
-    return reject(ErrorCode::kOrderRuleViolation,
+    return reject(ErrorCode::kDecimalArithmeticFailed,
                   "notional calculation failed");
   auto min_notional = notional->Compare(rule.min_notional);
   if (!min_notional.ok())
-    return reject(ErrorCode::kOrderRuleViolation,
+    return reject(ErrorCode::kDecimalArithmeticFailed,
                   "minimum notional comparison failed");
   if (*min_notional < 0)
-    return reject(ErrorCode::kOrderRuleViolation, "below minimum notional");
+    return reject(ErrorCode::kOrderBelowMinNotional, "below minimum notional");
 
   const AssetId& spent_asset =
       request.side == Side::Buy ? market.quote_asset : market.base_asset;
   auto it = leases_.find(Key(request.account, spent_asset));
   if (it == leases_.end())
-    return reject(ErrorCode::kRiskLeaseMissing, "missing asset lease");
+    return reject(ErrorCode::kRiskBudgetMissing, "missing asset lease");
   LeaseState& lease = it->second;
   if (now >= lease.lease.valid_until_utc) {
-    return reject(ErrorCode::kRiskLeaseStale, "asset lease expired");
+    return reject(ErrorCode::kRiskBudgetExpired, "asset lease expired");
   }
   absl::StatusOr<Decimal> principal =
       request.side == Side::Buy
           ? request.base_amount.Multiply(*request.limit_price)
           : absl::StatusOr<Decimal>(request.base_amount);
   if (!principal.ok())
-    return reject(ErrorCode::kRiskLimitExceeded,
+    return reject(ErrorCode::kDecimalArithmeticFailed,
                   "principal calculation failed");
   auto buffer = principal->Multiply(settings_.fee_buffer_rate);
   if (!buffer.ok())
-    return reject(ErrorCode::kRiskLimitExceeded,
+    return reject(ErrorCode::kDecimalArithmeticFailed,
                   "fee buffer calculation failed");
   auto needed = principal->Add(*buffer);
   if (!needed.ok())
-    return reject(ErrorCode::kRiskLimitExceeded,
+    return reject(ErrorCode::kDecimalArithmeticFailed,
                   "required amount calculation failed");
   auto after_reserved = lease.lease.hard_limit.Subtract(lease.reserved);
   if (!after_reserved.ok())
-    return reject(ErrorCode::kRiskReservationInvalid,
+    return reject(ErrorCode::kDecimalArithmeticFailed,
                   "reserved amount calculation failed");
   auto available = after_reserved->Subtract(lease.realized);
   if (!available.ok())
-    return reject(ErrorCode::kRiskReservationInvalid,
+    return reject(ErrorCode::kDecimalArithmeticFailed,
                   "available amount calculation failed");
   auto enough = available->Compare(*needed);
   if (!enough.ok())
-    return reject(ErrorCode::kRiskReservationInvalid,
+    return reject(ErrorCode::kDecimalArithmeticFailed,
                   "available amount comparison failed");
   if (*enough < 0)
-    return reject(ErrorCode::kRiskLeaseExhausted, "risk lease exhausted");
+    return reject(ErrorCode::kRiskBudgetExhausted, "risk lease exhausted");
   if (next_reservation_id_ == 0) {
     EmergencyStop();
     return reject(ErrorCode::kSequenceExhausted, "reservation id exhausted");
   }
   auto new_reserved = lease.reserved.Add(*needed);
   if (!new_reserved.ok())
-    return reject(ErrorCode::kRiskReservationInvalid,
+    return reject(ErrorCode::kDecimalArithmeticFailed,
                   "reservation total calculation failed");
   const ReservationId id{next_reservation_id_++};
   RiskReservation reservation;
@@ -318,10 +326,14 @@ ErrorCode RiskGate::TryReserveCode(
 absl::Status RiskGate::AttachClientId(ReservationId reservation,
                                       ClientOrderId client_id) {
   auto it = reservations_.find(reservation.value);
-  if (it == reservations_.end() ||
-      it->second.state == ReservationState::Terminal ||
-      client_id.value.empty() || it->second.client_id) {
-    return Error(ErrorCode::kRiskReservationInvalid, "cannot attach client id");
+  if (it == reservations_.end())
+    return Error(ErrorCode::kFundsHoldNotFound, "unknown reservation");
+  if (it->second.state == ReservationState::Terminal)
+    return Error(ErrorCode::kFundsHoldAlreadyReleased,
+                 "reservation already released");
+  if (client_id.value.empty() || it->second.client_id) {
+    return Error(ErrorCode::kFundsHoldClientIdConflict,
+                 "client ID empty or already attached");
   }
   it->second.client_id = std::move(client_id);
   return absl::OkStatus();
@@ -329,10 +341,11 @@ absl::Status RiskGate::AttachClientId(ReservationId reservation,
 
 absl::Status RiskGate::MarkSubmissionUnknown(ReservationId reservation) {
   auto it = reservations_.find(reservation.value);
-  if (it == reservations_.end() ||
-      it->second.state == ReservationState::Terminal) {
-    return Error(ErrorCode::kRiskReservationInvalid, "unknown reservation");
-  }
+  if (it == reservations_.end())
+    return Error(ErrorCode::kFundsHoldNotFound, "unknown reservation");
+  if (it->second.state == ReservationState::Terminal)
+    return Error(ErrorCode::kFundsHoldAlreadyReleased,
+                 "reservation already released");
   it->second.state = ReservationState::SubmissionUnknown;
   return absl::OkStatus();
 }
@@ -342,36 +355,39 @@ absl::Status RiskGate::ApplyFill(ReservationId reservation,
                                  const Decimal& actual_spent,
                                  const Decimal& remaining_worst_case) {
   auto it = reservations_.find(reservation.value);
-  if (it == reservations_.end() ||
-      it->second.state == ReservationState::Terminal ||
-      !actual_spent.IsNonnegative() || !remaining_worst_case.IsNonnegative()) {
-    return Error(ErrorCode::kRiskReservationInvalid,
-                 "invalid fill reservation");
+  if (it == reservations_.end())
+    return Error(ErrorCode::kFundsHoldNotFound, "unknown reservation");
+  if (it->second.state == ReservationState::Terminal)
+    return Error(ErrorCode::kFundsHoldAlreadyReleased,
+                 "reservation already released");
+  if (!actual_spent.IsNonnegative() || !remaining_worst_case.IsNonnegative()) {
+    return Error(ErrorCode::kOrderPriceOrAmountInvalid,
+                 "fill amounts must not be negative");
   }
   auto hold = it->second.per_asset_worst_case.find(spent_asset);
   auto lease = leases_.find(Key(it->second.account, spent_asset));
   if (hold == it->second.per_asset_worst_case.end() || lease == leases_.end()) {
-    return Error(ErrorCode::kRiskReservationInvalid,
+    return Error(ErrorCode::kRiskBudgetMissing,
                  "missing fill asset lease");
   }
   auto decreasing = hold->second.Compare(remaining_worst_case);
   if (!decreasing.ok())
-    return Error(ErrorCode::kRiskReservationInvalid,
+    return Error(ErrorCode::kDecimalArithmeticFailed,
                  "fill reservation amount cannot be compared");
   if (*decreasing < 0)
-    return Error(ErrorCode::kRiskReservationInvalid,
+    return Error(ErrorCode::kFundsHoldIncreased,
                  "hold cannot increase on fill");
   auto less_hold = lease->second.reserved.Subtract(hold->second);
   if (!less_hold.ok())
-    return Error(ErrorCode::kRiskReservationInvalid,
+    return Error(ErrorCode::kDecimalArithmeticFailed,
                  "reserved amount cannot be reduced on fill");
   auto new_hold = less_hold->Add(remaining_worst_case);
   if (!new_hold.ok())
-    return Error(ErrorCode::kRiskReservationInvalid,
+    return Error(ErrorCode::kDecimalArithmeticFailed,
                  "remaining reservation cannot be calculated");
   auto spent = lease->second.realized.Add(actual_spent);
   if (!spent.ok())
-    return Error(ErrorCode::kRiskReservationInvalid,
+    return Error(ErrorCode::kDecimalArithmeticFailed,
                  "realized spent amount cannot be calculated");
   lease->second.reserved = *new_hold;
   lease->second.realized = *spent;
@@ -384,18 +400,18 @@ absl::Status RiskGate::ApplyFill(ReservationId reservation,
 
 absl::Status RiskGate::ConfirmTerminal(ReservationId reservation) {
   auto it = reservations_.find(reservation.value);
-  if (it == reservations_.end() ||
-      it->second.state == ReservationState::Terminal) {
-    return Error(ErrorCode::kRiskReservationInvalid,
-                 "reservation already terminal or missing");
-  }
+  if (it == reservations_.end())
+    return Error(ErrorCode::kFundsHoldNotFound, "unknown reservation");
+  if (it->second.state == ReservationState::Terminal)
+    return Error(ErrorCode::kFundsHoldAlreadyReleased,
+                 "reservation already released");
   for (const auto& [asset, amount] : it->second.per_asset_worst_case) {
     auto lease = leases_.find(Key(it->second.account, asset));
     if (lease == leases_.end())
-      return Error(ErrorCode::kInternal, "reservation lease disappeared");
+      return Error(ErrorCode::kRiskBudgetMissing, "reservation lease disappeared");
     auto remaining = lease->second.reserved.Subtract(amount);
     if (!remaining.ok())
-      return Error(ErrorCode::kRiskReservationInvalid,
+      return Error(ErrorCode::kDecimalArithmeticFailed,
                    "terminal reservation amount cannot be released");
     lease->second.reserved = *remaining;
   }
@@ -408,15 +424,15 @@ absl::StatusOr<Decimal> RiskGate::Available(const AccountId& account,
                                             const AssetId& asset) const {
   auto it = leases_.find(Key(account, asset));
   if (it == leases_.end())
-    return Error(ErrorCode::kRiskLeaseMissing, "asset lease missing");
+    return Error(ErrorCode::kRiskBudgetMissing, "asset lease missing");
   auto after_reserved =
       it->second.lease.hard_limit.Subtract(it->second.reserved);
   if (!after_reserved.ok())
-    return Error(ErrorCode::kRiskReservationInvalid,
+    return Error(ErrorCode::kDecimalArithmeticFailed,
                  "available reserved amount cannot be calculated");
   auto available = after_reserved->Subtract(it->second.realized);
   if (!available.ok())
-    return Error(ErrorCode::kRiskReservationInvalid,
+    return Error(ErrorCode::kDecimalArithmeticFailed,
                  "available realized amount cannot be calculated");
   return *available;
 }

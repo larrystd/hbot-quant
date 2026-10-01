@@ -38,7 +38,7 @@ cc_test(name = "shard_test", srcs = ["shard_test.cc"], deps = ["//hquant/src/ser
 cc_test(name = "dispatcher_test", srcs = ["dispatcher_test.cc"], deps = ["//hquant/src/service:dispatcher"])
 cc_test(name = "routing_test", srcs = ["routing_test.cc"], deps = ["//hquant/src/service:routing", "@googletest//:gtest_main"])
 
-cc_test(name = "control_test", srcs = ["control_test.cc"], deps = ["//hquant/src/application:control", "//hquant/src/cli:cli", "@googletest//:gtest_main"])
+cc_test(name = "control_test", srcs = ["control_test.cc"], deps = ["//hquant/src/application:control", "//hquant/src/cli:cli", "//hquant/src/offline:storage", "@googletest//:gtest_main"])
 cc_test(name = "config_test", srcs = ["config_test.cc"], deps = ["//hquant/src/application:config", "//hquant/src/base:error"])
 cc_test(name = "cli_test", srcs = ["cli_test.cc"], deps = ["//hquant/src/base:error", "//hquant/src/cli:cli"])
 

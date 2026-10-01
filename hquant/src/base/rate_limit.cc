@@ -164,7 +164,7 @@ ErrorCode RateLimiter::TryAcquire(const RateLimitKey& key,
     return ErrorCode::kRateBreakerOpen;
   }
   auto it = windows_.find(key);
-  if (it == windows_.end()) return ErrorCode::kRateLeaseMissing;
+  if (it == windows_.end()) return ErrorCode::kRateBudgetMissing;
   auto& w = it->second;
   if (!w.started || now < w.starts_at || now - w.starts_at >= w.lease.window) {
     w.starts_at = now;
@@ -179,7 +179,7 @@ ErrorCode RateLimiter::TryAcquire(const RateLimitKey& key,
     ceiling -= w.lease.order_reserve;
   }
   if (w.used >= ceiling || weight > ceiling - w.used) {
-    return ErrorCode::kRateLeaseExhausted;
+    return ErrorCode::kRateBudgetExhausted;
   }
   w.used += weight;
   return ErrorCode::kOk;

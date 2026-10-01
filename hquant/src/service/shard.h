@@ -30,7 +30,7 @@ class ReplayClock final : public Clock {
     if (stamp.at_us < 0 || (last_ && (stamp.at_us < last_->at_us ||
                                       (stamp.at_us == last_->at_us &&
                                        stamp.ordinal <= last_->ordinal)))) {
-      return Error(ErrorCode::kShardInputInvalid,
+      return Error(ErrorCode::kInputTimeInvalid,
                    "replay input order must increase");
     }
     last_ = stamp;

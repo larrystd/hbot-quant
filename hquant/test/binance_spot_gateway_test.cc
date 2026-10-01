@@ -133,7 +133,7 @@ TEST(ClientIdCodecTest, StableStrategyIdAndUniqueRunRoundTrip) {
   EXPECT_EQ(decoded->shard_hint.value, 3);
   EXPECT_EQ(decoded->shard_sequence, 1);
   EXPECT_EQ(CodeOf(DecodeClientId(ClientOrderId(first->value + "A")).status()),
-            ErrorCode::kClientIdInvalid);
+            ErrorCode::kClientOrderIdInvalid);
   EXPECT_FALSE(EncodeClientId(MakeStrategyId(), RunId{42}, ShardId{3}, 0).ok());
   EXPECT_FALSE(EncodeClientId(MakeStrategyId(), RunId{42}, ShardId{3}, 1U << 29).ok());
 }
@@ -170,7 +170,7 @@ TEST(BinanceOrderGatewayTest,
   auto invalid = Command(clock);
   invalid.request.base_amount = D("0");
   EXPECT_EQ(CodeOf(gateway.PrepareSubmit(std::move(invalid)).status()),
-            ErrorCode::kOrderInvalid);
+            ErrorCode::kOrderPriceOrAmountInvalid);
   EXPECT_EQ(gateway.PendingSubmitCount(), 0);
   auto intent = gateway.PrepareSubmit(Command(clock));
   ASSERT_TRUE(intent.ok());
@@ -187,7 +187,7 @@ TEST(BinanceOrderGatewayTest,
   EXPECT_EQ(events[0].client_id, intent->client_id);
 }
 
-TEST(BinanceOrderGatewayTest, InvalidQuantizationUsesOrderRuleCode) {
+TEST(BinanceOrderGatewayTest, InvalidQuantizationUsesDecimalArithmeticCode) {
   boost::asio::io_context io;
   MockTransport transport;
   TestClock clock;
@@ -195,7 +195,7 @@ TEST(BinanceOrderGatewayTest, InvalidQuantizationUsesOrderRuleCode) {
   config.trading_rule.base_increment = D("0");
   BinanceOrderGateway gateway(io, transport, clock, std::move(config), {});
   EXPECT_EQ(CodeOf(gateway.PrepareSubmit(Command(clock)).status()),
-            ErrorCode::kOrderRuleViolation);
+            ErrorCode::kDecimalArithmeticFailed);
 }
 
 TEST(BinanceOrderGatewayTest, TimeoutAndServerErrorRemainUnknownWithoutResend) {
@@ -247,8 +247,8 @@ TEST(BinanceOrderGatewayTest, DistinguishesRateLimitFromIpBan) {
   ASSERT_TRUE(gateway.StartPrepared(second->client_id).ok());
   io.run();
   ASSERT_EQ(events.size(), 2);
-  EXPECT_EQ(events[0].code, ErrorCode::kVenueRateLimited);
-  EXPECT_EQ(events[1].code, ErrorCode::kVenueIpBanned);
+  EXPECT_EQ(events[0].code, ErrorCode::kExchangeRateLimited);
+  EXPECT_EQ(events[1].code, ErrorCode::kExchangeIpBanned);
 }
 
 TEST(BinanceOrderGatewayTest, CancelUsesReservedRateSlotAndOriginalClientId) {
@@ -280,7 +280,7 @@ TEST(BinanceOrderGatewayTest, CancelUsesReservedRateSlotAndOriginalClientId) {
   auto second = gateway.PrepareSubmit(Command(clock));
   ASSERT_TRUE(second.ok());
   EXPECT_EQ(CodeOf(gateway.StartPrepared(second->client_id)),
-            ErrorCode::kRateLeaseExhausted);
+            ErrorCode::kRateBudgetExhausted);
   EXPECT_TRUE(gateway.AbortPrepared(second->client_id).ok());
   EXPECT_TRUE(gateway.StartCancel(MakeStrategyId(), first->client_id).ok());
   EXPECT_EQ(CodeOf(gateway.StartCancel(MakeStrategyId(), first->client_id)),

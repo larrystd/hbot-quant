@@ -29,12 +29,12 @@ void UnwindPrepared(RiskGate& risk, OrderGateway& gateway,
 
 ErrorCode NormalizeOrder(const OrderRequest& raw, const TradingRule& rule,
                          std::optional<OrderRequest>* normalized) {
-  if (!raw.limit_price) return ErrorCode::kOrderInvalid;
+  if (!raw.limit_price) return ErrorCode::kOrderPriceOrAmountInvalid;
   auto amount =
       raw.base_amount.Quantize(rule.base_increment, RoundingMode::Down);
   auto price =
       raw.limit_price->Quantize(rule.price_increment, RoundingMode::Down);
-  if (!amount.ok() || !price.ok()) return ErrorCode::kOrderRuleViolation;
+  if (!amount.ok() || !price.ok()) return ErrorCode::kDecimalArithmeticFailed;
   normalized->emplace(raw);
   (*normalized)->base_amount = *amount;
   (*normalized)->limit_price = *price;
@@ -86,8 +86,8 @@ std::vector<DispatchResult> ActionDispatcher::Dispatch(
         action);
     const bool submit = std::holds_alternative<SubmitOrder>(action);
     if (action_strategy_id != context.strategy_id || !context.strategy_id.IsValid()) {
-      result.reason = ErrorCode::kOrderInvalid;
-      result.message = "action strategy_id mismatch";
+      result.reason = ErrorCode::kOrderStrategyIdInvalid;
+      result.message = "action strategy ID does not match the shard strategy";
     } else if (const auto* cancel = std::get_if<CancelOrder>(&action)) {
       const auto status =
           gateway_.StartCancel(cancel->strategy_id, cancel->client_id);

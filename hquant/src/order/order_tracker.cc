@@ -130,14 +130,20 @@ TrackerResult OrderTracker::MakeResult(
 }
 
 absl::StatusOr<TrackerResult> OrderTracker::Register(OrderIntent intent) {
-  if (intent.client_id.value.empty() || !intent.strategy_id.IsValid() ||
-      intent.request.account.value.empty() ||
-      intent.request.market.exchange.value.empty() ||
-      intent.request.market.native_symbol.empty() ||
-      !intent.request.base_amount.IsStrictlyPositive() ||
+  if (intent.client_id.value.empty())
+    return Error(ErrorCode::kClientOrderIdInvalid, "empty client order ID");
+  if (!intent.strategy_id.IsValid())
+    return Error(ErrorCode::kOrderStrategyIdInvalid, "invalid strategy ID");
+  if (intent.request.account.value.empty())
+    return Error(ErrorCode::kOrderAccountInvalid, "empty order account");
+  if (intent.request.market.exchange.value.empty() ||
+      intent.request.market.native_symbol.empty())
+    return Error(ErrorCode::kOrderMarketInvalid, "empty order market");
+  if (!intent.request.base_amount.IsStrictlyPositive() ||
       !intent.request.limit_price ||
       !intent.request.limit_price->IsStrictlyPositive())
-    return Error(ErrorCode::kOrderInvalid, "invalid order intent");
+    return Error(ErrorCode::kOrderPriceOrAmountInvalid,
+                 "limit price and amount must be positive");
   if (orders_.contains(intent.client_id.value))
     return Error(ErrorCode::kOrderDuplicate, "client order ID already tracked");
   TrackedOrder order;
@@ -173,27 +179,27 @@ absl::StatusOr<OrderTracker::TrackedOrder*> OrderTracker::Find(
   if (by_client && by_exchange && by_client != by_exchange) {
     by_client->reconciliation = ReconciliationState::ResyncRequired;
     by_exchange->reconciliation = ReconciliationState::ResyncRequired;
-    return Error(ErrorCode::kOrderReportConflict,
+    return Error(ErrorCode::kExchangeOrderIdConflict,
                  "client and exchange IDs identify different orders");
   }
   if (client_id && !by_client && by_exchange) {
     by_exchange->reconciliation = ReconciliationState::ResyncRequired;
-    return Error(ErrorCode::kOrderReportConflict,
+    return Error(ErrorCode::kExchangeOrderIdConflict,
                  "unknown client ID conflicts with exchange ID");
   }
   TrackedOrder* order = by_client ? by_client : by_exchange;
   if (!order)
-    return Error(ErrorCode::kOrderReportUnattributed,
+    return Error(ErrorCode::kReportOrderUnknown,
                  "order report has no tracked strategy_id");
   if (order->intent.request.account != account ||
       order->intent.request.market != market) {
     order->reconciliation = ReconciliationState::ResyncRequired;
-    return Error(ErrorCode::kOrderReportConflict, "account or market mismatch");
+    return Error(ErrorCode::kReportAccountMarketMismatch, "account or market mismatch");
   }
   if (order->exchange_id && exchange_id &&
       *order->exchange_id != *exchange_id) {
     order->reconciliation = ReconciliationState::ResyncRequired;
-    return Error(ErrorCode::kOrderReportConflict,
+    return Error(ErrorCode::kExchangeOrderIdConflict,
                  "exchange ID changed for tracked client ID");
   }
   return order;
@@ -205,7 +211,7 @@ absl::Status OrderTracker::BindExchangeId(
   if (order.exchange_id) {
     if (*order.exchange_id != *exchange_id) {
       order.reconciliation = ReconciliationState::ResyncRequired;
-      return Error(ErrorCode::kOrderReportConflict, "exchange ID changed");
+      return Error(ErrorCode::kExchangeOrderIdConflict, "exchange ID changed");
     }
     return absl::OkStatus();
   }
@@ -215,7 +221,7 @@ absl::Status OrderTracker::BindExchangeId(
       found != exchange_index_.end() &&
       found->second != order.intent.client_id.value) {
     order.reconciliation = ReconciliationState::ResyncRequired;
-    return Error(ErrorCode::kOrderReportConflict,
+    return Error(ErrorCode::kExchangeOrderIdConflict,
                  "exchange ID already owned by another order");
   }
   order.exchange_id = *exchange_id;
@@ -244,7 +250,7 @@ absl::StatusOr<TrackerResult> OrderTracker::FailBeforeWrite(
   auto& order = found->second;
   auto compared = order.cumulative_base.Compare(Decimal{});
   if (!compared.ok())
-    return Error(ErrorCode::kInternal,
+    return Error(ErrorCode::kDecimalArithmeticFailed,
                  "tracked cumulative amount cannot be compared");
   if (order.lifecycle != OrderLifecycle::PendingCreate ||
       order.reconciliation != ReconciliationState::Confirmed ||
@@ -266,7 +272,7 @@ absl::StatusOr<TrackerResult> OrderTracker::MarkSubmissionUnknown(
     return Error(ErrorCode::kOrderNotFound, "order not tracked");
   auto& order = found->second;
   if (order.lifecycle != OrderLifecycle::PendingCreate)
-    return Error(ErrorCode::kOrderReportConflict,
+    return Error(ErrorCode::kOrderStatusConflict,
                  "submission already confirmed or terminal");
   const bool changed =
       order.reconciliation != ReconciliationState::SubmissionUnknown;
@@ -297,7 +303,7 @@ absl::StatusOr<TrackerResult> OrderTracker::Update(const OrderUpdate& update,
   const OrderLifecycle next = Lifecycle(update.exchange_status);
   if (Terminal(order.lifecycle) && next != order.lifecycle) {
     order.reconciliation = ReconciliationState::ResyncRequired;
-    return Error(ErrorCode::kOrderReportConflict,
+    return Error(ErrorCode::kOrderStatusConflict,
                  "conflicting terminal order status");
   }
   if (Rank(next) < Rank(order.lifecycle)) {
@@ -338,7 +344,7 @@ absl::StatusOr<TrackerResult> OrderTracker::Update(const OrderUpdate& update,
     auto comparison =
         order.cumulative_base.Compare(order.intent.request.base_amount);
     if (!comparison.ok())
-      return Error(ErrorCode::kOrderReportConflict,
+      return Error(ErrorCode::kDecimalArithmeticFailed,
                    "reported cumulative amount cannot be compared");
     const bool awaiting = *comparison < 0;
     if (order.completion_pending_fills != awaiting) changed = true;
@@ -383,7 +389,7 @@ absl::StatusOr<TrackerResult> OrderTracker::ApplyTradeUpdate(
   if (auto seen = seen_trades_.find(key); seen != seen_trades_.end()) {
     if (seen->second != order.intent.client_id.value) {
       order.reconciliation = ReconciliationState::ResyncRequired;
-      return Error(ErrorCode::kOrderReportConflict,
+      return Error(ErrorCode::kTradeIdOnOtherOrder,
                    "trade ID assigned to another order");
     }
     return MakeResult(order, bound);
@@ -402,7 +408,7 @@ absl::StatusOr<TrackerResult> OrderTracker::ApplyTradeUpdate(
                  "trade fill amount cannot be compared");
   if (*overfill > 0) {
     order.reconciliation = ReconciliationState::ResyncRequired;
-    return Error(ErrorCode::kOrderReportConflict,
+    return Error(ErrorCode::kTradeExceedsOrderAmount,
                  "trade exceeds requested base amount");
   }
   auto fees = order.fees_by_asset;

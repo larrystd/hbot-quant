@@ -84,20 +84,20 @@ absl::StatusOr<uint64_t> IntegerDecimal(std::string_view text) {
   }
   if (shift < 0) return Invalid("non-integral scale quotient");
   if (shift > 20)
-    return Error(ErrorCode::kFeedScaleMismatch,
+    return Error(ErrorCode::kFeedTickSizeMismatch,
                  "scale quotient overflows uint64");
   uint64_t value = 0;
   for (char digit : digits) {
     const unsigned d = digit - '0';
     if (value > (std::numeric_limits<uint64_t>::max() - d) / 10) {
-      return Error(ErrorCode::kFeedScaleMismatch,
+      return Error(ErrorCode::kFeedTickSizeMismatch,
                    "scale quotient overflows uint64");
     }
     value = value * 10 + d;
   }
   for (int i = 0; i < shift; ++i) {
     if (value > std::numeric_limits<uint64_t>::max() / 10) {
-      return Error(ErrorCode::kFeedScaleMismatch,
+      return Error(ErrorCode::kFeedTickSizeMismatch,
                    "scale quotient overflows uint64");
     }
     value *= 10;
@@ -112,16 +112,16 @@ absl::StatusOr<uint64_t> ToUnits(std::string_view raw, const Decimal& quantum) {
   if (!value->IsNonnegative()) return Invalid("negative level");
   auto rounded = value->Quantize(quantum, RoundingMode::Down);
   if (!rounded.ok())
-    return Error(ErrorCode::kFeedScaleMismatch, rounded.status().message());
+    return Error(ErrorCode::kFeedTickSizeMismatch, rounded.status().message());
   auto exact = rounded->Compare(*value);
   if (!exact.ok())
-    return Error(ErrorCode::kFeedScaleMismatch, exact.status().message());
+    return Error(ErrorCode::kFeedTickSizeMismatch, exact.status().message());
   if (*exact != 0)
-    return Error(ErrorCode::kFeedScaleMismatch,
+    return Error(ErrorCode::kFeedTickSizeMismatch,
                  "raw level not divisible by BookScale");
   auto quotient = value->Divide(quantum);
   if (!quotient.ok())
-    return Error(ErrorCode::kFeedScaleMismatch, quotient.status().message());
+    return Error(ErrorCode::kFeedTickSizeMismatch, quotient.status().message());
   return IntegerDecimal(quotient->ToString());
 }
 
@@ -329,7 +329,7 @@ absl::Status MarketDataStream::Fault(absl::Status status) {
 
 boost::asio::awaitable<absl::Status> MarketDataStream::RunCycle(
     size_t max_depth_messages) {
-  if (stopped_) co_return Error(ErrorCode::kCancelled, "market stream stopped");
+  if (stopped_) co_return Error(ErrorCode::kFeedStopped, "market stream stopped");
   cycle_became_live_ = false;
   retry_after_ = std::chrono::steady_clock::duration::zero();
   if (epoch_ == std::numeric_limits<uint64_t>::max()) {
@@ -377,7 +377,7 @@ boost::asio::awaitable<absl::Status> MarketDataStream::RunCycle(
     ++depth_count;
   }
   if (stopped_)
-    co_return Fault(Error(ErrorCode::kCancelled, "market stream stopped"));
+    co_return Fault(Error(ErrorCode::kFeedStopped, "market stream stopped"));
 
   bool snapshot_applied = false;
   for (unsigned attempt = 0; attempt < config_.max_snapshot_attempts;
@@ -393,12 +393,12 @@ boost::asio::awaitable<absl::Status> MarketDataStream::RunCycle(
     if (response->status == 429 || response->status == 418) {
       retry_after_ = response->retry_after;
       co_return Fault(Error(response->status == 418
-                                ? ErrorCode::kVenueIpBanned
-                                : ErrorCode::kVenueRateLimited,
+                                ? ErrorCode::kExchangeIpBanned
+                                : ErrorCode::kExchangeRateLimited,
                             "Binance depth snapshot throttled"));
     }
     if (response->status != 200) {
-      co_return Fault(Error(ErrorCode::kHttpStatusUnexpected,
+      co_return Fault(Error(ErrorCode::kFeedSnapshotHttpError,
                             "Binance depth snapshot HTTP status " +
                                 std::to_string(response->status)));
     }
@@ -444,7 +444,7 @@ boost::asio::awaitable<absl::Status> MarketDataStream::RunCycle(
     ++depth_count;
   }
   if (stopped_)
-    co_return Fault(Error(ErrorCode::kCancelled, "market stream stopped"));
+    co_return Fault(Error(ErrorCode::kFeedStopped, "market stream stopped"));
   co_return absl::OkStatus();
 }
 
@@ -467,7 +467,7 @@ boost::asio::awaitable<void> MarketDataStream::Run() {
     if (recovery == Recovery::Resync) {
       ++consecutive_resyncs;
       consecutive_scale_mismatches =
-          CodeOf(result) == ErrorCode::kFeedScaleMismatch
+          CodeOf(result) == ErrorCode::kFeedTickSizeMismatch
               ? consecutive_scale_mismatches + 1
               : 0;
       if (consecutive_scale_mismatches >= 3) {

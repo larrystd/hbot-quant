@@ -19,7 +19,7 @@ int ProtocolContract() {
   response.payload = hquant::ControlError{hquant::ErrorCode::kControlBusy,
                                           "history \"timeout\"\n"};
   auto reply = hquant::EncodeControlResponse(response);
-  if (!reply.ok() || reply->find("\"code\":19008,\"name\":\"CONTROL_BUSY\"") ==
+  if (!reply.ok() || reply->find("\"code\":-19008,\"name\":\"CONTROL_BUSY\"") ==
                          std::string::npos)
     return 3;
   auto parsed = hquant::DecodeControlResponse(*reply);
@@ -72,9 +72,32 @@ int ProtocolContract() {
 
 #include "cli/cli.h"
 #include "gtest/gtest.h"
+#include "offline/storage.h"
 
 namespace hquant {
 namespace {
+
+TEST(ControlHistoryTest, DisplaysNegativeReasonNumbers) {
+  constexpr auto reason = ErrorCode::kStorageQueueFull;
+  HistoryPage page;
+  RecordEnvelope decision;
+  DecisionRecord action;
+  action.reason = reason;
+  decision.payload = action;
+  page.rows.push_back(decision);
+  RecordEnvelope gap;
+  gap.payload = HistoryGap{RunId{1}, ShardId{0}, 1, 2, reason};
+  page.rows.push_back(gap);
+  page.incomplete_ranges.push_back(
+      HistoryGap{RunId{1}, ShardId{0}, 1, 2, reason});
+  const std::string json = HistoryJson(page);
+  const std::string needle = "\"reason\":-17004";
+  const auto first = json.find(needle);
+  ASSERT_NE(first, std::string::npos);
+  const auto second = json.find(needle, first + needle.size());
+  ASSERT_NE(second, std::string::npos);
+  EXPECT_NE(json.find(needle, second + needle.size()), std::string::npos);
+}
 
 TEST(ControlServerTest, StopCanPassAnInFlightHistoryRequest) {
   EXPECT_EQ(::ProtocolContract(), 0);

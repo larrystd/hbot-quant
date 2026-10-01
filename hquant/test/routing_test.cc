@@ -182,7 +182,7 @@ TEST(PrivateReportRouterTest,
   EXPECT_TRUE(full.pause_account && full.request_reconcile);
   EXPECT_TRUE(router.IsAccountPaused(AccountId("account-a")));
   auto unknown = router.Route(Trade("unrecognized"));
-  EXPECT_EQ(unknown.failure, ErrorCode::kRouteOwnerUnknown);
+  EXPECT_EQ(unknown.failure, ErrorCode::kRouteStrategyUnknown);
   EXPECT_EQ(router.QuarantineSize(), 2);
   auto dropped = router.Route(Update(""));
   EXPECT_TRUE(dropped.quarantine_dropped);

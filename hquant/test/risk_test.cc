@@ -50,7 +50,7 @@ int RiskGateTestMain() {
   rejected.reservation_id = hquant::ReservationId{777};
   std::string_view detail;
   if (gate.TryReserveCode(strategy_id, buy, spec, rule, now, false, true, &rejected,
-                          &detail) != hquant::ErrorCode::kRiskNotReady ||
+                          &detail) != hquant::ErrorCode::kRiskMarketNotLive ||
       rejected.reservation_id.value != 777 || detail.empty())
     return 13;
   auto first = gate.TryReserve(strategy_id, buy, spec, rule, now, true, true);
@@ -176,7 +176,7 @@ int LeaseTestMain() {
   REQUIRE(gate0.MarkSubmissionUnknown(unknown->reservation_id).ok());
   REQUIRE(Equal(*gate0.Available(account, quote), "0"));
   REQUIRE(CodeOf(gate0.TryReserve(strategy_id, request, spec, rule, now, true, true)
-                     .status()) == ErrorCode::kRiskLeaseExhausted);
+                     .status()) == ErrorCode::kRiskBudgetExhausted);
 
   request.base_amount = LeaseD("0.4");
   auto other_shard =
@@ -189,7 +189,7 @@ int LeaseTestMain() {
   rule.observed_at = expiry;
   REQUIRE(
       CodeOf(gate0.TryReserve(strategy_id, request, spec, rule, expiry, true, true)
-                 .status()) == ErrorCode::kRiskLeaseStale);
+                 .status()) == ErrorCode::kRiskBudgetExpired);
   REQUIRE(!gate0.RenewAfterReconciliation(renewed, expiry, false).ok());
   forged = renewed;
   forged.hard_limit = LeaseD("61");

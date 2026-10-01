@@ -174,7 +174,7 @@ std::string ReasonName(const BookApplyResult& result) {
       return "Gap";
     case ErrorCode::kBookCrossed:
       return "CrossedBook";
-    case ErrorCode::kFeedScaleMismatch:
+    case ErrorCode::kFeedTickSizeMismatch:
       return "InvalidScale";
     case ErrorCode::kFeedMessageInvalid:
       return "InvalidMessage";

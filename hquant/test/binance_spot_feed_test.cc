@@ -75,7 +75,7 @@ TEST(DepthParserTest, RejectsInvalidRawScaleAndWrongSymbol) {
   auto invalid_scale = parser.ParseDiff(R"({"e":"depthUpdate","s":"BTCUSDT",
     "U":1,"u":1,"b":[["100.005","1.000"]],"a":[]})",
                                         1, {});
-  EXPECT_EQ(CodeOf(invalid_scale.status()), ErrorCode::kFeedScaleMismatch);
+  EXPECT_EQ(CodeOf(invalid_scale.status()), ErrorCode::kFeedTickSizeMismatch);
   EXPECT_FALSE(parser
                    .ParseDiff(R"({"e":"depthUpdate","s":"BTCUSDT",
     "U":1,"u":1,"b":[["100.00","0.0001"]],"a":[]})",
@@ -263,12 +263,12 @@ TEST(MarketDataStreamTest, GapStopsCycleAndRequestsResync) {
 
 TEST(MarketDataStreamTest, HttpThrottleStopsCycle) {
   RunLocalCycle(102, false, absl::StatusCode::kResourceExhausted, 429, false,
-                ErrorCode::kVenueRateLimited);
+                ErrorCode::kExchangeRateLimited);
 }
 
 TEST(MarketDataStreamTest, IpBanHaltsCycle) {
   RunLocalCycle(102, false, absl::StatusCode::kResourceExhausted, 418, false,
-                ErrorCode::kVenueIpBanned);
+                ErrorCode::kExchangeIpBanned);
 }
 
 TEST(MarketDataStreamTest, SnapshotDeadlineStopsCycle) {

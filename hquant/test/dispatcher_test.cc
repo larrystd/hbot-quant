@@ -117,7 +117,7 @@ int main() {
   context.market_live = false;
   auto rejected = dispatcher.Dispatch(quantized, context);
   if (rejected.size() != 1 || rejected[0].accepted ||
-      rejected[0].reason != hquant::ErrorCode::kRiskNotReady ||
+      rejected[0].reason != hquant::ErrorCode::kRiskMarketNotLive ||
       !rejected[0].message.empty())
     return 5;
   context.market_live = true;
@@ -126,7 +126,7 @@ int main() {
   invalid.ordered.emplace_back(hquant::SubmitOrder{strategy_id, buy});
   rejected = dispatcher.Dispatch(invalid, context);
   if (rejected.size() != 1 || rejected[0].accepted ||
-      rejected[0].reason != hquant::ErrorCode::kOrderInvalid ||
+      rejected[0].reason != hquant::ErrorCode::kOrderPriceOrAmountInvalid ||
       !rejected[0].message.empty())
     return 6;
   return 0;

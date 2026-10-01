@@ -52,7 +52,7 @@ absl::Status NetworkError(const boost::system::error_code& ec,
     return hquant::Error(ErrorCode::kNetTimeout, ec.message());
   }
   if (cancelled || ec == asio::error::operation_aborted) {
-    return hquant::Error(ErrorCode::kCancelled, ec.message());
+    return hquant::Error(ErrorCode::kNetCancelled, ec.message());
   }
   return hquant::Error(ErrorCode::kNetUnavailable, ec.message());
 }
@@ -168,7 +168,7 @@ asio::awaitable<absl::Status> HttpClient::Connect(
 asio::awaitable<absl::StatusOr<HttpResponse>> HttpClient::Send(
     HttpRequest request) {
   if (in_flight_)
-    co_return hquant::Error(ErrorCode::kNetBusy, "concurrent HTTP Send");
+    co_return hquant::Error(ErrorCode::kNetConcurrentCall, "concurrent HTTP Send");
   in_flight_ = true;
   struct Reset {
     bool& value;
@@ -306,7 +306,7 @@ absl::Status WebSocketClient::Error(
     return hquant::Error(ErrorCode::kNetTimeout, ec.message());
   }
   if (cancelled_ || ec == asio::error::operation_aborted) {
-    return hquant::Error(ErrorCode::kCancelled, ec.message());
+    return hquant::Error(ErrorCode::kNetCancelled, ec.message());
   }
   return hquant::Error(ErrorCode::kNetUnavailable, ec.message());
 }
@@ -340,7 +340,7 @@ bool WebSocketClient::Connected() const { return connected_; }
 asio::awaitable<absl::Status> WebSocketClient::Connect(
     std::chrono::steady_clock::time_point deadline) {
   if (in_flight_)
-    co_return hquant::Error(ErrorCode::kNetBusy,
+    co_return hquant::Error(ErrorCode::kNetConcurrentCall,
                             "concurrent WebSocket operation");
   in_flight_ = true;
   struct Reset {
@@ -435,7 +435,7 @@ asio::awaitable<absl::Status> WebSocketClient::Connect(
 asio::awaitable<absl::Status> WebSocketClient::Reconnect(
     std::chrono::steady_clock::time_point deadline) {
   if (in_flight_)
-    co_return hquant::Error(ErrorCode::kNetBusy,
+    co_return hquant::Error(ErrorCode::kNetConcurrentCall,
                             "concurrent WebSocket operation");
   DropConnection();
   co_return co_await Connect(deadline);
@@ -443,9 +443,13 @@ asio::awaitable<absl::Status> WebSocketClient::Reconnect(
 
 asio::awaitable<absl::Status> WebSocketClient::WriteText(
     std::string message, std::chrono::steady_clock::time_point deadline) {
-  if (!connected_ || in_flight_) {
-    co_return hquant::Error(ErrorCode::kNetBusy,
-                            "WebSocket unavailable or busy");
+  if (in_flight_) {
+    co_return hquant::Error(ErrorCode::kNetConcurrentCall,
+                            "concurrent WebSocket operation");
+  }
+  if (!connected_) {
+    co_return hquant::Error(ErrorCode::kNetNotConnected,
+                            "WebSocket not connected");
   }
   in_flight_ = true;
   struct Reset {
@@ -476,9 +480,13 @@ asio::awaitable<absl::Status> WebSocketClient::WriteText(
 
 asio::awaitable<absl::StatusOr<std::string>> WebSocketClient::Read(
     std::chrono::steady_clock::time_point deadline) {
-  if (!connected_ || in_flight_) {
-    co_return hquant::Error(ErrorCode::kNetBusy,
-                            "WebSocket unavailable or busy");
+  if (in_flight_) {
+    co_return hquant::Error(ErrorCode::kNetConcurrentCall,
+                            "concurrent WebSocket operation");
+  }
+  if (!connected_) {
+    co_return hquant::Error(ErrorCode::kNetNotConnected,
+                            "WebSocket not connected");
   }
   in_flight_ = true;
   struct Reset {
@@ -513,7 +521,7 @@ asio::awaitable<absl::Status> WebSocketClient::Close(
     co_return absl::OkStatus();
   }
   if (in_flight_)
-    co_return hquant::Error(ErrorCode::kNetBusy, "WebSocket busy");
+    co_return hquant::Error(ErrorCode::kNetConcurrentCall, "WebSocket busy");
   in_flight_ = true;
   struct Reset {
     bool& value;

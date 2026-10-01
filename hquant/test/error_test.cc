@@ -11,18 +11,19 @@ namespace hquant {
 namespace {
 
 TEST(ErrorTest, RegistryHasUniqueStableEntries) {
-  std::set<uint16_t> numbers;
+  std::set<int32_t> numbers;
   std::set<std::string> names;
-  EXPECT_EQ(AllErrorInfo().size(), 106);
+  EXPECT_EQ(AllErrorInfo().size(), 125);
   for (const auto& item : AllErrorInfo()) {
     EXPECT_NE(item.code, ErrorCode::kOk);
-    EXPECT_TRUE(numbers.insert(static_cast<uint16_t>(item.code)).second);
+    EXPECT_LT(ErrorNumber(item.code), 0);
+    EXPECT_TRUE(numbers.insert(ErrorNumber(item.code)).second);
     EXPECT_TRUE(names.insert(std::string(item.name)).second);
     EXPECT_EQ(Info(item.code).code, item.code);
     EXPECT_NE(item.canonical, absl::StatusCode::kOk);
   }
   EXPECT_EQ(Info(ErrorCode::kInternal).name, "INTERNAL");
-  EXPECT_EQ(Info(static_cast<ErrorCode>(19999)).code, ErrorCode::kInternal);
+  EXPECT_EQ(Info(static_cast<ErrorCode>(-19999)).code, ErrorCode::kInternal);
 }
 
 TEST(ErrorTest, StatusPayloadRoundTripAndFallback) {
@@ -37,9 +38,9 @@ TEST(ErrorTest, StatusPayloadRoundTripAndFallback) {
   absl::Status external(absl::StatusCode::kInvalidArgument, "external");
   EXPECT_EQ(CodeOf(external), ErrorCode::kInternal);
   EXPECT_EQ(RecoveryOf(external), Recovery::Halt);
-  external.SetPayload("type.hquant/error", absl::Cord("19999"));
+  external.SetPayload("type.hquant/error", absl::Cord("-19999"));
   EXPECT_EQ(CodeOf(external), ErrorCode::kInternal);
-  external.SetPayload("type.hquant/error", absl::Cord("12002x"));
+  external.SetPayload("type.hquant/error", absl::Cord("-12002x"));
   EXPECT_EQ(CodeOf(external), ErrorCode::kInternal);
   external.SetPayload("type.hquant/error", absl::Cord());
   EXPECT_EQ(CodeOf(external), ErrorCode::kInternal);

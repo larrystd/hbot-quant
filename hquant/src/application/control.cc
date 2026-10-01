@@ -98,7 +98,7 @@ std::string_view LegacyErrorName(ErrorCode code) {
   if (code == ErrorCode::kControlMessageInvalid) return "bad_request";
   if (code == ErrorCode::kControlBusy) return "busy";
   if (code == ErrorCode::kControlTimeout) return "timeout";
-  const auto value = static_cast<uint16_t>(code);
+  const auto value = -ErrorNumber(code);
   if (value >= 17000 && value < 18000) return "history";
   return "internal";
 }
@@ -193,7 +193,7 @@ absl::StatusOr<std::string> EncodeControlResponse(
                ",\"message\":" + EscapeWire(error.message) + "}";
     } else {
       frame += ",\"kind\":\"error\",\"code\":" +
-               std::to_string(static_cast<uint16_t>(error.code)) +
+               std::to_string(ErrorNumber(error.code)) +
                ",\"name\":" + EscapeWire(Info(error.code).name) +
                ",\"message\":" + EscapeWire(error.message) + "}";
     }
@@ -241,16 +241,15 @@ absl::StatusOr<ControlResponse> DecodeControlResponse(std::string_view json) {
                      "invalid legacy error response");
       code = LegacyErrorCode(legacy);
     } else {
-      uint64_t number = 0;
+      int64_t number = 0;
       std::string_view name;
-      if ((*root)["code"].get(number) || number > UINT16_MAX ||
-          (*root)["name"].get(name)) {
+      if ((*root)["code"].get(number) || (*root)["name"].get(name)) {
         return Error(ErrorCode::kControlMessageInvalid,
                      "invalid error code or name");
       }
-      code = static_cast<ErrorCode>(number);
-      if (code == ErrorCode::kOk || Info(code).code != code ||
-          Info(code).name != name) {
+      const auto known = ErrorFromNumber(number);
+      code = known.value_or(ErrorCode::kInternal);
+      if (!known || Info(code).name != name) {
         return Error(ErrorCode::kControlMessageInvalid,
                      "error code and name mismatch");
       }
@@ -499,7 +498,8 @@ const char* BookStateName(BookSyncState state) {
   return "Unknown";
 }
 
-std::string StatusJson(const ShardRuntime& shard, const SimpleSimulatedExchange& sim_exchange,
+std::string StatusJson(const ShardRuntime& shard,
+                       const SimpleSimulatedExchange& sim_exchange,
                        const MarketSpec& market,
                        const SqliteRecorder& recorder) {
   const auto health = recorder.Health();
@@ -511,13 +511,14 @@ std::string StatusJson(const ShardRuntime& shard, const SimpleSimulatedExchange&
          ",\"history_gaps\":" + std::to_string(health.gap_ranges.size()) +
          ",\"recorder_error\":" + EscapeJson(health.last_error) +
          ",\"balances\":{" + EscapeJson(market.base_asset.value) + ":" +
-         EscapeJson(sim_exchange.BalanceOf(market.base_asset).ToString()) + "," +
-         EscapeJson(market.quote_asset.value) + ":" +
+         EscapeJson(sim_exchange.BalanceOf(market.base_asset).ToString()) +
+         "," + EscapeJson(market.quote_asset.value) + ":" +
          EscapeJson(sim_exchange.BalanceOf(market.quote_asset).ToString()) +
          "},\"fees_paid\":{" + EscapeJson(market.base_asset.value) + ":" +
          EscapeJson(sim_exchange.FeesPaid(market.base_asset).ToString()) + "," +
          EscapeJson(market.quote_asset.value) + ":" +
-         EscapeJson(sim_exchange.FeesPaid(market.quote_asset).ToString()) + "}}";
+         EscapeJson(sim_exchange.FeesPaid(market.quote_asset).ToString()) +
+         "}}";
 }
 
 const char* OrderStatusName(ExchangeOrderStatus status) {
@@ -573,8 +574,8 @@ std::string HistoryJson(const HistoryPage& page) {
                    std::get_if<DecisionRecord>(&row.payload)) {
       kind = "decision";
       details = std::string(",\"accepted\":") +
-                (decision->accepted ? "true" : "false") + ",\"reason\":" +
-                std::to_string(static_cast<uint16_t>(decision->reason)) +
+                (decision->accepted ? "true" : "false") +
+                ",\"reason\":" + std::to_string(ErrorNumber(decision->reason)) +
                 ",\"reason_name\":" + EscapeJson(Info(decision->reason).name) +
                 ",\"message\":" + EscapeJson(decision->message);
     } else if (std::holds_alternative<Checkpoint>(row.payload))
@@ -582,9 +583,8 @@ std::string HistoryJson(const HistoryPage& page) {
     else {
       kind = "gap";
       const auto& gap = std::get<HistoryGap>(row.payload);
-      details =
-          ",\"reason\":" + std::to_string(static_cast<uint16_t>(gap.reason)) +
-          ",\"reason_name\":" + EscapeJson(Info(gap.reason).name);
+      details = ",\"reason\":" + std::to_string(ErrorNumber(gap.reason)) +
+                ",\"reason_name\":" + EscapeJson(Info(gap.reason).name);
     }
     json += "{\"run_id\":" + std::to_string(row.run_id.value) +
             ",\"sequence\":" + std::to_string(row.shard_sequence) +
@@ -598,7 +598,7 @@ std::string HistoryJson(const HistoryPage& page) {
     const auto& gap = page.incomplete_ranges[index];
     json += "{\"first\":" + std::to_string(gap.first_seq) +
             ",\"last\":" + std::to_string(gap.last_seq) +
-            ",\"reason\":" + std::to_string(static_cast<uint16_t>(gap.reason)) +
+            ",\"reason\":" + std::to_string(ErrorNumber(gap.reason)) +
             ",\"reason_name\":" + EscapeJson(Info(gap.reason).name) + "}";
   }
   return json + "]}";

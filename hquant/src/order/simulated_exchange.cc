@@ -95,41 +95,49 @@ void SimpleSimulatedExchange::EmitBalance(const AssetId& asset) {
 
 absl::Status SimpleSimulatedExchange::ValidateAndQuantize(OrderCommand* command) const {
   auto& request = command->request;
-  if (request.account != config_.account ||
-      request.market != config_.market.market || !command->strategy_id.IsValid() ||
-      !request.limit_price ||
-      (request.type != OrderType::Limit &&
-       request.type != OrderType::LimitMaker) ||
-      !request.base_amount.IsStrictlyPositive() ||
-      !request.limit_price->IsStrictlyPositive()) {
-    return Error(ErrorCode::kOrderInvalid, "invalid Simulated order");
-  }
+  if (!command->strategy_id.IsValid())
+    return Error(ErrorCode::kOrderStrategyIdInvalid, "invalid strategy ID");
+  if (request.account != config_.account)
+    return Error(ErrorCode::kOrderAccountInvalid,
+                 "order account is not the simulated account");
+  if (request.market != config_.market.market)
+    return Error(ErrorCode::kOrderMarketInvalid,
+                 "order market is not the simulated market");
+  if (request.type != OrderType::Limit && request.type != OrderType::LimitMaker)
+    return Error(ErrorCode::kOrderTypeUnsupported, "only limit orders");
+  if (!request.limit_price || !request.base_amount.IsStrictlyPositive() ||
+      !request.limit_price->IsStrictlyPositive())
+    return Error(ErrorCode::kOrderPriceOrAmountInvalid,
+                 "limit price and amount must be positive");
   auto amount = request.base_amount.Quantize(
       config_.trading_rule.base_increment, RoundingMode::Down);
   auto price = request.limit_price->Quantize(
       config_.trading_rule.price_increment, RoundingMode::Down);
   if (!amount.ok())
-    return Error(ErrorCode::kOrderRuleViolation,
+    return Error(ErrorCode::kDecimalArithmeticFailed,
                  "Simulated quantity cannot be quantized to trading rule");
   if (!price.ok())
-    return Error(ErrorCode::kOrderRuleViolation,
+    return Error(ErrorCode::kDecimalArithmeticFailed,
                  "Simulated price cannot be quantized to trading rule");
-  if (!amount->IsStrictlyPositive() || !price->IsStrictlyPositive() ||
+  if (!price->IsStrictlyPositive())
+    return Error(ErrorCode::kOrderPriceOrAmountInvalid,
+                 "price is below one price increment");
+  if (!amount->IsStrictlyPositive() ||
       !AtLeast(*amount, config_.trading_rule.min_base_amount)) {
-    return Error(ErrorCode::kOrderRuleViolation,
-                 "Simulated order below trading rule");
+    return Error(ErrorCode::kOrderBelowMinAmount,
+                 "Simulated order below minimum amount");
   }
   auto notional = amount->Multiply(*price);
   if (!notional.ok())
-    return Error(ErrorCode::kOrderRuleViolation,
+    return Error(ErrorCode::kDecimalArithmeticFailed,
                  "Simulated order notional cannot be calculated");
   if (!AtLeast(*notional, config_.trading_rule.min_notional)) {
-    return Error(ErrorCode::kOrderRuleViolation,
+    return Error(ErrorCode::kOrderBelowMinNotional,
                  "Simulated order below min notional");
   }
   if (config_.trading_rule.max_base_amount &&
       !AtLeast(*config_.trading_rule.max_base_amount, *amount)) {
-    return Error(ErrorCode::kOrderRuleViolation,
+    return Error(ErrorCode::kOrderAboveMaxAmount,
                  "Simulated order above max amount");
   }
   request.base_amount = *amount;
@@ -173,20 +181,20 @@ absl::Status SimpleSimulatedExchange::StartPrepared(const ClientOrderId& client_
           ? order.request.base_amount.Multiply(*order.request.limit_price)
           : absl::StatusOr<Decimal>(order.request.base_amount);
   if (!required.ok())
-    return Error(ErrorCode::kOrderRuleViolation,
+    return Error(ErrorCode::kDecimalArithmeticFailed,
                  "Simulated order collateral cannot be calculated");
   if (order.request.side == Side::Buy && !config_.buy_fee_from_returns) {
     auto fee = required->Multiply(config_.maker_fee_rate);
     if (!fee.ok())
-      return Error(ErrorCode::kInternal, "Simulated fee calculation failed");
+      return Error(ErrorCode::kDecimalArithmeticFailed, "Simulated fee calculation failed");
     required = required->Add(*fee);
     if (!required.ok())
-      return Error(ErrorCode::kInternal,
+      return Error(ErrorCode::kDecimalArithmeticFailed,
                    "Simulated order fee-adjusted collateral failed");
   }
   if (!AtLeast(AvailableBalance(collateral), *required)) {
     EmitOrder(order, ExchangeOrderStatus::Rejected);
-    return Error(ErrorCode::kPaperBalanceInsufficient,
+    return Error(ErrorCode::kSimulatedBalanceInsufficient,
                  "Simulated available balance insufficient");
   }
   orders_.push_back(order);
@@ -224,7 +232,7 @@ absl::Status SimpleSimulatedExchange::Fill(size_t index) {
   const Decimal& amount = order.request.base_amount;
   auto quote = price.Multiply(amount);
   if (!quote.ok())
-    return Error(ErrorCode::kInternal, "Simulated fill quote calculation failed");
+    return Error(ErrorCode::kDecimalArithmeticFailed, "Simulated fill quote calculation failed");
   const bool buy = order.request.side == Side::Buy;
   AssetId fee_asset = buy && config_.buy_fee_from_returns
                           ? config_.market.base_asset
@@ -234,27 +242,27 @@ absl::Status SimpleSimulatedExchange::Fill(size_t index) {
                       : absl::StatusOr<Decimal>(*quote);
   auto fee = fee_base->Multiply(config_.maker_fee_rate);
   if (!fee.ok())
-    return Error(ErrorCode::kInternal, "Simulated fill fee calculation failed");
+    return Error(ErrorCode::kDecimalArithmeticFailed, "Simulated fill fee calculation failed");
 
   auto next_base = buy ? BalanceOf(config_.market.base_asset).Add(amount)
                        : BalanceOf(config_.market.base_asset).Subtract(amount);
   auto next_quote = buy ? BalanceOf(config_.market.quote_asset).Subtract(*quote)
                         : BalanceOf(config_.market.quote_asset).Add(*quote);
   if (!next_base.ok())
-    return Error(ErrorCode::kInternal, "Simulated fill base balance failed");
+    return Error(ErrorCode::kDecimalArithmeticFailed, "Simulated fill base balance failed");
   if (!next_quote.ok())
-    return Error(ErrorCode::kInternal, "Simulated fill quote balance failed");
+    return Error(ErrorCode::kDecimalArithmeticFailed, "Simulated fill quote balance failed");
   if (fee_asset == config_.market.base_asset)
     next_base = next_base->Subtract(*fee);
   else
     next_quote = next_quote->Subtract(*fee);
   if (!next_base.ok())
-    return Error(ErrorCode::kInternal, "Simulated fill net base balance failed");
+    return Error(ErrorCode::kDecimalArithmeticFailed, "Simulated fill net base balance failed");
   if (!next_quote.ok())
-    return Error(ErrorCode::kInternal, "Simulated fill net quote balance failed");
+    return Error(ErrorCode::kDecimalArithmeticFailed, "Simulated fill net quote balance failed");
   auto fees_total = FeesPaid(fee_asset).Add(*fee);
   if (!fees_total.ok())
-    return Error(ErrorCode::kInternal, "Simulated accumulated fees failed");
+    return Error(ErrorCode::kDecimalArithmeticFailed, "Simulated accumulated fees failed");
 
   orders_.erase(orders_.begin() + index);
   balances_[config_.market.base_asset.value] = *next_base;
@@ -282,7 +290,7 @@ absl::Status SimpleSimulatedExchange::Fill(size_t index) {
 
 absl::Status SimpleSimulatedExchange::OnBookBbo(const Decimal& bid, const Decimal& ask) {
   if (!bid.IsStrictlyPositive() || !ask.IsStrictlyPositive()) {
-    return Error(ErrorCode::kPaperInputInvalid, "Simulated BBO invalid");
+    return Error(ErrorCode::kSimulatedMarketDataInvalid, "Simulated BBO invalid");
   }
   for (size_t i = 0; i < orders_.size();) {
     const auto& order = orders_[i];
@@ -290,7 +298,7 @@ absl::Status SimpleSimulatedExchange::OnBookBbo(const Decimal& bid, const Decima
                            ? order.request.limit_price->Compare(ask)
                            : order.request.limit_price->Compare(bid);
     if (!match.ok())
-      return Error(ErrorCode::kPaperInputInvalid,
+      return Error(ErrorCode::kSimulatedMarketDataInvalid,
                    "Simulated BBO price comparison failed");
     const bool touched =
         order.request.side == Side::Buy ? *match >= 0 : *match <= 0;
@@ -306,7 +314,7 @@ absl::Status SimpleSimulatedExchange::OnBookBbo(const Decimal& bid, const Decima
 absl::Status SimpleSimulatedExchange::OnPublicTrade(Side aggressor, const Decimal& price,
                                            const Decimal& public_amount) {
   if (!price.IsStrictlyPositive() || !public_amount.IsStrictlyPositive()) {
-    return Error(ErrorCode::kPaperInputInvalid, "Simulated public trade invalid");
+    return Error(ErrorCode::kSimulatedMarketDataInvalid, "Simulated public trade invalid");
   }
   for (size_t i = 0; i < orders_.size();) {
     const auto& order = orders_[i];
@@ -316,7 +324,7 @@ absl::Status SimpleSimulatedExchange::OnPublicTrade(Side aggressor, const Decima
     }
     auto comparison = order.request.limit_price->Compare(price);
     if (!comparison.ok())
-      return Error(ErrorCode::kPaperInputInvalid,
+      return Error(ErrorCode::kSimulatedMarketDataInvalid,
                    "Simulated public trade price comparison failed");
     const bool crossed =
         order.request.side == Side::Buy ? *comparison > 0 : *comparison < 0;

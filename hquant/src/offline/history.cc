@@ -38,9 +38,8 @@ ErrorCode LegacyGapReason(int reason) {
 
 bool ValidGapReason(int reason, int version) {
   if (version == 1) return reason >= 0 && reason <= 3;
-  if (reason < 0 || reason > std::numeric_limits<uint16_t>::max()) return false;
-  const auto code = static_cast<ErrorCode>(reason);
-  return code != ErrorCode::kOk && Info(code).code == code;
+  return reason > 0 &&
+         ErrorFromStoredNumber(static_cast<uint64_t>(reason)).has_value();
 }
 
 absl::StatusOr<int> StorageVersion(sqlite3* db) {
@@ -55,7 +54,7 @@ absl::StatusOr<int> StorageVersion(sqlite3* db) {
                           ? 0
                           : sqlite3_column_int(statement.get(), 0);
   if (version != 1 && version != 2)
-    return Error(ErrorCode::kStorageOptionsInvalid,
+    return Error(ErrorCode::kStorageConfigInvalid,
                  "unsupported storage schema version");
   return version;
 }
@@ -107,7 +106,7 @@ absl::StatusOr<std::unique_ptr<HistoryReader>> HistoryReader::Open(
     Options options) {
   if (options.path.empty() || options.queue_capacity == 0 ||
       options.max_page_size == 0 || options.max_page_size > 500)
-    return Error(ErrorCode::kStorageOptionsInvalid,
+    return Error(ErrorCode::kStorageConfigInvalid,
                  "invalid history reader options");
   sqlite3* db = nullptr;
   if (sqlite3_open_v2(options.path.c_str(), &db,
@@ -144,15 +143,15 @@ HistoryReader::~HistoryReader() {
 
 absl::Status HistoryReader::TrySubmit(HistoryQuery query) {
   if (query.page_size == 0 || query.page_size > options_.max_page_size)
-    return Error(ErrorCode::kStorageOptionsInvalid,
+    return Error(ErrorCode::kStorageConfigInvalid,
                  "history page size outside configured bound");
   if (query.cursor && !ParseUnsigned(*query.cursor).ok())
     return Error(ErrorCode::kHistoryCursorInvalid, "invalid history cursor");
   std::lock_guard lock(mutex_);
   if (stopping_)
-    return Error(ErrorCode::kHistoryStopping, "history reader is stopping");
+    return Error(ErrorCode::kHistoryReaderStopping, "history reader is stopping");
   if (outstanding_ == options_.queue_capacity)
-    return Error(ErrorCode::kHistoryBusy, "history query queue is full");
+    return Error(ErrorCode::kHistoryQueueFull, "history query queue is full");
   pending_.push_back(std::move(query));
   ++outstanding_;
   cv_.notify_one();
@@ -197,7 +196,7 @@ HistoryPage HistoryReader::Query(const HistoryQuery& query) {
           : std::min(query.deadline, now + std::chrono::seconds(1));
   if (deadline <= now) {
     page.status =
-        Error(ErrorCode::kHistoryDeadline, "history query deadline elapsed");
+        Error(ErrorCode::kHistoryQueryTimeout, "history query deadline elapsed");
     return page;
   }
   ProgressGuard progress(db_, &deadline);
@@ -256,7 +255,7 @@ HistoryPage HistoryReader::Query(const HistoryQuery& query) {
     if (rc != SQLITE_ROW) {
       page.status =
           rc == SQLITE_INTERRUPT
-              ? Error(ErrorCode::kHistoryDeadline, "history query interrupted")
+              ? Error(ErrorCode::kHistoryQueryTimeout, "history query interrupted")
               : Error(ErrorCode::kStorageQueryFailed, sqlite3_errmsg(db_));
       return page;
     }
@@ -300,7 +299,7 @@ HistoryPage HistoryReader::Query(const HistoryQuery& query) {
     if (rc != SQLITE_ROW) {
       page.status =
           rc == SQLITE_INTERRUPT
-              ? Error(ErrorCode::kHistoryDeadline, "gap query interrupted")
+              ? Error(ErrorCode::kHistoryQueryTimeout, "gap query interrupted")
               : Error(ErrorCode::kStorageQueryFailed, sqlite3_errmsg(db_));
       page.rows.clear();
       return page;
@@ -333,7 +332,7 @@ HistoryPage HistoryReader::Query(const HistoryQuery& query) {
       return page;
     }
     gap.reason = storage_version_ == 1 ? LegacyGapReason(reason)
-                                       : static_cast<ErrorCode>(reason);
+                                       : *ErrorFromStoredNumber(reason);
     page.incomplete_ranges.push_back(gap);
   }
   return page;
@@ -409,7 +408,7 @@ void AddUncovered(RecoverySnapshot* snapshot, uint8_t shard, uint64_t first,
 absl::StatusOr<RecoverySnapshot> LoadRecoverySnapshot(const std::string& path,
                                                       RunId run_id) {
   if (path.empty() || !run_id.IsValid()) {
-    return Error(ErrorCode::kStorageOptionsInvalid,
+    return Error(ErrorCode::kStorageConfigInvalid,
                  "invalid recovery path or run ID");
   }
   sqlite3* raw = nullptr;
@@ -441,7 +440,7 @@ absl::StatusOr<RecoverySnapshot> LoadRecoverySnapshot(const std::string& path,
     if (sqlite3_column_type(version.get(), 0) == SQLITE_NULL ||
         (sqlite3_column_int(version.get(), 0) != 1 &&
          sqlite3_column_int(version.get(), 0) != 2)) {
-      return Error(ErrorCode::kStorageOptionsInvalid,
+      return Error(ErrorCode::kStorageConfigInvalid,
                    "unsupported storage schema version");
     }
     storage_version = sqlite3_column_int(version.get(), 0);
@@ -517,7 +516,7 @@ absl::StatusOr<RecoverySnapshot> LoadRecoverySnapshot(const std::string& path,
           {run_id, ShardId{static_cast<uint8_t>(shard)},
            static_cast<uint64_t>(first), static_cast<uint64_t>(last),
            storage_version == 1 ? LegacyGapReason(reason)
-                                : static_cast<ErrorCode>(reason)});
+                                : *ErrorFromStoredNumber(reason)});
     }
   }
 

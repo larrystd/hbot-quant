@@ -172,16 +172,16 @@ absl::Status CheckLeaseTotals(const AppConfig& config) {
         config.accounts.begin(), config.accounts.end(),
         [&](const auto& item) { return item.account.value == key.first; });
     if (account == config.accounts.end())
-      return Error(ErrorCode::kConfigLeaseInvalid, "lease account unknown");
+      return Error(ErrorCode::kConfigBudgetInvalid, "lease account unknown");
     const auto balance = account->initial_balances.find(key.second);
     if (balance == account->initial_balances.end()) {
-      return Error(ErrorCode::kConfigLeaseInvalid,
+      return Error(ErrorCode::kConfigBudgetInvalid,
                    "lease asset has no conservative balance");
     }
     auto compare = granted.Compare(balance->second);
     if (!compare.ok()) return compare.status();
     if (*compare > 0)
-      return Error(ErrorCode::kConfigLeaseInvalid,
+      return Error(ErrorCode::kConfigBudgetInvalid,
                    "static risk leases exceed account balance");
   }
   return absl::OkStatus();
@@ -251,7 +251,7 @@ absl::StatusOr<AppConfig> ParseConfig(std::string_view yaml_text) {
       if (!item.IsMap())
         return Error(ErrorCode::kConfigFieldInvalid, "account must be a map");
       if (item["api_key"] || item["secret_key"] || item["private_key"]) {
-        return Error(ErrorCode::kConfigCredentialsInline,
+        return Error(ErrorCode::kConfigContainsSecret,
                      "inline credentials are not allowed");
       }
       auto name = Scalar(item, "account");
@@ -509,7 +509,7 @@ absl::StatusOr<AppConfig> ParseConfig(std::string_view yaml_text) {
             !shard_ids.contains(shard->value) ||
             !account_on_shard(*account, shard->value) ||
             !unique.insert({*account, *asset, shard->value}).second) {
-          return Error(ErrorCode::kConfigLeaseInvalid,
+          return Error(ErrorCode::kConfigBudgetInvalid,
                        "invalid static risk lease");
         }
         config.static_risk_leases.push_back(
@@ -542,7 +542,7 @@ absl::StatusOr<AppConfig> ParseConfig(std::string_view yaml_text) {
             !account_on_shard(*account, shard->value) || *limit == 0 ||
             *limit > UINT32_MAX || *reserve > *limit || *window == 0 ||
             *window > static_cast<uint64_t>(INT64_MAX)) {
-          return Error(ErrorCode::kConfigLeaseInvalid,
+          return Error(ErrorCode::kConfigBudgetInvalid,
                        "invalid static rate lease");
         }
         config.static_rate_leases.push_back(

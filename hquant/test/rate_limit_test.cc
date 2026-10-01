@@ -20,9 +20,9 @@ TEST(RateLimitTest, ReservesCancellationSlotsAndResetsWindow) {
   EXPECT_EQ(limiter.TryAcquire(key, false, now), ErrorCode::kOk);
   EXPECT_EQ(limiter.TryAcquire(key, false, now), ErrorCode::kOk);
   EXPECT_EQ(limiter.TryAcquire(key, false, now),
-            ErrorCode::kRateLeaseExhausted);
+            ErrorCode::kRateBudgetExhausted);
   EXPECT_EQ(limiter.TryAcquire(key, true, now), ErrorCode::kOk);
-  EXPECT_EQ(limiter.TryAcquire(key, true, now), ErrorCode::kRateLeaseExhausted);
+  EXPECT_EQ(limiter.TryAcquire(key, true, now), ErrorCode::kRateBudgetExhausted);
   EXPECT_EQ(limiter.TryAcquire(key, false, now + std::chrono::seconds(1)),
             ErrorCode::kOk);
 }
@@ -86,15 +86,15 @@ TEST(RateLimitTest, WeightedPrioritiesProtectOrderAndCancellationCapacity) {
   EXPECT_EQ(limiter.TryAcquire(key, RatePriority::Background, 5, now),
             ErrorCode::kOk);
   EXPECT_EQ(limiter.TryAcquire(key, RatePriority::Background, 1, now),
-            ErrorCode::kRateLeaseExhausted);
+            ErrorCode::kRateBudgetExhausted);
   EXPECT_EQ(limiter.TryAcquire(key, RatePriority::Order, 3, now),
             ErrorCode::kOk);
   EXPECT_EQ(limiter.TryAcquire(key, RatePriority::Order, 1, now),
-            ErrorCode::kRateLeaseExhausted);
+            ErrorCode::kRateBudgetExhausted);
   EXPECT_EQ(limiter.TryAcquire(key, RatePriority::Cancel, 2, now),
             ErrorCode::kOk);
   EXPECT_EQ(limiter.TryAcquire(key, RatePriority::Cancel, 1, now),
-            ErrorCode::kRateLeaseExhausted);
+            ErrorCode::kRateBudgetExhausted);
 }
 
 TEST(RateLimitTest, Keyed429StopsAllShardsForBucketOnly) {

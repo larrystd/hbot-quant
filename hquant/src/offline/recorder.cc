@@ -89,7 +89,7 @@ absl::StatusOr<std::unique_ptr<SqliteRecorder>> SqliteRecorder::Open(
       options.queue_capacity_per_shard == 0 || options.batch_size == 0 ||
       options.queue_capacity_per_shard > 1'000'000 ||
       options.batch_size > 10'000)
-    return Error(ErrorCode::kStorageOptionsInvalid, "invalid recorder options");
+    return Error(ErrorCode::kStorageConfigInvalid, "invalid recorder options");
   sqlite3* db = nullptr;
   if (sqlite3_open_v2(
           options.path.c_str(), &db,
@@ -126,7 +126,7 @@ absl::StatusOr<std::unique_ptr<SqliteRecorder>> SqliteRecorder::Open(
   version_query->reset();
   if (version < 0 || version > 2) {
     sqlite3_close(db);
-    return Error(ErrorCode::kStorageOptionsInvalid,
+    return Error(ErrorCode::kStorageConfigInvalid,
                  "unsupported storage schema version");
   }
   if (version < 2) {
@@ -356,7 +356,7 @@ absl::Status SqliteRecorder::PersistPendingGaps() {
     sqlite3_bind_int(s, 2, gap.shard.value);
     sqlite3_bind_int64(s, 3, static_cast<sqlite3_int64>(gap.first_seq));
     sqlite3_bind_int64(s, 4, static_cast<sqlite3_int64>(gap.last_seq));
-    sqlite3_bind_int(s, 5, static_cast<int>(gap.reason));
+    sqlite3_bind_int(s, 5, static_cast<int>(StoredErrorNumber(gap.reason)));
     if (sqlite3_step(s) != SQLITE_DONE) {
       auto error = SqlError(db_, "insert history gap");
       Rollback(db_);

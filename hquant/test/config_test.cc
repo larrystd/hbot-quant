@@ -148,14 +148,14 @@ int main() {
       Replace(kValid, "hard_limit: \"50\"", "hard_limit: \"101\""));
   Require(!overgrant.ok(), "lease aggregate over balance rejected");
   Require(hquant::CodeOf(overgrant.status()) ==
-              hquant::ErrorCode::kConfigLeaseInvalid,
+              hquant::ErrorCode::kConfigBudgetInvalid,
           "lease code");
   auto inline_secret = hquant::ParseConfig(
       Replace(kValid, "    initial_balances:\n",
               "    api_key: forbidden\n    initial_balances:\n"));
   Require(!inline_secret.ok(), "inline secret rejected");
   Require(hquant::CodeOf(inline_secret.status()) ==
-              hquant::ErrorCode::kConfigCredentialsInline,
+              hquant::ErrorCode::kConfigContainsSecret,
           "inline secret code");
   auto bad_version = hquant::ParseConfig(
       Replace(kValid, "schema_version: 1", "schema_version: 2"));

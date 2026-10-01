@@ -103,7 +103,7 @@ BookApplyResult BookSync::OnSnapshot(const BookSnapshot& snapshot) {
   if (snapshot.stream_epoch < stream_epoch_)
     return Result(false, ErrorCode::kOk, false, BookApplyOutcome::OldDiff);
   if (snapshot.scale_version != scale_version_)
-    return Resync(ErrorCode::kFeedScaleMismatch);
+    return Resync(ErrorCode::kFeedTickSizeMismatch);
   if (snapshot.stream_epoch != stream_epoch_ ||
       snapshot.last_sequence == std::numeric_limits<uint64_t>::max() ||
       !ValidLevels(snapshot.bids, false) ||
@@ -144,7 +144,7 @@ BookApplyResult BookSync::OnDiff(const BookDiff& diff) {
   if (diff.stream_epoch < stream_epoch_)
     return Result(false, ErrorCode::kOk, false, BookApplyOutcome::OldDiff);
   if (diff.scale_version != scale_version_)
-    return Resync(ErrorCode::kFeedScaleMismatch);
+    return Resync(ErrorCode::kFeedTickSizeMismatch);
   if (diff.stream_epoch != stream_epoch_ || diff.first_sequence == 0 ||
       diff.first_sequence > diff.last_sequence ||
       diff.last_sequence == std::numeric_limits<uint64_t>::max() ||
@@ -203,7 +203,7 @@ BookApplyResult BookSync::OnDisconnect() {
 }
 
 BookApplyResult BookSync::OnInvalidScale() {
-  return Resync(ErrorCode::kFeedScaleMismatch);
+  return Resync(ErrorCode::kFeedTickSizeMismatch);
 }
 
 const BookView& BookSync::View() const { return *book_; }

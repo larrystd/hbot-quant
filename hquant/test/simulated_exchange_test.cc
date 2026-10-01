@@ -175,7 +175,7 @@ TEST(SimulatedExchangeTest, ReplaysAllSimulatedExchangeCasesStepByStep) {
         EXPECT_EQ(prepared->client_id.value, S(event, "client_id"));
         auto started = sim_exchange.StartPrepared(prepared->client_id);
         if (fixture->expectation_kind == "intentional_divergence") {
-          EXPECT_EQ(CodeOf(started), ErrorCode::kPaperBalanceInsufficient);
+          EXPECT_EQ(CodeOf(started), ErrorCode::kSimulatedBalanceInsufficient);
         } else
           EXPECT_TRUE(started.ok()) << started;
       } else if (kind == "cancel") {

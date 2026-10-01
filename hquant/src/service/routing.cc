@@ -56,13 +56,13 @@ absl::Status OrderStrategyIndex::RegisterClient(ClientOrderId client_id,
   const auto route = strategy_routes_.find(strategy_id.value);
   if (route == strategy_routes_.end() || route->second.strategy_id != strategy_id ||
       route->second.account != account) {
-    return Error(ErrorCode::kRouteOwnerUnknown,
+    return Error(ErrorCode::kRouteStrategyUnknown,
                  "client strategy_id has no matching route");
   }
   if (decode_strategy_id_) {
     auto decoded = decode_strategy_id_(client_id);
     if (decoded && *decoded != strategy_id.value) {
-      return Error(ErrorCode::kRouteOwnershipConflict,
+      return Error(ErrorCode::kRouteStrategyConflict,
                    "client ID strategy_id conflicts with registration");
     }
   }
@@ -71,7 +71,7 @@ absl::Status OrderStrategyIndex::RegisterClient(ClientOrderId client_id,
   if (!inserted &&
       (it->second.account != account || it->second.market != market ||
        it->second.strategy_id != strategy_id.value)) {
-    return Error(ErrorCode::kRouteOwnershipConflict,
+    return Error(ErrorCode::kRouteStrategyConflict,
                  "client ID strategy conflict");
   }
   return absl::OkStatus();
@@ -88,20 +88,20 @@ absl::Status OrderStrategyIndex::RegisterExchange(
   const auto route = strategy_routes_.find(strategy_id.value);
   if (route == strategy_routes_.end() || route->second.strategy_id != strategy_id ||
       route->second.account != account) {
-    return Error(ErrorCode::kRouteOwnerUnknown,
+    return Error(ErrorCode::kRouteStrategyUnknown,
                  "exchange strategy_id has no matching route");
   }
   if (client_id) {
     auto resolved = Resolve(account, market, client_id, std::nullopt);
     if (!resolved.ok() || resolved->strategy_id != strategy_id) {
-      return Error(ErrorCode::kRouteOwnershipConflict,
+      return Error(ErrorCode::kRouteStrategyConflict,
                    "exchange/client strategy conflict");
     }
   }
   auto [it, inserted] =
       exchanges_.emplace(Key(account, market, exchange_id), strategy_id.value);
   if (!inserted && it->second != strategy_id.value) {
-    return Error(ErrorCode::kRouteOwnershipConflict,
+    return Error(ErrorCode::kRouteStrategyConflict,
                  "exchange ID strategy conflict");
   }
   return absl::OkStatus();
@@ -120,7 +120,7 @@ absl::StatusOr<OrderRoute> OrderStrategyIndex::Resolve(
   std::optional<uint64_t> candidate;
   const auto merge = [&](uint64_t strategy_id) -> absl::Status {
     if (candidate && *candidate != strategy_id) {
-      return Error(ErrorCode::kRouteOwnershipConflict,
+      return Error(ErrorCode::kRouteStrategyConflict,
                    "private report strategy conflict");
     }
     candidate = strategy_id;
@@ -137,7 +137,7 @@ absl::StatusOr<OrderRoute> OrderStrategyIndex::Resolve(
     const auto found = clients_.find(client_id->value);
     if (found != clients_.end()) {
       if (found->second.account != account || found->second.market != market) {
-        return Error(ErrorCode::kRouteOwnershipConflict,
+        return Error(ErrorCode::kRouteStrategyConflict,
                      "client ID account/market conflict");
       }
       auto status = merge(found->second.strategy_id);
@@ -152,12 +152,12 @@ absl::StatusOr<OrderRoute> OrderStrategyIndex::Resolve(
     }
   }
   if (!candidate)
-    return Error(ErrorCode::kRouteOwnerUnknown, "private report strategy_id unknown");
+    return Error(ErrorCode::kRouteStrategyUnknown, "private report strategy_id unknown");
   const auto route = strategy_routes_.find(*candidate);
   if (route == strategy_routes_.end())
-    return Error(ErrorCode::kRouteOwnerUnknown, "strategy_id route unknown");
+    return Error(ErrorCode::kRouteStrategyUnknown, "strategy_id route unknown");
   if (route->second.account != account) {
-    return Error(ErrorCode::kRouteOwnershipConflict, "strategy_id/account conflict");
+    return Error(ErrorCode::kRouteStrategyConflict, "strategy_id/account conflict");
   }
   return OrderRoute{route->second.strategy_id, route->second.shard};
 }

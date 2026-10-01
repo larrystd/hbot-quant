@@ -92,7 +92,7 @@ absl::Status RunSimulatedBinanceEngine(const AppConfig& config,
       config.market_specs.size() != 1 || config.strategy_configs.size() != 1 ||
       config.assignments.size() != 1) {
     return Error(
-        ErrorCode::kLaunchUnsupportedTopology,
+        ErrorCode::kLaunchMultipleNotSupported,
         "public Simulated v1 requires one blocking shard, account, market and "
         "strategy");
   }
@@ -105,7 +105,7 @@ absl::Status RunSimulatedBinanceEngine(const AppConfig& config,
       strategy_config.markets.size() != 1 ||
       strategy_config.markets.front() != market.spec.market ||
       assignment.shard.value >= 8) {
-    return Error(ErrorCode::kLaunchUnsupportedTopology,
+    return Error(ErrorCode::kLaunchMultipleNotSupported,
                  "public Simulated market or assignment mismatch");
   }
   std::error_code error;
@@ -232,7 +232,7 @@ absl::Status RunSimulatedBinanceEngine(const AppConfig& config,
           json.pop_back();
           const ErrorCode code = CodeOf(stream_error);
           json += ",\"market_stream_error\":{\"code\":" +
-                  std::to_string(static_cast<uint16_t>(code)) +
+                  std::to_string(ErrorNumber(code)) +
                   ",\"name\":" + EscapeJson(Info(code).name) +
                   ",\"message\":" + EscapeJson(stream_error.message()) + "}}";
         }
@@ -309,7 +309,7 @@ absl::Status Launch(const AppConfig& config, const std::string& state_dir) {
       config.market_specs.size() != 1 || config.strategy_configs.size() != 1 ||
       config.assignments.size() != 1 || !config.replay_fixture) {
     return Error(
-        ErrorCode::kLaunchUnsupportedTopology,
+        ErrorCode::kLaunchMultipleNotSupported,
         "G1 replay requires one Simulated account, market, strategy and shard");
   }
   const auto& account = config.accounts.front();
@@ -320,7 +320,7 @@ absl::Status Launch(const AppConfig& config, const std::string& state_dir) {
       strategy_config.markets.size() != 1 ||
       strategy_config.markets.front() != market.spec.market ||
       assignment.shard.value >= 8) {
-    return Error(ErrorCode::kLaunchUnsupportedTopology,
+    return Error(ErrorCode::kLaunchMultipleNotSupported,
                  "G1 account, market or shard assignment mismatch");
   }
   std::error_code error;

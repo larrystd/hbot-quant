@@ -264,7 +264,7 @@ TEST(OrderTrackerTest,
   ASSERT_TRUE(tracker.ApplyOrderUpdate(ack).ok());
   ack.client_id = second.client_id;
   EXPECT_EQ(CodeOf(tracker.ApplyOrderUpdate(ack).status()),
-            ErrorCode::kOrderReportConflict);
+            ErrorCode::kExchangeOrderIdConflict);
   EXPECT_EQ(tracker.ReconciliationQueue().size(), 2);
   TradeUpdate trade;
   trade.account = first.request.account;
@@ -276,7 +276,7 @@ TEST(OrderTrackerTest,
   trade.base_amount = D("1.1");
   trade.quote_amount = D("110");
   EXPECT_EQ(CodeOf(tracker.ApplyTradeUpdate(trade).status()),
-            ErrorCode::kOrderReportConflict);
+            ErrorCode::kTradeExceedsOrderAmount);
   auto snapshot = tracker.Snapshot(first.client_id);
   ASSERT_TRUE(snapshot);
   ExpectDecimal(snapshot->cumulative_base, "0");
