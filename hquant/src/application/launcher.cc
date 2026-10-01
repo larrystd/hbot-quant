@@ -29,8 +29,8 @@
 #include "market/replay_feed.h"
 #include "offline/history.h"
 #include "offline/recorder.h"
-#include "order/simulated_exchange.h"
 #include "order/risk.h"
+#include "order/simulated_exchange.h"
 #include "service/shard.h"
 #include "strategy/simple_pmm.h"
 
@@ -86,7 +86,7 @@ class SystemClock final : public Clock {
 };
 
 absl::Status RunSimulatedBinanceEngine(const AppConfig& config,
-                                  const std::string& state_dir) {
+                                       const std::string& state_dir) {
   if (config.mode != EngineMode::Simulated ||
       config.loop_mode != LoopMode::Blocking || config.accounts.size() != 1 ||
       config.market_specs.size() != 1 || config.strategy_configs.size() != 1 ||
@@ -143,10 +143,10 @@ absl::Status RunSimulatedBinanceEngine(const AppConfig& config,
       clock);
   RiskGate risk(
       {assignment.shard, *Decimal::Parse("0"), std::chrono::hours(24)});
-  for (const auto& lease : config.static_risk_leases) {
-    auto status = risk.SetInitialLease({lease.account, lease.asset, lease.shard,
-                                        1, lease.hard_limit,
-                                        started + std::chrono::hours(24)});
+  for (const auto& budget : config.risk_budgets) {
+    auto status = risk.SetInitialBudget({budget.account, budget.asset,
+                                         budget.shard, 1, budget.hard_limit,
+                                         started + std::chrono::hours(24)});
     if (!status.ok()) return status;
   }
   auto recorder =
@@ -360,10 +360,10 @@ absl::Status Launch(const AppConfig& config, const std::string& state_dir) {
       clock);
   RiskGate risk(
       {assignment.shard, *Decimal::Parse("0"), std::chrono::seconds(300)});
-  for (const auto& lease : config.static_risk_leases) {
-    auto status = risk.SetInitialLease({lease.account, lease.asset, lease.shard,
-                                        1, lease.hard_limit,
-                                        origin + std::chrono::hours(1)});
+  for (const auto& budget : config.risk_budgets) {
+    auto status = risk.SetInitialBudget({budget.account, budget.asset,
+                                         budget.shard, 1, budget.hard_limit,
+                                         origin + std::chrono::hours(1)});
     if (!status.ok()) return status;
   }
   auto recorder =
@@ -388,8 +388,8 @@ absl::Status Launch(const AppConfig& config, const std::string& state_dir) {
     ControlResponse response;
     response.request_id = request.request_id;
     if (std::holds_alternative<StatusRequest>(request.payload)) {
-      response.payload =
-          StatusResponse{StatusJson(shard, sim_exchange, market.spec, **recorder)};
+      response.payload = StatusResponse{
+          StatusJson(shard, sim_exchange, market.spec, **recorder)};
     } else if (const auto* history =
                    std::get_if<HistoryRequest>(&request.payload)) {
       std::lock_guard lock(history_mutex);

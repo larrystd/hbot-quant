@@ -73,7 +73,7 @@ struct ShardReport {
   ShardId shard;
   uint64_t report_version = 0;
   UtcTime observed_at{};
-  std::map<std::string, Decimal> lease_usage_by_asset;
+  std::map<std::string, Decimal> budget_usage_by_asset;
   std::map<std::string, bool> market_readiness;
   std::map<std::string, bool> account_freshness;
   std::map<std::string, uint64_t> queue_watermarks;
@@ -96,7 +96,8 @@ class ShardRuntime {
   };
 
   ShardRuntime(Config config, const Clock& clock, Strategy& strategy,
-               SimulatedExchange& exchange, RiskGate& risk, RecorderPort& recorder);
+               SimulatedExchange& exchange, RiskGate& risk,
+               RecorderPort& recorder);
 
   BookApplyResult Subscribe(uint64_t stream_epoch);
   absl::Status OnSnapshot(const BookSnapshot& snapshot);
@@ -138,7 +139,7 @@ class ShardRuntime {
   uint64_t next_decision_id_ = 1;
   ActionDispatcher dispatcher_;
   std::vector<ClientOrderId> order_ids_;
-  std::map<std::string, ReservationId> reservations_;
+  std::map<std::string, HoldId> holds_;
   std::vector<HistoryGap> local_gaps_;
   std::optional<Decimal> last_trade_price_;
 };

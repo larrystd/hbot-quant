@@ -32,7 +32,7 @@ struct DispatchResult {
   std::string message;
   std::optional<ClientOrderId> client_id;
   std::optional<PreparedOrder> prepared;
-  std::optional<ReservationId> reservation_id;
+  std::optional<HoldId> hold_id;
 };
 
 // Single-shard synchronous dispatcher. Only the owning shard calls Dispatch.

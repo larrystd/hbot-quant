@@ -111,12 +111,12 @@ TEST(RecoveryIntegrationTest, UnknownWriteAndCrashUseOriginalIdWithoutResend) {
   RiskGate original_risk({ShardId{0}, D("0"), std::chrono::seconds(300)});
   ASSERT_TRUE(
       original_risk
-          .SetInitialLease({account, AssetId("USDT"), ShardId{0}, 1, D("100"),
-                            clock.UtcNow() + std::chrono::hours(1)})
+          .SetInitialBudget({account, AssetId("USDT"), ShardId{0}, 1, D("100"),
+                             clock.UtcNow() + std::chrono::hours(1)})
           .ok());
-  auto reservation = original_risk.TryReserve(strategy_id, request, spec, rule,
-                                              clock.UtcNow(), true, true);
-  ASSERT_TRUE(reservation.ok()) << reservation.status();
+  auto hold = original_risk.TryHold(strategy_id, request, spec, rule,
+                                    clock.UtcNow(), true, true);
+  ASSERT_TRUE(hold.ok()) << hold.status();
   boost::asio::io_context io;
   TimeoutTransport transport;
   std::vector<binance_spot::GatewayEvent> events;
@@ -132,15 +132,12 @@ TEST(RecoveryIntegrationTest, UnknownWriteAndCrashUseOriginalIdWithoutResend) {
       io, transport, clock, config, [&](binance_spot::GatewayEvent event) {
         events.push_back(std::move(event));
       });
-  ApprovedOrder approved{strategy_id, request, reservation->reservation_id,
-                         DecisionId{1},
+  ApprovedOrder approved{strategy_id, request, hold->hold_id, DecisionId{1},
                          clock.MonoNow() + std::chrono::seconds(1)};
   auto prepared = gateway.PrepareSubmit(std::move(approved));
   ASSERT_TRUE(prepared.ok()) << prepared.status();
   ASSERT_TRUE(
-      original_risk
-          .AttachClientId(reservation->reservation_id, prepared->client_id)
-          .ok());
+      original_risk.AttachClientId(hold->hold_id, prepared->client_id).ok());
   auto recorder =
       SqliteRecorder::Open({database.path(), RunId{42}, clock.UtcNow(), 8, 1});
   ASSERT_TRUE(recorder.ok()) << recorder.status();
@@ -161,8 +158,7 @@ TEST(RecoveryIntegrationTest, UnknownWriteAndCrashUseOriginalIdWithoutResend) {
   ASSERT_EQ(events.size(), 1);
   EXPECT_EQ(events[0].kind, binance_spot::GatewayEventKind::SubmissionUnknown);
   ASSERT_TRUE(original_tracker.MarkSubmissionUnknown(prepared->client_id).ok());
-  ASSERT_TRUE(
-      original_risk.MarkSubmissionUnknown(reservation->reservation_id).ok());
+  ASSERT_TRUE(original_risk.MarkSubmissionUnknown(hold->hold_id).ok());
   EXPECT_EQ(
       *original_risk.Available(account, AssetId("USDT"))->Compare(D("99")), 0);
   EXPECT_FALSE(gateway.StartPrepared(prepared->client_id).ok());
@@ -194,18 +190,16 @@ TEST(RecoveryIntegrationTest, UnknownWriteAndCrashUseOriginalIdWithoutResend) {
   RiskGate restored_risk({ShardId{0}, D("0"), std::chrono::seconds(300)});
   ASSERT_TRUE(
       restored_risk
-          .SetInitialLease({account, AssetId("USDT"), ShardId{0}, 1, D("100"),
-                            clock.UtcNow() + std::chrono::hours(1)})
+          .SetInitialBudget({account, AssetId("USDT"), ShardId{0}, 1, D("100"),
+                             clock.UtcNow() + std::chrono::hours(1)})
           .ok());
-  auto restored_hold = restored_risk.TryReserve(
-      strategy_id, request, spec, rule, clock.UtcNow(), true, true);
+  auto restored_hold = restored_risk.TryHold(strategy_id, request, spec, rule,
+                                             clock.UtcNow(), true, true);
   ASSERT_TRUE(restored_hold.ok());
   ASSERT_TRUE(
-      restored_risk
-          .AttachClientId(restored_hold->reservation_id, prepared->client_id)
+      restored_risk.AttachClientId(restored_hold->hold_id, prepared->client_id)
           .ok());
-  ASSERT_TRUE(
-      restored_risk.MarkSubmissionUnknown(restored_hold->reservation_id).ok());
+  ASSERT_TRUE(restored_risk.MarkSubmissionUnknown(restored_hold->hold_id).ok());
   OrderTracker tracker;
   ASSERT_TRUE(
       tracker.Register(recovered->context.recovered_prepared_orders[0]).ok());
@@ -249,12 +243,11 @@ TEST(RecoveryIntegrationTest, UnknownWriteAndCrashUseOriginalIdWithoutResend) {
   ASSERT_TRUE(final.ok()) << final.status();
   EXPECT_EQ(final->snapshot.display_state, OrderDisplayState::Traded);
   EXPECT_EQ(*final->snapshot.cumulative_base.Compare(D("0.01")), 0);
-  ASSERT_TRUE(restored_risk
-                  .ApplyFill(restored_hold->reservation_id, AssetId("USDT"),
-                             D("1"), D("0"))
-                  .ok());
   ASSERT_TRUE(
-      restored_risk.ConfirmTerminal(restored_hold->reservation_id).ok());
+      restored_risk
+          .ApplyTrade(restored_hold->hold_id, AssetId("USDT"), D("1"), D("0"))
+          .ok());
+  ASSERT_TRUE(restored_risk.Release(restored_hold->hold_id).ok());
   EXPECT_EQ(
       *restored_risk.Available(account, AssetId("USDT"))->Compare(D("99")), 0);
   EXPECT_EQ(transport.calls, 1);  // no second POST after restart

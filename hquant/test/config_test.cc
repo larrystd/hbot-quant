@@ -60,12 +60,12 @@ assignments:
     markets: [BTC-USDT, ETH-USDT]
     strategy_ids: [1]
     accounts: [simulated]
-static_risk_leases:
+risk_budgets:
   - account: simulated
     asset: USDT
     shard: 0
     hard_limit: "50"
-static_rate_leases:
+rate_budgets:
   - account: simulated
     shard: 0
     ip: local
@@ -100,9 +100,8 @@ int main() {
               valid->assignments[0].markets.size() == 2 &&
               valid->strategy_configs[0].refresh_interval.count() == 15'000'000,
           "parsed assignment and timer");
-  Require(valid->static_risk_leases.size() == 1 &&
-              valid->static_rate_leases.size() == 1,
-          "parsed leases");
+  Require(valid->risk_budgets.size() == 1 && valid->rate_budgets.size() == 1,
+          "parsed budgets");
   Require(valid->replay_fixture == "examples/replay_market.json",
           "replay source");
   auto public_market = hquant::ParseConfig(
@@ -119,7 +118,8 @@ int main() {
               "examples/replay_market.json"));
   Require(!conflicting_sources.ok(), "conflicting data sources rejected");
 
-  auto live = hquant::ParseConfig(Replace(kValid, "mode: simulated", "mode: live"));
+  auto live =
+      hquant::ParseConfig(Replace(kValid, "mode: simulated", "mode: live"));
   Require(!live.ok(), "live disabled until G4");
   Require(
       hquant::CodeOf(live.status()) == hquant::ErrorCode::kConfigModeNotAllowed,
@@ -136,20 +136,20 @@ int main() {
               "    ask_spread: \"0.001\"\n"
               "    refresh_interval: 15s\nassignments:\n"));
   Require(!duplicate_strategy.ok(), "duplicate strategy_id rejected");
-  auto split_market = hquant::ParseConfig(
-      Replace(kValid, "markets: [BTC-USDT, ETH-USDT]\n    strategy_ids: [1]",
-              "markets: [BTC-USDT]\n    strategy_ids: [1]\n    accounts: [simulated]\n"
-              "  - shard: 1\n    markets: [ETH-USDT]\n    strategy_ids: []"));
+  auto split_market = hquant::ParseConfig(Replace(
+      kValid, "markets: [BTC-USDT, ETH-USDT]\n    strategy_ids: [1]",
+      "markets: [BTC-USDT]\n    strategy_ids: [1]\n    accounts: [simulated]\n"
+      "  - shard: 1\n    markets: [ETH-USDT]\n    strategy_ids: []"));
   Require(!split_market.ok(), "cross-shard strategy dependency rejected");
   Require(hquant::CodeOf(split_market.status()) ==
               hquant::ErrorCode::kConfigAssignmentInvalid,
           "assignment code");
   auto overgrant = hquant::ParseConfig(
       Replace(kValid, "hard_limit: \"50\"", "hard_limit: \"101\""));
-  Require(!overgrant.ok(), "lease aggregate over balance rejected");
+  Require(!overgrant.ok(), "budget aggregate over balance rejected");
   Require(hquant::CodeOf(overgrant.status()) ==
               hquant::ErrorCode::kConfigBudgetInvalid,
-          "lease code");
+          "budget code");
   auto inline_secret = hquant::ParseConfig(
       Replace(kValid, "    initial_balances:\n",
               "    api_key: forbidden\n    initial_balances:\n"));
@@ -167,9 +167,9 @@ int main() {
       Replace(kValid, "replay_fixture: examples/replay_market.json\n", ""));
   Require(!missing_market_data.ok(),
           "simulated start without market data rejected");
-  auto empty_storage = hquant::ParseConfig(
-      Replace(kValid, "storage_path: /tmp/hquant-simulated_exchange/history.sqlite",
-              "storage_path: \"\""));
+  auto empty_storage = hquant::ParseConfig(Replace(
+      kValid, "storage_path: /tmp/hquant-simulated_exchange/history.sqlite",
+      "storage_path: \"\""));
   Require(!empty_storage.ok(), "empty storage path rejected");
   return 0;
 }

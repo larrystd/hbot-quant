@@ -26,12 +26,12 @@ TEST(MultiShardTest, CapitalRateAndPrivateReportsStayWithinTheirShard) {
   const StrategyId owner0{1, StrategyName("simple_pmm")};
   const StrategyId owner1{2, StrategyName("simple_pmm")};
 
-  StaticRiskLeaseBook book;
+  RiskBudgetAllocator book;
   ASSERT_TRUE(book.SetConservativeLimit(account, quote, D("100")).ok());
-  RiskLease lease0{account, quote,   ShardId{0},
-                   1,       D("60"), now + std::chrono::hours(1)};
-  RiskLease lease1{account, quote,   ShardId{1},
-                   1,       D("40"), now + std::chrono::hours(1)};
+  RiskBudget lease0{account, quote,   ShardId{0},
+                    1,       D("60"), now + std::chrono::hours(1)};
+  RiskBudget lease1{account, quote,   ShardId{1},
+                    1,       D("40"), now + std::chrono::hours(1)};
   ASSERT_TRUE(book.GrantInitial(lease0, now).ok());
   ASSERT_TRUE(book.GrantInitial(lease1, now).ok());
   EXPECT_EQ(*book.GrantedTotal(account, quote)->Compare(D("100")), 0);
@@ -41,31 +41,31 @@ TEST(MultiShardTest, CapitalRateAndPrivateReportsStayWithinTheirShard) {
                    .ok());
   RiskGate risk0({ShardId{0}, D("0"), std::chrono::seconds(300)});
   RiskGate risk1({ShardId{1}, D("0"), std::chrono::seconds(300)});
-  ASSERT_TRUE(risk0.SetInitialLease(lease0).ok());
-  ASSERT_TRUE(risk1.SetInitialLease(lease1).ok());
+  ASSERT_TRUE(risk0.SetInitialBudget(lease0).ok());
+  ASSERT_TRUE(risk1.SetInitialBudget(lease1).ok());
   OrderRequest request;
   request.account = account;
   request.market = market;
   request.side = Side::Buy;
   request.base_amount = D("1");
   request.limit_price = D("30");
-  auto first = risk0.TryReserve(owner0, request, spec, rule, now, true, true);
-  auto second = risk1.TryReserve(owner1, request, spec, rule, now, true, true);
+  auto first = risk0.TryHold(owner0, request, spec, rule, now, true, true);
+  auto second = risk1.TryHold(owner1, request, spec, rule, now, true, true);
   ASSERT_TRUE(first.ok()) << first.status();
   ASSERT_TRUE(second.ok()) << second.status();
-  ASSERT_TRUE(risk0.MarkSubmissionUnknown(first->reservation_id).ok());
+  ASSERT_TRUE(risk0.MarkSubmissionUnknown(first->hold_id).ok());
   EXPECT_EQ(*risk0.Available(account, quote)->Compare(D("30")), 0);
   EXPECT_FALSE(
-      risk1.TryReserve(owner1, request, spec, rule, now, true, true).ok());
+      risk1.TryHold(owner1, request, spec, rule, now, true, true).ok());
   EXPECT_EQ(*risk1.Available(account, quote)->Compare(D("10")), 0);
 
   RateLimitKey rate_key{"shared", "127.0.0.1", "ORDERS/10s"};
   RateCapacity capacity{rate_key, 10, std::chrono::seconds(10)};
-  std::array<RateLeaseGrant, 2> grants{{
+  std::array<RateBudgetAssignment, 2> grants{{
       {rate_key, ShardId{0}, 1, {6, 1, std::chrono::seconds(10), 1}},
       {rate_key, ShardId{1}, 1, {4, 1, std::chrono::seconds(10), 1}},
   }};
-  ASSERT_TRUE(ValidateStaticRateLeases(std::span(&capacity, 1), grants).ok());
+  ASSERT_TRUE(ValidateRateBudgets(std::span(&capacity, 1), grants).ok());
   GlobalRateBreaker breaker;
   ASSERT_TRUE(breaker.RegisterKey(rate_key));
   breaker.Seal();
@@ -91,11 +91,9 @@ TEST(MultiShardTest, CapitalRateAndPrivateReportsStayWithinTheirShard) {
   ASSERT_TRUE(route.SetStrategyRoute(owner0, account, ShardId{0}).ok());
   ASSERT_TRUE(route.SetStrategyRoute(owner1, account, ShardId{1}).ok());
   ASSERT_TRUE(
-      route.RegisterClient(ClientOrderId("C1"), account, market, owner0)
-          .ok());
+      route.RegisterClient(ClientOrderId("C1"), account, market, owner0).ok());
   ASSERT_TRUE(
-      route.RegisterClient(ClientOrderId("C2"), account, market, owner1)
-          .ok());
+      route.RegisterClient(ClientOrderId("C2"), account, market, owner1).ok());
   auto router = PrivateReportRouter::Create({ShardId{0}, 1, 2}, route);
   ASSERT_TRUE(router.ok()) << router.status();
   OrderUpdate update;
@@ -138,8 +136,10 @@ TEST(MultiShardTest, EightShardRouterQueuesStaySeparate) {
     const uint64_t key = shard + 1;
     const StrategyId strategy_id{key, StrategyName("pmm")};
     const ClientOrderId client("C" + std::to_string(key));
-    ASSERT_TRUE(route.SetStrategyRoute(strategy_id, account, ShardId{shard}).ok());
-    ASSERT_TRUE(route.RegisterClient(client, account, market, strategy_id).ok());
+    ASSERT_TRUE(
+        route.SetStrategyRoute(strategy_id, account, ShardId{shard}).ok());
+    ASSERT_TRUE(
+        route.RegisterClient(client, account, market, strategy_id).ok());
   }
   auto router = PrivateReportRouter::Create({ShardId{0}, 2, 2}, route);
   ASSERT_TRUE(router.ok()) << router.status();

@@ -72,9 +72,9 @@ int main() {
   rule.observed_at = now;
   hquant::RiskGate risk(
       {hquant::ShardId{0}, D("0"), std::chrono::seconds(300)});
-  if (!risk.SetInitialLease({hquant::AccountId("A1"), hquant::AssetId("USDT"),
-                             hquant::ShardId{0}, 1, D("100"),
-                             now + std::chrono::hours(1)})
+  if (!risk.SetInitialBudget({hquant::AccountId("A1"), hquant::AssetId("USDT"),
+                              hquant::ShardId{0}, 1, D("100"),
+                              now + std::chrono::hours(1)})
            .ok())
     return 1;
   hquant::StrategyId strategy_id{1, hquant::StrategyName("simple_pmm")};

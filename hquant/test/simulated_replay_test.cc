@@ -80,13 +80,13 @@ std::string ReplayOnce() {
       D("0.001"), true, {}};
   SimpleSimulatedExchange sim_exchange(std::move(sim_exchange_config), clock);
   RiskGate risk({ShardId{0}, D("0"), std::chrono::seconds(300)});
-  if (!risk.SetInitialLease({account, AssetId("BTC"), ShardId{0}, 1, D("0.02"),
-                             origin + std::chrono::hours(1)})
+  if (!risk.SetInitialBudget({account, AssetId("BTC"), ShardId{0}, 1, D("0.02"),
+                              origin + std::chrono::hours(1)})
            .ok() ||
-      !risk.SetInitialLease({account, AssetId("USDT"), ShardId{0}, 1, D("10"),
-                             origin + std::chrono::hours(1)})
+      !risk.SetInitialBudget({account, AssetId("USDT"), ShardId{0}, 1, D("10"),
+                              origin + std::chrono::hours(1)})
            .ok()) {
-    throw std::runtime_error("risk lease setup failed");
+    throw std::runtime_error("risk budget setup failed");
   }
   auto recorder =
       SqliteRecorder::Open({database.path(), RunId{1}, origin, 64, 8});

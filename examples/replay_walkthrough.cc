@@ -252,11 +252,11 @@ void PrintState(const ShardRuntime& shard,
   std::cout << "\n  余额:";
   for (const AssetId& asset :
        {market.spec.base_asset, market.spec.quote_asset}) {
-    auto lease = risk.Available(account, asset);
+    auto budget = risk.Available(account, asset);
     std::cout << " " << asset.value << " 总额 "
               << Plain(sim_exchange.BalanceOf(asset)) << " / 可用 "
               << Plain(sim_exchange.AvailableBalance(asset))
-              << " / 风控剩余额度 " << (lease.ok() ? Plain(*lease) : "?")
+              << " / 风控剩余额度 " << (budget.ok() ? Plain(*budget) : "?")
               << ";";
   }
   std::cout << "\n";
@@ -302,10 +302,10 @@ absl::Status Run(const std::string& config_path,
                                        clock);
   // 风控：每种资产最多能用多少。
   RiskGate risk({assignment.shard, D("0"), std::chrono::seconds(300)});
-  for (const auto& lease : config->static_risk_leases) {
-    auto status = risk.SetInitialLease({lease.account, lease.asset, lease.shard,
-                                        1, lease.hard_limit,
-                                        origin + std::chrono::hours(1)});
+  for (const auto& budget : config->risk_budgets) {
+    auto status = risk.SetInitialBudget({budget.account, budget.asset,
+                                         budget.shard, 1, budget.hard_limit,
+                                         origin + std::chrono::hours(1)});
     if (!status.ok()) return status;
   }
   PrintingRecorder recorder;

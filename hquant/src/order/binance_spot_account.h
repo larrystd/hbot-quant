@@ -88,7 +88,7 @@ struct ReconciliationBatch {
   std::vector<TradeUpdate> trades;
   bool complete = false;
   // Incomplete/404/429/transport failures preserve SubmissionUnknown and its
-  // risk reservation. A caller applies trade details before the order status.
+  // funds hold. A caller applies trade details before the order status.
   absl::Status unresolved_status;
 };
 

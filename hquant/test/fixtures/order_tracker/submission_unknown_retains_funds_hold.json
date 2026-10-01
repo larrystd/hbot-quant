@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "family": "order_tracker",
-  "case_id": "order_tracker/submission_unknown_retains_reservation",
+  "case_id": "order_tracker/submission_unknown_retains_funds_hold",
   "baseline_commit": "9af100d6822da7d2d0291a906c730ef172284ee2",
   "source_files": [
     "hummingbot/connector/client_order_tracker.py",
@@ -11,7 +11,7 @@
     "docs/ARCHITECTURE.md"
   ],
   "expectation_kind": "intentional_divergence",
-  "divergence_reason": "C++ preserves the original client ID and full worst-case reservation after an uncertain socket write. Python ClientOrderTracker has no SubmissionUnknown reconciliation fact or RiskReservation output.",
+  "divergence_reason": "C++ preserves the original client ID and full worst-case funds hold after an uncertain socket write. Python ClientOrderTracker has no SubmissionUnknown reconciliation fact or FundsHold output.",
   "setup": {
     "account": "A1",
     "market": "BTC-USDT",

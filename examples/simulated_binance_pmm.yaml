@@ -41,7 +41,7 @@ assignments:
     strategy_ids: [1]
     accounts: [simulated]
 
-static_risk_leases:
+risk_budgets:
   - account: simulated
     asset: BTC
     shard: 0
@@ -51,7 +51,7 @@ static_risk_leases:
     shard: 0
     hard_limit: "2000"
 
-static_rate_leases:
+rate_budgets:
   - account: simulated
     shard: 0
     ip: local

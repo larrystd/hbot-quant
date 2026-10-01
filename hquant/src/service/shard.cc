@@ -127,9 +127,8 @@ absl::StatusOr<std::vector<DispatchResult>> ShardRuntime::OnTimer(
     auto registered = tracker_.Register(*result.prepared);
     if (!registered.ok()) return registered.status();
     order_ids_.push_back(result.prepared->client_id);
-    if (result.reservation_id) {
-      reservations_.emplace(result.prepared->client_id.value,
-                            *result.reservation_id);
+    if (result.hold_id) {
+      holds_.emplace(result.prepared->client_id.value, *result.hold_id);
     }
   }
   auto status = DrainSimulatedExchangeEvents();
@@ -171,10 +170,10 @@ absl::Status ShardRuntime::ProcessAccountEvent(const AccountEvent& event) {
                    "Simulated trade without client ID");
     auto updated = tracker_.ApplyTradeUpdate(*trade);
     if (!updated.ok()) return updated.status();
-    auto it = reservations_.find(trade->client_id->value);
-    if (it != reservations_.end()) {
+    auto it = holds_.find(trade->client_id->value);
+    if (it != holds_.end()) {
       const bool buy = updated->snapshot.request.side == Side::Buy;
-      auto status = risk_.ApplyFill(
+      auto status = risk_.ApplyTrade(
           it->second,
           buy ? config_.market.quote_asset : config_.market.base_asset,
           buy ? trade->quote_amount : trade->base_amount, Decimal());
@@ -192,11 +191,11 @@ absl::Status ShardRuntime::ProcessAccountEvent(const AccountEvent& event) {
         update->exchange_status == ExchangeOrderStatus::Canceled ||
         update->exchange_status == ExchangeOrderStatus::Rejected ||
         update->exchange_status == ExchangeOrderStatus::Expired) {
-      auto it = reservations_.find(update->client_id->value);
-      if (it != reservations_.end()) {
-        auto status = risk_.ConfirmTerminal(it->second);
+      auto it = holds_.find(update->client_id->value);
+      if (it != holds_.end()) {
+        auto status = risk_.Release(it->second);
         if (!status.ok()) return status;
-        reservations_.erase(it);
+        holds_.erase(it);
       }
     }
     return Record(*update, updated->snapshot.strategy_id);

@@ -591,7 +591,7 @@ ReconciliationClient::Query(ReconciliationTarget target, EventTime received,
       }
     }
     // Preserve verified partial fills if a later page fails. Incomplete never
-    // permits releasing the unknown order's remaining risk reservation.
+    // permits releasing the unknown order's remaining funds hold.
     batch.trades.clear();
     for (const auto& [_, trade] : by_trade_id) batch.trades.push_back(trade);
     if (trades->size() < limits_.trades_per_page) {

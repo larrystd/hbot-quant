@@ -46,14 +46,14 @@ struct ShardAssignment {
   std::vector<AccountId> accounts;
 };
 
-struct StaticRiskLeaseConfig {
+struct StaticRiskBudgetConfig {
   AccountId account;
   AssetId asset;
   ShardId shard;
   Decimal hard_limit;
 };
 
-struct StaticRateLeaseConfig {
+struct StaticRateBudgetConfig {
   AccountId account;
   ShardId shard;
   std::string ip;
@@ -72,8 +72,8 @@ struct AppConfig {
   std::vector<AccountConfig> accounts;
   std::vector<MarketConfig> market_specs;
   std::vector<StrategyConfig> strategy_configs;
-  std::vector<StaticRiskLeaseConfig> static_risk_leases;
-  std::vector<StaticRateLeaseConfig> static_rate_leases;
+  std::vector<StaticRiskBudgetConfig> risk_budgets;
+  std::vector<StaticRateBudgetConfig> rate_budgets;
   std::string storage_path;
   std::optional<std::string> replay_fixture;
 };

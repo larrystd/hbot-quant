@@ -13,8 +13,7 @@
 namespace hquant {
 namespace {
 
-void UnwindPrepared(RiskGate& risk, OrderGateway& gateway,
-                    ReservationId reservation,
+void UnwindPrepared(RiskGate& risk, OrderGateway& gateway, HoldId hold,
                     const std::optional<ClientOrderId>& client_id) {
   if (client_id) {
     const auto aborted = gateway.AbortPrepared(*client_id);
@@ -23,7 +22,7 @@ void UnwindPrepared(RiskGate& risk, OrderGateway& gateway,
     if (!aborted.ok() && CodeOf(aborted) != ErrorCode::kOrderNotFound)
       risk.EmergencyStop();
   }
-  const auto released = risk.ConfirmTerminal(reservation);
+  const auto released = risk.Release(hold);
   if (!released.ok()) risk.EmergencyStop();
 }
 
@@ -107,36 +106,33 @@ std::vector<DispatchResult> ActionDispatcher::Dispatch(
       if (normalization_code != ErrorCode::kOk) {
         result.reason = normalization_code;
       } else {
-        RiskReservation reservation;
-        const ErrorCode reserve_code = risk_.TryReserveCode(
+        FundsHold hold;
+        const ErrorCode reserve_code = risk_.TryHoldCode(
             order.strategy_id, *normalized, context.market, context.rule,
-            context.now_utc, context.market_live, context.account_fresh,
-            &reservation);
+            context.now_utc, context.market_live, context.account_fresh, &hold);
         if (reserve_code != ErrorCode::kOk) {
           result.reason = reserve_code;
         } else {
-          ApprovedOrder approved{
-              order.strategy_id, *normalized, reservation.reservation_id,
-              context.decision_id, context.now_mono + std::chrono::seconds(1)};
+          ApprovedOrder approved{order.strategy_id, *normalized, hold.hold_id,
+                                 context.decision_id,
+                                 context.now_mono + std::chrono::seconds(1)};
           auto prepared = gateway_.PrepareSubmit(std::move(approved));
           if (!prepared.ok()) {
-            UnwindPrepared(risk_, gateway_, reservation.reservation_id,
-                           std::nullopt);
+            UnwindPrepared(risk_, gateway_, hold.hold_id, std::nullopt);
             result.reason = CodeOf(prepared.status());
             result.message = std::string(prepared.status().message());
           } else if (prepared->client_id.value.empty() ||
                      prepared->strategy_id != order.strategy_id ||
                      prepared->request.account != normalized->account ||
                      prepared->request.market != normalized->market) {
-            UnwindPrepared(risk_, gateway_, reservation.reservation_id,
-                           prepared->client_id);
+            UnwindPrepared(risk_, gateway_, hold.hold_id, prepared->client_id);
             result.reason = ErrorCode::kInternal;
             result.message = "gateway returned mismatched prepared order";
           } else {
-            const auto attached = risk_.AttachClientId(
-                reservation.reservation_id, prepared->client_id);
+            const auto attached =
+                risk_.AttachClientId(hold.hold_id, prepared->client_id);
             if (!attached.ok()) {
-              UnwindPrepared(risk_, gateway_, reservation.reservation_id,
+              UnwindPrepared(risk_, gateway_, hold.hold_id,
                              prepared->client_id);
               result.reason = CodeOf(attached);
               result.message = std::string(attached.message());
@@ -150,10 +146,10 @@ std::vector<DispatchResult> ActionDispatcher::Dispatch(
               result.message = started.ok() ? "locally submitted"
                                             : std::string(started.message());
               if (started.ok()) {
-                result.reservation_id = reservation.reservation_id;
+                result.hold_id = hold.hold_id;
               }
               if (!started.ok()) {
-                UnwindPrepared(risk_, gateway_, reservation.reservation_id,
+                UnwindPrepared(risk_, gateway_, hold.hold_id,
                                prepared->client_id);
               }
             }

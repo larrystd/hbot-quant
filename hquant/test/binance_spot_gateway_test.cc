@@ -119,8 +119,7 @@ ApprovedOrder Approved(const TestClock& clock) {
   request.type = OrderType::LimitMaker;
   request.base_amount = D("0.0109");
   request.limit_price = D("99.999");
-  return ApprovedOrder{MakeStrategyId(), request, ReservationId{1},
-                       DecisionId{1},
+  return ApprovedOrder{MakeStrategyId(), request, HoldId{1}, DecisionId{1},
                        clock.MonoNow() + std::chrono::seconds(1)};
 }
 
@@ -266,7 +265,8 @@ TEST(BinanceOrderGatewayTest, CancelUsesReservedRateSlotAndOriginalClientId) {
   GlobalRateBreaker breaker;
   RateLimiter limiter(ShardId{3}, &breaker);
   RateLimitKey key{"test-account", "127.0.0.1", "orders"};
-  ASSERT_TRUE(limiter.Configure(key, RateLease{2, 1, std::chrono::seconds(1)}));
+  ASSERT_TRUE(
+      limiter.Configure(key, RateBudget{2, 1, std::chrono::seconds(1)}));
   auto config = Config();
   config.rate_limiter = &limiter;
   config.order_rate_key = key;

@@ -94,9 +94,9 @@ struct ShardId {
   bool IsValid() const { return value < 8; }
   bool operator==(const ShardId&) const = default;
 };
-struct ReservationId {
+struct HoldId {
   uint64_t value = 0;
-  bool operator==(const ReservationId&) const = default;
+  bool operator==(const HoldId&) const = default;
 };
 struct DecisionId {
   uint64_t value = 0;

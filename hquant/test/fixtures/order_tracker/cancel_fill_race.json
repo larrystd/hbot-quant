@@ -11,7 +11,7 @@
     "docs/ARCHITECTURE.md"
   ],
   "expectation_kind": "intentional_divergence",
-  "divergence_reason": "C++ cancel_pending is orthogonal to verified fills and retains the remaining reservation until exchange cancellation. Python tracker has a PENDING_CANCEL state but no cancel_requested input or RiskReservation output.",
+  "divergence_reason": "C++ cancel_pending is orthogonal to verified fills and retains the remaining funds hold until exchange cancellation. Python tracker has a PENDING_CANCEL state but no cancel_requested input or FundsHold output.",
   "setup": {
     "account": "A1",
     "market": "BTC-USDT",

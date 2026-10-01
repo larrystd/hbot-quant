@@ -368,7 +368,7 @@ absl::Status BinanceOrderGateway::StartPrepared(
         config_.order_rate_key, RatePriority::Order, 1,
         RateLimiter::Clock::now());
     if (rate != ErrorCode::kOk)
-      return Error(rate, "Binance order rate lease unavailable");
+      return Error(rate, "Binance order rate budget unavailable");
   }
   submits_.push_back(Work{client_id, std::move(*request), false,
                           found->second.expires_at_mono});
@@ -413,7 +413,7 @@ absl::Status BinanceOrderGateway::StartCancel(const StrategyId& strategy_id,
         config_.cancel_rate_key, RatePriority::Cancel, 1,
         RateLimiter::Clock::now());
     if (rate != ErrorCode::kOk)
-      return Error(rate, "Binance cancel rate lease unavailable");
+      return Error(rate, "Binance cancel rate budget unavailable");
   }
   cancels_.push_back(Work{client_id, std::move(*request), true,
                           clock_.MonoNow() + config_.request_timeout});

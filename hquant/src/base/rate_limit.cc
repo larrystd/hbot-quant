@@ -21,10 +21,10 @@ bool ValidKey(const RateLimitKey& key) {
   return !key.endpoint.empty() && (!key.account.empty() || !key.ip.empty());
 }
 
-bool ValidLease(const RateLease& lease) {
-  return lease.limit > 0 && lease.window > SteadyClock::duration::zero() &&
-         lease.cancel_reserve <= lease.limit &&
-         lease.order_reserve <= lease.limit - lease.cancel_reserve;
+bool ValidBudget(const RateBudget& budget) {
+  return budget.limit > 0 && budget.window > SteadyClock::duration::zero() &&
+         budget.cancel_reserve <= budget.limit &&
+         budget.order_reserve <= budget.limit - budget.cancel_reserve;
 }
 
 SteadyClock::duration RetryDelay(unsigned status,
@@ -44,8 +44,8 @@ void Extend(std::atomic<int64_t>& until, int64_t requested) {
 
 }  // namespace
 
-absl::Status ValidateStaticRateLeases(std::span<const RateCapacity> capacities,
-                                      std::span<const RateLeaseGrant> grants) {
+absl::Status ValidateRateBudgets(std::span<const RateCapacity> capacities,
+                                 std::span<const RateBudgetAssignment> grants) {
   std::map<RateLimitKey, RateCapacity> by_key;
   for (const auto& capacity : capacities) {
     if (!ValidKey(capacity.key) || capacity.global_limit == 0 ||
@@ -62,23 +62,23 @@ absl::Status ValidateStaticRateLeases(std::span<const RateCapacity> capacities,
   std::set<std::pair<RateLimitKey, uint8_t>> assigned;
   for (const auto& grant : grants) {
     if (!grant.shard.IsValid() || grant.version == 0 || !ValidKey(grant.key) ||
-        !ValidLease(grant.lease)) {
-      return Error(ErrorCode::kRateConfigInvalid, "invalid rate lease grant");
+        !ValidBudget(grant.budget)) {
+      return Error(ErrorCode::kRateConfigInvalid, "invalid rate budget grant");
     }
     auto capacity = by_key.find(grant.key);
     if (capacity == by_key.end() ||
-        capacity->second.window != grant.lease.window) {
+        capacity->second.window != grant.budget.window) {
       return Error(ErrorCode::kRateConfigInvalid,
-                   "rate lease has no matching global capacity/window");
+                   "rate budget has no matching global capacity/window");
     }
     if (!assigned.emplace(grant.key, grant.shard.value).second) {
-      return Error(ErrorCode::kRateConfigInvalid, "duplicate shard lease");
+      return Error(ErrorCode::kRateConfigInvalid, "duplicate shard budget");
     }
     auto& sum = total[grant.key];
-    sum += grant.lease.limit;
+    sum += grant.budget.limit;
     if (sum > capacity->second.global_limit) {
       return Error(ErrorCode::kRateConfigInvalid,
-                   "sum of static leases exceeds exchange capacity");
+                   "sum of static budgets exceeds exchange capacity");
     }
   }
   return absl::OkStatus();
@@ -125,28 +125,30 @@ bool GlobalRateBreaker::IsOpen(const RateLimitKey& key,
   return Nanos(now) < it->second->load(std::memory_order_acquire);
 }
 
-bool RateLimiter::Configure(RateLimitKey key, RateLease lease) {
-  if (!ValidKey(key) || !ValidLease(lease) ||
+bool RateLimiter::Configure(RateLimitKey key, RateBudget budget) {
+  if (!ValidKey(key) || !ValidBudget(budget) ||
       (breaker_ && !breaker_->RegisterKey(key))) {
     return false;
   }
-  windows_[std::move(key)] = Window{lease};
+  windows_[std::move(key)] = Window{budget};
   return true;
 }
 
-absl::Status RateLimiter::InstallGrant(const RateLeaseGrant& grant) {
+absl::Status RateLimiter::InstallGrant(const RateBudgetAssignment& grant) {
   if (!shard_ || !shard_->IsValid() || grant.shard.value != shard_->value ||
-      grant.version == 0 || !ValidKey(grant.key) || !ValidLease(grant.lease)) {
+      grant.version == 0 || !ValidKey(grant.key) ||
+      !ValidBudget(grant.budget)) {
     return Error(ErrorCode::kRateConfigInvalid,
-                 "invalid or mismatched shard lease");
+                 "invalid or mismatched shard budget");
   }
   if (windows_.contains(grant.key)) {
-    return Error(ErrorCode::kRateConfigInvalid, "lease already installed");
+    return Error(ErrorCode::kRateConfigInvalid, "budget already installed");
   }
   if (breaker_ && !breaker_->RegisterKey(grant.key)) {
     return Error(ErrorCode::kRateConfigInvalid, "rate bucket not registered");
   }
-  windows_.emplace(grant.key, Window{grant.lease, {}, 0, false, grant.version});
+  windows_.emplace(grant.key,
+                   Window{grant.budget, {}, 0, false, grant.version});
   return absl::OkStatus();
 }
 
@@ -166,17 +168,17 @@ ErrorCode RateLimiter::TryAcquire(const RateLimitKey& key,
   auto it = windows_.find(key);
   if (it == windows_.end()) return ErrorCode::kRateBudgetMissing;
   auto& w = it->second;
-  if (!w.started || now < w.starts_at || now - w.starts_at >= w.lease.window) {
+  if (!w.started || now < w.starts_at || now - w.starts_at >= w.budget.window) {
     w.starts_at = now;
     w.used = 0;
     w.started = true;
   }
-  uint32_t ceiling = w.lease.limit;
+  uint32_t ceiling = w.budget.limit;
   if (priority != RatePriority::Cancel) {
-    ceiling -= w.lease.cancel_reserve;
+    ceiling -= w.budget.cancel_reserve;
   }
   if (priority == RatePriority::Background) {
-    ceiling -= w.lease.order_reserve;
+    ceiling -= w.budget.order_reserve;
   }
   if (w.used >= ceiling || weight > ceiling - w.used) {
     return ErrorCode::kRateBudgetExhausted;

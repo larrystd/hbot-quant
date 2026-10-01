@@ -10,8 +10,8 @@
 #include "boost/beast/websocket.hpp"
 #include "gtest/gtest.h"
 #include "market/binance_spot_feed.h"
-#include "order/simulated_exchange.h"
 #include "order/risk.h"
+#include "order/simulated_exchange.h"
 #include "service/shard.h"
 #include "strategy/simple_pmm.h"
 
@@ -44,7 +44,8 @@ class MemoryRecorder final : public RecorderPort {
   std::vector<RecordEnvelope> rows;
 };
 
-TEST(SimulatedBinanceTest, RestAndWebsocketDriveSimulatedExchangeThenDisconnectAndResync) {
+TEST(SimulatedBinanceTest,
+     RestAndWebsocketDriveSimulatedExchangeThenDisconnectAndResync) {
   asio::io_context server_io;
   Tcp::acceptor http_acceptor(server_io, Tcp::endpoint(Tcp::v4(), 0));
   Tcp::acceptor ws_acceptor(server_io, Tcp::endpoint(Tcp::v4(), 0));
@@ -87,29 +88,30 @@ TEST(SimulatedBinanceTest, RestAndWebsocketDriveSimulatedExchangeThenDisconnectA
   const BookScale scale{D("0.01"), D("0.001"), 1};
   const TradingRule rule{market,    D("0.01"), D("0.001"), D("0.001"),
                          D("0.01"), {},        1,          clock.UtcNow()};
-  SimplePmm strategy({strategy_id, account, spec, D("0.01"), D("0.001"), D("0.001"),
-                      std::chrono::seconds(15), PmmPriceType::Mid, D("0.001"),
-                      true});
+  SimplePmm strategy({strategy_id, account, spec, D("0.01"), D("0.001"),
+                      D("0.001"), std::chrono::seconds(15), PmmPriceType::Mid,
+                      D("0.001"), true});
   SimpleSimulatedExchange sim_exchange({account,
-                        spec,
-                        rule,
-                        {{"BTC", D("0.02")}, {"USDT", D("10")}},
-                        D("0.001"),
-                        true,
-                        {}},
-                       clock);
+                                        spec,
+                                        rule,
+                                        {{"BTC", D("0.02")}, {"USDT", D("10")}},
+                                        D("0.001"),
+                                        true,
+                                        {}},
+                                       clock);
   RiskGate risk({ShardId{0}, D("0"), std::chrono::seconds(300)});
   ASSERT_TRUE(
-      risk.SetInitialLease({account, AssetId("BTC"), ShardId{0}, 1, D("0.02"),
-                            clock.UtcNow() + std::chrono::hours(1)})
+      risk.SetInitialBudget({account, AssetId("BTC"), ShardId{0}, 1, D("0.02"),
+                             clock.UtcNow() + std::chrono::hours(1)})
           .ok());
   ASSERT_TRUE(
-      risk.SetInitialLease({account, AssetId("USDT"), ShardId{0}, 1, D("10"),
-                            clock.UtcNow() + std::chrono::hours(1)})
+      risk.SetInitialBudget({account, AssetId("USDT"), ShardId{0}, 1, D("10"),
+                             clock.UtcNow() + std::chrono::hours(1)})
           .ok());
   MemoryRecorder recorder;
-  ShardRuntime shard({RunId{1}, ShardId{0}, strategy_id, account, spec, scale, rule},
-                     clock, strategy, sim_exchange, risk, recorder);
+  ShardRuntime shard(
+      {RunId{1}, ShardId{0}, strategy_id, account, spec, scale, rule}, clock,
+      strategy, sim_exchange, risk, recorder);
 
   asio::io_context io;
   HttpClient http_client(io, "127.0.0.1", http_port);

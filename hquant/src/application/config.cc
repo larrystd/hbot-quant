@@ -154,15 +154,15 @@ absl::StatusOr<std::vector<MarketId>> MarketList(
   return result;
 }
 
-absl::Status CheckLeaseTotals(const AppConfig& config) {
+absl::Status CheckBudgetTotals(const AppConfig& config) {
   std::map<std::pair<std::string, std::string>, Decimal> totals;
-  for (const auto& lease : config.static_risk_leases) {
-    const auto key = std::pair{lease.account.value, lease.asset.value};
+  for (const auto& budget : config.risk_budgets) {
+    const auto key = std::pair{budget.account.value, budget.asset.value};
     const auto found = totals.find(key);
     if (found == totals.end()) {
-      totals.emplace(key, lease.hard_limit);
+      totals.emplace(key, budget.hard_limit);
     } else {
-      auto sum = found->second.Add(lease.hard_limit);
+      auto sum = found->second.Add(budget.hard_limit);
       if (!sum.ok()) return sum.status();
       found->second = *sum;
     }
@@ -172,17 +172,17 @@ absl::Status CheckLeaseTotals(const AppConfig& config) {
         config.accounts.begin(), config.accounts.end(),
         [&](const auto& item) { return item.account.value == key.first; });
     if (account == config.accounts.end())
-      return Error(ErrorCode::kConfigBudgetInvalid, "lease account unknown");
+      return Error(ErrorCode::kConfigBudgetInvalid, "budget account unknown");
     const auto balance = account->initial_balances.find(key.second);
     if (balance == account->initial_balances.end()) {
       return Error(ErrorCode::kConfigBudgetInvalid,
-                   "lease asset has no conservative balance");
+                   "budget asset has no conservative balance");
     }
     auto compare = granted.Compare(balance->second);
     if (!compare.ok()) return compare.status();
     if (*compare > 0)
       return Error(ErrorCode::kConfigBudgetInvalid,
-                   "static risk leases exceed account balance");
+                   "static risk budgets exceed account balance");
   }
   return absl::OkStatus();
 }
@@ -492,11 +492,11 @@ absl::StatusOr<AppConfig> ParseConfig(std::string_view yaml_text) {
                  [&](const auto& item) { return item.value == account; });
     };
 
-    if (root["static_risk_leases"]) {
-      auto leases = Sequence(root, "static_risk_leases");
-      if (!leases.ok()) return leases.status();
+    if (root["risk_budgets"]) {
+      auto budgets = Sequence(root, "risk_budgets");
+      if (!budgets.ok()) return budgets.status();
       std::set<std::tuple<std::string, std::string, uint8_t>> unique;
-      for (const auto& item : *leases) {
+      for (const auto& item : *budgets) {
         auto account = Scalar(item, "account");
         auto asset = Scalar(item, "asset");
         auto shard = Shard(item, "shard");
@@ -510,19 +510,19 @@ absl::StatusOr<AppConfig> ParseConfig(std::string_view yaml_text) {
             !account_on_shard(*account, shard->value) ||
             !unique.insert({*account, *asset, shard->value}).second) {
           return Error(ErrorCode::kConfigBudgetInvalid,
-                       "invalid static risk lease");
+                       "invalid static risk budget");
         }
-        config.static_risk_leases.push_back(
+        config.risk_budgets.push_back(
             {AccountId(*account), AssetId(*asset), *shard, *limit});
       }
     }
-    auto lease_status = CheckLeaseTotals(config);
-    if (!lease_status.ok()) return lease_status;
+    auto budget_status = CheckBudgetTotals(config);
+    if (!budget_status.ok()) return budget_status;
 
-    if (root["static_rate_leases"]) {
-      auto leases = Sequence(root, "static_rate_leases");
-      if (!leases.ok()) return leases.status();
-      for (const auto& item : *leases) {
+    if (root["rate_budgets"]) {
+      auto budgets = Sequence(root, "rate_budgets");
+      if (!budgets.ok()) return budgets.status();
+      for (const auto& item : *budgets) {
         auto account = Scalar(item, "account");
         auto shard = Shard(item, "shard");
         auto ip = Scalar(item, "ip");
@@ -543,9 +543,9 @@ absl::StatusOr<AppConfig> ParseConfig(std::string_view yaml_text) {
             *limit > UINT32_MAX || *reserve > *limit || *window == 0 ||
             *window > static_cast<uint64_t>(INT64_MAX)) {
           return Error(ErrorCode::kConfigBudgetInvalid,
-                       "invalid static rate lease");
+                       "invalid static rate budget");
         }
-        config.static_rate_leases.push_back(
+        config.rate_budgets.push_back(
             {AccountId(*account), *shard, *ip, *endpoint,
              static_cast<uint32_t>(*limit), static_cast<uint32_t>(*reserve),
              std::chrono::microseconds(static_cast<int64_t>(*window))});

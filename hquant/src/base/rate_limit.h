@@ -15,8 +15,9 @@
 
 namespace hquant {
 
-// One local lease applies to one account/IP/endpoint key. The owning io_context
-// serializes calls to RateLimiter; only the breaker is shared across shards.
+// One local budget applies to one account/IP/endpoint key. The owning
+// io_context serializes calls to RateLimiter; only the breaker is shared across
+// shards.
 struct RateLimitKey {
   std::string account;
   std::string ip;
@@ -25,7 +26,7 @@ struct RateLimitKey {
   auto operator<=>(const RateLimitKey&) const = default;
 };
 
-struct RateLease {
+struct RateBudget {
   uint32_t limit = 0;
   uint32_t cancel_reserve = 0;
   std::chrono::steady_clock::duration window{};
@@ -38,18 +39,18 @@ struct RateCapacity {
   std::chrono::steady_clock::duration window{};
 };
 
-struct RateLeaseGrant {
+struct RateBudgetAssignment {
   RateLimitKey key;
   ShardId shard;
   uint64_t version = 0;
-  RateLease lease;
+  RateBudget budget;
 };
 
 // Control-thread startup check. A key is one exchange-enforced bucket (e.g.
 // IP REQUEST_WEIGHT/1m or account ORDERS/10s), normalized identically across
 // all shards. No runtime borrowing or reassignment is permitted in v1.
-absl::Status ValidateStaticRateLeases(std::span<const RateCapacity> capacities,
-                                      std::span<const RateLeaseGrant> grants);
+absl::Status ValidateRateBudgets(std::span<const RateCapacity> capacities,
+                                 std::span<const RateBudgetAssignment> grants);
 
 enum class RatePriority { Background, Order, Cancel };
 
@@ -81,8 +82,8 @@ class RateLimiter {
   RateLimiter(ShardId shard, GlobalRateBreaker* breaker)
       : breaker_(breaker), shard_(shard) {}
 
-  bool Configure(RateLimitKey key, RateLease lease);
-  absl::Status InstallGrant(const RateLeaseGrant& grant);
+  bool Configure(RateLimitKey key, RateBudget budget);
+  absl::Status InstallGrant(const RateBudgetAssignment& grant);
   ErrorCode TryAcquire(const RateLimitKey& key, bool is_cancel,
                        Clock::time_point now);
   ErrorCode TryAcquire(const RateLimitKey& key, RatePriority priority,
@@ -94,7 +95,7 @@ class RateLimiter {
 
  private:
   struct Window {
-    RateLease lease;
+    RateBudget budget;
     Clock::time_point starts_at{};
     uint32_t used = 0;
     bool started = false;

@@ -170,8 +170,7 @@ TEST(SimulatedExchangeTest, ReplaysAllSimulatedExchangeCasesStepByStep) {
         request.base_amount = D(S(event, "amount"));
         request.limit_price = D(S(event, "price"));
         request.time_in_force = TimeInForce::Gtc;
-        ApprovedOrder approved{strategy_id, request, ReservationId{1},
-                               DecisionId{1},
+        ApprovedOrder approved{strategy_id, request, HoldId{1}, DecisionId{1},
                                clock.MonoNow() + std::chrono::seconds(1)};
         auto prepared = sim_exchange.PrepareSubmit(std::move(approved));
         ASSERT_TRUE(prepared.ok()) << prepared.status();

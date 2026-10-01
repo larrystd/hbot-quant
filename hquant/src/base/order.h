@@ -65,7 +65,7 @@ struct OrderRequest {
 struct ApprovedOrder {
   StrategyId strategy_id;
   OrderRequest request;
-  ReservationId reservation_id;
+  HoldId hold_id;
   DecisionId decision_id;
   MonoTime expires_at_mono{};
 };
@@ -151,7 +151,7 @@ using TrackedOrderEvent =
 
 // Methods are called only by the owning shard. Preparing reserves a bounded
 // send slot, fixes the client ID, and registers PendingCreate, but sends no
-// bytes. The caller attaches the RiskReservation and attempts to record the
+// bytes. The caller attaches the FundsHold and attempts to record the
 // PreparedOrder before StartPrepared. A failed StartPrepared proves no write
 // was initiated; uncertain write outcomes arrive later as account events.
 class OrderGateway {
