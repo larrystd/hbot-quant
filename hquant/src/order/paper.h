@@ -33,7 +33,7 @@ struct PaperOrder {
 // Deterministic local spot exchange. The caller owns the shard and supplies a
 // clock; public trades are only matching triggers, never account fills by
 // themselves. All matches fill the entire resting order at its own limit.
-class PaperConnector final : public SimulatedVenue {
+class PaperConnector final : public SimulatedExchange {
  public:
   PaperConnector(PaperConfig config, const Clock& clock);
 

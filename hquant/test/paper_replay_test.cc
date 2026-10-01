@@ -57,7 +57,7 @@ std::string ReplayOnce() {
   const UtcTime origin(std::chrono::microseconds(1'000'000));
   ReplayClock clock(origin, MonoTime(std::chrono::microseconds(1'000'000)));
   const AccountId account("PAPER");
-  const MarketId market{VenueId("paper"), InstrumentKind::Spot, "BTCUSDT"};
+  const MarketId market{ExchangeId("paper"), InstrumentKind::Spot, "BTCUSDT"};
   const MarketSpec spec{market, AssetId("BTC"), AssetId("USDT")};
   const OwnerId owner{1, StrategyId("simple_pmm"), std::nullopt};
   const BookScale scale{D("0.01"), D("0.001"), 1};

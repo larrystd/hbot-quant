@@ -27,15 +27,15 @@ struct UserDataBatch {
 // belong to their owning components; this object holds no mutable order state.
 class UserDataStream {
  public:
-  UserDataStream(AccountId account, VenueId venue)
-      : account_(std::move(account)), venue_(std::move(venue)) {}
+  UserDataStream(AccountId account, ExchangeId exchange)
+      : account_(std::move(account)), exchange_(std::move(exchange)) {}
 
   absl::StatusOr<UserDataBatch> Parse(std::string_view json,
                                       EventTime received) const;
 
  private:
   AccountId account_;
-  VenueId venue_;
+  ExchangeId exchange_;
 };
 
 }  // namespace hquant::binance_spot

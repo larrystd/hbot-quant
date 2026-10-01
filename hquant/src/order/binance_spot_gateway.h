@@ -34,7 +34,7 @@ struct DecodedClientId {
 
 // Candidate Binance Spot codec: H + 10/13/7 RFC4648 base32 digits. The owner
 // key is stable; shard_hint is only a uniqueness/routing hint within one run.
-// Enable live trading only after the target venue accepts and echoes this form.
+// Enable live trading only after the target exchange accepts and echoes this form.
 absl::StatusOr<ClientOrderId> EncodeClientId(const OwnerId& owner, RunId run,
                                              ShardId shard,
                                              uint32_t shard_sequence);

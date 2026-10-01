@@ -100,7 +100,7 @@ absl::Status RunPublicPaperEngine(const AppConfig& config,
   const auto& market = config.market_specs.front();
   const auto& strategy_config = config.strategy_configs.front();
   const auto& assignment = config.assignments.front();
-  if (market.spec.market.venue != VenueId("binance") ||
+  if (market.spec.market.exchange != ExchangeId("binance") ||
       strategy_config.account != account.account ||
       strategy_config.markets.size() != 1 ||
       strategy_config.markets.front() != market.spec.market ||

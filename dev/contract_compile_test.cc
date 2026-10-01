@@ -21,7 +21,7 @@ int main() {
   auto rounded = price->Quantize(*tick, hquant::RoundingMode::Down);
   if (!rounded.ok() || rounded->ToString() != "100.1") return 2;
   if (hquant::Decimal::Parse("NaN").ok()) return 3;
-  hquant::MarketId market{hquant::VenueId("binance"),
+  hquant::MarketId market{hquant::ExchangeId("binance"),
                           hquant::InstrumentKind::Spot, "BTCUSDT"};
   hquant::OrderRequest request;
   request.market = market;

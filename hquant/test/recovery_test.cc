@@ -96,7 +96,7 @@ TEST(RecoveryIntegrationTest, UnknownWriteAndCrashUseOriginalIdWithoutResend) {
   TemporaryDatabase database;
   TestClock clock;
   const AccountId account("A1");
-  const MarketId market{VenueId("binance"), InstrumentKind::Spot, "BTCUSDT"};
+  const MarketId market{ExchangeId("binance"), InstrumentKind::Spot, "BTCUSDT"};
   const MarketSpec spec{market, AssetId("BTC"), AssetId("USDT")};
   const OwnerId owner{17, StrategyId("simple_pmm"), std::nullopt};
   TradingRule rule{market,    D("0.01"), D("0.001"), D("0.001"),

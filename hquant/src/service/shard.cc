@@ -10,17 +10,17 @@
 namespace hquant {
 
 ShardRuntime::ShardRuntime(Config config, const Clock& clock,
-                           Strategy& strategy, SimulatedVenue& venue,
+                           Strategy& strategy, SimulatedExchange& exchange,
                            RiskGate& risk, RecorderPort& recorder)
     : config_(std::move(config)),
       clock_(clock),
       strategy_(strategy),
-      venue_(venue),
+      exchange_(exchange),
       risk_(risk),
       recorder_(recorder),
       book_(config_.market.market, config_.scale.scale_version, 8192, 1024,
             config_.stale_after_us),
-      dispatcher_(risk_, venue_, recorder_, config_.run, config_.shard,
+      dispatcher_(risk_, exchange_, recorder_, config_.run, config_.shard,
                   shard_sequence_) {}
 
 BookApplyResult ShardRuntime::Subscribe(uint64_t stream_epoch) {
@@ -48,7 +48,7 @@ absl::Status ShardRuntime::RefreshPaperBbo() {
   auto ask_price = Price(ask->price_ticks);
   if (!bid_price.ok()) return bid_price.status();
   if (!ask_price.ok()) return ask_price.status();
-  auto status = venue_.OnBookBbo(*bid_price, *ask_price);
+  auto status = exchange_.OnBookBbo(*bid_price, *ask_price);
   if (!status.ok()) return status;
   return DrainPaperEvents();
 }
@@ -73,7 +73,7 @@ absl::Status ShardRuntime::OnPublicTrade(const PublicTrade& trade) {
   if (!price.ok()) return price.status();
   if (!amount.ok()) return amount.status();
   last_trade_price_ = *price;
-  auto status = venue_.OnPublicTrade(*trade.side, *price, *amount);
+  auto status = exchange_.OnPublicTrade(*trade.side, *price, *amount);
   if (!status.ok()) return status;
   return DrainPaperEvents();
 }
@@ -91,8 +91,8 @@ std::vector<Balance> ShardRuntime::BalanceViews() const {
   std::vector<Balance> result;
   for (const AssetId& asset :
        {config_.market.base_asset, config_.market.quote_asset}) {
-    result.push_back(Balance{config_.account, asset, venue_.BalanceOf(asset),
-                             venue_.AvailableBalance(asset),
+    result.push_back(Balance{config_.account, asset, exchange_.BalanceOf(asset),
+                             exchange_.AvailableBalance(asset),
                              EventTime{{}, clock_.UtcNow(), clock_.MonoNow()}});
   }
   return result;
@@ -204,7 +204,7 @@ absl::Status ShardRuntime::ProcessAccountEvent(const AccountEvent& event) {
 }
 
 absl::Status ShardRuntime::DrainPaperEvents() {
-  for (const auto& event : venue_.DrainEvents()) {
+  for (const auto& event : exchange_.DrainEvents()) {
     auto status = ProcessAccountEvent(event);
     if (!status.ok()) return status;
   }

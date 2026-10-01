@@ -284,7 +284,7 @@ absl::Status SqliteRecorder::WriteBatch(
     else
       sqlite3_bind_null(s, 8);
     if (index.market) {
-      Text(s, 9, index.market->venue.value);
+      Text(s, 9, index.market->exchange.value);
       sqlite3_bind_int(s, 10, static_cast<int>(index.market->instrument_kind));
       Text(s, 11, index.market->native_symbol);
     } else {

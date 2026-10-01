@@ -31,7 +31,7 @@ struct OrderOwnership {
 
 // The private-stream reader owns this index. Registration and lookup must be
 // serialized on that reader; other shards send registrations to it as messages.
-// A codec validates the complete venue client ID before returning its stable
+// A codec validates the complete exchange client ID before returning its stable
 // owner key. A shard hint encoded in that ID is never used for routing.
 class OrderOwnershipIndex {
  public:

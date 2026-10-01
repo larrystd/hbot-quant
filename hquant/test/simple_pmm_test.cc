@@ -88,7 +88,7 @@ TEST(SimplePmmTest, ReplaysEveryPythonFixtureStep) {
     config.owner =
         OwnerId{uint64_t(setup["owner_key"]), StrategyId("simple_pmm"), {}};
     config.market = MarketSpec{
-        MarketId{VenueId("paper"), InstrumentKind::Spot, market_name},
+        MarketId{ExchangeId("paper"), InstrumentKind::Spot, market_name},
         AssetId(market_name.substr(0, dash)),
         AssetId(market_name.substr(dash + 1))};
     config.order_amount = D(S(config_json, "order_amount"));

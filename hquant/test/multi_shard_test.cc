@@ -19,7 +19,7 @@ TEST(MultiShardTest, CapitalRateAndPrivateReportsStayWithinTheirShard) {
   const auto now = UtcTime(std::chrono::microseconds(1'000'000));
   const AccountId account("shared");
   const AssetId quote("USDT");
-  const MarketId market{VenueId("binance"), InstrumentKind::Spot, "BTCUSDT"};
+  const MarketId market{ExchangeId("binance"), InstrumentKind::Spot, "BTCUSDT"};
   const MarketSpec spec{market, AssetId("BTC"), quote};
   const TradingRule rule{market,    D("0.01"), D("0.001"), D("0.001"),
                          D("0.01"), {},        1,          now};
@@ -126,7 +126,7 @@ TEST(MultiShardTest, CapitalRateAndPrivateReportsStayWithinTheirShard) {
 
 TEST(MultiShardTest, EightShardRouterQueuesStaySeparate) {
   const AccountId account("A");
-  const MarketId market{VenueId("binance"), InstrumentKind::Spot, "BTCUSDT"};
+  const MarketId market{ExchangeId("binance"), InstrumentKind::Spot, "BTCUSDT"};
   OrderOwnershipIndex ownership(
       [](const ClientOrderId& id) -> std::optional<uint64_t> {
         if (id.value.size() != 2 || id.value[0] != 'C' || id.value[1] < '1' ||

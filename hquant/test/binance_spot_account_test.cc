@@ -25,7 +25,7 @@ bool Equal(const Decimal& value, const char* raw) {
 }
 
 MarketId Market() {
-  return {VenueId("binance"), InstrumentKind::Spot, "BTCUSDT"};
+  return {ExchangeId("binance"), InstrumentKind::Spot, "BTCUSDT"};
 }
 EventTime Received() {
   EventTime time;
@@ -96,7 +96,7 @@ std::string TradeJson(int trade_id, const char* amount = "1",
 }
 
 TEST(UserDataStreamTest, EmitsTradeBeforeStatusAndTrackerDeduplicates) {
-  UserDataStream stream(AccountId("A1"), VenueId("binance"));
+  UserDataStream stream(AccountId("A1"), ExchangeId("binance"));
   OrderTracker tracker;
   OrderIntent intent;
   intent.client_id = ClientOrderId("C1");
@@ -157,7 +157,7 @@ TEST(UserDataStreamTest, EmitsTradeBeforeStatusAndTrackerDeduplicates) {
 }
 
 TEST(UserDataStreamTest, CancelUsesOriginalIdAndGapsRequestResync) {
-  UserDataStream stream(AccountId("A1"), VenueId("binance"));
+  UserDataStream stream(AccountId("A1"), ExchangeId("binance"));
   auto canceled = stream.Parse(Report("CANCELED", "CANCELED", "0", "0", "0",
                                       "0", -1, "cancel-request", "C1"),
                                Received());
@@ -175,7 +175,7 @@ TEST(UserDataStreamTest, CancelUsesOriginalIdAndGapsRequestResync) {
   ASSERT_EQ(position->events.size(), 1);
   const auto& balance = std::get<BalanceUpdate>(position->events[0]);
   EXPECT_TRUE(Equal(balance.total, "0.5"));
-  EXPECT_TRUE(Equal(balance.venue_available, "0.2"));
+  EXPECT_TRUE(Equal(balance.available, "0.2"));
   auto terminated =
       stream.Parse(R"({"e":"eventStreamTerminated","E":1000})", Received());
   ASSERT_TRUE(terminated.ok());

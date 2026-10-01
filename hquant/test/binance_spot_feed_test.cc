@@ -26,7 +26,7 @@ namespace {
 
 Decimal ParserD(const char* text) { return *Decimal::Parse(text); }
 MarketId ParserMarket() {
-  return MarketId{VenueId("binance"), InstrumentKind::Spot, "BTCUSDT"};
+  return MarketId{ExchangeId("binance"), InstrumentKind::Spot, "BTCUSDT"};
 }
 BookScale ParserScale() {
   return BookScale{ParserD("0.01"), ParserD("0.001"), 1};
@@ -106,7 +106,7 @@ TEST(DepthParserTest, WrongMarketResynchronizesBook) {
   BookSync sync(ParserMarket(), 1);
   sync.Subscribe(1);
   BookDiff wrong;
-  wrong.market = MarketId{VenueId("binance"), InstrumentKind::Spot, "ETHUSDT"};
+  wrong.market = MarketId{ExchangeId("binance"), InstrumentKind::Spot, "ETHUSDT"};
   wrong.scale_version = 1;
   wrong.stream_epoch = 1;
   wrong.first_sequence = 1;
@@ -143,7 +143,7 @@ using Tcp = asio::ip::tcp;
 
 Decimal D(const char* text) { return *Decimal::Parse(text); }
 MarketId Market() {
-  return MarketId{VenueId("binance"), InstrumentKind::Spot, "BTCUSDT"};
+  return MarketId{ExchangeId("binance"), InstrumentKind::Spot, "BTCUSDT"};
 }
 
 class TestClock final : public Clock {
@@ -461,7 +461,7 @@ TEST(F1AdapterTest, ReplaysOrderBookFixturesThroughRawBinanceJson) {
         (directory / (std::string(name) + ".json")).string());
     ASSERT_TRUE(fixture.ok()) << fixture.status();
     SCOPED_TRACE(name);
-    MarketId market{VenueId("binance"), InstrumentKind::Spot, "BTCUSDT"};
+    MarketId market{ExchangeId("binance"), InstrumentKind::Spot, "BTCUSDT"};
     DepthParser parser(market, BookScale{*Decimal::Parse("0.01"),
                                          *Decimal::Parse("0.001"), 1});
     BookSync sync(market, 1);

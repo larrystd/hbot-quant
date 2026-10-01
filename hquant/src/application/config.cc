@@ -288,18 +288,18 @@ absl::StatusOr<AppConfig> ParseConfig(std::string_view yaml_text) {
         return Error(ErrorCode::kConfigFieldInvalid,
                      "market spec must be a map");
       auto name = Scalar(item, "market");
-      auto venue = Scalar(item, "venue");
+      auto exchange = Scalar(item, "exchange");
       auto base = Scalar(item, "base_asset");
       auto quote = Scalar(item, "quote_asset");
       if (!name.ok()) return name.status();
-      if (!venue.ok()) return venue.status();
+      if (!exchange.ok()) return exchange.status();
       if (!base.ok()) return base.status();
       if (!quote.ok()) return quote.status();
       if (markets_by_name.contains(*name))
         return Error(ErrorCode::kConfigReferenceInvalid, "duplicate market");
       MarketConfig market;
       market.spec.market =
-          MarketId{VenueId(*venue), InstrumentKind::Spot, *name};
+          MarketId{ExchangeId(*exchange), InstrumentKind::Spot, *name};
       market.spec.base_asset = AssetId(*base);
       market.spec.quote_asset = AssetId(*quote);
       const YAML::Node scale = item["book_scale"] ? item["book_scale"] : item;

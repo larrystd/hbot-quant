@@ -61,7 +61,7 @@ class Writer {
     if (owner.executor_id) String(owner.executor_id->value);
   }
   void Market(const MarketId& market) {
-    String(market.venue.value);
+    String(market.exchange.value);
     Byte(static_cast<uint8_t>(market.instrument_kind));
     String(market.native_symbol);
   }
@@ -147,7 +147,7 @@ class Reader {
   }
   bool Market(MarketId* market) {
     uint8_t kind = 0;
-    if (!String(&market->venue.value) || !Byte(&kind) || kind != 0 ||
+    if (!String(&market->exchange.value) || !Byte(&kind) || kind != 0 ||
         !String(&market->native_symbol))
       return false;
     market->instrument_kind = static_cast<InstrumentKind>(kind);

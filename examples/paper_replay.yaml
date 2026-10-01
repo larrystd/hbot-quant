@@ -12,7 +12,7 @@ accounts:
 
 market_specs:
   - market: BTC-USDT
-    venue: paper
+    exchange: paper
     base_asset: BTC
     quote_asset: USDT
     book_scale:

@@ -23,7 +23,7 @@ struct Balance {
   AccountId account;
   AssetId asset;
   Decimal total;
-  Decimal venue_available;
+  Decimal available;
   EventTime time;
 };
 
@@ -164,9 +164,9 @@ class OrderGateway {
                                    const ClientOrderId& client_id) = 0;
 };
 
-// Local Paper venue port used by replay and public-market Paper shards. The
+// Local Paper exchange port used by replay and public-market Paper shards. The
 // runtime depends on this interface; app selects the concrete PaperConnector.
-class SimulatedVenue : public OrderGateway {
+class SimulatedExchange : public OrderGateway {
  public:
   virtual absl::Status OnBookBbo(const Decimal& bid, const Decimal& ask) = 0;
   virtual absl::Status OnPublicTrade(Side aggressor, const Decimal& price,

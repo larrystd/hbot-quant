@@ -21,7 +21,7 @@ accounts:
       USDT: "100"
 market_specs:
   - market: BTC-USDT
-    venue: binance
+    exchange: binance
     base_asset: BTC
     quote_asset: USDT
     book_scale:
@@ -34,7 +34,7 @@ market_specs:
       min_base_amount: "0.001"
       min_notional: "0.01"
   - market: ETH-USDT
-    venue: binance
+    exchange: binance
     base_asset: ETH
     quote_asset: USDT
     book_scale:

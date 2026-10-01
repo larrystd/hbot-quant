@@ -42,7 +42,7 @@ UtcTime At(int64_t us) { return UtcTime{std::chrono::microseconds{us}}; }
 Decimal D(const char* value) { return *Decimal::Parse(value); }
 OwnerId Owner() { return OwnerId{1, StrategyId{"recovery"}, std::nullopt}; }
 MarketId Market() {
-  return MarketId{VenueId{"binance"}, InstrumentKind::Spot, "BTCUSDT"};
+  return MarketId{ExchangeId{"binance"}, InstrumentKind::Spot, "BTCUSDT"};
 }
 
 RecordEnvelope Intent(uint64_t sequence, std::string client = "B1") {

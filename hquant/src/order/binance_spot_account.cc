@@ -110,7 +110,7 @@ absl::StatusOr<EventTime> ReportTime(simdjson::dom::element data,
 
 absl::StatusOr<UserDataBatch> ExecutionReport(simdjson::dom::element data,
                                               const AccountId& account,
-                                              const VenueId& venue,
+                                              const ExchangeId& exchange,
                                               EventTime received) {
   auto symbol = field::Text(data, "s");
   auto client = field::Text(data, "c");
@@ -145,7 +145,7 @@ absl::StatusOr<UserDataBatch> ExecutionReport(simdjson::dom::element data,
   auto mapped_status = Status(*raw_status);
   if (!mapped_status.ok()) return mapped_status.status();
 
-  const MarketId market{venue, InstrumentKind::Spot, std::string(*symbol)};
+  const MarketId market{exchange, InstrumentKind::Spot, std::string(*symbol)};
   const ClientOrderId client_id{std::string(original)};
   std::optional<ExchangeOrderId> exchange_id;
   if (*order_id > 0) exchange_id = ExchangeOrderId(std::to_string(*order_id));
@@ -230,7 +230,7 @@ absl::StatusOr<UserDataBatch> AccountPosition(simdjson::dom::element data,
 
 absl::StatusOr<UserDataBatch> UserDataStream::Parse(std::string_view json,
                                                     EventTime received) const {
-  if (account_.value.empty() || venue_.value.empty()) {
+  if (account_.value.empty() || exchange_.value.empty()) {
     return field::Invalid("invalid user data stream identity");
   }
   simdjson::dom::parser parser;
@@ -239,7 +239,7 @@ absl::StatusOr<UserDataBatch> UserDataStream::Parse(std::string_view json,
   auto type = field::Text(*root, "e");
   if (!type.ok()) return type.status();
   if (*type == "executionReport") {
-    auto batch = ExecutionReport(*root, account_, venue_, received);
+    auto batch = ExecutionReport(*root, account_, exchange_, received);
     if (!batch.ok())
       return Error(ErrorCode::kAccountMessageInvalid, batch.status().message());
     return batch;
@@ -269,7 +269,7 @@ namespace {
 namespace field = private_detail;
 
 bool ValidMarket(const MarketId& market) {
-  return !market.venue.value.empty() && !market.native_symbol.empty() &&
+  return !market.exchange.value.empty() && !market.native_symbol.empty() &&
          market.instrument_kind == InstrumentKind::Spot;
 }
 

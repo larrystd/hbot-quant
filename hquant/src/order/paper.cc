@@ -88,7 +88,7 @@ void PaperConnector::EmitBalance(const AssetId& asset) {
   balance.account = config_.account;
   balance.asset = asset;
   balance.total = BalanceOf(asset);
-  balance.venue_available = AvailableBalance(asset);
+  balance.available = AvailableBalance(asset);
   balance.time = Now();
   events_.emplace_back(std::move(balance));
 }

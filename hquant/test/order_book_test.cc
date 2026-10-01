@@ -247,7 +247,7 @@ void Replay(const std::filesystem::path& path) {
   uint64_t stale_after = 5'000'000;
   if (!setup["stale_after_us"].error())
     stale_after = U64(setup, "stale_after_us");
-  hquant::MarketId market{hquant::VenueId("binance"),
+  hquant::MarketId market{hquant::ExchangeId("binance"),
                           hquant::InstrumentKind::Spot, market_name};
   hquant::BookSync sync(market, scale_version, 8192, 1024, stale_after);
 
@@ -299,7 +299,7 @@ void Replay(const std::filesystem::path& path) {
 }
 
 void CheckSyncEdges() {
-  hquant::MarketId market{hquant::VenueId("binance"),
+  hquant::MarketId market{hquant::ExchangeId("binance"),
                           hquant::InstrumentKind::Spot, "BTC-USDT"};
   hquant::BookSync sync(market, 1, 16, 2, 100);
   Require(sync.Subscribe(1).state == BookSyncState::Buffering, "subscribe");

@@ -58,7 +58,7 @@ struct FakeGateway final : hquant::OrderGateway {
 
 int main() {
   const hquant::UtcTime now(std::chrono::microseconds(1'000'000));
-  const hquant::MarketId market{hquant::VenueId("binance"),
+  const hquant::MarketId market{hquant::ExchangeId("binance"),
                                 hquant::InstrumentKind::Spot, "BTCUSDT"};
   const hquant::MarketSpec spec{market, hquant::AssetId("BTC"),
                                 hquant::AssetId("USDT")};

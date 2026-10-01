@@ -81,7 +81,7 @@ TEST(PublicPaperTest, RestAndWebsocketDrivePaperThenDisconnectAndResync) {
 
   const FixedClock clock;
   const AccountId account("paper");
-  const MarketId market{VenueId("binance"), InstrumentKind::Spot, "BTCUSDT"};
+  const MarketId market{ExchangeId("binance"), InstrumentKind::Spot, "BTCUSDT"};
   const MarketSpec spec{market, AssetId("BTC"), AssetId("USDT")};
   const OwnerId owner{1, StrategyId("simple_pmm"), std::nullopt};
   const BookScale scale{D("0.01"), D("0.001"), 1};

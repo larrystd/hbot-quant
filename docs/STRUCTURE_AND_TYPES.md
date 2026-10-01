@@ -89,7 +89,7 @@ flowchart LR
 | 类型 / 位置 | 字段与不变量 |
 | --- | --- |
 | `Decimal` / `base/types.h` | libmpdec RAII 值；解析、运算、量化返回 `StatusOr` 或明确错误；不隐式转 `double`；拒绝 NaN/Inf/溢出。JSON/SQLite 用规范化十进制字符串，舍入模式由调用处显式选定。 |
-| `VenueId`、`AccountId`、`AssetId`、`StrategyId`、`ExecutorId` / `base/types.h` | 互不混用的拥有字符串 ID。`AccountId` 在进程内唯一指向一个交易所账户，日志和持久化用脱敏表示。 |
+| `ExchangeId`、`AccountId`、`AssetId`、`StrategyId`、`ExecutorId` / `base/types.h` | 互不混用的拥有字符串 ID。`AccountId` 在进程内唯一指向一个交易所账户，日志和持久化用脱敏表示。 |
 | `OwnerId` / `base/types.h` | `{owner_key, strategy_id, optional executor_id}`。`owner_key` 是配置中显式、稳定、唯一的 48 位正整数；名称用于展示，订单归属由 key 判定，不能靠名称哈希临时生成。重配时旧 key 仍保留在恢复映射中。 |
 | `RunId`、`ShardId`、`ReservationId`、`DecisionId` / `base/types.h` | `RunId` 是每次引擎启动的加密随机 64 位非零值；client ID 的 32 位尾段中高 3 位是本次运行的 shard 槽位，低 29 位是该 shard 的本地递增序号，溢出停止创建新 ID，不在热路径争用全局计数器。启动对账时若发现与历史 client ID 冲突则重新生成。`ShardId` 是进程内 `0..7` 路由号，可因重启分配改变，ID 中的槽位只用于唯一性/路由提示，不能充当持久归属；预留/决策 ID 也不可互用。 |
 | `ClientOrderId`、`ExchangeOrderId`、`ExchangeTradeId` / `base/types.h` | 三个不同强类型；client ID 在新单发送前确定。交易所 ID 可晚到；成交 ID 的唯一范围由 adapter 明确，去重键至少包括账户、市场和 trade ID。 |
@@ -101,7 +101,7 @@ flowchart LR
 
 | 类型 / 位置 | 必有字段、单位和规则 |
 | --- | --- |
-| `MarketId` / `base/market.h` | `{venue, instrument_kind, native_symbol}`；首版 `instrument_kind=Spot`。`MarketSpec` 另给 `{market, base_asset, quote_asset}`，不能从交易所符号任意切字符串猜资产。 |
+| `MarketId` / `base/market.h` | `{exchange, instrument_kind, native_symbol}`；首版 `instrument_kind=Spot`。`MarketSpec` 另给 `{market, base_asset, quote_asset}`，不能从交易所符号任意切字符串猜资产。 |
 | `BookScale` / `base/market.h` | `{quote_per_tick: Decimal, base_per_lot: Decimal, scale_version}`，两个步长都大于零。adapter 检查原始十进制可整除及 64 位范围，转为强类型 `PriceTicks{int64}`、`QuantityLots{uint64}`。行情 scale 可以比下单精度细，不能拿它代替 `TradingRule`。 |
 | `BookLevel` / `base/market.h` | `{price_ticks, quantity_lots}`，价格正、数量非负；Diff 中 0 表示删除该价位。bids/asks 分侧存储，不用正负价格表示方向。 |
 | `BookSnapshot` / `base/market.h` | `{market, scale_version, stream_epoch, last_sequence, bids, asks, time}`；深度为拥有 `vector<BookLevel>`，`last_sequence` 只与同 market/epoch 可比。 |
@@ -126,7 +126,7 @@ flowchart LR
 | `OrderIntent` / `base/order.h` | `{client_id, owner, request, config_revision, created_at_utc, optional executor_checkpoint}`；account 已在 request 中，checkpoint 含 `{schema_version, owner, config_revision, payload}`。发起网络写前 `try_push` Recorder；队列/SQLite 失败不等提交、继续发送，并标记历史缺口。 |
 | `OrderUpdate` / `base/order.h` | `{account, market, client_id?, exchange_order_id?, exchange_status, cumulative_base?, cumulative_quote?, time}`；至少有一个订单 ID；双 ID 同时存在须指向同一订单。它只是输入事实，不直接等于 Tracker 内部状态。 |
 | `TradeUpdate` / `base/order.h` | `{account, market, client_id?, exchange_order_id?, exchange_trade_id, price, base_amount, quote_amount, fees: vector<TradeFee>, maker?, time}`；至少有一个订单 ID，trade ID 必有，价格/数量/费用全为 Decimal。成交去重键是 `{account, market, exchange_trade_id}`（若交易所范围更窄，adapter 扩展键）。 |
-| `TradeFee`、`Balance` / `base/order.h` | `TradeFee={asset, signed_amount}`，正数为收费、负数为返佣；`Balance={account, asset, total, venue_available, time}`。交易所 `venue_available` 可能已扣本系统挂单，不直接再减一次本地预留。 |
+| `TradeFee`、`Balance` / `base/order.h` | `TradeFee={asset, signed_amount}`，正数为收费、负数为返佣；`Balance={account, asset, total, available, time}`。交易所 `available` 可能已扣本系统挂单，不直接再减一次本地预留。 |
 
 `StrategyContext` 在 `strategy/strategy.h` 中只借用当前分片的 `BookView`、订单/余额只读快照、触发输入序号及注入时钟；不能保存、跨线程传递或在 `co_await` 后使用。每次回调由 runtime 分配 `DecisionId`，其 `ActionBatch` 与拒绝原因按确定顺序记录。`AccountEvent` 只包装私有 `OrderUpdate/TradeUpdate/BalanceUpdate`；`MarketEvent` 只包装公开 `BookSnapshot/BookDiff/PublicTrade`，两类事件不能通过一个未标来源的“成交”类型混用。
 

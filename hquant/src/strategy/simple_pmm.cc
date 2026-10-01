@@ -37,7 +37,7 @@ Decimal SimplePmm::Available(const StrategyContext& context,
                              const AssetId& asset) const {
   for (const auto& balance : context.balances) {
     if (balance.account == config_.account && balance.asset == asset) {
-      return balance.venue_available;
+      return balance.available;
     }
   }
   return D("0");

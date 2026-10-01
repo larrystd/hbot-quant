@@ -94,7 +94,7 @@ class MockTransport final : public HttpTransport {
 BinanceGatewayConfig Config() {
   BinanceGatewayConfig config;
   config.account = AccountId("test-account");
-  config.market = MarketId{VenueId("binance"), InstrumentKind::Spot, "BTCUSDT"};
+  config.market = MarketId{ExchangeId("binance"), InstrumentKind::Spot, "BTCUSDT"};
   config.trading_rule =
       TradingRule{config.market, D("0.01"), D("0.001"), D("0.001"), D("0.01")};
   config.run = RunId{42};

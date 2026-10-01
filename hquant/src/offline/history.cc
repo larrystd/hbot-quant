@@ -237,7 +237,7 @@ HistoryPage HistoryReader::Query(const HistoryQuery& query) {
     sqlite3_bind_int64(s, bind++,
                        static_cast<sqlite3_int64>(query.owner->owner_key));
   if (query.market) {
-    Text(s, bind++, query.market->venue.value);
+    Text(s, bind++, query.market->exchange.value);
     sqlite3_bind_int(s, bind++,
                      static_cast<int>(query.market->instrument_kind));
     Text(s, bind++, query.market->native_symbol);

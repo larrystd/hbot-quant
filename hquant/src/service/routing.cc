@@ -19,7 +19,7 @@ OrderOwnershipIndex::OrderOwnershipIndex(DecodeOwnerKey decode_owner_key)
 OrderOwnershipIndex::ExchangeKey OrderOwnershipIndex::Key(
     const AccountId& account, const MarketId& market,
     const ExchangeOrderId& exchange_id) {
-  return {account.value, market.venue.value,
+  return {account.value, market.exchange.value,
           static_cast<int>(market.instrument_kind), market.native_symbol,
           exchange_id.value};
 }
@@ -49,7 +49,7 @@ absl::Status OrderOwnershipIndex::RegisterClient(ClientOrderId client_id,
                                                  MarketId market,
                                                  const OwnerId& owner) {
   if (client_id.value.empty() || account.value.empty() ||
-      market.venue.value.empty() || market.native_symbol.empty()) {
+      market.exchange.value.empty() || market.native_symbol.empty()) {
     return Error(ErrorCode::kRouteReportInvalid,
                  "invalid client ownership key");
   }
@@ -81,7 +81,7 @@ absl::Status OrderOwnershipIndex::RegisterExchange(
     AccountId account, MarketId market, ExchangeOrderId exchange_id,
     const OwnerId& owner, std::optional<ClientOrderId> client_id) {
   if (exchange_id.value.empty() || account.value.empty() ||
-      market.venue.value.empty() || market.native_symbol.empty()) {
+      market.exchange.value.empty() || market.native_symbol.empty()) {
     return Error(ErrorCode::kRouteReportInvalid,
                  "invalid exchange ownership key");
   }
@@ -111,7 +111,7 @@ absl::StatusOr<OrderOwnership> OrderOwnershipIndex::Resolve(
     const AccountId& account, const MarketId& market,
     const std::optional<ClientOrderId>& client_id,
     const std::optional<ExchangeOrderId>& exchange_id) const {
-  if (account.value.empty() || market.venue.value.empty() ||
+  if (account.value.empty() || market.exchange.value.empty() ||
       market.native_symbol.empty() || (client_id && client_id->value.empty()) ||
       (exchange_id && exchange_id->value.empty())) {
     return Error(ErrorCode::kRouteReportInvalid,

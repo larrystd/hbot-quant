@@ -127,7 +127,7 @@ TEST(PaperTest, ReplaysAllPaperCasesStepByStep) {
     PaperConfig config;
     config.account = AccountId(S(setup, "account"));
     config.market = MarketSpec{
-        MarketId{VenueId("paper"), InstrumentKind::Spot, S(setup, "market")},
+        MarketId{ExchangeId("paper"), InstrumentKind::Spot, S(setup, "market")},
         AssetId(S(setup, "base_asset")), AssetId(S(setup, "quote_asset"))};
     config.trading_rule = TradingRule{config.market.market,
                                       D(S(setup, "price_increment")),
@@ -254,7 +254,7 @@ TEST(PaperTest, AbortedPreparationNeverCreatesAnOrder) {
   PaperConfig config;
   config.account = AccountId("paper");
   config.market =
-      MarketSpec{MarketId{VenueId("paper"), InstrumentKind::Spot, "BTC-USDT"},
+      MarketSpec{MarketId{ExchangeId("paper"), InstrumentKind::Spot, "BTC-USDT"},
                  AssetId("BTC"), AssetId("USDT")};
   config.trading_rule = TradingRule{config.market.market,
                                     D("0.01"),
@@ -270,7 +270,7 @@ TEST(PaperTest, AbortedPreparationNeverCreatesAnOrder) {
   OwnerId owner{1, StrategyId("simple_pmm"), {}};
   OrderRequest request;
   request.account = AccountId("paper");
-  request.market = MarketId{VenueId("paper"), InstrumentKind::Spot, "BTC-USDT"};
+  request.market = MarketId{ExchangeId("paper"), InstrumentKind::Spot, "BTC-USDT"};
   request.side = Side::Buy;
   request.base_amount = D("0.01");
   request.limit_price = D("100");

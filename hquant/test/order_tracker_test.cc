@@ -101,7 +101,7 @@ OrderIntent Intent(simdjson::dom::element setup) {
                          std::nullopt};
   intent.request.account = AccountId{String(setup, "account")};
   intent.request.market =
-      MarketId{VenueId{"paper"}, InstrumentKind::Spot, String(setup, "market")};
+      MarketId{ExchangeId{"paper"}, InstrumentKind::Spot, String(setup, "market")};
   intent.request.side = String(setup, "side") == "Buy" ? Side::Buy : Side::Sell;
   intent.request.type = OrderType::Limit;
   intent.request.base_amount = D(String(setup, "base_amount"));
@@ -249,7 +249,7 @@ TEST(OrderTrackerTest,
   first.owner = OwnerId{1, StrategyId{"s"}, std::nullopt};
   first.request.account = AccountId{"A1"};
   first.request.market =
-      MarketId{VenueId{"paper"}, InstrumentKind::Spot, "BTC-USDT"};
+      MarketId{ExchangeId{"paper"}, InstrumentKind::Spot, "BTC-USDT"};
   first.request.base_amount = D("1");
   first.request.limit_price = D("100");
   ASSERT_TRUE(tracker.Register(first).ok());
@@ -290,7 +290,7 @@ TEST(OrderTrackerTest, ReconcilesUnknownSubmissionUsingOriginalClientId) {
   intent.owner = OwnerId{1, StrategyId{"s"}, std::nullopt};
   intent.request.account = AccountId{"A1"};
   intent.request.market =
-      MarketId{VenueId{"paper"}, InstrumentKind::Spot, "BTC-USDT"};
+      MarketId{ExchangeId{"paper"}, InstrumentKind::Spot, "BTC-USDT"};
   intent.request.base_amount = D("1");
   intent.request.limit_price = D("100");
   ASSERT_TRUE(tracker.Register(intent).ok());
@@ -324,7 +324,7 @@ TEST(OrderTrackerTest, RoutesExchangeOnlyReportAndDoesNotRegressOnStaleStatus) {
   intent.owner = OwnerId{1, StrategyId{"s"}, std::nullopt};
   intent.request.account = AccountId{"A1"};
   intent.request.market =
-      MarketId{VenueId{"paper"}, InstrumentKind::Spot, "BTC-USDT"};
+      MarketId{ExchangeId{"paper"}, InstrumentKind::Spot, "BTC-USDT"};
   intent.request.base_amount = D("1");
   intent.request.limit_price = D("100");
   ASSERT_TRUE(tracker.Register(intent).ok());
@@ -356,7 +356,7 @@ TEST(OrderTrackerTest,
   intent.owner = OwnerId{1, StrategyId{"s"}, std::nullopt};
   intent.request.account = AccountId{"A1"};
   intent.request.market =
-      MarketId{VenueId{"paper"}, InstrumentKind::Spot, "BTC-USDT"};
+      MarketId{ExchangeId{"paper"}, InstrumentKind::Spot, "BTC-USDT"};
   intent.request.base_amount = D("1");
   intent.request.limit_price = D("100");
   ASSERT_TRUE(tracker.Register(intent).ok());

@@ -44,7 +44,7 @@ UtcTime At(int64_t us) { return UtcTime{std::chrono::microseconds{us}}; }
 MonoTime MonoAt(int64_t us) { return MonoTime{std::chrono::microseconds{us}}; }
 Decimal D(const char* text) { return *Decimal::Parse(text); }
 MarketId Market() {
-  return MarketId{VenueId{"paper"}, InstrumentKind::Spot, "BTCUSDT"};
+  return MarketId{ExchangeId{"paper"}, InstrumentKind::Spot, "BTCUSDT"};
 }
 OwnerId Owner() { return OwnerId{1, StrategyId{"simple_pmm"}, std::nullopt}; }
 

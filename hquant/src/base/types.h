@@ -57,7 +57,7 @@ struct StringId {
   }
 };
 
-struct VenueTag {};
+struct ExchangeTag {};
 struct AccountTag {};
 struct AssetTag {};
 struct StrategyTag {};
@@ -66,7 +66,7 @@ struct ClientOrderTag {};
 struct ExchangeOrderTag {};
 struct ExchangeTradeTag {};
 
-using VenueId = StringId<VenueTag>;
+using ExchangeId = StringId<ExchangeTag>;
 using AccountId = StringId<AccountTag>;
 using AssetId = StringId<AssetTag>;
 using StrategyId = StringId<StrategyTag>;

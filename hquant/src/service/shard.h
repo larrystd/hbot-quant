@@ -96,7 +96,7 @@ class ShardRuntime {
   };
 
   ShardRuntime(Config config, const Clock& clock, Strategy& strategy,
-               SimulatedVenue& venue, RiskGate& risk, RecorderPort& recorder);
+               SimulatedExchange& exchange, RiskGate& risk, RecorderPort& recorder);
 
   BookApplyResult Subscribe(uint64_t stream_epoch);
   absl::Status OnSnapshot(const BookSnapshot& snapshot);
@@ -129,7 +129,7 @@ class ShardRuntime {
   Config config_;
   const Clock& clock_;
   Strategy& strategy_;
-  SimulatedVenue& venue_;
+  SimulatedExchange& exchange_;
   RiskGate& risk_;
   RecorderPort& recorder_;
   BookSync book_;

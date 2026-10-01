@@ -51,7 +51,7 @@ OrderLifecycle Lifecycle(ExchangeOrderStatus status) {
 OrderTracker::ExchangeKey OrderTracker::ExchangeIndexKey(
     const AccountId& account, const MarketId& market,
     const ExchangeOrderId& exchange_id) {
-  return {account.value, market.venue.value,
+  return {account.value, market.exchange.value,
           static_cast<int>(market.instrument_kind), market.native_symbol,
           exchange_id.value};
 }
@@ -59,7 +59,7 @@ OrderTracker::ExchangeKey OrderTracker::ExchangeIndexKey(
 OrderTracker::TradeKey OrderTracker::TradeIndexKey(
     const AccountId& account, const MarketId& market,
     const ExchangeTradeId& trade_id) {
-  return {account.value, market.venue.value,
+  return {account.value, market.exchange.value,
           static_cast<int>(market.instrument_kind), market.native_symbol,
           trade_id.value};
 }
@@ -132,7 +132,7 @@ TrackerResult OrderTracker::MakeResult(
 absl::StatusOr<TrackerResult> OrderTracker::Register(OrderIntent intent) {
   if (intent.client_id.value.empty() || !intent.owner.IsValid() ||
       intent.request.account.value.empty() ||
-      intent.request.market.venue.value.empty() ||
+      intent.request.market.exchange.value.empty() ||
       intent.request.market.native_symbol.empty() ||
       !intent.request.base_amount.IsStrictlyPositive() ||
       !intent.request.limit_price ||

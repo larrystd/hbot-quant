@@ -14,7 +14,7 @@ namespace hquant {
 namespace {
 
 MarketId Market(std::string symbol = "BTCUSDT") {
-  return MarketId{VenueId("binance"), InstrumentKind::Spot, std::move(symbol)};
+  return MarketId{ExchangeId("binance"), InstrumentKind::Spot, std::move(symbol)};
 }
 
 OwnerId Owner(uint64_t key) {

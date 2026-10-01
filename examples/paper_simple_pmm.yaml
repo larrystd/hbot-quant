@@ -12,7 +12,7 @@ accounts:
 
 market_specs:
   - market: BTCUSDT
-    venue: binance
+    exchange: binance
     base_asset: BTC
     quote_asset: USDT
     book_scale:

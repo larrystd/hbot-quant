@@ -16,7 +16,7 @@ hquant::Decimal D(const char* text) { return *hquant::Decimal::Parse(text); }
 int RiskGateTestMain() {
   const hquant::AccountId account("A1");
   const hquant::AssetId base("BTC"), quote("USDT");
-  const hquant::MarketId market{hquant::VenueId("binance"),
+  const hquant::MarketId market{hquant::ExchangeId("binance"),
                                 hquant::InstrumentKind::Spot, "BTCUSDT"};
   const hquant::MarketSpec spec{market, base, quote};
   const hquant::UtcTime now(std::chrono::microseconds(10'000'000));
@@ -103,7 +103,7 @@ int LeaseTestMain() {
   using namespace hquant;
   const AccountId account("same-account");
   const AssetId base("BTC"), quote("USDT");
-  const MarketId market{VenueId("binance"), InstrumentKind::Spot, "BTCUSDT"};
+  const MarketId market{ExchangeId("binance"), InstrumentKind::Spot, "BTCUSDT"};
   const MarketSpec spec{market, base, quote};
   const UtcTime now(std::chrono::microseconds(10'000'000));
   const UtcTime expiry = now + std::chrono::hours(1);

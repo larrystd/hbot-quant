@@ -13,14 +13,14 @@ namespace hquant {
 enum class InstrumentKind { Spot };
 
 struct MarketId {
-  VenueId venue;
+  ExchangeId exchange;
   InstrumentKind instrument_kind = InstrumentKind::Spot;
   std::string native_symbol;
   bool operator==(const MarketId&) const = default;
 
   template <typename H>
   friend H AbslHashValue(H hash, const MarketId& market) {
-    return H::combine(std::move(hash), market.venue, market.instrument_kind,
+    return H::combine(std::move(hash), market.exchange, market.instrument_kind,
                       market.native_symbol);
   }
 };
