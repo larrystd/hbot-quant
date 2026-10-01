@@ -109,7 +109,7 @@ class ReconciliationClient {
       std::chrono::steady_clock::time_point deadline);
 
   // Returns exchange-discovered client IDs after an unclean restart. The
-  // caller still validates stable owner identity and queries each original ID.
+  // caller still validates stable strategy_id identity and queries each original ID.
   boost::asio::awaitable<absl::StatusOr<std::vector<ReconciliationTarget>>>
   DiscoverOpenOrders(AccountId account, MarketId market,
                      std::chrono::steady_clock::time_point deadline);

@@ -29,10 +29,10 @@ int RunDecimalChecks() {
 #include "base/market.h"
 
 int RunDomainChecks() {
-  hquant::OwnerId owner{1, hquant::StrategyId("simple_pmm"), std::nullopt};
-  if (!owner.IsValid()) return 1;
-  owner.owner_key = uint64_t{1} << 48;
-  if (owner.IsValid() || hquant::RunId{0}.IsValid() ||
+  hquant::StrategyId strategy_id{1, hquant::StrategyName("simple_pmm")};
+  if (!strategy_id.IsValid()) return 1;
+  strategy_id.value = uint64_t{1} << 48;
+  if (strategy_id.IsValid() || hquant::RunId{0}.IsValid() ||
       hquant::ShardId{8}.IsValid())
     return 2;
   auto tick = hquant::Decimal::Parse("0.01");

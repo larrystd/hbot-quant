@@ -46,13 +46,13 @@ Decimal D(const char* text) { return *Decimal::Parse(text); }
 MarketId Market() {
   return MarketId{ExchangeId{"simulated"}, InstrumentKind::Spot, "BTCUSDT"};
 }
-OwnerId Owner() { return OwnerId{1, StrategyId{"simple_pmm"}, std::nullopt}; }
+StrategyId MakeStrategyId() { return StrategyId{1, StrategyName{"simple_pmm"}}; }
 
 RecordEnvelope Intent(uint64_t sequence, RunId run = RunId{11},
                       ShardId shard = ShardId{0}) {
   OrderIntent intent;
   intent.client_id = ClientOrderId{"B1"};
-  intent.owner = Owner();
+  intent.strategy_id = MakeStrategyId();
   intent.request.account = AccountId{"A1"};
   intent.request.market = Market();
   intent.request.side = Side::Buy;
@@ -61,12 +61,12 @@ RecordEnvelope Intent(uint64_t sequence, RunId run = RunId{11},
   intent.request.limit_price = D("99.9");
   intent.created_at_utc = At(1000);
   intent.config_revision = 7;
-  intent.executor_checkpoint = ExecutorCheckpoint{1, Owner(), 7, "checkpoint"};
+  intent.executor_checkpoint = ExecutorCheckpoint{1, MakeStrategyId(), 7, "checkpoint"};
   RecordEnvelope record;
   record.run_id = run;
   record.shard = shard;
   record.shard_sequence = sequence;
-  record.owner = Owner();
+  record.strategy_id = MakeStrategyId();
   record.received_at_utc = At(1000 + sequence);
   record.payload = std::move(intent);
   return record;
@@ -122,7 +122,7 @@ TEST(StorageTest, PersistsTypedRecordsAndPagesThroughReadOnlyConnection) {
   EXPECT_TRUE((*recorder)->TryPush(Trade(3)));
   RecordEnvelope checkpoint = Intent(4);
   checkpoint.payload =
-      Checkpoint{ExecutorCheckpoint{1, Owner(), 7, "state"}, At(1004)};
+      Checkpoint{ExecutorCheckpoint{1, MakeStrategyId(), 7, "state"}, At(1004)};
   EXPECT_TRUE((*recorder)->TryPush(std::move(checkpoint)));
   ASSERT_TRUE((*recorder)->Flush().ok());
   auto reader = HistoryReader::Open({db.path(), 4, 2});
@@ -247,7 +247,7 @@ TEST(StorageTest, DecisionRecordsPreserveActionOrderAndRejectionReason) {
   ASSERT_TRUE(recorder.ok()) << recorder.status();
   RecordEnvelope first = Intent(1);
   first.payload = DecisionRecord{DecisionId{19},
-                                 Owner(),
+                                 MakeStrategyId(),
                                  0,
                                  DecisionActionKind::Cancel,
                                  true,
@@ -256,7 +256,7 @@ TEST(StorageTest, DecisionRecordsPreserveActionOrderAndRejectionReason) {
                                  ClientOrderId{"B1"}};
   RecordEnvelope second = Intent(2);
   second.payload = DecisionRecord{DecisionId{19},
-                                  Owner(),
+                                  MakeStrategyId(),
                                   1,
                                   DecisionActionKind::Submit,
                                   false,
@@ -269,7 +269,7 @@ TEST(StorageTest, DecisionRecordsPreserveActionOrderAndRejectionReason) {
   auto reader = HistoryReader::Open({db.path(), 2, 2});
   ASSERT_TRUE(reader.ok());
   HistoryQuery query;
-  query.owner = Owner();
+  query.strategy_id = MakeStrategyId();
   query.page_size = 2;
   ASSERT_TRUE((*reader)->TrySubmit(query).ok());
   auto page = WaitPage(**reader);

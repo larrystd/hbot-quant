@@ -13,10 +13,10 @@
 
 namespace hquant {
 
-OrderOwnershipIndex::OrderOwnershipIndex(DecodeOwnerKey decode_owner_key)
-    : decode_owner_key_(std::move(decode_owner_key)) {}
+OrderStrategyIndex::OrderStrategyIndex(DecodeStrategyId decode_strategy_id)
+    : decode_strategy_id_(std::move(decode_strategy_id)) {}
 
-OrderOwnershipIndex::ExchangeKey OrderOwnershipIndex::Key(
+OrderStrategyIndex::ExchangeKey OrderStrategyIndex::Key(
     const AccountId& account, const MarketId& market,
     const ExchangeOrderId& exchange_id) {
   return {account.value, market.exchange.value,
@@ -24,90 +24,90 @@ OrderOwnershipIndex::ExchangeKey OrderOwnershipIndex::Key(
           exchange_id.value};
 }
 
-absl::Status OrderOwnershipIndex::SetOwnerRoute(OwnerId owner,
+absl::Status OrderStrategyIndex::SetStrategyRoute(StrategyId strategy_id,
                                                 AccountId account,
                                                 ShardId shard) {
-  if (!owner.IsValid() || account.value.empty() || !shard.IsValid()) {
-    return Error(ErrorCode::kRouteConfigInvalid, "invalid owner route");
+  if (!strategy_id.IsValid() || account.value.empty() || !shard.IsValid()) {
+    return Error(ErrorCode::kRouteConfigInvalid, "invalid strategy_id route");
   }
-  auto found = owners_.find(owner.owner_key);
-  if (found != owners_.end()) {
-    if (found->second.owner != owner || found->second.account != account) {
+  auto found = strategy_routes_.find(strategy_id.value);
+  if (found != strategy_routes_.end()) {
+    if (found->second.strategy_id != strategy_id || found->second.account != account) {
       return Error(ErrorCode::kRouteConfigInvalid,
-                   "owner key identity conflict");
+                   "strategy_id key identity conflict");
     }
     found->second.shard = shard;
   } else {
-    owners_.emplace(owner.owner_key,
-                    OwnerRoute{std::move(owner), std::move(account), shard});
+    strategy_routes_.emplace(strategy_id.value,
+                    StrategyRoute{std::move(strategy_id), std::move(account), shard});
   }
   return absl::OkStatus();
 }
 
-absl::Status OrderOwnershipIndex::RegisterClient(ClientOrderId client_id,
+absl::Status OrderStrategyIndex::RegisterClient(ClientOrderId client_id,
                                                  AccountId account,
                                                  MarketId market,
-                                                 const OwnerId& owner) {
+                                                 const StrategyId& strategy_id) {
   if (client_id.value.empty() || account.value.empty() ||
       market.exchange.value.empty() || market.native_symbol.empty()) {
     return Error(ErrorCode::kRouteReportInvalid,
-                 "invalid client ownership key");
+                 "invalid client strategy key");
   }
-  const auto route = owners_.find(owner.owner_key);
-  if (route == owners_.end() || route->second.owner != owner ||
+  const auto route = strategy_routes_.find(strategy_id.value);
+  if (route == strategy_routes_.end() || route->second.strategy_id != strategy_id ||
       route->second.account != account) {
     return Error(ErrorCode::kRouteOwnerUnknown,
-                 "client owner has no matching route");
+                 "client strategy_id has no matching route");
   }
-  if (decode_owner_key_) {
-    auto decoded = decode_owner_key_(client_id);
-    if (decoded && *decoded != owner.owner_key) {
+  if (decode_strategy_id_) {
+    auto decoded = decode_strategy_id_(client_id);
+    if (decoded && *decoded != strategy_id.value) {
       return Error(ErrorCode::kRouteOwnershipConflict,
-                   "client ID owner conflicts with registration");
+                   "client ID strategy_id conflicts with registration");
     }
   }
   auto [it, inserted] = clients_.emplace(
-      client_id.value, ClientMapping{account, market, owner.owner_key});
+      client_id.value, ClientMapping{account, market, strategy_id.value});
   if (!inserted &&
       (it->second.account != account || it->second.market != market ||
-       it->second.owner_key != owner.owner_key)) {
+       it->second.strategy_id != strategy_id.value)) {
     return Error(ErrorCode::kRouteOwnershipConflict,
-                 "client ID ownership conflict");
+                 "client ID strategy conflict");
   }
   return absl::OkStatus();
 }
 
-absl::Status OrderOwnershipIndex::RegisterExchange(
+absl::Status OrderStrategyIndex::RegisterExchange(
     AccountId account, MarketId market, ExchangeOrderId exchange_id,
-    const OwnerId& owner, std::optional<ClientOrderId> client_id) {
+    const StrategyId& strategy_id, std::optional<ClientOrderId> client_id) {
   if (exchange_id.value.empty() || account.value.empty() ||
       market.exchange.value.empty() || market.native_symbol.empty()) {
     return Error(ErrorCode::kRouteReportInvalid,
-                 "invalid exchange ownership key");
+                 "invalid exchange strategy key");
   }
-  const auto route = owners_.find(owner.owner_key);
-  if (route == owners_.end() || route->second.owner != owner ||
+  const auto route = strategy_routes_.find(strategy_id.value);
+  if (route == strategy_routes_.end() || route->second.strategy_id != strategy_id ||
       route->second.account != account) {
     return Error(ErrorCode::kRouteOwnerUnknown,
-                 "exchange owner has no matching route");
+                 "exchange strategy_id has no matching route");
   }
   if (client_id) {
     auto resolved = Resolve(account, market, client_id, std::nullopt);
-    if (!resolved.ok() || resolved->owner != owner) {
+    if (!resolved.ok() || resolved->strategy_id != strategy_id) {
       return Error(ErrorCode::kRouteOwnershipConflict,
-                   "exchange/client ownership conflict");
+                   "exchange/client strategy conflict");
     }
   }
   auto [it, inserted] =
-      exchanges_.emplace(Key(account, market, exchange_id), owner.owner_key);
-  if (!inserted && it->second != owner.owner_key) {
+      exchanges_.emplace(Key(account, market, exchange_id), strategy_id.value);
+  if (!inserted && it->second != strategy_id.value) {
     return Error(ErrorCode::kRouteOwnershipConflict,
-                 "exchange ID ownership conflict");
+                 "exchange ID strategy conflict");
   }
   return absl::OkStatus();
 }
 
-absl::StatusOr<OrderOwnership> OrderOwnershipIndex::Resolve(
+absl::StatusOr<OrderRoute> OrderStrategyIndex::Resolve(
     const AccountId& account, const MarketId& market,
     const std::optional<ClientOrderId>& client_id,
     const std::optional<ExchangeOrderId>& exchange_id) const {
@@ -118,16 +118,16 @@ absl::StatusOr<OrderOwnership> OrderOwnershipIndex::Resolve(
                  "invalid private report identity");
   }
   std::optional<uint64_t> candidate;
-  const auto merge = [&](uint64_t owner_key) -> absl::Status {
-    if (candidate && *candidate != owner_key) {
+  const auto merge = [&](uint64_t strategy_id) -> absl::Status {
+    if (candidate && *candidate != strategy_id) {
       return Error(ErrorCode::kRouteOwnershipConflict,
-                   "private report ownership conflict");
+                   "private report strategy conflict");
     }
-    candidate = owner_key;
+    candidate = strategy_id;
     return absl::OkStatus();
   };
-  if (client_id && decode_owner_key_) {
-    auto decoded = decode_owner_key_(*client_id);
+  if (client_id && decode_strategy_id_) {
+    auto decoded = decode_strategy_id_(*client_id);
     if (decoded) {
       auto status = merge(*decoded);
       if (!status.ok()) return status;
@@ -140,7 +140,7 @@ absl::StatusOr<OrderOwnership> OrderOwnershipIndex::Resolve(
         return Error(ErrorCode::kRouteOwnershipConflict,
                      "client ID account/market conflict");
       }
-      auto status = merge(found->second.owner_key);
+      auto status = merge(found->second.strategy_id);
       if (!status.ok()) return status;
     }
   }
@@ -152,18 +152,18 @@ absl::StatusOr<OrderOwnership> OrderOwnershipIndex::Resolve(
     }
   }
   if (!candidate)
-    return Error(ErrorCode::kRouteOwnerUnknown, "private report owner unknown");
-  const auto route = owners_.find(*candidate);
-  if (route == owners_.end())
-    return Error(ErrorCode::kRouteOwnerUnknown, "owner route unknown");
+    return Error(ErrorCode::kRouteOwnerUnknown, "private report strategy_id unknown");
+  const auto route = strategy_routes_.find(*candidate);
+  if (route == strategy_routes_.end())
+    return Error(ErrorCode::kRouteOwnerUnknown, "strategy_id route unknown");
   if (route->second.account != account) {
-    return Error(ErrorCode::kRouteOwnershipConflict, "owner/account conflict");
+    return Error(ErrorCode::kRouteOwnershipConflict, "strategy_id/account conflict");
   }
-  return OrderOwnership{route->second.owner, route->second.shard};
+  return OrderRoute{route->second.strategy_id, route->second.shard};
 }
 
-bool OrderOwnershipIndex::KnowsAccount(const AccountId& account) const {
-  for (const auto& [key, route] : owners_) {
+bool OrderStrategyIndex::KnowsAccount(const AccountId& account) const {
+  for (const auto& [key, route] : strategy_routes_) {
     if (route.account == account) return true;
   }
   return false;
@@ -174,7 +174,7 @@ bool OrderOwnershipIndex::KnowsAccount(const AccountId& account) const {
 namespace hquant {
 
 PrivateReportRouter::PrivateReportRouter(Options options,
-                                         OrderOwnershipIndex& index)
+                                         OrderStrategyIndex& index)
     : options_(options), index_(index) {
   for (size_t shard = 0; shard < queues_.size(); ++shard) {
     if (shard != options_.reader_shard.value) {
@@ -185,7 +185,7 @@ PrivateReportRouter::PrivateReportRouter(Options options,
 }
 
 absl::StatusOr<std::unique_ptr<PrivateReportRouter>>
-PrivateReportRouter::Create(Options options, OrderOwnershipIndex& index) {
+PrivateReportRouter::Create(Options options, OrderStrategyIndex& index) {
   if (!options.reader_shard.IsValid() ||
       options.queue_capacity_per_shard == 0 ||
       options.quarantine_capacity == 0 ||
@@ -241,19 +241,19 @@ RouteResult PrivateReportRouter::Route(PrivateReport report) {
     return Quarantine(std::move(report), std::move(result));
   }
   result.source_sequence = next_source_sequence_++;
-  auto ownership = index_.Resolve(account, market, client_id, exchange_id);
-  if (!ownership.ok()) {
-    result.failure = CodeOf(ownership.status());
+  auto route = index_.Resolve(account, market, client_id, exchange_id);
+  if (!route.ok()) {
+    result.failure = CodeOf(route.status());
     return Quarantine(std::move(report), std::move(result));
   }
-  RoutedPrivateReport routed{ownership->owner, ownership->current_shard,
+  RoutedPrivateReport routed{route->strategy_id, route->current_shard,
                              result.source_sequence, std::move(report)};
-  if (ownership->current_shard == options_.reader_shard) {
+  if (route->current_shard == options_.reader_shard) {
     result.disposition = RouteDisposition::Local;
     result.local_report = std::move(routed);
     return result;
   }
-  auto& queue = *queues_[ownership->current_shard.value];
+  auto& queue = *queues_[route->current_shard.value];
   const size_t tail = queue.tail.load(std::memory_order_relaxed);
   const size_t head = queue.head.load(std::memory_order_acquire);
   if (tail - head >= queue.slots.size()) {
@@ -263,7 +263,7 @@ RouteResult PrivateReportRouter::Route(PrivateReport report) {
   queue.slots[tail % queue.slots.size()] = std::move(routed);
   queue.tail.store(tail + 1, std::memory_order_release);
   result.disposition = RouteDisposition::Forwarded;
-  if (tail == head) result.wake_shard = ownership->current_shard;
+  if (tail == head) result.wake_shard = route->current_shard;
   return result;
 }
 

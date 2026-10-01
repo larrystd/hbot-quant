@@ -83,11 +83,11 @@ TEST(SimulatedBinanceTest, RestAndWebsocketDriveSimulatedExchangeThenDisconnectA
   const AccountId account("simulated");
   const MarketId market{ExchangeId("binance"), InstrumentKind::Spot, "BTCUSDT"};
   const MarketSpec spec{market, AssetId("BTC"), AssetId("USDT")};
-  const OwnerId owner{1, StrategyId("simple_pmm"), std::nullopt};
+  const StrategyId strategy_id{1, StrategyName("simple_pmm")};
   const BookScale scale{D("0.01"), D("0.001"), 1};
   const TradingRule rule{market,    D("0.01"), D("0.001"), D("0.001"),
                          D("0.01"), {},        1,          clock.UtcNow()};
-  SimplePmm strategy({owner, account, spec, D("0.01"), D("0.001"), D("0.001"),
+  SimplePmm strategy({strategy_id, account, spec, D("0.01"), D("0.001"), D("0.001"),
                       std::chrono::seconds(15), PmmPriceType::Mid, D("0.001"),
                       true});
   SimpleSimulatedExchange sim_exchange({account,
@@ -108,7 +108,7 @@ TEST(SimulatedBinanceTest, RestAndWebsocketDriveSimulatedExchangeThenDisconnectA
                             clock.UtcNow() + std::chrono::hours(1)})
           .ok());
   MemoryRecorder recorder;
-  ShardRuntime shard({RunId{1}, ShardId{0}, owner, account, spec, scale, rule},
+  ShardRuntime shard({RunId{1}, ShardId{0}, strategy_id, account, spec, scale, rule},
                      clock, strategy, sim_exchange, risk, recorder);
 
   asio::io_context io;

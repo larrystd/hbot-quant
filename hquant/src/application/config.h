@@ -30,7 +30,7 @@ struct MarketConfig {
 };
 
 struct StrategyConfig {
-  OwnerId owner;
+  StrategyId strategy_id;
   AccountId account;
   std::vector<MarketId> markets;
   Decimal order_amount;
@@ -42,7 +42,7 @@ struct StrategyConfig {
 struct ShardAssignment {
   ShardId shard;
   std::vector<MarketId> markets;
-  std::vector<OwnerId> owners;
+  std::vector<StrategyId> strategy_ids;
   std::vector<AccountId> accounts;
 };
 

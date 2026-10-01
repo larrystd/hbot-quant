@@ -15,7 +15,7 @@
 
 namespace hquant {
 
-// One local lease applies to one account/IP/endpoint key. The owner io_context
+// One local lease applies to one account/IP/endpoint key. The owning io_context
 // serializes calls to RateLimiter; only the breaker is shared across shards.
 struct RateLimitKey {
   std::string account;

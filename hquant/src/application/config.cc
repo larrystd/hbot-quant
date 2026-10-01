@@ -335,22 +335,22 @@ absl::StatusOr<AppConfig> ParseConfig(std::string_view yaml_text) {
       return Error(ErrorCode::kConfigReferenceInvalid,
                    "at least one market required");
 
-    std::map<uint64_t, OwnerId> owners_by_key;
+    std::map<uint64_t, StrategyId> strategies_by_id;
     auto strategies = Sequence(root, "strategy_configs");
     if (!strategies.ok()) return strategies.status();
     for (const auto& item : *strategies) {
       if (!item.IsMap())
         return Error(ErrorCode::kConfigFieldInvalid, "strategy must be a map");
-      auto key = Unsigned(item, "owner_key");
+      auto key = Unsigned(item, "strategy_id");
       auto strategy = Scalar(item, "strategy");
       auto account = Scalar(item, "account");
       if (!key.ok()) return key.status();
       if (!strategy.ok()) return strategy.status();
       if (!account.ok()) return account.status();
       if (*key == 0 || *key >= (uint64_t{1} << 48) ||
-          owners_by_key.contains(*key)) {
+          strategies_by_id.contains(*key)) {
         return Error(ErrorCode::kConfigReferenceInvalid,
-                     "invalid or duplicate owner_key");
+                     "invalid or duplicate strategy_id");
       }
       if (*strategy != "simple_pmm" || !accounts_by_name.contains(*account)) {
         return Error(ErrorCode::kConfigReferenceInvalid,
@@ -378,14 +378,14 @@ absl::StatusOr<AppConfig> ParseConfig(std::string_view yaml_text) {
                      "strategy spread must be below one");
       }
       StrategyConfig config_entry;
-      config_entry.owner = OwnerId{*key, StrategyId(*strategy), std::nullopt};
+      config_entry.strategy_id = StrategyId{*key, StrategyName(*strategy)};
       config_entry.account = AccountId(*account);
       config_entry.markets = std::move(*dependencies);
       config_entry.order_amount = *amount;
       config_entry.bid_spread = *bid_spread;
       config_entry.ask_spread = *ask_spread;
       config_entry.refresh_interval = *refresh;
-      owners_by_key.emplace(*key, config_entry.owner);
+      strategies_by_id.emplace(*key, config_entry.strategy_id);
       config.strategy_configs.push_back(std::move(config_entry));
     }
     if (config.strategy_configs.empty())
@@ -393,7 +393,7 @@ absl::StatusOr<AppConfig> ParseConfig(std::string_view yaml_text) {
                    "at least one strategy required");
 
     std::map<std::string, uint8_t> market_shard;
-    std::map<uint64_t, uint8_t> owner_shard;
+    std::map<uint64_t, uint8_t> strategy_shard;
     std::set<uint8_t> shard_ids;
     auto assignments = Sequence(root, "assignments");
     if (!assignments.ok()) return assignments.status();
@@ -419,27 +419,27 @@ absl::StatusOr<AppConfig> ParseConfig(std::string_view yaml_text) {
         }
         assignment.markets.push_back(std::move(market));
       }
-      auto owners = Sequence(item, "owners");
-      if (!owners.ok()) return owners.status();
-      for (const auto& owner_node : *owners) {
-        if (!owner_node.IsScalar())
+      auto strategy_ids = Sequence(item, "strategy_ids");
+      if (!strategy_ids.ok()) return strategy_ids.status();
+      for (const auto& strategy_node : *strategy_ids) {
+        if (!strategy_node.IsScalar())
           return Error(ErrorCode::kConfigFieldInvalid,
-                       "owner key must be scalar");
-        const std::string text = owner_node.Scalar();
+                       "strategy_id key must be scalar");
+        const std::string text = strategy_node.Scalar();
         uint64_t key = 0;
         auto [end, error] =
             std::from_chars(text.data(), text.data() + text.size(), key);
         if (error != std::errc{} || end != text.data() + text.size()) {
           return Error(ErrorCode::kConfigAssignmentInvalid,
-                       "invalid assigned owner key");
+                       "invalid assigned strategy_id key");
         }
-        const auto owner = owners_by_key.find(key);
-        if (owner == owners_by_key.end() ||
-            !owner_shard.emplace(key, shard->value).second) {
+        const auto strategy_id = strategies_by_id.find(key);
+        if (strategy_id == strategies_by_id.end() ||
+            !strategy_shard.emplace(key, shard->value).second) {
           return Error(ErrorCode::kConfigAssignmentInvalid,
-                       "unknown or duplicate assigned owner");
+                       "unknown or duplicate assigned strategy_id");
         }
-        assignment.owners.push_back(owner->second);
+        assignment.strategy_ids.push_back(strategy_id->second);
       }
       auto account_nodes = Sequence(item, "accounts");
       if (!account_nodes.ok()) return account_nodes.status();
@@ -457,12 +457,12 @@ absl::StatusOr<AppConfig> ParseConfig(std::string_view yaml_text) {
     }
     if (config.assignments.empty() || config.assignments.size() > 8 ||
         market_shard.size() != markets_by_name.size() ||
-        owner_shard.size() != owners_by_key.size()) {
+        strategy_shard.size() != strategies_by_id.size()) {
       return Error(ErrorCode::kConfigAssignmentInvalid,
                    "incomplete or oversized shard assignment");
     }
     for (const auto& strategy : config.strategy_configs) {
-      const uint8_t shard = owner_shard.at(strategy.owner.owner_key);
+      const uint8_t shard = strategy_shard.at(strategy.strategy_id.value);
       const auto assignment = std::find_if(
           config.assignments.begin(), config.assignments.end(),
           [&](const auto& item) { return item.shard.value == shard; });

@@ -214,7 +214,7 @@ HistoryPage HistoryReader::Query(const HistoryQuery& query) {
       "SELECT id,schema_version,record_blob FROM history_records WHERE id>?1";
   int next = 2;
   if (query.account) sql += " AND account=?" + std::to_string(next++);
-  if (query.owner) sql += " AND owner_key=?" + std::to_string(next++);
+  if (query.strategy_id) sql += " AND owner_key=?" + std::to_string(next++);
   if (query.market) {
     sql += " AND market_venue=?" + std::to_string(next++);
     sql += " AND market_kind=?" + std::to_string(next++);
@@ -233,9 +233,9 @@ HistoryPage HistoryReader::Query(const HistoryQuery& query) {
   sqlite3_bind_int64(s, 1, static_cast<sqlite3_int64>(cursor));
   int bind = 2;
   if (query.account) Text(s, bind++, query.account->value);
-  if (query.owner)
+  if (query.strategy_id)
     sqlite3_bind_int64(s, bind++,
-                       static_cast<sqlite3_int64>(query.owner->owner_key));
+                       static_cast<sqlite3_int64>(query.strategy_id->value));
   if (query.market) {
     Text(s, bind++, query.market->exchange.value);
     sqlite3_bind_int(s, bind++,

@@ -69,7 +69,7 @@ and must not silently alter accepted levels.
 
 ## `order_tracker`
 
-`setup` fixes `account`, `market`, numeric `owner_key` (a positive 48-bit
+`setup` fixes `account`, `market`, numeric `strategy_id` (a positive 48-bit
 integer), `client_id`, `side`,
 `base_amount`, `limit_price`, and optional `initial_reservation_by_asset`.
 `event.kind` is `register`, `order_update`, `trade_update`,
@@ -97,7 +97,7 @@ not a claim of Python parity. Keep Python-parity Tracker outputs marked
 
 ## `simple_pmm`
 
-`setup` fixes `account`, `market`, numeric `owner_key` (a positive 48-bit
+`setup` fixes `account`, `market`, numeric `strategy_id` (a positive 48-bit
 integer), and `config` containing
 `order_amount`, `bid_spread`, `ask_spread`, `refresh_interval_us`, and
 `price_type` (`mid` or `last`). A `tick` event supplies `ready`, `mid_price`,
@@ -117,7 +117,7 @@ there is no wait for cancel confirmation.
 
 ## `paper` (G1)
 
-`setup` fixes `market`, `base_asset`, `quote_asset`, numeric `owner_key`,
+`setup` fixes `market`, `base_asset`, `quote_asset`, numeric `strategy_id`,
 `initial_balances` (asset → decimal string), `maker_fee_rate` (decimal string),
 `buy_fee_from_returns` (boolean), `price_increment`, and `base_increment`
 (decimal strings). The fee setup is explicit so fixtures never depend on a

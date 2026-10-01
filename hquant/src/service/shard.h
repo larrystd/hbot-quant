@@ -55,7 +55,7 @@ struct StopNewOrders {
   std::string reason;
 };
 struct CancelOwnedOrders {
-  OwnerId owner;
+  StrategyId strategy_id;
 };
 struct RequestShardReport {};
 using ShardCommandPayload =
@@ -87,7 +87,7 @@ class ShardRuntime {
   struct Config {
     RunId run;
     ShardId shard;
-    OwnerId owner;
+    StrategyId strategy_id;
     AccountId account;
     MarketSpec market;
     BookScale scale;
@@ -119,7 +119,7 @@ class ShardRuntime {
   absl::Status UpdateSimulatedExchangeBbo();
   absl::Status DrainSimulatedExchangeEvents();
   absl::Status ProcessAccountEvent(const AccountEvent& event);
-  absl::Status Record(RecordPayload payload, const OwnerId& owner);
+  absl::Status Record(RecordPayload payload, const StrategyId& strategy_id);
   void AddGap(uint64_t sequence);
   std::vector<OrderSnapshot> OrderViews() const;
   std::vector<Balance> BalanceViews() const;

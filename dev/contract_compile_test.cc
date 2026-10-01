@@ -27,7 +27,7 @@ int main() {
   request.market = market;
   request.limit_price = *price;
   hquant::ActionBatch batch;
-  batch.ordered.emplace_back(hquant::SubmitOrder{hquant::OwnerId{}, request});
+  batch.ordered.emplace_back(hquant::SubmitOrder{hquant::StrategyId{}, request});
   hquant::RecordEnvelope record;
   record.payload = hquant::OrderIntent{};
   hquant::ControlRequest control;

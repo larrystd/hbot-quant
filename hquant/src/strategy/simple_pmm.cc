@@ -18,7 +18,7 @@ TriggerPolicy SimplePmm::Triggers() const {
 }
 
 bool SimplePmm::Active(const OrderSnapshot& order) const {
-  if (order.owner != config_.owner ||
+  if (order.strategy_id != config_.strategy_id ||
       order.request.account != config_.account ||
       order.request.market != config_.market.market)
     return false;
@@ -76,7 +76,7 @@ ActionBatch SimplePmm::OnTimer(const StrategyContext& context) {
 
   for (const auto& order : context.orders) {
     if (Active(order))
-      actions.ordered.emplace_back(CancelOrder{config_.owner, order.client_id});
+      actions.ordered.emplace_back(CancelOrder{config_.strategy_id, order.client_id});
   }
 
   const auto reference = ReferencePrice(context);
@@ -125,9 +125,9 @@ ActionBatch SimplePmm::OnTimer(const StrategyContext& context) {
     return order;
   };
   actions.ordered.emplace_back(
-      SubmitOrder{config_.owner, request(Side::Buy, buy_amount, *buy_price)});
+      SubmitOrder{config_.strategy_id, request(Side::Buy, buy_amount, *buy_price)});
   actions.ordered.emplace_back(SubmitOrder{
-      config_.owner, request(Side::Sell, sell_amount, *sell_price)});
+      config_.strategy_id, request(Side::Sell, sell_amount, *sell_price)});
 
   const int64_t period = config_.refresh_interval.count();
   if (period > 0 && now <= std::numeric_limits<int64_t>::max() - period) {

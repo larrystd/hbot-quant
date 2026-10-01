@@ -63,7 +63,7 @@ struct OrderRequest {
 };
 
 struct OrderCommand {
-  OwnerId owner;
+  StrategyId strategy_id;
   OrderRequest request;
   ReservationId reservation_id;
   DecisionId decision_id;
@@ -72,14 +72,14 @@ struct OrderCommand {
 
 struct ExecutorCheckpoint {
   uint32_t schema_version = 0;
-  OwnerId owner;
+  StrategyId strategy_id;
   uint64_t config_revision = 0;
   std::string payload;
 };
 
 struct OrderIntent {
   ClientOrderId client_id;
-  OwnerId owner;
+  StrategyId strategy_id;
   OrderRequest request;
   uint64_t config_revision = 0;
   UtcTime created_at_utc{};
@@ -116,7 +116,7 @@ struct TradeUpdate {
 struct OrderSnapshot {
   ClientOrderId client_id;
   std::optional<ExchangeOrderId> exchange_id;
-  OwnerId owner;
+  StrategyId strategy_id;
   OrderRequest request;
   OrderDisplayState display_state = OrderDisplayState::PendingCreate;
   Decimal cumulative_base;
@@ -160,7 +160,7 @@ class OrderGateway {
   virtual absl::StatusOr<OrderIntent> PrepareSubmit(OrderCommand command) = 0;
   virtual absl::Status StartPrepared(const ClientOrderId& client_id) = 0;
   virtual absl::Status AbortPrepared(const ClientOrderId& client_id) = 0;
-  virtual absl::Status StartCancel(const OwnerId& owner,
+  virtual absl::Status StartCancel(const StrategyId& strategy_id,
                                    const ClientOrderId& client_id) = 0;
 };
 

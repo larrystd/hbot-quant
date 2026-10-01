@@ -98,7 +98,7 @@ TEST(RecoveryIntegrationTest, UnknownWriteAndCrashUseOriginalIdWithoutResend) {
   const AccountId account("A1");
   const MarketId market{ExchangeId("binance"), InstrumentKind::Spot, "BTCUSDT"};
   const MarketSpec spec{market, AssetId("BTC"), AssetId("USDT")};
-  const OwnerId owner{17, StrategyId("simple_pmm"), std::nullopt};
+  const StrategyId strategy_id{17, StrategyName("simple_pmm")};
   TradingRule rule{market,    D("0.01"), D("0.001"), D("0.001"),
                    D("0.01"), {},        1,          clock.UtcNow()};
   OrderRequest request;
@@ -114,7 +114,7 @@ TEST(RecoveryIntegrationTest, UnknownWriteAndCrashUseOriginalIdWithoutResend) {
           .SetInitialLease({account, AssetId("USDT"), ShardId{0}, 1, D("100"),
                             clock.UtcNow() + std::chrono::hours(1)})
           .ok());
-  auto reservation = original_risk.TryReserve(owner, request, spec, rule,
+  auto reservation = original_risk.TryReserve(strategy_id, request, spec, rule,
                                               clock.UtcNow(), true, true);
   ASSERT_TRUE(reservation.ok()) << reservation.status();
   boost::asio::io_context io;
@@ -132,7 +132,7 @@ TEST(RecoveryIntegrationTest, UnknownWriteAndCrashUseOriginalIdWithoutResend) {
       io, transport, clock, config, [&](binance_spot::GatewayEvent event) {
         events.push_back(std::move(event));
       });
-  OrderCommand command{owner, request, reservation->reservation_id,
+  OrderCommand command{strategy_id, request, reservation->reservation_id,
                        DecisionId{1},
                        clock.MonoNow() + std::chrono::seconds(1)};
   auto intent = gateway.PrepareSubmit(std::move(command));
@@ -148,7 +148,7 @@ TEST(RecoveryIntegrationTest, UnknownWriteAndCrashUseOriginalIdWithoutResend) {
   record.run_id = RunId{42};
   record.shard = ShardId{0};
   record.shard_sequence = 1;
-  record.owner = owner;
+  record.strategy_id = strategy_id;
   record.received_at_utc = clock.UtcNow();
   record.payload = *intent;
   ASSERT_TRUE((*recorder)->TryPush(std::move(record)));
@@ -196,7 +196,7 @@ TEST(RecoveryIntegrationTest, UnknownWriteAndCrashUseOriginalIdWithoutResend) {
           .SetInitialLease({account, AssetId("USDT"), ShardId{0}, 1, D("100"),
                             clock.UtcNow() + std::chrono::hours(1)})
           .ok());
-  auto restored_hold = restored_risk.TryReserve(owner, request, spec, rule,
+  auto restored_hold = restored_risk.TryReserve(strategy_id, request, spec, rule,
                                                 clock.UtcNow(), true, true);
   ASSERT_TRUE(restored_hold.ok());
   ASSERT_TRUE(

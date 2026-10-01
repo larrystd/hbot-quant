@@ -17,8 +17,8 @@ MarketId Market(std::string symbol = "BTCUSDT") {
   return MarketId{ExchangeId("binance"), InstrumentKind::Spot, std::move(symbol)};
 }
 
-OwnerId Owner(uint64_t key) {
-  return OwnerId{key, StrategyId("simple_pmm"), std::nullopt};
+StrategyId MakeStrategyId(uint64_t key) {
+  return StrategyId{key, StrategyName("simple_pmm")};
 }
 
 OrderUpdate Update(std::string client, std::string exchange = "") {
@@ -42,10 +42,10 @@ TradeUpdate Trade(std::string client, std::string exchange = "") {
   return trade;
 }
 
-OrderOwnershipIndex Index() {
+OrderStrategyIndex Index() {
   // Test codec validates the whole synthetic ID. The digit represents only
-  // the stable owner; a trailing shard hint has no routing authority.
-  return OrderOwnershipIndex(
+  // the stable strategy_id; a trailing shard hint has no routing authority.
+  return OrderStrategyIndex(
       [](const ClientOrderId& id) -> std::optional<uint64_t> {
         if (id.value.size() != 4 || id.value[0] != 'C' || id.value[1] < '1' ||
             id.value[1] > '9' || id.value[2] != '-' || id.value[3] < '0' ||
@@ -56,21 +56,21 @@ OrderOwnershipIndex Index() {
       });
 }
 
-TEST(OrderOwnershipIndexTest, StableOwnerRoutesOldClientToCurrentShard) {
+TEST(OrderStrategyIndexTest, StableStrategyRoutesOldClientToCurrentShard) {
   auto index = Index();
   ASSERT_TRUE(
-      index.SetOwnerRoute(Owner(1), AccountId("account-a"), ShardId{1}).ok());
+      index.SetStrategyRoute(MakeStrategyId(1), AccountId("account-a"), ShardId{1}).ok());
   ASSERT_TRUE(index
                   .RegisterClient(ClientOrderId("C1-1"), AccountId("account-a"),
-                                  Market(), Owner(1))
+                                  Market(), MakeStrategyId(1))
                   .ok());
   ASSERT_TRUE(index
                   .RegisterExchange(AccountId("account-a"), Market(),
-                                    ExchangeOrderId("E1"), Owner(1),
+                                    ExchangeOrderId("E1"), MakeStrategyId(1),
                                     ClientOrderId("C1-1"))
                   .ok());
   ASSERT_TRUE(
-      index.SetOwnerRoute(Owner(1), AccountId("account-a"), ShardId{5}).ok());
+      index.SetStrategyRoute(MakeStrategyId(1), AccountId("account-a"), ShardId{5}).ok());
   auto from_old_client = index.Resolve(AccountId("account-a"), Market(),
                                        ClientOrderId("C1-1"), std::nullopt);
   ASSERT_TRUE(from_old_client.ok()) << from_old_client.status();
@@ -78,41 +78,41 @@ TEST(OrderOwnershipIndexTest, StableOwnerRoutesOldClientToCurrentShard) {
   auto from_exchange = index.Resolve(AccountId("account-a"), Market(),
                                      std::nullopt, ExchangeOrderId("E1"));
   ASSERT_TRUE(from_exchange.ok()) << from_exchange.status();
-  EXPECT_EQ(from_exchange->owner, Owner(1));
+  EXPECT_EQ(from_exchange->strategy_id, MakeStrategyId(1));
   auto decoded_only = index.Resolve(AccountId("account-a"), Market(),
                                     ClientOrderId("C1-7"), std::nullopt);
   ASSERT_TRUE(decoded_only.ok());
   EXPECT_EQ(decoded_only->current_shard.value, 5);
 }
 
-TEST(OrderOwnershipIndexTest, RejectsConflictsAndWrongAccountOrMarket) {
+TEST(OrderStrategyIndexTest, RejectsConflictsAndWrongAccountOrMarket) {
   auto index = Index();
   ASSERT_TRUE(
-      index.SetOwnerRoute(Owner(1), AccountId("account-a"), ShardId{1}).ok());
+      index.SetStrategyRoute(MakeStrategyId(1), AccountId("account-a"), ShardId{1}).ok());
   ASSERT_TRUE(
-      index.SetOwnerRoute(Owner(2), AccountId("account-a"), ShardId{2}).ok());
+      index.SetStrategyRoute(MakeStrategyId(2), AccountId("account-a"), ShardId{2}).ok());
   EXPECT_FALSE(
-      index.SetOwnerRoute(Owner(1), AccountId("account-b"), ShardId{3}).ok());
+      index.SetStrategyRoute(MakeStrategyId(1), AccountId("account-b"), ShardId{3}).ok());
   EXPECT_FALSE(index
                    .RegisterClient(ClientOrderId("C2-0"),
-                                   AccountId("account-a"), Market(), Owner(1))
+                                   AccountId("account-a"), Market(), MakeStrategyId(1))
                    .ok());
   ASSERT_TRUE(index
                   .RegisterClient(ClientOrderId("C1-0"), AccountId("account-a"),
-                                  Market(), Owner(1))
+                                  Market(), MakeStrategyId(1))
                   .ok());
   EXPECT_FALSE(index
                    .RegisterClient(ClientOrderId("C1-0"),
                                    AccountId("account-a"), Market("ETHUSDT"),
-                                   Owner(1))
+                                   MakeStrategyId(1))
                    .ok());
   ASSERT_TRUE(index
                   .RegisterExchange(AccountId("account-a"), Market(),
-                                    ExchangeOrderId("E2"), Owner(2))
+                                    ExchangeOrderId("E2"), MakeStrategyId(2))
                   .ok());
   EXPECT_FALSE(index
                    .RegisterExchange(AccountId("account-a"), Market(),
-                                     ExchangeOrderId("E2"), Owner(1))
+                                     ExchangeOrderId("E2"), MakeStrategyId(1))
                    .ok());
   EXPECT_FALSE(index
                    .Resolve(AccountId("account-a"), Market(),
@@ -133,12 +133,12 @@ TEST(OrderOwnershipIndexTest, RejectsConflictsAndWrongAccountOrMarket) {
 }
 
 TEST(PrivateReportRouterTest,
-     LocalAndRemoteDeliveryPreserveOwnerAndSourceOrder) {
+     LocalAndRemoteDeliveryPreserveStrategyAndSourceOrder) {
   auto index = Index();
   ASSERT_TRUE(
-      index.SetOwnerRoute(Owner(1), AccountId("account-a"), ShardId{0}).ok());
+      index.SetStrategyRoute(MakeStrategyId(1), AccountId("account-a"), ShardId{0}).ok());
   ASSERT_TRUE(
-      index.SetOwnerRoute(Owner(2), AccountId("account-a"), ShardId{2}).ok());
+      index.SetStrategyRoute(MakeStrategyId(2), AccountId("account-a"), ShardId{2}).ok());
   auto router_or = PrivateReportRouter::Create({ShardId{0}, 2, 2}, index);
   ASSERT_TRUE(router_or.ok());
   auto& router = **router_or;
@@ -146,7 +146,7 @@ TEST(PrivateReportRouterTest,
   auto local = router.Route(Update("C1-7"));
   ASSERT_EQ(local.disposition, RouteDisposition::Local);
   ASSERT_TRUE(local.local_report);
-  EXPECT_EQ(local.local_report->owner, Owner(1));
+  EXPECT_EQ(local.local_report->strategy_id, MakeStrategyId(1));
   EXPECT_EQ(local.source_sequence, 1);
   auto first = router.Route(Trade("C2-0"));
   EXPECT_EQ(first.disposition, RouteDisposition::Forwarded);
@@ -169,7 +169,7 @@ TEST(PrivateReportRouterTest,
      QueueFullAndUnknownIsolatePauseAndRequireReconcile) {
   auto index = Index();
   ASSERT_TRUE(
-      index.SetOwnerRoute(Owner(2), AccountId("account-a"), ShardId{2}).ok());
+      index.SetStrategyRoute(MakeStrategyId(2), AccountId("account-a"), ShardId{2}).ok());
   auto router_or = PrivateReportRouter::Create({ShardId{0}, 1, 2}, index);
   ASSERT_TRUE(router_or.ok());
   auto& router = **router_or;
@@ -197,7 +197,7 @@ TEST(PrivateReportRouterTest,
 TEST(PrivateReportRouterTest, RemoteQueueIsSafeForOneReaderAndOneShard) {
   auto index = Index();
   ASSERT_TRUE(
-      index.SetOwnerRoute(Owner(2), AccountId("account-a"), ShardId{2}).ok());
+      index.SetStrategyRoute(MakeStrategyId(2), AccountId("account-a"), ShardId{2}).ok());
   auto router_or = PrivateReportRouter::Create({ShardId{0}, 64, 8}, index);
   ASSERT_TRUE(router_or.ok());
   auto& router = **router_or;
@@ -214,7 +214,7 @@ TEST(PrivateReportRouterTest, RemoteQueueIsSafeForOneReaderAndOneShard) {
         std::this_thread::yield();
         continue;
       }
-      if (report->source_sequence != expected || report->owner != Owner(2)) {
+      if (report->source_sequence != expected || report->strategy_id != MakeStrategyId(2)) {
         bad_order.store(true, std::memory_order_relaxed);
         return;
       }

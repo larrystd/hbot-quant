@@ -85,8 +85,8 @@ TEST(SimplePmmTest, ReplaysEveryPythonFixtureStep) {
     ASSERT_NE(dash, std::string::npos);
     SimplePmmConfig config;
     config.account = AccountId(S(setup, "account"));
-    config.owner =
-        OwnerId{uint64_t(setup["owner_key"]), StrategyId("simple_pmm"), {}};
+    config.strategy_id =
+        StrategyId{uint64_t(setup["strategy_id"]), StrategyName("simple_pmm")};
     config.market = MarketSpec{
         MarketId{ExchangeId("simulated"), InstrumentKind::Spot, market_name},
         AssetId(market_name.substr(0, dash)),
@@ -127,7 +127,7 @@ TEST(SimplePmmTest, ReplaysEveryPythonFixtureStep) {
       for (auto raw : simdjson::dom::array(event["active_orders"])) {
         OrderSnapshot order;
         order.client_id = ClientOrderId(S(raw, "client_id"));
-        order.owner = config.owner;
+        order.strategy_id = config.strategy_id;
         order.request.account = config.account;
         order.request.market = config.market.market;
         order.display_state = OrderDisplayState::Open;
@@ -156,13 +156,13 @@ TEST(SimplePmmTest, ReplaysEveryPythonFixtureStep) {
           ASSERT_TRUE(
               std::holds_alternative<CancelOrder>(actual.ordered[index]));
           const auto& action = std::get<CancelOrder>(actual.ordered[index]);
-          EXPECT_EQ(action.owner, config.owner);
+          EXPECT_EQ(action.strategy_id, config.strategy_id);
           EXPECT_EQ(action.client_id.value, S(wanted, "client_id"));
         } else {
           ASSERT_TRUE(
               std::holds_alternative<SubmitOrder>(actual.ordered[index]));
           const auto& action = std::get<SubmitOrder>(actual.ordered[index]);
-          EXPECT_EQ(action.owner, config.owner);
+          EXPECT_EQ(action.strategy_id, config.strategy_id);
           EXPECT_EQ(action.request.side,
                     S(wanted, "side") == "Buy" ? Side::Buy : Side::Sell);
           ASSERT_TRUE(action.request.limit_price.has_value());

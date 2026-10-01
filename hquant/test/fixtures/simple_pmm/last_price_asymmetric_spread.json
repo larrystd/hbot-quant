@@ -12,7 +12,7 @@
   "setup": {
     "account": "simulated",
     "market": "ETH-USDT",
-    "owner_key": 1,
+    "strategy_id": 1,
     "config": {
       "order_amount": "0.01",
       "bid_spread": "0.01",

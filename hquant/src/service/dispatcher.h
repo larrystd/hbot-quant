@@ -15,7 +15,7 @@
 namespace hquant {
 
 struct DispatchContext {
-  OwnerId owner;
+  StrategyId strategy_id;
   DecisionId decision_id;
   MarketSpec market;
   TradingRule rule;
@@ -53,7 +53,7 @@ class ActionDispatcher {
   const std::vector<HistoryGap>& local_gaps() const { return local_gaps_; }
 
  private:
-  bool Record(RecordPayload payload, const OwnerId& owner, UtcTime now);
+  bool Record(RecordPayload payload, const StrategyId& strategy_id, UtcTime now);
   void Gap(uint64_t sequence);
 
   RiskGate& risk_;

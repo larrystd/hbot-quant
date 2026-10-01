@@ -26,7 +26,7 @@ market_specs:
       min_notional: "5"
 
 strategy_configs:
-  - owner_key: 1
+  - strategy_id: 1
     strategy: simple_pmm
     account: simulated
     markets: [BTCUSDT]
@@ -38,7 +38,7 @@ strategy_configs:
 assignments:
   - shard: 0
     markets: [BTCUSDT]
-    owners: [1]
+    strategy_ids: [1]
     accounts: [simulated]
 
 static_risk_leases:

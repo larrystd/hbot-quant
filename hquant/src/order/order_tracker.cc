@@ -103,7 +103,7 @@ OrderSnapshot OrderTracker::MakeSnapshot(const TrackedOrder& order) const {
   OrderSnapshot snapshot;
   snapshot.client_id = order.intent.client_id;
   snapshot.exchange_id = order.exchange_id;
-  snapshot.owner = order.intent.owner;
+  snapshot.strategy_id = order.intent.strategy_id;
   snapshot.request = order.intent.request;
   snapshot.display_state = Display(order);
   snapshot.cumulative_base = order.cumulative_base;
@@ -130,7 +130,7 @@ TrackerResult OrderTracker::MakeResult(
 }
 
 absl::StatusOr<TrackerResult> OrderTracker::Register(OrderIntent intent) {
-  if (intent.client_id.value.empty() || !intent.owner.IsValid() ||
+  if (intent.client_id.value.empty() || !intent.strategy_id.IsValid() ||
       intent.request.account.value.empty() ||
       intent.request.market.exchange.value.empty() ||
       intent.request.market.native_symbol.empty() ||
@@ -184,7 +184,7 @@ absl::StatusOr<OrderTracker::TrackedOrder*> OrderTracker::Find(
   TrackedOrder* order = by_client ? by_client : by_exchange;
   if (!order)
     return Error(ErrorCode::kOrderReportUnattributed,
-                 "order report has no tracked owner");
+                 "order report has no tracked strategy_id");
   if (order->intent.request.account != account ||
       order->intent.request.market != market) {
     order->reconciliation = ReconciliationState::ResyncRequired;

@@ -54,11 +54,10 @@ class Writer {
     bytes_.append(value);
   }
   void DecimalValue(const Decimal& value) { String(value.ToString()); }
-  void Owner(const OwnerId& owner) {
-    U64(owner.owner_key);
-    String(owner.strategy_id.value);
-    Byte(owner.executor_id.has_value());
-    if (owner.executor_id) String(owner.executor_id->value);
+  void StrategyIdField(const StrategyId& strategy) {
+    U64(strategy.value);
+    String(strategy.name.value);
+    Byte(0);  // Former executor-present flag; kept so old records decode.
   }
   void Market(const MarketId& market) {
     String(market.exchange.value);
@@ -85,7 +84,7 @@ class Writer {
   }
   void CheckpointValue(const ExecutorCheckpoint& checkpoint) {
     U64(checkpoint.schema_version);
-    Owner(checkpoint.owner);
+    StrategyIdField(checkpoint.strategy_id);
     U64(checkpoint.config_revision);
     String(checkpoint.payload);
   }
@@ -132,18 +131,11 @@ class Reader {
     *value = std::move(*parsed);
     return true;
   }
-  bool Owner(OwnerId* owner) {
-    uint64_t key = 0;
-    uint8_t present = 0;
-    if (!U64(&key) || !String(&owner->strategy_id.value) || !Byte(&present) ||
-        present > 1)
-      return false;
-    owner->owner_key = key;
-    if (present) {
-      owner->executor_id.emplace();
-      if (!String(&owner->executor_id->value)) return false;
-    }
-    return true;
+  bool StrategyIdField(StrategyId* strategy) {
+    uint8_t executor_present = 0;
+    // Records with the former executor id are not produced and are rejected.
+    return U64(&strategy->value) && String(&strategy->name.value) &&
+           Byte(&executor_present) && executor_present == 0;
   }
   bool Market(MarketId* market) {
     uint8_t kind = 0;
@@ -190,7 +182,7 @@ class Reader {
   bool CheckpointValue(ExecutorCheckpoint* checkpoint) {
     uint64_t version = 0;
     if (!U64(&version) || version > std::numeric_limits<uint32_t>::max() ||
-        !Owner(&checkpoint->owner) || !U64(&checkpoint->config_revision) ||
+        !StrategyIdField(&checkpoint->strategy_id) || !U64(&checkpoint->config_revision) ||
         !String(&checkpoint->payload))
       return false;
     checkpoint->schema_version = static_cast<uint32_t>(version);
@@ -212,8 +204,8 @@ std::string EncodeRecord(const RecordEnvelope& record) {
   out.U64(record.run_id.value);
   out.Byte(record.shard.value);
   out.U64(record.shard_sequence);
-  out.Byte(record.owner.has_value());
-  if (record.owner) out.Owner(*record.owner);
+  out.Byte(record.strategy_id.has_value());
+  if (record.strategy_id) out.StrategyIdField(*record.strategy_id);
   out.I64(Us(record.received_at_utc));
   out.Byte(record.exchange_at_utc.has_value());
   if (record.exchange_at_utc) out.I64(Us(*record.exchange_at_utc));
@@ -223,7 +215,7 @@ std::string EncodeRecord(const RecordEnvelope& record) {
         using T = std::decay_t<decltype(payload)>;
         if constexpr (std::is_same_v<T, OrderIntent>) {
           out.String(payload.client_id.value);
-          out.Owner(payload.owner);
+          out.StrategyIdField(payload.strategy_id);
           out.Request(payload.request);
           out.U64(payload.config_revision);
           out.I64(Us(payload.created_at_utc));
@@ -277,7 +269,7 @@ std::string EncodeRecord(const RecordEnvelope& record) {
           out.U64(static_cast<uint16_t>(payload.reason));
         } else if constexpr (std::is_same_v<T, DecisionRecord>) {
           out.U64(payload.decision_id.value);
-          out.Owner(payload.owner);
+          out.StrategyIdField(payload.strategy_id);
           out.U64(payload.action_index);
           out.Byte(static_cast<uint8_t>(payload.action_kind));
           out.Byte(payload.accepted);
@@ -307,9 +299,9 @@ absl::StatusOr<RecordEnvelope> DecodeRecord(std::string_view bytes) {
   record.schema_version = static_cast<uint32_t>(schema_version);
   record.shard.value = shard;
   if (present) {
-    record.owner.emplace();
-    if (!in.Owner(&*record.owner))
-      return Error(ErrorCode::kRecordEncodingInvalid, "invalid owner");
+    record.strategy_id.emplace();
+    if (!in.StrategyIdField(&*record.strategy_id))
+      return Error(ErrorCode::kRecordEncodingInvalid, "invalid strategy_id");
   }
   if (!in.I64(&timestamp) || !in.Byte(&present) || present > 1)
     return Error(ErrorCode::kRecordEncodingInvalid, "invalid record time");
@@ -323,7 +315,7 @@ absl::StatusOr<RecordEnvelope> DecodeRecord(std::string_view bytes) {
     return Error(ErrorCode::kRecordEncodingInvalid, "invalid payload kind");
   if (kind == 0) {
     OrderIntent value;
-    if (!in.String(&value.client_id.value) || !in.Owner(&value.owner) ||
+    if (!in.String(&value.client_id.value) || !in.StrategyIdField(&value.strategy_id) ||
         !in.Request(&value.request) || !in.U64(&value.config_revision) ||
         !in.I64(&timestamp) || !in.Byte(&present) || present > 1)
       return Error(ErrorCode::kRecordEncodingInvalid, "invalid order intent");
@@ -445,7 +437,7 @@ absl::StatusOr<RecordEnvelope> DecodeRecord(std::string_view bytes) {
     uint64_t action_index = 0;
     uint8_t action_kind = 0, accepted = 0;
     uint64_t reason = 0;
-    if (!in.U64(&value.decision_id.value) || !in.Owner(&value.owner) ||
+    if (!in.U64(&value.decision_id.value) || !in.StrategyIdField(&value.strategy_id) ||
         !in.U64(&action_index) ||
         action_index > std::numeric_limits<uint32_t>::max() ||
         !in.Byte(&action_kind) || action_kind > 1 || !in.Byte(&accepted) ||

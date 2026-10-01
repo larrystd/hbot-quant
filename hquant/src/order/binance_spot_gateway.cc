@@ -48,10 +48,10 @@ absl::StatusOr<uint64_t> ParseBase32(std::string_view text, uint64_t max) {
 }
 }  // namespace
 
-absl::StatusOr<ClientOrderId> EncodeClientId(const OwnerId& owner, RunId run,
+absl::StatusOr<ClientOrderId> EncodeClientId(const StrategyId& strategy_id, RunId run,
                                              ShardId shard,
                                              uint32_t shard_sequence) {
-  if (!owner.IsValid() || !run.IsValid() || !shard.IsValid() ||
+  if (!strategy_id.IsValid() || !run.IsValid() || !shard.IsValid() ||
       shard_sequence == 0 || shard_sequence > kMaxShardSequence) {
     return Error(ErrorCode::kClientIdInvalid, "invalid client ID components");
   }
@@ -60,7 +60,7 @@ absl::StatusOr<ClientOrderId> EncodeClientId(const OwnerId& owner, RunId run,
   std::string text;
   text.reserve(31);
   text.push_back('H');
-  AppendBase32(owner.owner_key, 10, &text);
+  AppendBase32(strategy_id.value, 10, &text);
   AppendBase32(run.value, 13, &text);
   AppendBase32(suffix, 7, &text);
   return ClientOrderId(std::move(text));
@@ -70,18 +70,18 @@ absl::StatusOr<DecodedClientId> DecodeClientId(const ClientOrderId& id) {
   if (id.value.size() != 31 || id.value[0] != 'H') {
     return Error(ErrorCode::kClientIdInvalid, "unsupported client ID format");
   }
-  auto owner = ParseBase32(std::string_view(id.value).substr(1, 10),
+  auto strategy_id = ParseBase32(std::string_view(id.value).substr(1, 10),
                            (uint64_t{1} << 48) - 1);
   auto run = ParseBase32(std::string_view(id.value).substr(11, 13), UINT64_MAX);
   auto suffix =
       ParseBase32(std::string_view(id.value).substr(24, 7), UINT32_MAX);
-  if (!owner.ok()) return owner.status();
+  if (!strategy_id.ok()) return strategy_id.status();
   if (!run.ok()) return run.status();
   if (!suffix.ok()) return suffix.status();
-  DecodedClientId result{*owner, RunId{*run},
+  DecodedClientId result{*strategy_id, RunId{*run},
                          ShardId{static_cast<uint8_t>(*suffix >> 29)},
                          static_cast<uint32_t>(*suffix & kMaxShardSequence)};
-  if (result.owner_key == 0 || !result.run.IsValid() ||
+  if (result.strategy_id == 0 || !result.run.IsValid() ||
       result.shard_sequence == 0) {
     return Error(ErrorCode::kClientIdInvalid, "invalid client ID identity");
   }
@@ -206,7 +206,7 @@ absl::Status BinanceOrderGateway::ValidateAndQuantize(
       config_.recv_window_ms == 0 || config_.recv_window_ms > 60'000 ||
       config_.request_timeout <= std::chrono::milliseconds::zero() ||
       config_.max_pending_submits == 0 || config_.max_pending_cancels == 0 ||
-      !command->owner.IsValid() || request.account != config_.account ||
+      !command->strategy_id.IsValid() || request.account != config_.account ||
       request.market != config_.market ||
       config_.trading_rule.market != config_.market || !request.limit_price ||
       !request.limit_price->IsStrictlyPositive() ||
@@ -265,7 +265,7 @@ absl::StatusOr<OrderIntent> BinanceOrderGateway::PrepareSubmit(
                  "Binance client ID sequence exhausted");
   }
   auto id =
-      EncodeClientId(command.owner, config_.run, config_.shard, next_sequence_);
+      EncodeClientId(command.strategy_id, config_.run, config_.shard, next_sequence_);
   if (!id.ok()) return id.status();
   if (historical_ids_.contains(id->value) ||
       known_orders_.contains(id->value)) {
@@ -273,7 +273,7 @@ absl::StatusOr<OrderIntent> BinanceOrderGateway::PrepareSubmit(
   }
   OrderIntent intent;
   intent.client_id = *id;
-  intent.owner = command.owner;
+  intent.strategy_id = command.strategy_id;
   intent.request = command.request;
   intent.created_at_utc = clock_.UtcNow();
   known_orders_.emplace(
@@ -369,10 +369,10 @@ absl::Status BinanceOrderGateway::AbortPrepared(
   return absl::OkStatus();
 }
 
-absl::Status BinanceOrderGateway::StartCancel(const OwnerId& owner,
+absl::Status BinanceOrderGateway::StartCancel(const StrategyId& strategy_id,
                                               const ClientOrderId& client_id) {
   auto found = known_orders_.find(client_id.value);
-  if (found == known_orders_.end() || found->second.intent.owner != owner ||
+  if (found == known_orders_.end() || found->second.intent.strategy_id != strategy_id ||
       (found->second.state != State::Submitted &&
        found->second.state != State::Unknown)) {
     return Error(ErrorCode::kOrderNotCancelable,
@@ -417,7 +417,7 @@ absl::Status BinanceOrderGateway::ObserveHistoricalClientId(
 }
 
 absl::Status BinanceOrderGateway::RestoreOrder(OrderIntent intent) {
-  if (intent.client_id.value.empty() || intent.owner.IsValid() == false ||
+  if (intent.client_id.value.empty() || intent.strategy_id.IsValid() == false ||
       intent.request.account != config_.account ||
       intent.request.market != config_.market ||
       known_orders_.contains(intent.client_id.value)) {

@@ -90,7 +90,7 @@ flowchart LR
 | --- | --- |
 | `Decimal` / `base/types.h` | libmpdec RAII 值；解析、运算、量化返回 `StatusOr` 或明确错误；不隐式转 `double`；拒绝 NaN/Inf/溢出。JSON/SQLite 用规范化十进制字符串，舍入模式由调用处显式选定。 |
 | `ExchangeId`、`AccountId`、`AssetId`、`StrategyId`、`ExecutorId` / `base/types.h` | 互不混用的拥有字符串 ID。`AccountId` 在进程内唯一指向一个交易所账户，日志和持久化用脱敏表示。 |
-| `OwnerId` / `base/types.h` | `{owner_key, strategy_id, optional executor_id}`。`owner_key` 是配置中显式、稳定、唯一的 48 位正整数；名称用于展示，订单归属由 key 判定，不能靠名称哈希临时生成。重配时旧 key 仍保留在恢复映射中。 |
+| `StrategyId` / `base/types.h` | `{strategy_id, strategy_id, optional executor_id}`。`strategy_id` 是配置中显式、稳定、唯一的 48 位正整数；名称用于展示，订单归属由 key 判定，不能靠名称哈希临时生成。重配时旧 key 仍保留在恢复映射中。 |
 | `RunId`、`ShardId`、`ReservationId`、`DecisionId` / `base/types.h` | `RunId` 是每次引擎启动的加密随机 64 位非零值；client ID 的 32 位尾段中高 3 位是本次运行的 shard 槽位，低 29 位是该 shard 的本地递增序号，溢出停止创建新 ID，不在热路径争用全局计数器。启动对账时若发现与历史 client ID 冲突则重新生成。`ShardId` 是进程内 `0..7` 路由号，可因重启分配改变，ID 中的槽位只用于唯一性/路由提示，不能充当持久归属；预留/决策 ID 也不可互用。 |
 | `ClientOrderId`、`ExchangeOrderId`、`ExchangeTradeId` / `base/types.h` | 三个不同强类型；client ID 在新单发送前确定。交易所 ID 可晚到；成交 ID 的唯一范围由 adapter 明确，去重键至少包括账户、市场和 trade ID。 |
 | `UtcTime`、`MonoTime`、`EventTime` / `base/types.h` | UTC 为微秒 `sys_time`，本地期限用 `steady_clock`。`EventTime={optional exchange_utc, receive_utc, receive_mono}`；前两者可持久化，mono 只在本次 run 比较。`ReplayClock` 同时推进两种时间，夹具用 `at_us` 加 `ordinal` 定相同时间输入顺序。 |

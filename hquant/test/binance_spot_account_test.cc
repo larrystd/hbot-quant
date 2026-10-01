@@ -100,7 +100,7 @@ TEST(UserDataStreamTest, EmitsTradeBeforeStatusAndTrackerDeduplicates) {
   OrderTracker tracker;
   OrderIntent intent;
   intent.client_id = ClientOrderId("C1");
-  intent.owner = OwnerId{1, StrategyId("simple_pmm"), std::nullopt};
+  intent.strategy_id = StrategyId{1, StrategyName("simple_pmm")};
   intent.request.account = AccountId("A1");
   intent.request.market = Market();
   intent.request.base_amount = D("1");

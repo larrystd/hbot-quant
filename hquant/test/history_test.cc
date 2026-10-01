@@ -40,7 +40,7 @@ class TemporaryDatabase {
 
 UtcTime At(int64_t us) { return UtcTime{std::chrono::microseconds{us}}; }
 Decimal D(const char* value) { return *Decimal::Parse(value); }
-OwnerId Owner() { return OwnerId{1, StrategyId{"recovery"}, std::nullopt}; }
+StrategyId MakeStrategyId() { return StrategyId{1, StrategyName{"recovery"}}; }
 MarketId Market() {
   return MarketId{ExchangeId{"binance"}, InstrumentKind::Spot, "BTCUSDT"};
 }
@@ -48,7 +48,7 @@ MarketId Market() {
 RecordEnvelope Intent(uint64_t sequence, std::string client = "B1") {
   OrderIntent intent;
   intent.client_id = ClientOrderId{std::move(client)};
-  intent.owner = Owner();
+  intent.strategy_id = MakeStrategyId();
   intent.request.account = AccountId{"A1"};
   intent.request.market = Market();
   intent.request.side = Side::Buy;
@@ -58,12 +58,12 @@ RecordEnvelope Intent(uint64_t sequence, std::string client = "B1") {
   intent.created_at_utc = At(1000 + sequence);
   intent.config_revision = 7;
   intent.executor_checkpoint =
-      ExecutorCheckpoint{1, Owner(), 7, "intent state"};
+      ExecutorCheckpoint{1, MakeStrategyId(), 7, "intent state"};
   RecordEnvelope record;
   record.run_id = RunId{21};
   record.shard = ShardId{0};
   record.shard_sequence = sequence;
-  record.owner = Owner();
+  record.strategy_id = MakeStrategyId();
   record.received_at_utc = At(1000 + sequence);
   record.payload = std::move(intent);
   return record;
@@ -85,7 +85,7 @@ TEST(RecoveryTest, CleanRunLoadsTypedContextAndOpenClientIds) {
   ASSERT_TRUE((*recorder)->TryPush(Intent(3, "B2")));
   RecordEnvelope checkpoint = Intent(4);
   checkpoint.payload =
-      Checkpoint{ExecutorCheckpoint{1, Owner(), 8, "latest state"}, At(1004)};
+      Checkpoint{ExecutorCheckpoint{1, MakeStrategyId(), 8, "latest state"}, At(1004)};
   ASSERT_TRUE((*recorder)->TryPush(std::move(checkpoint)));
   ASSERT_TRUE((*recorder)->Stop(At(2000)).ok());
   recorder->reset();

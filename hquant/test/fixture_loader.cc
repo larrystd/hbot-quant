@@ -83,10 +83,10 @@ bool ValidateSetup(const std::string& family, simdjson::dom::element setup) {
            U64(setup, "stream_epoch", &epoch) && epoch > 0;
   }
   std::string account;
-  uint64_t owner = 0;
+  uint64_t strategy_id = 0;
   if (!String(setup, "account", &account) || account.empty() ||
-      !U64(setup, "owner_key", &owner) || owner == 0 ||
-      owner >= (uint64_t{1} << 48)) {
+      !U64(setup, "strategy_id", &strategy_id) || strategy_id == 0 ||
+      strategy_id >= (uint64_t{1} << 48)) {
     return false;
   }
   if (family == "order_tracker") {

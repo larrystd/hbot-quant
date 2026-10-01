@@ -20,7 +20,7 @@
     "market": "BTC-USDT",
     "base_asset": "BTC",
     "quote_asset": "USDT",
-    "owner_key": 1,
+    "strategy_id": 1,
     "initial_balances": {
       "BTC": "1",
       "USDT": "100"

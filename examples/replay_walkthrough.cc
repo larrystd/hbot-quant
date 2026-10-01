@@ -260,7 +260,7 @@ absl::Status Run(const std::string& config_path, const std::string& market_path)
   rule.revision = 1;
 
   // 策略：只负责"想做什么"，返回下单/撤单列表。
-  SimplePmm strategy({strategy_config.owner, account.account, market.spec,
+  SimplePmm strategy({strategy_config.strategy_id, account.account, market.spec,
                       strategy_config.order_amount, strategy_config.bid_spread,
                       strategy_config.ask_spread,
                       strategy_config.refresh_interval, PmmPriceType::Mid,
@@ -279,7 +279,7 @@ absl::Status Run(const std::string& config_path, const std::string& market_path)
   }
   PrintingRecorder recorder;
   // 总管：把订单簿、策略、风控、交易所、记录器串起来。
-  ShardRuntime shard({RunId{1}, assignment.shard, strategy_config.owner,
+  ShardRuntime shard({RunId{1}, assignment.shard, strategy_config.strategy_id,
                       account.account, market.spec, market.book_scale, rule},
                      clock, strategy, sim_exchange, risk, recorder);
 

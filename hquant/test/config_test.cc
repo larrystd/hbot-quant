@@ -47,7 +47,7 @@ market_specs:
       min_base_amount: "0.001"
       min_notional: "0.01"
 strategy_configs:
-  - owner_key: 1
+  - strategy_id: 1
     strategy: simple_pmm
     account: simulated
     markets: [BTC-USDT, ETH-USDT]
@@ -58,7 +58,7 @@ strategy_configs:
 assignments:
   - shard: 0
     markets: [BTC-USDT, ETH-USDT]
-    owners: [1]
+    strategy_ids: [1]
     accounts: [simulated]
 static_risk_leases:
   - account: simulated
@@ -127,19 +127,19 @@ int main() {
   auto implicit_mode =
       hquant::ParseConfig(Replace(kValid, "mode: simulated\n", ""));
   Require(!implicit_mode.ok(), "mode must be explicit");
-  auto duplicate_owner = hquant::ParseConfig(
+  auto duplicate_strategy = hquant::ParseConfig(
       Replace(kValid, "assignments:\n",
-              "  - owner_key: 1\n    strategy: simple_pmm\n"
+              "  - strategy_id: 1\n    strategy: simple_pmm\n"
               "    account: simulated\n    markets: [BTC-USDT]\n"
               "    order_amount: \"0.01\"\n"
               "    bid_spread: \"0.001\"\n"
               "    ask_spread: \"0.001\"\n"
               "    refresh_interval: 15s\nassignments:\n"));
-  Require(!duplicate_owner.ok(), "duplicate owner rejected");
+  Require(!duplicate_strategy.ok(), "duplicate strategy_id rejected");
   auto split_market = hquant::ParseConfig(
-      Replace(kValid, "markets: [BTC-USDT, ETH-USDT]\n    owners: [1]",
-              "markets: [BTC-USDT]\n    owners: [1]\n    accounts: [simulated]\n"
-              "  - shard: 1\n    markets: [ETH-USDT]\n    owners: []"));
+      Replace(kValid, "markets: [BTC-USDT, ETH-USDT]\n    strategy_ids: [1]",
+              "markets: [BTC-USDT]\n    strategy_ids: [1]\n    accounts: [simulated]\n"
+              "  - shard: 1\n    markets: [ETH-USDT]\n    strategy_ids: []"));
   Require(!split_market.ok(), "cross-shard strategy dependency rejected");
   Require(hquant::CodeOf(split_market.status()) ==
               hquant::ErrorCode::kConfigAssignmentInvalid,

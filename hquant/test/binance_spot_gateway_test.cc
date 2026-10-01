@@ -106,7 +106,7 @@ BinanceGatewayConfig Config() {
   return config;
 }
 
-OwnerId Owner() { return OwnerId{17, StrategyId("simple_pmm"), std::nullopt}; }
+StrategyId MakeStrategyId() { return StrategyId{17, StrategyName("simple_pmm")}; }
 
 OrderCommand Command(const TestClock& clock) {
   OrderRequest request;
@@ -116,26 +116,26 @@ OrderCommand Command(const TestClock& clock) {
   request.type = OrderType::LimitMaker;
   request.base_amount = D("0.0109");
   request.limit_price = D("99.999");
-  return OrderCommand{Owner(), request, ReservationId{1}, DecisionId{1},
+  return OrderCommand{MakeStrategyId(), request, ReservationId{1}, DecisionId{1},
                       clock.MonoNow() + std::chrono::seconds(1)};
 }
 
-TEST(ClientIdCodecTest, StableOwnerAndUniqueRunRoundTrip) {
-  auto first = EncodeClientId(Owner(), RunId{42}, ShardId{3}, 1);
-  auto restarted = EncodeClientId(Owner(), RunId{43}, ShardId{7}, 1);
+TEST(ClientIdCodecTest, StableStrategyIdAndUniqueRunRoundTrip) {
+  auto first = EncodeClientId(MakeStrategyId(), RunId{42}, ShardId{3}, 1);
+  auto restarted = EncodeClientId(MakeStrategyId(), RunId{43}, ShardId{7}, 1);
   ASSERT_TRUE(first.ok() && restarted.ok());
   EXPECT_EQ(first->value.size(), 31);
   EXPECT_NE(first->value, restarted->value);
   auto decoded = DecodeClientId(*first);
   ASSERT_TRUE(decoded.ok());
-  EXPECT_EQ(decoded->owner_key, Owner().owner_key);
+  EXPECT_EQ(decoded->strategy_id, MakeStrategyId().value);
   EXPECT_EQ(decoded->run.value, 42);
   EXPECT_EQ(decoded->shard_hint.value, 3);
   EXPECT_EQ(decoded->shard_sequence, 1);
   EXPECT_EQ(CodeOf(DecodeClientId(ClientOrderId(first->value + "A")).status()),
             ErrorCode::kClientIdInvalid);
-  EXPECT_FALSE(EncodeClientId(Owner(), RunId{42}, ShardId{3}, 0).ok());
-  EXPECT_FALSE(EncodeClientId(Owner(), RunId{42}, ShardId{3}, 1U << 29).ok());
+  EXPECT_FALSE(EncodeClientId(MakeStrategyId(), RunId{42}, ShardId{3}, 0).ok());
+  EXPECT_FALSE(EncodeClientId(MakeStrategyId(), RunId{42}, ShardId{3}, 1U << 29).ok());
 }
 
 TEST(SignerTest, OfficialHmacVectorAndPercentEncodedWireBytes) {
@@ -282,8 +282,8 @@ TEST(BinanceOrderGatewayTest, CancelUsesReservedRateSlotAndOriginalClientId) {
   EXPECT_EQ(CodeOf(gateway.StartPrepared(second->client_id)),
             ErrorCode::kRateLeaseExhausted);
   EXPECT_TRUE(gateway.AbortPrepared(second->client_id).ok());
-  EXPECT_TRUE(gateway.StartCancel(Owner(), first->client_id).ok());
-  EXPECT_EQ(CodeOf(gateway.StartCancel(Owner(), first->client_id)),
+  EXPECT_TRUE(gateway.StartCancel(MakeStrategyId(), first->client_id).ok());
+  EXPECT_EQ(CodeOf(gateway.StartCancel(MakeStrategyId(), first->client_id)),
             ErrorCode::kOrderCancelPending);
   io.restart();
   io.run();
@@ -314,7 +314,7 @@ TEST(BinanceOrderGatewayTest, CancellationRunsAheadOfQueuedSubmissions) {
   ASSERT_TRUE(a.ok() && b.ok());
   ASSERT_TRUE(gateway.StartPrepared(a->client_id).ok());
   ASSERT_TRUE(gateway.StartPrepared(b->client_id).ok());
-  ASSERT_TRUE(gateway.StartCancel(Owner(), original->client_id).ok());
+  ASSERT_TRUE(gateway.StartCancel(MakeStrategyId(), original->client_id).ok());
   io.restart();
   io.run();
   ASSERT_EQ(transport.requests.size(), 4);
@@ -328,7 +328,7 @@ TEST(BinanceOrderGatewayTest, HistoricalRunCollisionStopsNewIds) {
   MockTransport transport;
   TestClock clock;
   BinanceOrderGateway gateway(io, transport, clock, Config(), {});
-  auto old = EncodeClientId(Owner(), RunId{42}, ShardId{7}, 123);
+  auto old = EncodeClientId(MakeStrategyId(), RunId{42}, ShardId{7}, 123);
   ASSERT_TRUE(old.ok());
   EXPECT_EQ(CodeOf(gateway.ObserveHistoricalClientId(*old)),
             ErrorCode::kOrderRecoveryInvalid);

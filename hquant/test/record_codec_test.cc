@@ -34,7 +34,7 @@ TEST(RecordCodecTest, VersionTwoPreservesFullWidthReasonCodesAndMessages) {
   EXPECT_EQ(CodeOf(rejected_gap.status()), ErrorCode::kRecordEncodingInvalid);
 
   auto decision = Record(DecisionRecord{
-      DecisionId{7}, OwnerId{1, StrategyId{"test"}, std::nullopt}, 0,
+      DecisionId{7}, StrategyId{1, StrategyName{"test"}}, 0,
       DecisionActionKind::Submit, false, ErrorCode::kRiskLeaseExhausted,
       "insufficient quote", std::nullopt});
   auto decoded_decision =
@@ -61,7 +61,7 @@ TEST(RecordCodecTest, ReadsLegacyGapAndPreservesArbitraryDecisionText) {
 
   constexpr std::string_view kLegacyText = "Unmapped legacy rejection";
   auto decision = Record(DecisionRecord{
-      DecisionId{7}, OwnerId{1, StrategyId{"test"}, std::nullopt}, 0,
+      DecisionId{7}, StrategyId{1, StrategyName{"test"}}, 0,
       DecisionActionKind::Submit, false, ErrorCode::kRiskLeaseExhausted,
       std::string(kLegacyText), std::nullopt});
   std::string old_decision = storage_internal::EncodeRecord(decision);

@@ -26,16 +26,16 @@
 namespace hquant::binance_spot {
 
 struct DecodedClientId {
-  uint64_t owner_key = 0;
+  uint64_t strategy_id = 0;
   RunId run;
   ShardId shard_hint;
   uint32_t shard_sequence = 0;
 };
 
-// Candidate Binance Spot codec: H + 10/13/7 RFC4648 base32 digits. The owner
+// Candidate Binance Spot codec: H + 10/13/7 RFC4648 base32 digits. The strategy_id
 // key is stable; shard_hint is only a uniqueness/routing hint within one run.
 // Enable live trading only after the target exchange accepts and echoes this form.
-absl::StatusOr<ClientOrderId> EncodeClientId(const OwnerId& owner, RunId run,
+absl::StatusOr<ClientOrderId> EncodeClientId(const StrategyId& strategy_id, RunId run,
                                              ShardId shard,
                                              uint32_t shard_sequence);
 absl::StatusOr<DecodedClientId> DecodeClientId(const ClientOrderId& id);
@@ -105,7 +105,7 @@ class BinanceOrderGateway final : public OrderGateway {
   absl::StatusOr<OrderIntent> PrepareSubmit(OrderCommand command) override;
   absl::Status StartPrepared(const ClientOrderId& client_id) override;
   absl::Status AbortPrepared(const ClientOrderId& client_id) override;
-  absl::Status StartCancel(const OwnerId& owner,
+  absl::Status StartCancel(const StrategyId& strategy_id,
                            const ClientOrderId& client_id) override;
 
   // Recovery loads historical IDs before order creation; a repeated run ID is

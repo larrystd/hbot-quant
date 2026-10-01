@@ -43,7 +43,7 @@ ErrorCode NormalizeOrder(const OrderRequest& raw, const TradingRule& rule,
 
 }  // namespace
 
-bool ActionDispatcher::Record(RecordPayload payload, const OwnerId& owner,
+bool ActionDispatcher::Record(RecordPayload payload, const StrategyId& strategy_id,
                               UtcTime now) {
   if (shard_sequence_ == std::numeric_limits<uint64_t>::max()) {
     risk_.EmergencyStop();
@@ -54,7 +54,7 @@ bool ActionDispatcher::Record(RecordPayload payload, const OwnerId& owner,
   envelope.run_id = run_;
   envelope.shard = shard_;
   envelope.shard_sequence = sequence;
-  envelope.owner = owner;
+  envelope.strategy_id = strategy_id;
   envelope.received_at_utc = now;
   envelope.payload = std::move(payload);
   if (!recorder_.TryPush(std::move(envelope))) {
@@ -81,16 +81,16 @@ std::vector<DispatchResult> ActionDispatcher::Dispatch(
     const StrategyAction& action = batch.ordered[index];
     DispatchResult result;
     result.action_index = index;
-    const OwnerId& action_owner = std::visit(
-        [](const auto& value) -> const OwnerId& { return value.owner; },
+    const StrategyId& action_strategy_id = std::visit(
+        [](const auto& value) -> const StrategyId& { return value.strategy_id; },
         action);
     const bool submit = std::holds_alternative<SubmitOrder>(action);
-    if (action_owner != context.owner || !context.owner.IsValid()) {
+    if (action_strategy_id != context.strategy_id || !context.strategy_id.IsValid()) {
       result.reason = ErrorCode::kOrderInvalid;
-      result.message = "action owner mismatch";
+      result.message = "action strategy_id mismatch";
     } else if (const auto* cancel = std::get_if<CancelOrder>(&action)) {
       const auto status =
-          gateway_.StartCancel(cancel->owner, cancel->client_id);
+          gateway_.StartCancel(cancel->strategy_id, cancel->client_id);
       result.accepted = status.ok();
       result.reason = status.ok() ? ErrorCode::kOk : CodeOf(status);
       result.message =
@@ -106,13 +106,13 @@ std::vector<DispatchResult> ActionDispatcher::Dispatch(
       } else {
         RiskReservation reservation;
         const ErrorCode reserve_code = risk_.TryReserveCode(
-            order.owner, *normalized, context.market, context.rule,
+            order.strategy_id, *normalized, context.market, context.rule,
             context.now_utc, context.market_live, context.account_fresh,
             &reservation);
         if (reserve_code != ErrorCode::kOk) {
           result.reason = reserve_code;
         } else {
-          OrderCommand command{order.owner, *normalized,
+          OrderCommand command{order.strategy_id, *normalized,
                                reservation.reservation_id, context.decision_id,
                                context.now_mono + std::chrono::seconds(1)};
           auto intent = gateway_.PrepareSubmit(std::move(command));
@@ -122,7 +122,7 @@ std::vector<DispatchResult> ActionDispatcher::Dispatch(
             result.reason = CodeOf(intent.status());
             result.message = std::string(intent.status().message());
           } else if (intent->client_id.value.empty() ||
-                     intent->owner != order.owner ||
+                     intent->strategy_id != order.strategy_id ||
                      intent->request.account != normalized->account ||
                      intent->request.market != normalized->market) {
             UnwindPrepared(risk_, gateway_, reservation.reservation_id,
@@ -140,7 +140,7 @@ std::vector<DispatchResult> ActionDispatcher::Dispatch(
             } else {
               result.client_id = intent->client_id;
               result.intent = *intent;
-              Record(*intent, order.owner, context.now_utc);
+              Record(*intent, order.strategy_id, context.now_utc);
               const auto started = gateway_.StartPrepared(intent->client_id);
               result.accepted = started.ok();
               result.reason = started.ok() ? ErrorCode::kOk : CodeOf(started);
@@ -160,7 +160,7 @@ std::vector<DispatchResult> ActionDispatcher::Dispatch(
     }
     DecisionRecord decision;
     decision.decision_id = context.decision_id;
-    decision.owner = action_owner;
+    decision.strategy_id = action_strategy_id;
     decision.action_index = index;
     decision.action_kind =
         submit ? DecisionActionKind::Submit : DecisionActionKind::Cancel;
@@ -168,7 +168,7 @@ std::vector<DispatchResult> ActionDispatcher::Dispatch(
     decision.reason = result.reason;
     decision.message = result.message;
     decision.client_id = result.client_id;
-    Record(std::move(decision), action_owner, context.now_utc);
+    Record(std::move(decision), action_strategy_id, context.now_utc);
     results.push_back(std::move(result));
   }
   return results;

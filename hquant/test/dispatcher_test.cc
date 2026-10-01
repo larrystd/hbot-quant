@@ -33,7 +33,7 @@ struct FakeGateway final : hquant::OrderGateway {
       hquant::OrderCommand command) override {
     trace->push_back("prepare");
     intent.client_id = hquant::ClientOrderId("B1");
-    intent.owner = command.owner;
+    intent.strategy_id = command.strategy_id;
     intent.request = command.request;
     return intent;
   }
@@ -47,7 +47,7 @@ struct FakeGateway final : hquant::OrderGateway {
     trace->push_back("abort");
     return absl::OkStatus();
   }
-  absl::Status StartCancel(const hquant::OwnerId&,
+  absl::Status StartCancel(const hquant::StrategyId&,
                            const hquant::ClientOrderId&) override {
     trace->push_back("cancel");
     return absl::OkStatus();
@@ -77,7 +77,7 @@ int main() {
                              now + std::chrono::hours(1)})
            .ok())
     return 1;
-  hquant::OwnerId owner{1, hquant::StrategyId("simple_pmm"), std::nullopt};
+  hquant::StrategyId strategy_id{1, hquant::StrategyName("simple_pmm")};
   hquant::OrderRequest buy;
   buy.account = hquant::AccountId("A1");
   buy.market = market;
@@ -86,15 +86,15 @@ int main() {
   buy.limit_price = D("100");
   hquant::ActionBatch batch;
   batch.ordered.emplace_back(
-      hquant::CancelOrder{owner, hquant::ClientOrderId("OLD")});
-  batch.ordered.emplace_back(hquant::SubmitOrder{owner, buy});
+      hquant::CancelOrder{strategy_id, hquant::ClientOrderId("OLD")});
+  batch.ordered.emplace_back(hquant::SubmitOrder{strategy_id, buy});
   std::vector<std::string> trace;
   FakeRecorder recorder{&trace, true};
   FakeGateway gateway{&trace};
   uint64_t sequence = 0;
   hquant::ActionDispatcher dispatcher(risk, gateway, recorder, hquant::RunId{1},
                                       hquant::ShardId{0}, sequence);
-  hquant::DispatchContext context{owner, hquant::DecisionId{1}, spec, rule,
+  hquant::DispatchContext context{strategy_id, hquant::DecisionId{1}, spec, rule,
                                   now,   hquant::MonoTime{},    true, true};
   auto results = dispatcher.Dispatch(batch, context);
   if (results.size() != 2 || !results[0].accepted || !results[1].accepted ||
@@ -108,7 +108,7 @@ int main() {
     return 3;
   buy.limit_price = D("100.0549");
   hquant::ActionBatch quantized;
-  quantized.ordered.emplace_back(hquant::SubmitOrder{owner, buy});
+  quantized.ordered.emplace_back(hquant::SubmitOrder{strategy_id, buy});
   auto next = dispatcher.Dispatch(quantized, context);
   if (next.size() != 1 || !next[0].accepted || !next[0].intent ||
       !next[0].intent->request.limit_price ||
@@ -123,7 +123,7 @@ int main() {
   context.market_live = true;
   buy.limit_price.reset();
   hquant::ActionBatch invalid;
-  invalid.ordered.emplace_back(hquant::SubmitOrder{owner, buy});
+  invalid.ordered.emplace_back(hquant::SubmitOrder{strategy_id, buy});
   rejected = dispatcher.Dispatch(invalid, context);
   if (rejected.size() != 1 || rejected[0].accepted ||
       rejected[0].reason != hquant::ErrorCode::kOrderInvalid ||

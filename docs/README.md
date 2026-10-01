@@ -57,7 +57,7 @@ bazel run //apps:hquant -- stop    --state-dir /tmp/hquant-paper-demo
 | 术语 | 含义 |
 | --- | --- |
 | 分片（shard） | 一个 OS 线程 + 一个 `io_context`，独占若干市场的行情、订单、策略、风控与 socket |
-| owner | 稳定的策略/执行器归属 `{owner_key, strategy_id, executor_id?}`；跨重启不变，分片号不是 owner |
+| owner | 稳定的策略/执行器归属 `{strategy_id, strategy_id, executor_id?}`；跨重启不变，分片号不是 owner |
 | `BookScale` | 行情流的价格/数量步长，用于把盘口转成整数 ticks/lots；不同于下单规则 `TradingRule` |
 | `ActionBatch` | 策略回调返回的有序动作列表，由 `ActionDispatcher` 在回调结束后逐个验证执行 |
 | `SubmissionUnknown` | 写请求结果不明；保留最坏敞口，用原 client ID 补查，绝不换 ID 重发 |

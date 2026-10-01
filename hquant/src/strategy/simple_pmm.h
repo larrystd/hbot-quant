@@ -12,7 +12,7 @@ namespace hquant {
 enum class PmmPriceType { Mid, Last };
 
 struct SimplePmmConfig {
-  OwnerId owner;
+  StrategyId strategy_id;
   AccountId account;
   MarketSpec market;
   Decimal order_amount;

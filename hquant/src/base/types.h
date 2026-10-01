@@ -60,8 +60,7 @@ struct StringId {
 struct ExchangeTag {};
 struct AccountTag {};
 struct AssetTag {};
-struct StrategyTag {};
-struct ExecutorTag {};
+struct StrategyNameTag {};
 struct ClientOrderTag {};
 struct ExchangeOrderTag {};
 struct ExchangeTradeTag {};
@@ -69,23 +68,20 @@ struct ExchangeTradeTag {};
 using ExchangeId = StringId<ExchangeTag>;
 using AccountId = StringId<AccountTag>;
 using AssetId = StringId<AssetTag>;
-using StrategyId = StringId<StrategyTag>;
-using ExecutorId = StringId<ExecutorTag>;
+using StrategyName = StringId<StrategyNameTag>;
 using ClientOrderId = StringId<ClientOrderTag>;
 using ExchangeOrderId = StringId<ExchangeOrderTag>;
 using ExchangeTradeId = StringId<ExchangeTradeTag>;
 
-struct OwnerId {
-  // Explicit 48-bit positive key persisted in config and the client order ID.
-  uint64_t owner_key = 0;
-  StrategyId strategy_id;
-  std::optional<ExecutorId> executor_id;
+// Identifies the strategy that owns an order. The numeric value is a 48-bit
+// positive id from config and is encoded into the client order ID.
+struct StrategyId {
+  uint64_t value = 0;
+  StrategyName name;
   bool IsValid() const {
-    return owner_key > 0 && owner_key < (uint64_t{1} << 48) &&
-           !strategy_id.value.empty() &&
-           (!executor_id || !executor_id->value.empty());
+    return value > 0 && value < (uint64_t{1} << 48) && !name.value.empty();
   }
-  bool operator==(const OwnerId&) const = default;
+  bool operator==(const StrategyId&) const = default;
 };
 
 struct RunId {

@@ -128,7 +128,7 @@ absl::Status RunSimulatedBinanceEngine(const AppConfig& config,
   auto rule = market.trading_rule;
   rule.revision = 1;
   rule.observed_at = started;
-  SimplePmm strategy({strategy_config.owner, account.account, market.spec,
+  SimplePmm strategy({strategy_config.strategy_id, account.account, market.spec,
                       strategy_config.order_amount, strategy_config.bid_spread,
                       strategy_config.ask_spread,
                       strategy_config.refresh_interval, PmmPriceType::Mid,
@@ -153,7 +153,7 @@ absl::Status RunSimulatedBinanceEngine(const AppConfig& config,
       SqliteRecorder::Open({storage_path.string(), run, started, 1024, 64});
   if (!recorder.ok()) return recorder.status();
   ShardRuntime shard(
-      {run, assignment.shard, strategy_config.owner, account.account,
+      {run, assignment.shard, strategy_config.strategy_id, account.account,
        market.spec, market.book_scale, rule, 5'000'000},
       clock, strategy, sim_exchange, risk, **recorder);
   auto reader = HistoryReader::Open({storage_path.string(), 32, 500});
@@ -345,7 +345,7 @@ absl::Status Launch(const AppConfig& config, const std::string& state_dir) {
   auto rule = market.trading_rule;
   rule.observed_at = origin;
   rule.revision = 1;
-  SimplePmm strategy({strategy_config.owner, account.account, market.spec,
+  SimplePmm strategy({strategy_config.strategy_id, account.account, market.spec,
                       strategy_config.order_amount, strategy_config.bid_spread,
                       strategy_config.ask_spread,
                       strategy_config.refresh_interval, PmmPriceType::Mid,
@@ -369,7 +369,7 @@ absl::Status Launch(const AppConfig& config, const std::string& state_dir) {
   auto recorder =
       SqliteRecorder::Open({storage_path.string(), run, origin, 1024, 64});
   if (!recorder.ok()) return recorder.status();
-  ShardRuntime shard({run, assignment.shard, strategy_config.owner,
+  ShardRuntime shard({run, assignment.shard, strategy_config.strategy_id,
                       account.account, market.spec, market.book_scale, rule},
                      clock, strategy, sim_exchange, risk, **recorder);
   auto replay =

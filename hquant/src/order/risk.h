@@ -34,7 +34,7 @@ struct RiskReservation {
   ReservationId reservation_id;
   std::optional<ClientOrderId> client_id;
   AccountId account;
-  OwnerId owner;
+  StrategyId strategy_id;
   uint64_t lease_version = 0;
   absl::flat_hash_map<AssetId, Decimal> per_asset_worst_case;
   ReservationState state = ReservationState::Active;
@@ -84,7 +84,7 @@ class RiskGate {
   // Reconciliation may extend the expiry and version, never the allocation.
   absl::Status RenewAfterReconciliation(RiskLease lease, UtcTime now,
                                         bool account_fresh);
-  absl::StatusOr<RiskReservation> TryReserve(const OwnerId& owner,
+  absl::StatusOr<RiskReservation> TryReserve(const StrategyId& strategy_id,
                                              const OrderRequest& request,
                                              const MarketSpec& market,
                                              const TradingRule& rule,
@@ -92,7 +92,7 @@ class RiskGate {
                                              bool account_fresh);
   // Hot-path reservation: rejection returns only a code. On success, writes
   // the reservation to out. The optional detail is a static diagnostic.
-  ErrorCode TryReserveCode(const OwnerId& owner, const OrderRequest& request,
+  ErrorCode TryReserveCode(const StrategyId& strategy_id, const OrderRequest& request,
                            const MarketSpec& market, const TradingRule& rule,
                            UtcTime now, bool market_live, bool account_fresh,
                            RiskReservation* out,

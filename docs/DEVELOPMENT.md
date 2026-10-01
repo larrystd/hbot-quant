@@ -91,7 +91,7 @@ Sanitizer：`bazel test --config=asan //...`、`bazel test --config=tsan //...`�
 
 | 契约组 | 冻结内容 | 并行实现所需的判断 |
 | --- | --- | --- |
-| 数值/身份 | `Decimal` 精度与舍入、`MarketId`、`OwnerId`、`RunId`、三种订单/成交 ID、时间类型 | 盘口步长与下单规则分开；client ID 的归属和唯一性不依赖 SQLite |
+| 数值/身份 | `Decimal` 精度与舍入、`MarketId`、`StrategyId`、`RunId`、三种订单/成交 ID、时间类型 | 盘口步长与下单规则分开；client ID 的归属和唯一性不依赖 SQLite |
 | 行情 | `BookScale`、Snapshot/Diff 的序号与 ticks/lots、`BookView` 生命周期、同步状态 | adapter 负责原始序号，订单簿负责连续性和状态 |
 | 订单与策略 | `OrderRequest/Command/Update/TradeUpdate`、`TrackedOrder`、`ActionBatch`、`TriggerPolicy`、`AwaitingFills` | 回报乱序/去重、动作顺序和本账户成交边界清楚 |
 | 存储与恢复 | `OrderIntent`、`RecoveryContext`、`StorageHealth`、每分片记录序号、schema 版本、`HistoryQuery` | 非阻塞入队；提交不触发发单；缺口与不可恢复状态可见 |

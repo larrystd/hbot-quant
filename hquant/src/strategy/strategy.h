@@ -15,11 +15,11 @@
 namespace hquant {
 
 struct SubmitOrder {
-  OwnerId owner;
+  StrategyId strategy_id;
   OrderRequest request;
 };
 struct CancelOrder {
-  OwnerId owner;
+  StrategyId strategy_id;
   ClientOrderId client_id;
 };
 using StrategyAction = std::variant<SubmitOrder, CancelOrder>;

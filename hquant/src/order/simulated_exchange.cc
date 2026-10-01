@@ -96,7 +96,7 @@ void SimpleSimulatedExchange::EmitBalance(const AssetId& asset) {
 absl::Status SimpleSimulatedExchange::ValidateAndQuantize(OrderCommand* command) const {
   auto& request = command->request;
   if (request.account != config_.account ||
-      request.market != config_.market.market || !command->owner.IsValid() ||
+      request.market != config_.market.market || !command->strategy_id.IsValid() ||
       !request.limit_price ||
       (request.type != OrderType::Limit &&
        request.type != OrderType::LimitMaker) ||
@@ -150,7 +150,7 @@ absl::StatusOr<OrderIntent> SimpleSimulatedExchange::PrepareSubmit(
   }
   OrderIntent intent;
   intent.client_id = id;
-  intent.owner = command.owner;
+  intent.strategy_id = command.strategy_id;
   intent.request = command.request;
   intent.created_at_utc = clock_.UtcNow();
   used_ids_.insert(id.value);
@@ -164,7 +164,7 @@ absl::Status SimpleSimulatedExchange::StartPrepared(const ClientOrderId& client_
     return Error(ErrorCode::kOrderNotFound, "Simulated prepared order absent");
   OrderCommand command = std::move(it->second);
   prepared_.erase(it);
-  RestingOrder order{client_id, command.owner, command.request};
+  RestingOrder order{client_id, command.strategy_id, command.request};
   const AssetId& collateral = order.request.side == Side::Buy
                                   ? config_.market.quote_asset
                                   : config_.market.base_asset;
@@ -202,11 +202,11 @@ absl::Status SimpleSimulatedExchange::AbortPrepared(const ClientOrderId& client_
   return absl::OkStatus();
 }
 
-absl::Status SimpleSimulatedExchange::StartCancel(const OwnerId& owner,
+absl::Status SimpleSimulatedExchange::StartCancel(const StrategyId& strategy_id,
                                          const ClientOrderId& client_id) {
   auto it = std::find_if(
       orders_.begin(), orders_.end(), [&](const RestingOrder& order) {
-        return order.client_id == client_id && order.owner == owner;
+        return order.client_id == client_id && order.strategy_id == strategy_id;
       });
   if (it == orders_.end())
     return Error(ErrorCode::kOrderNotFound, "Simulated open order absent");

@@ -24,56 +24,56 @@
 
 namespace hquant {
 
-struct OrderOwnership {
-  OwnerId owner;
+struct OrderRoute {
+  StrategyId strategy_id;
   ShardId current_shard;
 };
 
 // The private-stream reader owns this index. Registration and lookup must be
 // serialized on that reader; other shards send registrations to it as messages.
 // A codec validates the complete exchange client ID before returning its stable
-// owner key. A shard hint encoded in that ID is never used for routing.
-class OrderOwnershipIndex {
+// strategy_id key. A shard hint encoded in that ID is never used for routing.
+class OrderStrategyIndex {
  public:
-  using DecodeOwnerKey =
+  using DecodeStrategyId =
       std::function<std::optional<uint64_t>(const ClientOrderId&)>;
 
-  explicit OrderOwnershipIndex(DecodeOwnerKey decode_owner_key = {});
+  explicit OrderStrategyIndex(DecodeStrategyId decode_strategy_id = {});
 
-  // Calling again with the same owner/account changes its current shard after
-  // a restart. Historical client/exchange mappings keep their logical owner.
-  absl::Status SetOwnerRoute(OwnerId owner, AccountId account, ShardId shard);
+  // Calling again with the same strategy_id/account changes its current shard after
+  // a restart. Historical client/exchange mappings keep their logical strategy_id.
+  absl::Status SetStrategyRoute(StrategyId strategy_id, AccountId account, ShardId shard);
   absl::Status RegisterClient(ClientOrderId client_id, AccountId account,
-                              MarketId market, const OwnerId& owner);
+                              MarketId market, const StrategyId& strategy_id);
   absl::Status RegisterExchange(
       AccountId account, MarketId market, ExchangeOrderId exchange_id,
-      const OwnerId& owner,
+      const StrategyId& strategy_id,
       std::optional<ClientOrderId> client_id = std::nullopt);
 
-  absl::StatusOr<OrderOwnership> Resolve(
+  absl::StatusOr<OrderRoute> Resolve(
       const AccountId& account, const MarketId& market,
       const std::optional<ClientOrderId>& client_id,
       const std::optional<ExchangeOrderId>& exchange_id) const;
   bool KnowsAccount(const AccountId& account) const;
 
  private:
-  struct OwnerRoute {
-    OwnerId owner;
+  struct StrategyRoute {
+    StrategyId strategy_id;
     AccountId account;
     ShardId shard;
   };
   struct ClientMapping {
     AccountId account;
     MarketId market;
-    uint64_t owner_key = 0;
+    uint64_t strategy_id = 0;
   };
   using ExchangeKey =
       std::tuple<std::string, std::string, int, std::string, std::string>;
   static ExchangeKey Key(const AccountId& account, const MarketId& market,
                          const ExchangeOrderId& exchange_id);
 
-  DecodeOwnerKey decode_owner_key_;
-  std::map<uint64_t, OwnerRoute> owners_;
+  DecodeStrategyId decode_strategy_id_;
+  std::map<uint64_t, StrategyRoute> strategy_routes_;
   std::map<std::string, ClientMapping> clients_;
   std::map<ExchangeKey, uint64_t> exchanges_;
 };
@@ -81,7 +81,7 @@ class OrderOwnershipIndex {
 using PrivateReport = std::variant<OrderUpdate, TradeUpdate>;
 
 struct RoutedPrivateReport {
-  OwnerId owner;
+  StrategyId strategy_id;
   ShardId target_shard;
   uint64_t source_sequence = 0;
   PrivateReport report;
@@ -119,7 +119,7 @@ class PrivateReportRouter {
   };
 
   static absl::StatusOr<std::unique_ptr<PrivateReportRouter>> Create(
-      Options options, OrderOwnershipIndex& index);
+      Options options, OrderStrategyIndex& index);
   PrivateReportRouter(const PrivateReportRouter&) = delete;
   PrivateReportRouter& operator=(const PrivateReportRouter&) = delete;
 
@@ -140,11 +140,11 @@ class PrivateReportRouter {
     alignas(64) std::atomic<size_t> tail{0};
   };
 
-  PrivateReportRouter(Options options, OrderOwnershipIndex& index);
+  PrivateReportRouter(Options options, OrderStrategyIndex& index);
   RouteResult Quarantine(PrivateReport report, RouteResult result);
 
   Options options_;
-  OrderOwnershipIndex& index_;
+  OrderStrategyIndex& index_;
   std::array<std::unique_ptr<Queue>, 8> queues_;
   std::deque<QuarantinedPrivateReport> quarantine_;
   std::set<std::string> paused_accounts_;

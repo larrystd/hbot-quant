@@ -39,7 +39,7 @@ int RiskGateTestMain() {
            .ok())
     return 2;
 
-  hquant::OwnerId owner{1, hquant::StrategyId("simple_pmm"), std::nullopt};
+  hquant::StrategyId strategy_id{1, hquant::StrategyName("simple_pmm")};
   hquant::OrderRequest buy;
   buy.account = account;
   buy.market = market;
@@ -49,18 +49,18 @@ int RiskGateTestMain() {
   hquant::RiskReservation rejected;
   rejected.reservation_id = hquant::ReservationId{777};
   std::string_view detail;
-  if (gate.TryReserveCode(owner, buy, spec, rule, now, false, true, &rejected,
+  if (gate.TryReserveCode(strategy_id, buy, spec, rule, now, false, true, &rejected,
                           &detail) != hquant::ErrorCode::kRiskNotReady ||
       rejected.reservation_id.value != 777 || detail.empty())
     return 13;
-  auto first = gate.TryReserve(owner, buy, spec, rule, now, true, true);
+  auto first = gate.TryReserve(strategy_id, buy, spec, rule, now, true, true);
   if (!first.ok() ||
       !gate.AttachClientId(first->reservation_id, hquant::ClientOrderId("B1"))
            .ok())
     return 3;
-  if (gate.TryReserve(owner, buy, spec, rule, now, true, true).ok()) return 4;
+  if (gate.TryReserve(strategy_id, buy, spec, rule, now, true, true).ok()) return 4;
   if (!gate.MarkSubmissionUnknown(first->reservation_id).ok() ||
-      gate.TryReserve(owner, buy, spec, rule, now, true, true).ok())
+      gate.TryReserve(strategy_id, buy, spec, rule, now, true, true).ok())
     return 5;
   if (!gate.ApplyFill(first->reservation_id, quote, D("40"), D("60.06")).ok())
     return 6;
@@ -71,11 +71,11 @@ int RiskGateTestMain() {
   if (!available.ok() || available->ToString() != "60.1") return 9;
 
   buy.base_amount = D("0.0015");
-  if (gate.TryReserve(owner, buy, spec, rule, now, true, true).ok()) return 10;
+  if (gate.TryReserve(strategy_id, buy, spec, rule, now, true, true).ok()) return 10;
   buy.base_amount = D("0.01");
-  if (gate.TryReserve(owner, buy, spec, rule, now, false, true).ok()) return 11;
+  if (gate.TryReserve(strategy_id, buy, spec, rule, now, false, true).ok()) return 11;
   gate.EmergencyStop();
-  if (gate.TryReserve(owner, buy, spec, rule, now, true, true).ok()) return 12;
+  if (gate.TryReserve(strategy_id, buy, spec, rule, now, true, true).ok()) return 12;
   return 0;
 }
 
@@ -158,7 +158,7 @@ int LeaseTestMain() {
   rule.min_notional = LeaseD("1");
   rule.revision = 1;
   rule.observed_at = now;
-  const OwnerId owner{1, StrategyId("simple_pmm"), std::nullopt};
+  const StrategyId strategy_id{1, StrategyName("simple_pmm")};
   RiskGate gate0({ShardId{0}, LeaseD("0"), std::chrono::seconds(300)});
   RiskGate gate1({ShardId{1}, LeaseD("0"), std::chrono::seconds(300)});
   REQUIRE(gate0.SetInitialLease(first).ok());
@@ -171,24 +171,24 @@ int LeaseTestMain() {
   request.side = Side::Buy;
   request.base_amount = LeaseD("0.6");
   request.limit_price = LeaseD("100");
-  auto unknown = gate0.TryReserve(owner, request, spec, rule, now, true, true);
+  auto unknown = gate0.TryReserve(strategy_id, request, spec, rule, now, true, true);
   REQUIRE(unknown.ok());
   REQUIRE(gate0.MarkSubmissionUnknown(unknown->reservation_id).ok());
   REQUIRE(Equal(*gate0.Available(account, quote), "0"));
-  REQUIRE(CodeOf(gate0.TryReserve(owner, request, spec, rule, now, true, true)
+  REQUIRE(CodeOf(gate0.TryReserve(strategy_id, request, spec, rule, now, true, true)
                      .status()) == ErrorCode::kRiskLeaseExhausted);
 
   request.base_amount = LeaseD("0.4");
   auto other_shard =
-      gate1.TryReserve(owner, request, spec, rule, now, true, true);
+      gate1.TryReserve(strategy_id, request, spec, rule, now, true, true);
   REQUIRE(other_shard.ok());
   REQUIRE(Equal(*gate1.Available(account, quote), "0"));
-  REQUIRE(!gate1.TryReserve(owner, request, spec, rule, now, true, false).ok());
+  REQUIRE(!gate1.TryReserve(strategy_id, request, spec, rule, now, true, false).ok());
   REQUIRE(gate0.ConfirmTerminal(unknown->reservation_id).ok());
   REQUIRE(Equal(*gate0.Available(account, quote), "60"));
   rule.observed_at = expiry;
   REQUIRE(
-      CodeOf(gate0.TryReserve(owner, request, spec, rule, expiry, true, true)
+      CodeOf(gate0.TryReserve(strategy_id, request, spec, rule, expiry, true, true)
                  .status()) == ErrorCode::kRiskLeaseStale);
   REQUIRE(!gate0.RenewAfterReconciliation(renewed, expiry, false).ok());
   forged = renewed;
@@ -197,7 +197,7 @@ int LeaseTestMain() {
   REQUIRE(gate0.RenewAfterReconciliation(renewed, expiry, true).ok());
   request.base_amount = LeaseD("0.6");
   auto new_order =
-      gate0.TryReserve(owner, request, spec, rule, expiry, true, true);
+      gate0.TryReserve(strategy_id, request, spec, rule, expiry, true, true);
   REQUIRE(new_order.ok() && new_order->lease_version == 2);
   REQUIRE(Equal(*gate0.Available(account, quote), "0"));
   return 0;

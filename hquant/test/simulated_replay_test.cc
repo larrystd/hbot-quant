@@ -59,11 +59,11 @@ std::string ReplayOnce() {
   const AccountId account("SIMULATED");
   const MarketId market{ExchangeId("simulated"), InstrumentKind::Spot, "BTCUSDT"};
   const MarketSpec spec{market, AssetId("BTC"), AssetId("USDT")};
-  const OwnerId owner{1, StrategyId("simple_pmm"), std::nullopt};
+  const StrategyId strategy_id{1, StrategyName("simple_pmm")};
   const BookScale scale{D("0.01"), D("0.001"), 1};
   const TradingRule rule{market,    D("0.01"),    D("0.001"), D("0.001"),
                          D("0.01"), std::nullopt, 1,          origin};
-  SimplePmmConfig strategy_config{owner,
+  SimplePmmConfig strategy_config{strategy_id,
                                   account,
                                   spec,
                                   D("0.01"),
@@ -91,7 +91,7 @@ std::string ReplayOnce() {
       SqliteRecorder::Open({database.path(), RunId{1}, origin, 64, 8});
   if (!recorder.ok())
     throw std::runtime_error(std::string(recorder.status().message()));
-  ShardRuntime shard({RunId{1}, ShardId{0}, owner, account, spec, scale, rule},
+  ShardRuntime shard({RunId{1}, ShardId{0}, strategy_id, account, spec, scale, rule},
                      clock, strategy, sim_exchange, risk, **recorder);
 
   if (!clock.Advance({0, 1}).ok() ||

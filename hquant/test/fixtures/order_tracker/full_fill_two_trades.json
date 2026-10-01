@@ -15,7 +15,7 @@
   "setup": {
     "account": "A1",
     "market": "BTC-USDT",
-    "owner_key": 1,
+    "strategy_id": 1,
     "client_id": "B1",
     "side": "Buy",
     "base_amount": "1",

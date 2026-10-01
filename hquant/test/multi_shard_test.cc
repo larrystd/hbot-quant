@@ -23,8 +23,8 @@ TEST(MultiShardTest, CapitalRateAndPrivateReportsStayWithinTheirShard) {
   const MarketSpec spec{market, AssetId("BTC"), quote};
   const TradingRule rule{market,    D("0.01"), D("0.001"), D("0.001"),
                          D("0.01"), {},        1,          now};
-  const OwnerId owner0{1, StrategyId("simple_pmm"), std::nullopt};
-  const OwnerId owner1{2, StrategyId("simple_pmm"), std::nullopt};
+  const StrategyId owner0{1, StrategyName("simple_pmm")};
+  const StrategyId owner1{2, StrategyName("simple_pmm")};
 
   StaticRiskLeaseBook book;
   ASSERT_TRUE(book.SetConservativeLimit(account, quote, D("100")).ok());
@@ -81,22 +81,22 @@ TEST(MultiShardTest, CapitalRateAndPrivateReportsStayWithinTheirShard) {
   EXPECT_EQ(rate1.TryAcquire(rate_key, RatePriority::Cancel, 1, mono),
             ErrorCode::kRateBreakerOpen);
 
-  OrderOwnershipIndex ownership(
+  OrderStrategyIndex route(
       [](const ClientOrderId& id) -> std::optional<uint64_t> {
         if (id.value.size() != 2 || id.value[0] != 'C' || id.value[1] < '1' ||
             id.value[1] > '8')
           return std::nullopt;
         return static_cast<uint64_t>(id.value[1] - '0');
       });
-  ASSERT_TRUE(ownership.SetOwnerRoute(owner0, account, ShardId{0}).ok());
-  ASSERT_TRUE(ownership.SetOwnerRoute(owner1, account, ShardId{1}).ok());
+  ASSERT_TRUE(route.SetStrategyRoute(owner0, account, ShardId{0}).ok());
+  ASSERT_TRUE(route.SetStrategyRoute(owner1, account, ShardId{1}).ok());
   ASSERT_TRUE(
-      ownership.RegisterClient(ClientOrderId("C1"), account, market, owner0)
+      route.RegisterClient(ClientOrderId("C1"), account, market, owner0)
           .ok());
   ASSERT_TRUE(
-      ownership.RegisterClient(ClientOrderId("C2"), account, market, owner1)
+      route.RegisterClient(ClientOrderId("C2"), account, market, owner1)
           .ok());
-  auto router = PrivateReportRouter::Create({ShardId{0}, 1, 2}, ownership);
+  auto router = PrivateReportRouter::Create({ShardId{0}, 1, 2}, route);
   ASSERT_TRUE(router.ok()) << router.status();
   OrderUpdate update;
   update.account = account;
@@ -114,7 +114,7 @@ TEST(MultiShardTest, CapitalRateAndPrivateReportsStayWithinTheirShard) {
   EXPECT_TRUE((*router)->IsAccountPaused(account));
   auto consumed = (*router)->TryPop(ShardId{1});
   ASSERT_TRUE(consumed);
-  EXPECT_EQ(consumed->owner.owner_key, 2);
+  EXPECT_EQ(consumed->strategy_id.value, 2);
   (*router)->MarkReconciled(account);
   EXPECT_FALSE((*router)->IsAccountPaused(account));
   update.client_id = ClientOrderId("BAD");
@@ -127,7 +127,7 @@ TEST(MultiShardTest, CapitalRateAndPrivateReportsStayWithinTheirShard) {
 TEST(MultiShardTest, EightShardRouterQueuesStaySeparate) {
   const AccountId account("A");
   const MarketId market{ExchangeId("binance"), InstrumentKind::Spot, "BTCUSDT"};
-  OrderOwnershipIndex ownership(
+  OrderStrategyIndex route(
       [](const ClientOrderId& id) -> std::optional<uint64_t> {
         if (id.value.size() != 2 || id.value[0] != 'C' || id.value[1] < '1' ||
             id.value[1] > '8')
@@ -136,12 +136,12 @@ TEST(MultiShardTest, EightShardRouterQueuesStaySeparate) {
       });
   for (uint8_t shard = 0; shard < 8; ++shard) {
     const uint64_t key = shard + 1;
-    const OwnerId owner{key, StrategyId("pmm"), std::nullopt};
+    const StrategyId strategy_id{key, StrategyName("pmm")};
     const ClientOrderId client("C" + std::to_string(key));
-    ASSERT_TRUE(ownership.SetOwnerRoute(owner, account, ShardId{shard}).ok());
-    ASSERT_TRUE(ownership.RegisterClient(client, account, market, owner).ok());
+    ASSERT_TRUE(route.SetStrategyRoute(strategy_id, account, ShardId{shard}).ok());
+    ASSERT_TRUE(route.RegisterClient(client, account, market, strategy_id).ok());
   }
-  auto router = PrivateReportRouter::Create({ShardId{0}, 2, 2}, ownership);
+  auto router = PrivateReportRouter::Create({ShardId{0}, 2, 2}, route);
   ASSERT_TRUE(router.ok()) << router.status();
   for (uint8_t shard = 0; shard < 8; ++shard) {
     OrderUpdate update;
@@ -156,7 +156,7 @@ TEST(MultiShardTest, EightShardRouterQueuesStaySeparate) {
       EXPECT_EQ(result.disposition, RouteDisposition::Forwarded);
       auto popped = (*router)->TryPop(ShardId{shard});
       ASSERT_TRUE(popped);
-      EXPECT_EQ(popped->owner.owner_key, shard + 1);
+      EXPECT_EQ(popped->strategy_id.value, shard + 1);
     }
   }
 }

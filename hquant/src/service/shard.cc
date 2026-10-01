@@ -117,7 +117,7 @@ absl::StatusOr<std::vector<DispatchResult>> ShardRuntime::OnTimer(
                                    clock_};
   auto batch = strategy_.OnTimer(strategy_context);
   DispatchContext dispatch_context{
-      config_.owner,          DecisionId{next_decision_id_++},
+      config_.strategy_id,          DecisionId{next_decision_id_++},
       config_.market,         config_.rule,
       clock_.UtcNow(),        clock_.MonoNow(),
       strategy_context.ready, true};
@@ -137,7 +137,7 @@ absl::StatusOr<std::vector<DispatchResult>> ShardRuntime::OnTimer(
   return results;
 }
 
-absl::Status ShardRuntime::Record(RecordPayload payload, const OwnerId& owner) {
+absl::Status ShardRuntime::Record(RecordPayload payload, const StrategyId& strategy_id) {
   if (shard_sequence_ == std::numeric_limits<uint64_t>::max()) {
     risk_.EmergencyStop();
     return Error(ErrorCode::kSequenceExhausted, "shard sequence exhausted");
@@ -147,7 +147,7 @@ absl::Status ShardRuntime::Record(RecordPayload payload, const OwnerId& owner) {
   record.run_id = config_.run;
   record.shard = config_.shard;
   record.shard_sequence = sequence;
-  record.owner = owner;
+  record.strategy_id = strategy_id;
   record.received_at_utc = clock_.UtcNow();
   record.payload = std::move(payload);
   if (!recorder_.TryPush(std::move(record))) AddGap(sequence);
@@ -179,7 +179,7 @@ absl::Status ShardRuntime::ProcessAccountEvent(const AccountEvent& event) {
           buy ? trade->quote_amount : trade->base_amount, Decimal());
       if (!status.ok()) return status;
     }
-    return Record(*trade, updated->snapshot.owner);
+    return Record(*trade, updated->snapshot.strategy_id);
   }
   if (const auto* update = std::get_if<OrderUpdate>(&event)) {
     if (!update->client_id)
@@ -198,7 +198,7 @@ absl::Status ShardRuntime::ProcessAccountEvent(const AccountEvent& event) {
         reservations_.erase(it);
       }
     }
-    return Record(*update, updated->snapshot.owner);
+    return Record(*update, updated->snapshot.strategy_id);
   }
   return absl::OkStatus();
 }

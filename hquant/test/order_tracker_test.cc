@@ -97,8 +97,7 @@ ExchangeOrderStatus Status(const std::string& text) {
 OrderIntent Intent(simdjson::dom::element setup) {
   OrderIntent intent;
   intent.client_id = ClientOrderId{String(setup, "client_id")};
-  intent.owner = OwnerId{Unsigned(setup, "owner_key"), StrategyId{"simple_pmm"},
-                         std::nullopt};
+  intent.strategy_id = StrategyId{Unsigned(setup, "strategy_id"), StrategyName{"simple_pmm"}};
   intent.request.account = AccountId{String(setup, "account")};
   intent.request.market =
       MarketId{ExchangeId{"simulated"}, InstrumentKind::Spot, String(setup, "market")};
@@ -246,7 +245,7 @@ TEST(OrderTrackerTest,
   OrderTracker tracker;
   OrderIntent first;
   first.client_id = ClientOrderId{"B1"};
-  first.owner = OwnerId{1, StrategyId{"s"}, std::nullopt};
+  first.strategy_id = StrategyId{1, StrategyName{"s"}};
   first.request.account = AccountId{"A1"};
   first.request.market =
       MarketId{ExchangeId{"simulated"}, InstrumentKind::Spot, "BTC-USDT"};
@@ -287,7 +286,7 @@ TEST(OrderTrackerTest, ReconcilesUnknownSubmissionUsingOriginalClientId) {
   OrderTracker tracker;
   OrderIntent intent;
   intent.client_id = ClientOrderId{"B1"};
-  intent.owner = OwnerId{1, StrategyId{"s"}, std::nullopt};
+  intent.strategy_id = StrategyId{1, StrategyName{"s"}};
   intent.request.account = AccountId{"A1"};
   intent.request.market =
       MarketId{ExchangeId{"simulated"}, InstrumentKind::Spot, "BTC-USDT"};
@@ -321,7 +320,7 @@ TEST(OrderTrackerTest, RoutesExchangeOnlyReportAndDoesNotRegressOnStaleStatus) {
   OrderTracker tracker;
   OrderIntent intent;
   intent.client_id = ClientOrderId{"B1"};
-  intent.owner = OwnerId{1, StrategyId{"s"}, std::nullopt};
+  intent.strategy_id = StrategyId{1, StrategyName{"s"}};
   intent.request.account = AccountId{"A1"};
   intent.request.market =
       MarketId{ExchangeId{"simulated"}, InstrumentKind::Spot, "BTC-USDT"};
@@ -353,7 +352,7 @@ TEST(OrderTrackerTest,
   OrderTracker tracker;
   OrderIntent intent;
   intent.client_id = ClientOrderId{"B1"};
-  intent.owner = OwnerId{1, StrategyId{"s"}, std::nullopt};
+  intent.strategy_id = StrategyId{1, StrategyName{"s"}};
   intent.request.account = AccountId{"A1"};
   intent.request.market =
       MarketId{ExchangeId{"simulated"}, InstrumentKind::Spot, "BTC-USDT"};

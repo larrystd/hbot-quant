@@ -29,7 +29,7 @@ struct Checkpoint {
 enum class DecisionActionKind { Submit, Cancel };
 struct DecisionRecord {
   DecisionId decision_id;
-  OwnerId owner;
+  StrategyId strategy_id;
   uint32_t action_index = 0;
   DecisionActionKind action_kind = DecisionActionKind::Submit;
   bool accepted = false;
@@ -45,7 +45,7 @@ struct RecordEnvelope {
   RunId run_id;
   ShardId shard;
   uint64_t shard_sequence = 0;
-  std::optional<OwnerId> owner;
+  std::optional<StrategyId> strategy_id;
   UtcTime received_at_utc{};
   std::optional<UtcTime> exchange_at_utc;
   RecordPayload payload;
@@ -70,7 +70,7 @@ struct RunManifest {
 struct HistoryQuery {
   uint64_t request_id = 0;
   std::optional<AccountId> account;
-  std::optional<OwnerId> owner;
+  std::optional<StrategyId> strategy_id;
   std::optional<MarketId> market;
   std::optional<UtcTime> from_utc;
   std::optional<UtcTime> through_utc;

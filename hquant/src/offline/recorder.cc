@@ -269,9 +269,9 @@ absl::Status SqliteRecorder::WriteBatch(
     sqlite3_bind_int(s, 2, record.shard.value);
     sqlite3_bind_int64(s, 3, static_cast<sqlite3_int64>(record.shard_sequence));
     sqlite3_bind_int(s, 4, record.schema_version);
-    if (record.owner)
+    if (record.strategy_id)
       sqlite3_bind_int64(s, 5,
-                         static_cast<sqlite3_int64>(record.owner->owner_key));
+                         static_cast<sqlite3_int64>(record.strategy_id->value));
     else
       sqlite3_bind_null(s, 5);
     sqlite3_bind_int64(s, 6, Us(record.received_at_utc));

@@ -148,7 +148,7 @@ TEST(SimulatedExchangeTest, ReplaysAllSimulatedExchangeCasesStepByStep) {
     };
     FakeClock clock;
     SimpleSimulatedExchange sim_exchange(config, clock);
-    OwnerId owner{uint64_t(setup["owner_key"]), StrategyId("simple_pmm"), {}};
+    StrategyId strategy_id{uint64_t(setup["strategy_id"]), StrategyName("simple_pmm")};
 
     for (const auto& step : fixture->steps) {
       SCOPED_TRACE(step.stamp.at_us);
@@ -168,7 +168,7 @@ TEST(SimulatedExchangeTest, ReplaysAllSimulatedExchangeCasesStepByStep) {
         request.base_amount = D(S(event, "amount"));
         request.limit_price = D(S(event, "price"));
         request.time_in_force = TimeInForce::Gtc;
-        OrderCommand command{owner, request, ReservationId{1}, DecisionId{1},
+        OrderCommand command{strategy_id, request, ReservationId{1}, DecisionId{1},
                              clock.MonoNow() + std::chrono::seconds(1)};
         auto prepared = sim_exchange.PrepareSubmit(std::move(command));
         ASSERT_TRUE(prepared.ok()) << prepared.status();
@@ -180,7 +180,7 @@ TEST(SimulatedExchangeTest, ReplaysAllSimulatedExchangeCasesStepByStep) {
           EXPECT_TRUE(started.ok()) << started;
       } else if (kind == "cancel") {
         EXPECT_TRUE(
-            sim_exchange.StartCancel(owner, ClientOrderId(S(event, "client_id")))
+            sim_exchange.StartCancel(strategy_id, ClientOrderId(S(event, "client_id")))
                 .ok());
       } else if (kind == "book_bbo") {
         EXPECT_TRUE(
@@ -267,14 +267,14 @@ TEST(SimulatedExchangeTest, AbortedPreparationNeverCreatesAnOrder) {
   config.initial_balances = {{"BTC", D("1")}, {"USDT", D("100")}};
   config.make_client_id = [](Side) { return ClientOrderId("B1"); };
   SimpleSimulatedExchange sim_exchange(std::move(config), clock);
-  OwnerId owner{1, StrategyId("simple_pmm"), {}};
+  StrategyId strategy_id{1, StrategyName("simple_pmm")};
   OrderRequest request;
   request.account = AccountId("simulated");
   request.market = MarketId{ExchangeId("simulated"), InstrumentKind::Spot, "BTC-USDT"};
   request.side = Side::Buy;
   request.base_amount = D("0.01");
   request.limit_price = D("100");
-  auto intent = sim_exchange.PrepareSubmit(OrderCommand{owner, request, {}, {}, {}});
+  auto intent = sim_exchange.PrepareSubmit(OrderCommand{strategy_id, request, {}, {}, {}});
   ASSERT_TRUE(intent.ok()) << intent.status();
   EXPECT_TRUE(sim_exchange.DrainEvents().empty());
   EXPECT_TRUE(sim_exchange.OpenOrders().empty());

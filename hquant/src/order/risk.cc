@@ -169,20 +169,20 @@ absl::Status RiskGate::RenewAfterReconciliation(RiskLease lease, UtcTime now,
 }
 
 absl::StatusOr<RiskReservation> RiskGate::TryReserve(
-    const OwnerId& owner, const OrderRequest& request, const MarketSpec& market,
+    const StrategyId& strategy_id, const OrderRequest& request, const MarketSpec& market,
     const TradingRule& rule, UtcTime now, bool market_live,
     bool account_fresh) {
   RiskReservation reservation;
   std::string_view detail;
   const ErrorCode code =
-      TryReserveCode(owner, request, market, rule, now, market_live,
+      TryReserveCode(strategy_id, request, market, rule, now, market_live,
                      account_fresh, &reservation, &detail);
   if (code != ErrorCode::kOk) return Error(code, detail);
   return reservation;
 }
 
 ErrorCode RiskGate::TryReserveCode(
-    const OwnerId& owner, const OrderRequest& request, const MarketSpec& market,
+    const StrategyId& strategy_id, const OrderRequest& request, const MarketSpec& market,
     const TradingRule& rule, UtcTime now, bool market_live, bool account_fresh,
     RiskReservation* out, std::string_view* detail) {
   const auto reject = [detail](ErrorCode code, std::string_view message) {
@@ -199,7 +199,7 @@ ErrorCode RiskGate::TryReserveCode(
   if (!market_live || !account_fresh) {
     return reject(ErrorCode::kRiskNotReady, "market or account not ready");
   }
-  if (!owner.IsValid() || request.account.value.empty() ||
+  if (!strategy_id.IsValid() || request.account.value.empty() ||
       request.market != market.market || request.market != rule.market ||
       (request.type != OrderType::Limit &&
        request.type != OrderType::LimitMaker)) {
@@ -305,7 +305,7 @@ ErrorCode RiskGate::TryReserveCode(
   RiskReservation reservation;
   reservation.reservation_id = id;
   reservation.account = request.account;
-  reservation.owner = owner;
+  reservation.strategy_id = strategy_id;
   reservation.lease_version = lease.lease.lease_version;
   reservation.per_asset_worst_case.emplace(spent_asset, *needed);
   reservations_.emplace(id.value, reservation);
