@@ -108,7 +108,7 @@ absl::StatusOr<EventTime> ReportTime(simdjson::dom::element data,
   return received;
 }
 
-absl::StatusOr<AccountStreamBatch> ExecutionReport(simdjson::dom::element data,
+absl::StatusOr<AccountPushBatch> ExecutionReport(simdjson::dom::element data,
                                                    const AccountId& account,
                                                    const ExchangeId& exchange,
                                                    EventTime received) {
@@ -149,7 +149,7 @@ absl::StatusOr<AccountStreamBatch> ExecutionReport(simdjson::dom::element data,
   const ClientOrderId client_id{std::string(original)};
   std::optional<ExchangeOrderId> exchange_id;
   if (*order_id > 0) exchange_id = ExchangeOrderId(std::to_string(*order_id));
-  AccountStreamBatch batch;
+  AccountPushBatch batch;
   if (*execution == "TRADE") {
     auto trade_id = field::Integer(data, "t");
     auto price = field::Amount(data, "L", true);
@@ -201,7 +201,7 @@ absl::StatusOr<AccountStreamBatch> ExecutionReport(simdjson::dom::element data,
   return batch;
 }
 
-absl::StatusOr<AccountStreamBatch> AccountPosition(simdjson::dom::element data,
+absl::StatusOr<AccountPushBatch> AccountPosition(simdjson::dom::element data,
                                                    const AccountId& account,
                                                    EventTime received) {
   auto time = ReportTime(data, received);
@@ -209,7 +209,7 @@ absl::StatusOr<AccountStreamBatch> AccountPosition(simdjson::dom::element data,
   simdjson::dom::array balances;
   if (data["B"].get(balances))
     return field::Invalid("missing account balances");
-  AccountStreamBatch batch;
+  AccountPushBatch batch;
   for (auto item : balances) {
     auto asset = field::Text(item, "a");
     auto free = field::Amount(item, "f");
@@ -228,7 +228,7 @@ absl::StatusOr<AccountStreamBatch> AccountPosition(simdjson::dom::element data,
 
 }  // namespace
 
-absl::StatusOr<AccountStreamBatch> AccountStreamParser::Parse(
+absl::StatusOr<AccountPushBatch> AccountPushParser::Parse(
     std::string_view json, EventTime received) const {
   if (account_.value.empty() || exchange_.value.empty()) {
     return field::Invalid("invalid user data stream identity");
@@ -251,12 +251,12 @@ absl::StatusOr<AccountStreamBatch> AccountStreamParser::Parse(
     return batch;
   }
   if (*type == "eventStreamTerminated") {
-    return AccountStreamBatch{{}, true, true};
+    return AccountPushBatch{{}, true, true};
   }
   if (*type == "balanceUpdate" || *type == "externalLockUpdate" ||
       *type == "listStatus") {
     // These do not carry a complete account/order state for the domain model.
-    return AccountStreamBatch{{}, false, true};
+    return AccountPushBatch{{}, false, true};
   }
   return Error(ErrorCode::kAccountEventUnsupported,
                "unsupported Binance user data event");
@@ -277,11 +277,11 @@ template <typename T>
 absl::StatusOr<T> RestResult(absl::StatusOr<T> result) {
   if (result.ok()) return result;
   const ErrorCode code = CodeOf(result.status());
-  if (code == ErrorCode::kReconcileIdentityMismatch ||
-      code == ErrorCode::kReconcileResponseTooLarge) {
+  if (code == ErrorCode::kOrderQueryIdentityMismatch ||
+      code == ErrorCode::kOrderQueryResponseTooLarge) {
     return result.status();
   }
-  return Error(ErrorCode::kReconcileResponseInvalid, result.status().message());
+  return Error(ErrorCode::kOrderQueryResponseInvalid, result.status().message());
 }
 
 std::string Encode(std::string_view raw) {
@@ -316,7 +316,7 @@ absl::StatusOr<ExchangeOrderStatus> ParseStatus(std::string_view raw) {
 }
 
 absl::StatusOr<OrderUpdate> ParseOrder(std::string_view json,
-                                       const ReconciliationTarget& target,
+                                       const OrderToQuery& target,
                                        EventTime received) {
   simdjson::dom::parser parser;
   simdjson::dom::element root;
@@ -337,7 +337,7 @@ absl::StatusOr<OrderUpdate> ParseOrder(std::string_view json,
   if (!updated.ok()) return updated.status();
   if (*symbol != target.market.native_symbol ||
       *client != target.original_client_id.value || *id <= 0) {
-    return Error(ErrorCode::kReconcileIdentityMismatch,
+    return Error(ErrorCode::kOrderQueryIdentityMismatch,
                  "REST order identity mismatch");
   }
   auto mapped = ParseStatus(*status);
@@ -363,7 +363,7 @@ absl::StatusOr<OrderUpdate> ParseOrder(std::string_view json,
 using IdTrade = std::pair<int64_t, TradeUpdate>;
 
 absl::StatusOr<std::vector<IdTrade>> ParseTrades(
-    std::string_view json, const ReconciliationTarget& target,
+    std::string_view json, const OrderToQuery& target,
     const ExchangeOrderId& exchange_id, EventTime received) {
   simdjson::dom::parser parser;
   simdjson::dom::element root;
@@ -394,7 +394,7 @@ absl::StatusOr<std::vector<IdTrade>> ParseTrades(
     if (!time.ok()) return time.status();
     if (*symbol != target.market.native_symbol || *trade_id < 0 ||
         std::to_string(*order_id) != exchange_id.value) {
-      return Error(ErrorCode::kReconcileIdentityMismatch,
+      return Error(ErrorCode::kOrderQueryIdentityMismatch,
                    "REST trade identity mismatch");
     }
     auto utc = field::Millis(*time);
@@ -424,7 +424,7 @@ absl::StatusOr<std::vector<IdTrade>> ParseTrades(
   return trades;
 }
 
-absl::StatusOr<std::vector<ReconciliationTarget>> ParseOpenOrders(
+absl::StatusOr<std::vector<OrderToQuery>> ParseOpenOrders(
     std::string_view json, const AccountId& account, const MarketId& market) {
   simdjson::dom::parser parser;
   simdjson::dom::element root;
@@ -434,9 +434,9 @@ absl::StatusOr<std::vector<ReconciliationTarget>> ParseOpenOrders(
   if (root.get(items))
     return field::Invalid("open orders response is not an array");
   if (items.size() > 8192)
-    return Error(ErrorCode::kReconcileResponseTooLarge,
+    return Error(ErrorCode::kOrderQueryResponseTooLarge,
                  "open orders scan too large");
-  std::vector<ReconciliationTarget> targets;
+  std::vector<OrderToQuery> targets;
   std::set<std::string> seen;
   for (auto item : items) {
     auto symbol = field::Text(item, "symbol");
@@ -444,7 +444,7 @@ absl::StatusOr<std::vector<ReconciliationTarget>> ParseOpenOrders(
     if (!symbol.ok()) return symbol.status();
     if (!client.ok()) return client.status();
     if (*symbol != market.native_symbol || client->empty()) {
-      return Error(ErrorCode::kReconcileIdentityMismatch,
+      return Error(ErrorCode::kOrderQueryIdentityMismatch,
                    "open order identity mismatch");
     }
     if (seen.emplace(*client).second) {
@@ -456,33 +456,33 @@ absl::StatusOr<std::vector<ReconciliationTarget>> ParseOpenOrders(
 
 }  // namespace
 
-absl::StatusOr<RestartReconciliationPlan> PlanRestart(
-    const RestartReconciliationInput& input) {
+absl::StatusOr<StartupQueryPlan> PlanStartupQueries(
+    const StartupQueryInput& input) {
   if (input.account.value.empty() || input.assigned_markets.empty()) {
-    return Error(ErrorCode::kReconcileTargetInvalid,
+    return Error(ErrorCode::kOrderQueryTargetInvalid,
                  "restart account or markets missing");
   }
   std::set<std::string> markets;
   for (const auto& market : input.assigned_markets) {
     if (!ValidMarket(market) || !markets.emplace(market.native_symbol).second) {
-      return Error(ErrorCode::kReconcileTargetInvalid,
+      return Error(ErrorCode::kOrderQueryTargetInvalid,
                    "invalid or duplicate restart market");
     }
   }
-  std::map<std::string, ReconciliationTarget> by_client_id;
+  std::map<std::string, OrderToQuery> by_client_id;
   auto insert = [&](const AccountId& account, const MarketId& market,
                     const ClientOrderId& client_id) -> absl::Status {
     if (account != input.account || !markets.contains(market.native_symbol) ||
         std::find(input.assigned_markets.begin(), input.assigned_markets.end(),
                   market) == input.assigned_markets.end() ||
         !ValidMarket(market) || client_id.value.empty()) {
-      return Error(ErrorCode::kReconcileTargetInvalid,
+      return Error(ErrorCode::kOrderQueryTargetInvalid,
                    "restart order outside account assignment");
     }
     auto [it, inserted] = by_client_id.emplace(
-        client_id.value, ReconciliationTarget{account, market, client_id});
+        client_id.value, OrderToQuery{account, market, client_id});
     if (!inserted && it->second.market != market) {
-      return Error(ErrorCode::kReconcileIdentityMismatch,
+      return Error(ErrorCode::kOrderQueryIdentityMismatch,
                    "client ID assigned to two markets");
     }
     return absl::OkStatus();
@@ -497,7 +497,7 @@ absl::StatusOr<RestartReconciliationPlan> PlanRestart(
                          snapshot.client_id);
     if (!status.ok()) return status;
   }
-  RestartReconciliationPlan plan;
+  StartupQueryPlan plan;
   for (const auto& [_, target] : by_client_id)
     plan.known_orders.push_back(target);
   if (!input.history_complete || !input.previous_run_clean) {
@@ -509,24 +509,24 @@ absl::StatusOr<RestartReconciliationPlan> PlanRestart(
   return plan;
 }
 
-boost::asio::awaitable<absl::StatusOr<ReconciliationBatch>>
-ReconciliationClient::Query(ReconciliationTarget target, EventTime received,
+boost::asio::awaitable<absl::StatusOr<OrderQueryResult>>
+OrderQueryClient::QueryOrder(OrderToQuery target, EventTime received,
                             std::chrono::steady_clock::time_point deadline) {
   if (target.account.value.empty() || !ValidMarket(target.market) ||
       target.original_client_id.value.empty() || limits_.max_trade_pages == 0 ||
       limits_.trades_per_page == 0 || limits_.trades_per_page > 1000 ||
       limits_.max_response_bytes == 0) {
-    co_return Error(ErrorCode::kReconcileTargetInvalid,
+    co_return Error(ErrorCode::kOrderQueryTargetInvalid,
                     "invalid reconciliation target or limits");
   }
-  ReconciliationBatch batch;
+  OrderQueryResult batch;
   batch.target = target;
   const std::string order_path =
       "/api/v3/order?symbol=" + Encode(target.market.native_symbol) +
       "&origClientOrderId=" + Encode(target.original_client_id.value);
   auto order_response = co_await rest_.GetSigned(order_path, deadline);
   if (!order_response.ok()) {
-    batch.unresolved_status = Error(ErrorCode::kReconcileQueryFailed,
+    batch.unresolved_status = Error(ErrorCode::kOrderQueryFailed,
                                     order_response.status().message());
     co_return batch;
   }
@@ -534,12 +534,12 @@ ReconciliationClient::Query(ReconciliationTarget target, EventTime received,
     // Even Binance -2013 / HTTP 404 cannot prove an uncertain write was not
     // accepted; orders can age out of the query window.
     batch.unresolved_status = Error(
-        ErrorCode::kReconcileQueryFailed,
+        ErrorCode::kOrderQueryFailed,
         "order query returned HTTP " + std::to_string(order_response->status));
     co_return batch;
   }
   if (order_response->body.size() > limits_.max_response_bytes) {
-    batch.unresolved_status = Error(ErrorCode::kReconcileResponseTooLarge,
+    batch.unresolved_status = Error(ErrorCode::kOrderQueryResponseTooLarge,
                                     "order response exceeds size limit");
     co_return batch;
   }
@@ -561,16 +561,16 @@ ReconciliationClient::Query(ReconciliationTarget target, EventTime received,
     auto response = co_await rest_.GetSigned(std::move(path), deadline);
     if (!response.ok()) {
       batch.unresolved_status =
-          Error(ErrorCode::kReconcileQueryFailed, response.status().message());
+          Error(ErrorCode::kOrderQueryFailed, response.status().message());
       co_return batch;
     }
     if (response->status != 200) {
       batch.unresolved_status =
-          Error(ErrorCode::kReconcileQueryFailed, "trade query failed");
+          Error(ErrorCode::kOrderQueryFailed, "trade query failed");
       co_return batch;
     }
     if (response->body.size() > limits_.max_response_bytes) {
-      batch.unresolved_status = Error(ErrorCode::kReconcileResponseTooLarge,
+      batch.unresolved_status = Error(ErrorCode::kOrderQueryResponseTooLarge,
                                       "trade response too large");
       co_return batch;
     }
@@ -585,7 +585,7 @@ ReconciliationClient::Query(ReconciliationTarget target, EventTime received,
       highest = std::max(highest, id);
       auto [it, inserted] = by_trade_id.emplace(id, std::move(trade));
       if (!inserted) {
-        batch.unresolved_status = Error(ErrorCode::kReconcileResponseInvalid,
+        batch.unresolved_status = Error(ErrorCode::kOrderQueryResponseInvalid,
                                         "duplicate trade ID in REST pages");
         co_return batch;
       }
@@ -600,14 +600,14 @@ ReconciliationClient::Query(ReconciliationTarget target, EventTime received,
     }
     if (highest == std::numeric_limits<int64_t>::max() ||
         (from_id && highest < *from_id)) {
-      batch.unresolved_status = Error(ErrorCode::kReconcileResponseInvalid,
+      batch.unresolved_status = Error(ErrorCode::kOrderQueryResponseInvalid,
                                       "trade pagination made no progress");
       co_return batch;
     }
     from_id = highest + 1;
   }
   if (!exhausted) {
-    batch.unresolved_status = Error(ErrorCode::kReconcileResponseTooLarge,
+    batch.unresolved_status = Error(ErrorCode::kOrderQueryResponseTooLarge,
                                     "trade query hit page limit");
     co_return batch;
   }
@@ -618,7 +618,7 @@ ReconciliationClient::Query(ReconciliationTarget target, EventTime received,
     auto quote = quote_total.Add(trade.quote_amount);
     if (!base.ok() || !quote.ok()) {
       batch.unresolved_status =
-          Error(ErrorCode::kReconcileResponseInvalid, "trade total overflow");
+          Error(ErrorCode::kOrderQueryResponseInvalid, "trade total overflow");
       co_return batch;
     }
     base_total = *base;
@@ -626,14 +626,14 @@ ReconciliationClient::Query(ReconciliationTarget target, EventTime received,
   }
   auto same_base = base_total.Compare(*order->cumulative_base);
   if (!same_base.ok() || *same_base != 0) {
-    batch.unresolved_status = Error(ErrorCode::kReconcileIdentityMismatch,
+    batch.unresolved_status = Error(ErrorCode::kOrderQueryIdentityMismatch,
                                     "order and trade base totals disagree");
     co_return batch;
   }
   if (order->cumulative_quote) {
     auto same_quote = quote_total.Compare(*order->cumulative_quote);
     if (!same_quote.ok() || *same_quote != 0) {
-      batch.unresolved_status = Error(ErrorCode::kReconcileIdentityMismatch,
+      batch.unresolved_status = Error(ErrorCode::kOrderQueryIdentityMismatch,
                                       "order and trade quote totals disagree");
       co_return batch;
     }
@@ -645,40 +645,40 @@ ReconciliationClient::Query(ReconciliationTarget target, EventTime received,
   co_return batch;
 }
 
-boost::asio::awaitable<absl::StatusOr<std::vector<ReconciliationTarget>>>
-ReconciliationClient::DiscoverOpenOrders(
+boost::asio::awaitable<absl::StatusOr<std::vector<OrderToQuery>>>
+OrderQueryClient::ListOpenOrders(
     AccountId account, MarketId market,
     std::chrono::steady_clock::time_point deadline) {
   if (account.value.empty() || !ValidMarket(market) ||
       limits_.max_response_bytes == 0) {
-    co_return Error(ErrorCode::kReconcileTargetInvalid,
+    co_return Error(ErrorCode::kOrderQueryTargetInvalid,
                     "invalid open order scan target");
   }
   const std::string path =
       "/api/v3/openOrders?symbol=" + Encode(market.native_symbol);
   auto response = co_await rest_.GetSigned(path, deadline);
   if (!response.ok())
-    co_return Error(ErrorCode::kReconcileQueryFailed,
+    co_return Error(ErrorCode::kOrderQueryFailed,
                     response.status().message());
   if (response->status != 200) {
-    co_return Error(ErrorCode::kReconcileQueryFailed,
+    co_return Error(ErrorCode::kOrderQueryFailed,
                     "open orders query failed");
   }
   if (response->body.size() > limits_.max_response_bytes) {
-    co_return Error(ErrorCode::kReconcileResponseTooLarge,
+    co_return Error(ErrorCode::kOrderQueryResponseTooLarge,
                     "open orders response too large");
   }
   co_return RestResult(ParseOpenOrders(response->body, account, market));
 }
 
-boost::asio::awaitable<absl::StatusOr<std::vector<ReconciliationTarget>>>
-ReconciliationClient::DiscoverRecentOrders(
+boost::asio::awaitable<absl::StatusOr<std::vector<OrderToQuery>>>
+OrderQueryClient::ListRecentOrders(
     AccountId account, MarketId market, UtcTime start, UtcTime end,
     std::chrono::steady_clock::time_point deadline) {
   if (account.value.empty() || !ValidMarket(market) || start >= end ||
       end - start > std::chrono::hours(24) ||
       start.time_since_epoch().count() < 0 || limits_.max_response_bytes == 0) {
-    co_return Error(ErrorCode::kReconcileTargetInvalid,
+    co_return Error(ErrorCode::kOrderQueryTargetInvalid,
                     "invalid recent order scan window");
   }
   const auto start_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
@@ -688,7 +688,7 @@ ReconciliationClient::DiscoverRecentOrders(
                           end.time_since_epoch())
                           .count();
   if (start_ms == end_ms) {
-    co_return Error(ErrorCode::kReconcileTargetInvalid,
+    co_return Error(ErrorCode::kOrderQueryTargetInvalid,
                     "recent order scan window too narrow");
   }
   const std::string path =
@@ -697,29 +697,29 @@ ReconciliationClient::DiscoverRecentOrders(
       "&endTime=" + std::to_string(end_ms) + "&limit=1000";
   auto response = co_await rest_.GetSigned(path, deadline);
   if (!response.ok())
-    co_return Error(ErrorCode::kReconcileQueryFailed,
+    co_return Error(ErrorCode::kOrderQueryFailed,
                     response.status().message());
   if (response->status != 200) {
-    co_return Error(ErrorCode::kReconcileQueryFailed,
+    co_return Error(ErrorCode::kOrderQueryFailed,
                     "recent orders query failed");
   }
   if (response->body.size() > limits_.max_response_bytes) {
-    co_return Error(ErrorCode::kReconcileResponseTooLarge,
+    co_return Error(ErrorCode::kOrderQueryResponseTooLarge,
                     "recent orders response too large");
   }
   simdjson::dom::parser parser;
   simdjson::dom::element root;
   if (parser.parse(response->body).get(root)) {
-    co_return Error(ErrorCode::kReconcileResponseInvalid,
+    co_return Error(ErrorCode::kOrderQueryResponseInvalid,
                     "invalid recent orders JSON");
   }
   simdjson::dom::array orders;
   if (root.get(orders)) {
-    co_return Error(ErrorCode::kReconcileResponseInvalid,
+    co_return Error(ErrorCode::kOrderQueryResponseInvalid,
                     "recent orders response is not an array");
   }
   if (orders.size() >= 1000) {
-    co_return Error(ErrorCode::kReconcileResponseTooLarge,
+    co_return Error(ErrorCode::kOrderQueryResponseTooLarge,
                     "recent order window may be truncated; split the window");
   }
   co_return RestResult(ParseOpenOrders(response->body, account, market));

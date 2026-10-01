@@ -207,7 +207,7 @@ RouteResult AccountReportRouter::Quarantine(AccountReport report,
                                             RouteResult result) {
   result.disposition = RouteDisposition::Quarantined;
   result.pause_account = true;
-  result.request_reconcile = true;
+  result.request_order_query = true;
   if (index_.KnowsAccount(result.account)) {
     paused_accounts_.insert(result.account.value);
   }
@@ -299,7 +299,7 @@ bool AccountReportRouter::IsAccountPaused(const AccountId& account) const {
   return paused_accounts_.contains(account.value);
 }
 
-void AccountReportRouter::MarkReconciled(const AccountId& account) {
+void AccountReportRouter::MarkOrderQueried(const AccountId& account) {
   paused_accounts_.erase(account.value);
 }
 

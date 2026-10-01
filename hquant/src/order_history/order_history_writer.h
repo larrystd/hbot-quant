@@ -14,13 +14,13 @@
 
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
-#include "storage/storage.h"
+#include "order_history/order_history.h"
 
 struct sqlite3;
 
 namespace hquant {
 
-class SqliteHistoryWriter final : public HistoryWriter {
+class SqliteOrderHistoryWriter final : public OrderHistoryWriter {
  public:
   struct Options {
     std::string path;
@@ -30,23 +30,23 @@ class SqliteHistoryWriter final : public HistoryWriter {
     size_t batch_size = 64;
   };
 
-  static absl::StatusOr<std::unique_ptr<SqliteHistoryWriter>> Open(
+  static absl::StatusOr<std::unique_ptr<SqliteOrderHistoryWriter>> Open(
       Options options);
-  ~SqliteHistoryWriter() override;
-  SqliteHistoryWriter(const SqliteHistoryWriter&) = delete;
-  SqliteHistoryWriter& operator=(const SqliteHistoryWriter&) = delete;
+  ~SqliteOrderHistoryWriter() override;
+  SqliteOrderHistoryWriter(const SqliteOrderHistoryWriter&) = delete;
+  SqliteOrderHistoryWriter& operator=(const SqliteOrderHistoryWriter&) = delete;
 
   // One producer per shard. Never waits for a SQLite commit or acquires a
   // mutex. The caller allocates shard_sequence before calling, even if this
   // returns false.
-  bool TryPush(HistoryRecord record) override;
+  bool TryPush(OrderHistoryRecord record) override;
 
   // Control/test thread operations. Call Stop only after producers have
   // stopped.
   absl::Status Flush();
   absl::Status Stop(UtcTime clean_stopped_at_utc);
-  StorageHealth Health() const;
-  RunManifest Manifest() const;
+  OrderHistoryWriterHealth Health() const;
+  RunInfo Manifest() const;
 
   // Deterministic fault injection for the package tests; no SQLite operation
   // occurs on a shard thread.
@@ -56,7 +56,7 @@ class SqliteHistoryWriter final : public HistoryWriter {
  private:
   struct Queue {
     explicit Queue(size_t capacity) : slots(capacity) {}
-    std::vector<std::optional<HistoryRecord>> slots;
+    std::vector<std::optional<OrderHistoryRecord>> slots;
     alignas(64) std::atomic<size_t> head{0};
     alignas(64) std::atomic<size_t> tail{0};
     std::atomic<uint64_t> last_attempted_seq{0};
@@ -65,11 +65,11 @@ class SqliteHistoryWriter final : public HistoryWriter {
     std::atomic<uint64_t> dropped_count{0};
   };
 
-  SqliteHistoryWriter(Options options, sqlite3* db);
+  SqliteOrderHistoryWriter(Options options, sqlite3* db);
   void Run();
-  bool Pop(uint8_t shard, HistoryRecord* record);
-  void AddGap(const HistoryGap& gap);
-  absl::Status WriteBatch(const std::vector<HistoryRecord>& batch);
+  bool Pop(uint8_t shard, OrderHistoryRecord* record);
+  void AddGap(const OrderHistoryGap& gap);
+  absl::Status WriteBatch(const std::vector<OrderHistoryRecord>& batch);
   absl::Status PersistPendingGaps();
   absl::Status FinishManifest(UtcTime clean_time);
   void SetError(const absl::Status& status);
@@ -92,9 +92,9 @@ class SqliteHistoryWriter final : public HistoryWriter {
   absl::Status final_status_;
 
   mutable std::mutex state_mutex_;
-  StorageHealth health_;
-  RunManifest manifest_;
-  std::vector<HistoryGap> pending_gaps_;  // worker thread only
+  OrderHistoryWriterHealth health_;
+  RunInfo manifest_;
+  std::vector<OrderHistoryGap> pending_gaps_;  // worker thread only
 };
 
 }  // namespace hquant

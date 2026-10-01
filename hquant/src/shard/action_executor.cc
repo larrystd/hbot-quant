@@ -42,14 +42,14 @@ ErrorCode NormalizeOrder(const OrderRequest& raw, const TradingRule& rule,
 
 }  // namespace
 
-bool ActionExecutor::Record(HistoryRecordPayload payload,
+bool ActionExecutor::Record(OrderHistoryRecordPayload payload,
                             const StrategyId& strategy_id, UtcTime now) {
   if (shard_sequence_ == std::numeric_limits<uint64_t>::max()) {
     risk_.EmergencyStop();
     return false;
   }
   const uint64_t sequence = ++shard_sequence_;
-  HistoryRecord envelope;
+  OrderHistoryRecord envelope;
   envelope.run_id = run_;
   envelope.shard = shard_;
   envelope.shard_sequence = sequence;
@@ -68,8 +68,8 @@ void ActionExecutor::Gap(uint64_t sequence) {
     local_gaps_.back().last_seq = sequence;
     return;
   }
-  local_gaps_.push_back(HistoryGap{run_, shard_, sequence, sequence,
-                                   ErrorCode::kStorageQueueFull});
+  local_gaps_.push_back(OrderHistoryGap{run_, shard_, sequence, sequence,
+                                   ErrorCode::kOrderHistoryQueueFull});
 }
 
 std::vector<ActionResult> ActionExecutor::Execute(

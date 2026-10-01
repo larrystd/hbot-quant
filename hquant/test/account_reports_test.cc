@@ -73,7 +73,7 @@ T RunAsync(boost::asio::awaitable<T> operation) {
   return result.get();
 }
 
-ReconciliationTarget Target() {
+OrderToQuery Target() {
   return {AccountId("A1"), Market(), ClientOrderId("C1")};
 }
 
@@ -96,7 +96,7 @@ std::string TradeJson(int trade_id, const char* amount = "1",
 }
 
 TEST(AccountStreamParserTest, EmitsTradeBeforeStatusAndTrackerDeduplicates) {
-  AccountStreamParser stream(AccountId("A1"), ExchangeId("binance"));
+  AccountPushParser stream(AccountId("A1"), ExchangeId("binance"));
   OrderTracker tracker;
   PreparedOrder prepared;
   prepared.client_id = ClientOrderId("C1");
@@ -158,7 +158,7 @@ TEST(AccountStreamParserTest, EmitsTradeBeforeStatusAndTrackerDeduplicates) {
 }
 
 TEST(AccountStreamParserTest, CancelUsesOriginalIdAndGapsRequestResync) {
-  AccountStreamParser stream(AccountId("A1"), ExchangeId("binance"));
+  AccountPushParser stream(AccountId("A1"), ExchangeId("binance"));
   auto canceled = stream.Parse(Report("CANCELED", "CANCELED", "0", "0", "0",
                                       "0", -1, "cancel-request", "C1"),
                                Received());
@@ -204,22 +204,22 @@ TEST(AccountStreamParserTest, CancelUsesOriginalIdAndGapsRequestResync) {
 TEST(ReconciliationTest, InvalidRestDecimalRequiresReconciliation) {
   FakeRest rest;
   rest.responses.push_back({200, OrderJson("C1", "FILLED", "bad")});
-  ReconciliationClient client(rest);
+  OrderQueryClient client(rest);
   auto result = RunAsync(
-      client.Query(Target(), Received(), std::chrono::steady_clock::now()));
+      client.QueryOrder(Target(), Received(), std::chrono::steady_clock::now()));
   ASSERT_TRUE(result.ok());
   EXPECT_FALSE(result->complete);
   EXPECT_EQ(CodeOf(result->unresolved_status),
-            ErrorCode::kReconcileResponseInvalid);
+            ErrorCode::kOrderQueryResponseInvalid);
 }
 
 TEST(ReconciliationTest, QueriesOriginalIdThenTradesAndComparesTotals) {
   FakeRest rest;
   rest.responses.push_back({200, OrderJson()});
   rest.responses.push_back({200, "[" + TradeJson(7) + "]"});
-  ReconciliationClient client(rest);
+  OrderQueryClient client(rest);
   auto result = RunAsync(
-      client.Query(Target(), Received(),
+      client.QueryOrder(Target(), Received(),
                    std::chrono::steady_clock::now() + std::chrono::seconds(2)));
   ASSERT_TRUE(result.ok()) << result.status();
   EXPECT_TRUE(result->complete) << result->unresolved_status;
@@ -237,40 +237,40 @@ TEST(ReconciliationTest, MissingOrMismatchedOrderNeverProvesNoWrite) {
   FakeRest missing;
   missing.responses.push_back(
       {404, R"({"code":-2013,"msg":"Order does not exist."})"});
-  ReconciliationClient missing_client(missing);
-  auto absent = RunAsync(missing_client.Query(
+  OrderQueryClient missing_client(missing);
+  auto absent = RunAsync(missing_client.QueryOrder(
       Target(), Received(), std::chrono::steady_clock::now()));
   ASSERT_TRUE(absent.ok());
   EXPECT_FALSE(absent->complete);
   EXPECT_FALSE(absent->order.has_value());
   EXPECT_EQ(CodeOf(absent->unresolved_status),
-            ErrorCode::kReconcileQueryFailed);
+            ErrorCode::kOrderQueryFailed);
   EXPECT_EQ(missing.targets.size(), 1);
 
   FakeRest mismatch;
   mismatch.responses.push_back({200, OrderJson("other-id")});
-  ReconciliationClient mismatch_client(mismatch);
-  auto wrong = RunAsync(mismatch_client.Query(
+  OrderQueryClient mismatch_client(mismatch);
+  auto wrong = RunAsync(mismatch_client.QueryOrder(
       Target(), Received(), std::chrono::steady_clock::now()));
   ASSERT_TRUE(wrong.ok());
   EXPECT_FALSE(wrong->complete);
   EXPECT_FALSE(wrong->order.has_value());
   EXPECT_EQ(CodeOf(wrong->unresolved_status),
-            ErrorCode::kReconcileIdentityMismatch);
+            ErrorCode::kOrderQueryIdentityMismatch);
   EXPECT_EQ(mismatch.targets.size(), 1);
 
   FakeRest incomplete;
   incomplete.responses.push_back({200, OrderJson()});
   incomplete.responses.push_back({200, "[" + TradeJson(7, "0.5", "50") + "]"});
-  ReconciliationClient incomplete_client(incomplete);
-  auto gap = RunAsync(incomplete_client.Query(
+  OrderQueryClient incomplete_client(incomplete);
+  auto gap = RunAsync(incomplete_client.QueryOrder(
       Target(), Received(), std::chrono::steady_clock::now()));
   ASSERT_TRUE(gap.ok());
   EXPECT_FALSE(gap->complete);
   EXPECT_FALSE(gap->order.has_value());
   EXPECT_EQ(gap->trades.size(), 1);
   EXPECT_EQ(CodeOf(gap->unresolved_status),
-            ErrorCode::kReconcileIdentityMismatch);
+            ErrorCode::kOrderQueryIdentityMismatch);
 }
 
 TEST(ReconciliationTest, PagesTradesAndBoundsIncompletePages) {
@@ -279,9 +279,9 @@ TEST(ReconciliationTest, PagesTradesAndBoundsIncompletePages) {
   rest.responses.push_back({200, "[" + TradeJson(7, "0.4", "40") + "]"});
   rest.responses.push_back({200, "[" + TradeJson(8, "0.6", "60") + "]"});
   rest.responses.push_back({200, "[]"});
-  ReconciliationClient client(rest, {4, 1, 10000});
+  OrderQueryClient client(rest, {4, 1, 10000});
   auto result = RunAsync(
-      client.Query(Target(), Received(), std::chrono::steady_clock::now()));
+      client.QueryOrder(Target(), Received(), std::chrono::steady_clock::now()));
   ASSERT_TRUE(result.ok());
   EXPECT_TRUE(result->complete) << result->unresolved_status;
   EXPECT_EQ(result->trades.size(), 2);
@@ -292,13 +292,13 @@ TEST(ReconciliationTest, PagesTradesAndBoundsIncompletePages) {
   FakeRest capped;
   capped.responses.push_back({200, OrderJson()});
   capped.responses.push_back({200, "[" + TradeJson(7) + "]"});
-  ReconciliationClient capped_client(capped, {1, 1, 10000});
-  auto unresolved = RunAsync(capped_client.Query(
+  OrderQueryClient capped_client(capped, {1, 1, 10000});
+  auto unresolved = RunAsync(capped_client.QueryOrder(
       Target(), Received(), std::chrono::steady_clock::now()));
   ASSERT_TRUE(unresolved.ok());
   EXPECT_FALSE(unresolved->complete);
   EXPECT_EQ(CodeOf(unresolved->unresolved_status),
-            ErrorCode::kReconcileResponseTooLarge);
+            ErrorCode::kOrderQueryResponseTooLarge);
   EXPECT_EQ(unresolved->unresolved_status.message(),
             "trade query hit page limit");
 
@@ -307,8 +307,8 @@ TEST(ReconciliationTest, PagesTradesAndBoundsIncompletePages) {
   later_failure.responses.push_back(
       {200, "[" + TradeJson(7, "0.4", "40") + "]"});
   later_failure.responses.push_back({429, R"({"code":-1003})"});
-  ReconciliationClient later_client(later_failure, {4, 1, 10000});
-  auto partial = RunAsync(later_client.Query(Target(), Received(),
+  OrderQueryClient later_client(later_failure, {4, 1, 10000});
+  auto partial = RunAsync(later_client.QueryOrder(Target(), Received(),
                                              std::chrono::steady_clock::now()));
   ASSERT_TRUE(partial.ok());
   EXPECT_FALSE(partial->complete);
@@ -318,7 +318,7 @@ TEST(ReconciliationTest, PagesTradesAndBoundsIncompletePages) {
 }
 
 TEST(ReconciliationTest, RestartPlanAndOpenOrderDiscovery) {
-  RestartReconciliationInput input;
+  StartupQueryInput input;
   input.account = AccountId("A1");
   input.assigned_markets = {Market()};
   input.history_complete = false;
@@ -333,7 +333,7 @@ TEST(ReconciliationTest, RestartPlanAndOpenOrderDiscovery) {
   snapshot.client_id = ClientOrderId("C1");
   snapshot.request = prepared.request;
   input.live_snapshots.push_back(snapshot);
-  auto plan = PlanRestart(input);
+  auto plan = PlanStartupQueries(input);
   ASSERT_TRUE(plan.ok()) << plan.status();
   EXPECT_EQ(plan->known_orders.size(), 1);
   EXPECT_EQ(plan->markets_to_scan.size(), 1);
@@ -343,8 +343,8 @@ TEST(ReconciliationTest, RestartPlanAndOpenOrderDiscovery) {
   rest.responses.push_back(
       {200,
        R"([{"symbol":"BTCUSDT","clientOrderId":"C1"},{"symbol":"BTCUSDT","clientOrderId":"C2"}])"});
-  ReconciliationClient client(rest);
-  auto discovered = RunAsync(client.DiscoverOpenOrders(
+  OrderQueryClient client(rest);
+  auto discovered = RunAsync(client.ListOpenOrders(
       input.account, Market(), std::chrono::steady_clock::now()));
   ASSERT_TRUE(discovered.ok()) << discovered.status();
   ASSERT_EQ(discovered->size(), 2);
@@ -354,8 +354,8 @@ TEST(ReconciliationTest, RestartPlanAndOpenOrderDiscovery) {
   FakeRest recent_rest;
   recent_rest.responses.push_back(
       {200, R"([{"symbol":"BTCUSDT","clientOrderId":"C3"}])"});
-  ReconciliationClient recent_client(recent_rest);
-  auto recent = RunAsync(recent_client.DiscoverRecentOrders(
+  OrderQueryClient recent_client(recent_rest);
+  auto recent = RunAsync(recent_client.ListRecentOrders(
       input.account, Market(), UtcTime(std::chrono::milliseconds(1000)),
       UtcTime(std::chrono::milliseconds(2000)),
       std::chrono::steady_clock::now()));

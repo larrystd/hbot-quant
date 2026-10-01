@@ -1,4 +1,4 @@
-#include "storage/recorder.h"
+#include "order_history/order_history_writer.h"
 
 #include <unistd.h>
 
@@ -14,7 +14,7 @@
 #include "base/types.h"
 #include "gtest/gtest.h"
 #include "sqlite3.h"
-#include "storage/history.h"
+#include "order_history/order_history_reader.h"
 
 namespace hquant {
 namespace {
@@ -50,7 +50,7 @@ StrategyId MakeStrategyId() {
   return StrategyId{1, StrategyName{"simple_pmm"}};
 }
 
-HistoryRecord PreparedRecord(uint64_t sequence, RunId run = RunId{11},
+OrderHistoryRecord PreparedRecord(uint64_t sequence, RunId run = RunId{11},
                              ShardId shard = ShardId{0}) {
   PreparedOrder prepared;
   prepared.client_id = ClientOrderId{"B1"};
@@ -65,7 +65,7 @@ HistoryRecord PreparedRecord(uint64_t sequence, RunId run = RunId{11},
   prepared.config_revision = 7;
   prepared.executor_checkpoint =
       StrategyCheckpoint{1, MakeStrategyId(), 7, "checkpoint"};
-  HistoryRecord record;
+  OrderHistoryRecord record;
   record.run_id = run;
   record.shard = shard;
   record.shard_sequence = sequence;
@@ -75,8 +75,8 @@ HistoryRecord PreparedRecord(uint64_t sequence, RunId run = RunId{11},
   return record;
 }
 
-HistoryRecord Update(uint64_t sequence) {
-  HistoryRecord record = PreparedRecord(sequence);
+OrderHistoryRecord Update(uint64_t sequence) {
+  OrderHistoryRecord record = PreparedRecord(sequence);
   OrderUpdate update;
   update.account = AccountId{"A1"};
   update.market = Market();
@@ -90,8 +90,8 @@ HistoryRecord Update(uint64_t sequence) {
   return record;
 }
 
-HistoryRecord Trade(uint64_t sequence) {
-  HistoryRecord record = PreparedRecord(sequence);
+OrderHistoryRecord Trade(uint64_t sequence) {
+  OrderHistoryRecord record = PreparedRecord(sequence);
   TradeUpdate trade;
   trade.account = AccountId{"A1"};
   trade.market = Market();
@@ -108,7 +108,7 @@ HistoryRecord Trade(uint64_t sequence) {
   return record;
 }
 
-std::optional<HistoryPage> WaitPage(SqliteHistoryReader& reader) {
+std::optional<OrderHistoryPage> WaitPage(SqliteOrderHistoryReader& reader) {
   for (int i = 0; i < 1000; ++i) {
     if (auto page = reader.TryReceive()) return page;
     std::this_thread::sleep_for(std::chrono::milliseconds(1));
@@ -119,19 +119,19 @@ std::optional<HistoryPage> WaitPage(SqliteHistoryReader& reader) {
 TEST(StorageTest, PersistsTypedRecordsAndPagesThroughReadOnlyConnection) {
   TemporaryDatabase db;
   auto recorder =
-      SqliteHistoryWriter::Open({db.path(), RunId{11}, At(100), 8, 2});
+      SqliteOrderHistoryWriter::Open({db.path(), RunId{11}, At(100), 8, 2});
   ASSERT_TRUE(recorder.ok()) << recorder.status();
   EXPECT_TRUE((*recorder)->TryPush(PreparedRecord(1)));
   EXPECT_TRUE((*recorder)->TryPush(Update(2)));
   EXPECT_TRUE((*recorder)->TryPush(Trade(3)));
-  HistoryRecord checkpoint = PreparedRecord(4);
+  OrderHistoryRecord checkpoint = PreparedRecord(4);
   checkpoint.payload = RecordedCheckpoint{
       StrategyCheckpoint{1, MakeStrategyId(), 7, "state"}, At(1004)};
   EXPECT_TRUE((*recorder)->TryPush(std::move(checkpoint)));
   ASSERT_TRUE((*recorder)->Flush().ok());
-  auto reader = SqliteHistoryReader::Open({db.path(), 4, 2});
+  auto reader = SqliteOrderHistoryReader::Open({db.path(), 4, 2});
   ASSERT_TRUE(reader.ok()) << reader.status();
-  HistoryQuery query;
+  OrderHistoryQuery query;
   query.request_id = 1;
   query.page_size = 2;
   ASSERT_TRUE((*reader)->TrySubmit(query).ok());
@@ -158,7 +158,7 @@ TEST(StorageTest, PersistsTypedRecordsAndPagesThroughReadOnlyConnection) {
       std::holds_alternative<RecordedCheckpoint>(second->rows[1].payload));
   EXPECT_FALSE(second->next_cursor);
 
-  HistoryQuery filtered;
+  OrderHistoryQuery filtered;
   filtered.request_id = 3;
   filtered.account = AccountId{"A1"};
   filtered.market = Market();
@@ -179,7 +179,7 @@ TEST(StorageTest, PersistsTypedRecordsAndPagesThroughReadOnlyConnection) {
 TEST(StorageTest, QueueFullCreatesDurableGapWithoutBlockingProducer) {
   TemporaryDatabase db;
   auto recorder =
-      SqliteHistoryWriter::Open({db.path(), RunId{11}, At(100), 1, 1});
+      SqliteOrderHistoryWriter::Open({db.path(), RunId{11}, At(100), 1, 1});
   ASSERT_TRUE(recorder.ok()) << recorder.status();
   (*recorder)->PauseWorkerForTesting(true);
   EXPECT_TRUE((*recorder)->TryPush(PreparedRecord(1)));
@@ -191,12 +191,12 @@ TEST(StorageTest, QueueFullCreatesDurableGapWithoutBlockingProducer) {
   ASSERT_EQ(health.gap_ranges.size(), 1);
   EXPECT_EQ(health.gap_ranges[0].first_seq, 2);
   EXPECT_EQ(health.gap_ranges[0].last_seq, 2);
-  EXPECT_EQ(health.gap_ranges[0].reason, ErrorCode::kStorageQueueFull);
+  EXPECT_EQ(health.gap_ranges[0].reason, ErrorCode::kOrderHistoryQueueFull);
   EXPECT_FALSE((*recorder)->Manifest().history_complete);
   ASSERT_TRUE((*recorder)->Stop(At(2000)).ok());
-  auto reader = SqliteHistoryReader::Open({db.path(), 2, 2});
+  auto reader = SqliteOrderHistoryReader::Open({db.path(), 2, 2});
   ASSERT_TRUE(reader.ok());
-  HistoryQuery query;
+  OrderHistoryQuery query;
   query.page_size = 2;
   ASSERT_TRUE((*reader)->TrySubmit(query).ok());
   auto page = WaitPage(**reader);
@@ -209,7 +209,7 @@ TEST(StorageTest, QueueFullCreatesDurableGapWithoutBlockingProducer) {
 TEST(StorageTest, TwoShardProducersKeepIndependentSequenceOrder) {
   TemporaryDatabase db;
   auto recorder =
-      SqliteHistoryWriter::Open({db.path(), RunId{11}, At(100), 256, 32});
+      SqliteOrderHistoryWriter::Open({db.path(), RunId{11}, At(100), 256, 32});
   ASSERT_TRUE(recorder.ok()) << recorder.status();
   std::thread first([&] {
     for (uint64_t sequence = 1; sequence <= 100; ++sequence)
@@ -228,9 +228,9 @@ TEST(StorageTest, TwoShardProducersKeepIndependentSequenceOrder) {
   EXPECT_EQ(manifest.last_committed_seq_by_shard.at(0), 100);
   EXPECT_EQ(manifest.last_committed_seq_by_shard.at(1), 100);
   EXPECT_TRUE(manifest.history_complete);
-  auto reader = SqliteHistoryReader::Open({db.path(), 2, 250});
+  auto reader = SqliteOrderHistoryReader::Open({db.path(), 2, 250});
   ASSERT_TRUE(reader.ok());
-  HistoryQuery query;
+  OrderHistoryQuery query;
   query.page_size = 250;
   ASSERT_TRUE((*reader)->TrySubmit(query).ok());
   auto page = WaitPage(**reader);
@@ -250,9 +250,9 @@ TEST(StorageTest, TwoShardProducersKeepIndependentSequenceOrder) {
 TEST(StorageTest, ActionRecordsPreserveActionOrderAndRejectionReason) {
   TemporaryDatabase db;
   auto recorder =
-      SqliteHistoryWriter::Open({db.path(), RunId{11}, At(100), 8, 8});
+      SqliteOrderHistoryWriter::Open({db.path(), RunId{11}, At(100), 8, 8});
   ASSERT_TRUE(recorder.ok()) << recorder.status();
-  HistoryRecord first = PreparedRecord(1);
+  OrderHistoryRecord first = PreparedRecord(1);
   first.payload = ActionRecord{ActionBatchId{19},
                                MakeStrategyId(),
                                0,
@@ -261,7 +261,7 @@ TEST(StorageTest, ActionRecordsPreserveActionOrderAndRejectionReason) {
                                ErrorCode::kOk,
                                "cancel requested",
                                ClientOrderId{"B1"}};
-  HistoryRecord second = PreparedRecord(2);
+  OrderHistoryRecord second = PreparedRecord(2);
   second.payload = ActionRecord{ActionBatchId{19},
                                 MakeStrategyId(),
                                 1,
@@ -273,9 +273,9 @@ TEST(StorageTest, ActionRecordsPreserveActionOrderAndRejectionReason) {
   EXPECT_TRUE((*recorder)->TryPush(std::move(first)));
   EXPECT_TRUE((*recorder)->TryPush(std::move(second)));
   ASSERT_TRUE((*recorder)->Flush().ok());
-  auto reader = SqliteHistoryReader::Open({db.path(), 2, 2});
+  auto reader = SqliteOrderHistoryReader::Open({db.path(), 2, 2});
   ASSERT_TRUE(reader.ok());
-  HistoryQuery query;
+  OrderHistoryQuery query;
   query.strategy_id = MakeStrategyId();
   query.page_size = 2;
   ASSERT_TRUE((*reader)->TrySubmit(query).ok());
@@ -305,7 +305,7 @@ TEST(StorageTest, ActionRecordsPreserveActionOrderAndRejectionReason) {
 TEST(StorageTest, WriteFailureMarksGapAndHistoryQueryReportsErrors) {
   TemporaryDatabase db;
   auto recorder =
-      SqliteHistoryWriter::Open({db.path(), RunId{11}, At(100), 2, 2});
+      SqliteOrderHistoryWriter::Open({db.path(), RunId{11}, At(100), 2, 2});
   ASSERT_TRUE(recorder.ok()) << recorder.status();
   (*recorder)->SetWriteFailureForTesting(true);
   EXPECT_TRUE((*recorder)->TryPush(PreparedRecord(1)));
@@ -313,16 +313,16 @@ TEST(StorageTest, WriteFailureMarksGapAndHistoryQueryReportsErrors) {
   auto health = (*recorder)->Health();
   EXPECT_FALSE(health.last_error.empty());
   ASSERT_FALSE(health.gap_ranges.empty());
-  EXPECT_EQ(health.gap_ranges[0].reason, ErrorCode::kStorageWriteFailed);
+  EXPECT_EQ(health.gap_ranges[0].reason, ErrorCode::kOrderHistoryWriteFailed);
   (*recorder)->SetWriteFailureForTesting(false);
   EXPECT_TRUE((*recorder)->TryPush(PreparedRecord(2)));
   EXPECT_FALSE((*recorder)
                    ->Flush()
                    .ok());  // historical write failure remains observable
   ASSERT_TRUE((*recorder)->Stop(At(2000)).ok());
-  auto reader = SqliteHistoryReader::Open({db.path(), 2, 2});
+  auto reader = SqliteOrderHistoryReader::Open({db.path(), 2, 2});
   ASSERT_TRUE(reader.ok());
-  HistoryQuery expired;
+  OrderHistoryQuery expired;
   expired.request_id = 7;
   expired.page_size = 2;
   expired.deadline = MonoAt(1);
@@ -331,7 +331,7 @@ TEST(StorageTest, WriteFailureMarksGapAndHistoryQueryReportsErrors) {
   ASSERT_TRUE(error);
   EXPECT_EQ(error->request_id, 7);
   EXPECT_EQ(error->status.code(), absl::StatusCode::kDeadlineExceeded);
-  HistoryQuery query;
+  OrderHistoryQuery query;
   query.request_id = 8;
   query.page_size = 2;
   ASSERT_TRUE((*reader)->TrySubmit(query).ok());
@@ -341,12 +341,12 @@ TEST(StorageTest, WriteFailureMarksGapAndHistoryQueryReportsErrors) {
   ASSERT_EQ(page->rows.size(), 1);
   EXPECT_EQ(page->rows[0].shard_sequence, 2);
   ASSERT_EQ(page->incomplete_ranges.size(), 1);
-  EXPECT_EQ(page->incomplete_ranges[0].reason, ErrorCode::kStorageWriteFailed);
+  EXPECT_EQ(page->incomplete_ranges[0].reason, ErrorCode::kOrderHistoryWriteFailed);
 }
 
 TEST(StorageTest, ReadsAndMigratesLegacyGapReasons) {
   TemporaryDatabase db;
-  auto first = SqliteHistoryWriter::Open({db.path(), RunId{11}, At(100), 1, 1});
+  auto first = SqliteOrderHistoryWriter::Open({db.path(), RunId{11}, At(100), 1, 1});
   ASSERT_TRUE(first.ok()) << first.status();
   (*first)->PauseWorkerForTesting(true);
   ASSERT_TRUE((*first)->TryPush(PreparedRecord(1)));
@@ -367,20 +367,20 @@ TEST(StorageTest, ReadsAndMigratesLegacyGapReasons) {
   sqlite3_close(raw);
 
   {
-    auto reader = SqliteHistoryReader::Open({db.path(), 2, 2});
+    auto reader = SqliteOrderHistoryReader::Open({db.path(), 2, 2});
     ASSERT_TRUE(reader.ok()) << reader.status();
-    HistoryQuery query;
+    OrderHistoryQuery query;
     query.page_size = 2;
     ASSERT_TRUE((*reader)->TrySubmit(query).ok());
     auto page = WaitPage(**reader);
     ASSERT_TRUE(page);
     ASSERT_TRUE(page->status.ok()) << page->status;
     ASSERT_EQ(page->incomplete_ranges.size(), 1);
-    EXPECT_EQ(page->incomplete_ranges[0].reason, ErrorCode::kStorageQueueFull);
+    EXPECT_EQ(page->incomplete_ranges[0].reason, ErrorCode::kOrderHistoryQueueFull);
   }
 
   auto second =
-      SqliteHistoryWriter::Open({db.path(), RunId{12}, At(3000), 2, 1});
+      SqliteOrderHistoryWriter::Open({db.path(), RunId{12}, At(3000), 2, 1});
   ASSERT_TRUE(second.ok()) << second.status();
   ASSERT_TRUE((*second)->Stop(At(4000)).ok());
   second->reset();
@@ -391,7 +391,7 @@ TEST(StorageTest, ReadsAndMigratesLegacyGapReasons) {
             SQLITE_OK);
   ASSERT_EQ(sqlite3_step(statement), SQLITE_ROW);
   EXPECT_EQ(sqlite3_column_int(statement, 0),
-            static_cast<int>(StoredErrorNumber(ErrorCode::kStorageQueueFull)));
+            static_cast<int>(StoredErrorNumber(ErrorCode::kOrderHistoryQueueFull)));
   sqlite3_finalize(statement);
   ASSERT_EQ(
       sqlite3_prepare_v2(raw, "SELECT MAX(version) FROM schema_migrations", -1,

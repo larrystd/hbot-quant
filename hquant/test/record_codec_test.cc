@@ -1,4 +1,4 @@
-#include "storage/record_codec.h"
+#include "order_history/record_codec.h"
 
 #include <string>
 
@@ -8,8 +8,8 @@
 namespace hquant {
 namespace {
 
-HistoryRecord Record(HistoryRecordPayload payload) {
-  HistoryRecord record;
+OrderHistoryRecord Record(OrderHistoryRecordPayload payload) {
+  OrderHistoryRecord record;
   record.run_id = RunId{42};
   record.shard = ShardId{0};
   record.shard_sequence = 1;
@@ -19,19 +19,19 @@ HistoryRecord Record(HistoryRecordPayload payload) {
 
 TEST(RecordCodecTest, VersionTwoPreservesFullWidthReasonCodesAndMessages) {
   auto gap = Record(
-      HistoryGap{RunId{42}, ShardId{0}, 2, 3, ErrorCode::kStorageQueueFull});
+      OrderHistoryGap{RunId{42}, ShardId{0}, 2, 3, ErrorCode::kOrderHistoryQueueFull});
   const std::string gap_blob = storage_internal::EncodeRecord(gap);
   ASSERT_EQ(static_cast<unsigned char>(gap_blob[0]), 2);
   auto decoded_gap = storage_internal::DecodeRecord(gap_blob);
   ASSERT_TRUE(decoded_gap.ok()) << decoded_gap.status();
-  EXPECT_EQ(std::get<HistoryGap>(decoded_gap->payload).reason,
-            ErrorCode::kStorageQueueFull);
+  EXPECT_EQ(std::get<OrderHistoryGap>(decoded_gap->payload).reason,
+            ErrorCode::kOrderHistoryQueueFull);
   std::string invalid_gap = gap_blob;
   invalid_gap[invalid_gap.size() - 8] = 0;
   invalid_gap[invalid_gap.size() - 7] = 0;
   auto rejected_gap = storage_internal::DecodeRecord(invalid_gap);
   ASSERT_FALSE(rejected_gap.ok());
-  EXPECT_EQ(CodeOf(rejected_gap.status()), ErrorCode::kHistoryRecordCorrupted);
+  EXPECT_EQ(CodeOf(rejected_gap.status()), ErrorCode::kOrderHistoryRecordCorrupted);
 
   auto decision = Record(
       ActionRecord{ActionBatchId{7}, StrategyId{1, StrategyName{"test"}}, 0,
@@ -47,7 +47,7 @@ TEST(RecordCodecTest, VersionTwoPreservesFullWidthReasonCodesAndMessages) {
 
 TEST(RecordCodecTest, ReadsLegacyGapAndPreservesArbitraryDecisionText) {
   auto gap = Record(
-      HistoryGap{RunId{42}, ShardId{0}, 2, 3, ErrorCode::kStorageQueueFull});
+      OrderHistoryGap{RunId{42}, ShardId{0}, 2, 3, ErrorCode::kOrderHistoryQueueFull});
   std::string old_gap = storage_internal::EncodeRecord(gap);
   old_gap[0] = 1;  // Codec version.
   old_gap[1] = 1;  // Envelope schema version (little endian uint64).
@@ -56,8 +56,8 @@ TEST(RecordCodecTest, ReadsLegacyGapAndPreservesArbitraryDecisionText) {
   auto decoded_gap = storage_internal::DecodeRecord(old_gap);
   ASSERT_TRUE(decoded_gap.ok()) << decoded_gap.status();
   EXPECT_EQ(decoded_gap->schema_version, 1);
-  EXPECT_EQ(std::get<HistoryGap>(decoded_gap->payload).reason,
-            ErrorCode::kStorageQueueFull);
+  EXPECT_EQ(std::get<OrderHistoryGap>(decoded_gap->payload).reason,
+            ErrorCode::kOrderHistoryQueueFull);
 
   constexpr std::string_view kLegacyText = "Unmapped legacy rejection";
   auto decision = Record(

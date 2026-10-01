@@ -140,17 +140,17 @@ int BudgetTestMain() {
   RiskBudget renewed = first;
   renewed.budget_version = 2;
   renewed.valid_until_utc = expiry + std::chrono::hours(1);
-  REQUIRE(!book.RenewAfterReconciliation(renewed, now, false).ok());
+  REQUIRE(!book.RenewAfterOrderQuery(renewed, now, false).ok());
   RiskBudget forged = renewed;
   forged.hard_limit = BudgetD("61");
-  REQUIRE(!book.RenewAfterReconciliation(forged, now, true).ok());
+  REQUIRE(!book.RenewAfterOrderQuery(forged, now, true).ok());
   forged = renewed;
   forged.budget_version = 1;
-  REQUIRE(!book.RenewAfterReconciliation(forged, now, true).ok());
+  REQUIRE(!book.RenewAfterOrderQuery(forged, now, true).ok());
   forged = renewed;
   forged.valid_until_utc = expiry;
-  REQUIRE(!book.RenewAfterReconciliation(forged, expiry, true).ok());
-  REQUIRE(book.RenewAfterReconciliation(renewed, expiry, true).ok());
+  REQUIRE(!book.RenewAfterOrderQuery(forged, expiry, true).ok());
+  REQUIRE(book.RenewAfterOrderQuery(renewed, expiry, true).ok());
   REQUIRE(book.FindBudget(account, quote, ShardId{0})->budget_version == 2);
   REQUIRE(Equal(*book.GrantedTotal(account, quote), "100"));
 
@@ -197,11 +197,11 @@ int BudgetTestMain() {
   REQUIRE(
       CodeOf(gate0.TryHold(strategy_id, request, spec, rule, expiry, true, true)
                  .status()) == ErrorCode::kRiskBudgetExpired);
-  REQUIRE(!gate0.RenewAfterReconciliation(renewed, expiry, false).ok());
+  REQUIRE(!gate0.RenewAfterOrderQuery(renewed, expiry, false).ok());
   forged = renewed;
   forged.hard_limit = BudgetD("61");
-  REQUIRE(!gate0.RenewAfterReconciliation(forged, expiry, true).ok());
-  REQUIRE(gate0.RenewAfterReconciliation(renewed, expiry, true).ok());
+  REQUIRE(!gate0.RenewAfterOrderQuery(forged, expiry, true).ok());
+  REQUIRE(gate0.RenewAfterOrderQuery(renewed, expiry, true).ok());
   request.base_amount = BudgetD("0.6");
   auto new_order =
       gate0.TryHold(strategy_id, request, spec, rule, expiry, true, true);

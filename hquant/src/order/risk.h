@@ -48,7 +48,7 @@ class RiskBudgetAllocator {
   absl::Status SetConservativeLimit(const AccountId& account,
                                     const AssetId& asset, const Decimal& limit);
   absl::Status GrantInitial(RiskBudget budget, UtcTime now);
-  absl::Status RenewAfterReconciliation(RiskBudget budget, UtcTime now,
+  absl::Status RenewAfterOrderQuery(RiskBudget budget, UtcTime now,
                                         bool account_fresh);
   absl::StatusOr<RiskBudget> FindBudget(const AccountId& account,
                                         const AssetId& asset,
@@ -82,7 +82,7 @@ class RiskGate {
   explicit RiskGate(Settings settings);
   absl::Status SetInitialBudget(RiskBudget budget);
   // Reconciliation may extend the expiry and version, never the allocation.
-  absl::Status RenewAfterReconciliation(RiskBudget budget, UtcTime now,
+  absl::Status RenewAfterOrderQuery(RiskBudget budget, UtcTime now,
                                         bool account_fresh);
   absl::StatusOr<FundsHold> TryHold(const StrategyId& strategy_id,
                                     const OrderRequest& request,

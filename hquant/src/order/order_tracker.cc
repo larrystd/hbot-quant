@@ -84,7 +84,7 @@ OrderDisplayState OrderTracker::Display(const TrackedOrder& order) const {
     default:
       break;
   }
-  if (order.reconciliation != ReconciliationState::Confirmed)
+  if (order.confirmation != ConfirmationState::Confirmed)
     return OrderDisplayState::SubmissionUnknown;
   if (order.cancel_pending) return OrderDisplayState::PendingCancel;
   switch (order.lifecycle) {
@@ -122,10 +122,10 @@ TrackerResult OrderTracker::MakeResult(
   result.events = std::move(events);
   result.changed = changed;
   result.cancel_pending = order.cancel_pending;
-  result.reconciliation = order.reconciliation;
-  result.needs_reconciliation =
+  result.confirmation = order.confirmation;
+  result.needs_order_query =
       order.completion_pending_fills ||
-      order.reconciliation != ReconciliationState::Confirmed;
+      order.confirmation != ConfirmationState::Confirmed;
   return result;
 }
 
@@ -177,13 +177,13 @@ absl::StatusOr<OrderTracker::TrackedOrder*> OrderTracker::Find(
     }
   }
   if (by_client && by_exchange && by_client != by_exchange) {
-    by_client->reconciliation = ReconciliationState::ResyncRequired;
-    by_exchange->reconciliation = ReconciliationState::ResyncRequired;
+    by_client->confirmation = ConfirmationState::NeedsQuery;
+    by_exchange->confirmation = ConfirmationState::NeedsQuery;
     return Error(ErrorCode::kExchangeOrderIdConflict,
                  "client and exchange IDs identify different orders");
   }
   if (client_id && !by_client && by_exchange) {
-    by_exchange->reconciliation = ReconciliationState::ResyncRequired;
+    by_exchange->confirmation = ConfirmationState::NeedsQuery;
     return Error(ErrorCode::kExchangeOrderIdConflict,
                  "unknown client ID conflicts with exchange ID");
   }
@@ -193,13 +193,13 @@ absl::StatusOr<OrderTracker::TrackedOrder*> OrderTracker::Find(
                  "order report has no tracked strategy_id");
   if (order->prepared.request.account != account ||
       order->prepared.request.market != market) {
-    order->reconciliation = ReconciliationState::ResyncRequired;
+    order->confirmation = ConfirmationState::NeedsQuery;
     return Error(ErrorCode::kReportAccountMarketMismatch,
                  "account or market mismatch");
   }
   if (order->exchange_id && exchange_id &&
       *order->exchange_id != *exchange_id) {
-    order->reconciliation = ReconciliationState::ResyncRequired;
+    order->confirmation = ConfirmationState::NeedsQuery;
     return Error(ErrorCode::kExchangeOrderIdConflict,
                  "exchange ID changed for tracked client ID");
   }
@@ -211,7 +211,7 @@ absl::Status OrderTracker::BindExchangeId(
   if (!exchange_id) return absl::OkStatus();
   if (order.exchange_id) {
     if (*order.exchange_id != *exchange_id) {
-      order.reconciliation = ReconciliationState::ResyncRequired;
+      order.confirmation = ConfirmationState::NeedsQuery;
       return Error(ErrorCode::kExchangeOrderIdConflict, "exchange ID changed");
     }
     return absl::OkStatus();
@@ -222,7 +222,7 @@ absl::Status OrderTracker::BindExchangeId(
   if (auto found = exchange_index_.find(key);
       found != exchange_index_.end() &&
       found->second != order.prepared.client_id.value) {
-    order.reconciliation = ReconciliationState::ResyncRequired;
+    order.confirmation = ConfirmationState::NeedsQuery;
     return Error(ErrorCode::kExchangeOrderIdConflict,
                  "exchange ID already owned by another order");
   }
@@ -255,7 +255,7 @@ absl::StatusOr<TrackerResult> OrderTracker::FailBeforeWrite(
     return Error(ErrorCode::kDecimalArithmeticFailed,
                  "tracked cumulative amount cannot be compared");
   if (order.lifecycle != OrderLifecycle::PendingCreate ||
-      order.reconciliation != ReconciliationState::Confirmed ||
+      order.confirmation != ConfirmationState::Confirmed ||
       order.exchange_id || order.created_emitted || *compared != 0)
     return Error(ErrorCode::kOrderNotCancelable,
                  "cannot prove no exchange write or fill");
@@ -277,8 +277,8 @@ absl::StatusOr<TrackerResult> OrderTracker::MarkSubmissionUnknown(
     return Error(ErrorCode::kOrderStatusConflict,
                  "submission already confirmed or terminal");
   const bool changed =
-      order.reconciliation != ReconciliationState::SubmissionUnknown;
-  order.reconciliation = ReconciliationState::SubmissionUnknown;
+      order.confirmation != ConfirmationState::SubmissionUnknown;
+  order.confirmation = ConfirmationState::SubmissionUnknown;
   return MakeResult(order, changed);
 }
 
@@ -287,13 +287,13 @@ absl::StatusOr<TrackerResult> OrderTracker::ApplyOrderUpdate(
   return Update(update, false);
 }
 
-absl::StatusOr<TrackerResult> OrderTracker::Reconcile(
+absl::StatusOr<TrackerResult> OrderTracker::ApplyQueriedOrder(
     const OrderUpdate& update) {
   return Update(update, true);
 }
 
 absl::StatusOr<TrackerResult> OrderTracker::Update(const OrderUpdate& update,
-                                                   bool reconciled) {
+                                                   bool queried_order) {
   auto found = Find(update.account, update.market, update.client_id,
                     update.exchange_order_id);
   if (!found.ok()) return found.status();
@@ -304,7 +304,7 @@ absl::StatusOr<TrackerResult> OrderTracker::Update(const OrderUpdate& update,
   bool changed = previous_exchange != order.exchange_id;
   const OrderLifecycle next = Lifecycle(update.exchange_status);
   if (Terminal(order.lifecycle) && next != order.lifecycle) {
-    order.reconciliation = ReconciliationState::ResyncRequired;
+    order.confirmation = ConfirmationState::NeedsQuery;
     return Error(ErrorCode::kOrderStatusConflict,
                  "conflicting terminal order status");
   }
@@ -324,10 +324,10 @@ absl::StatusOr<TrackerResult> OrderTracker::Update(const OrderUpdate& update,
     order.lifecycle = next;
     changed = true;
   }
-  if (order.reconciliation == ReconciliationState::SubmissionUnknown ||
-      (reconciled &&
-       order.reconciliation == ReconciliationState::ResyncRequired)) {
-    order.reconciliation = ReconciliationState::Confirmed;
+  if (order.confirmation == ConfirmationState::SubmissionUnknown ||
+      (queried_order &&
+       order.confirmation == ConfirmationState::NeedsQuery)) {
+    order.confirmation = ConfirmationState::Confirmed;
     changed = true;
   }
   if (update.cumulative_base) {
@@ -390,7 +390,7 @@ absl::StatusOr<TrackerResult> OrderTracker::ApplyTradeUpdate(
       TradeIndexKey(trade.account, trade.market, trade.exchange_trade_id);
   if (auto seen = seen_trades_.find(key); seen != seen_trades_.end()) {
     if (seen->second != order.prepared.client_id.value) {
-      order.reconciliation = ReconciliationState::ResyncRequired;
+      order.confirmation = ConfirmationState::NeedsQuery;
       return Error(ErrorCode::kTradeIdOnOtherOrder,
                    "trade ID assigned to another order");
     }
@@ -409,7 +409,7 @@ absl::StatusOr<TrackerResult> OrderTracker::ApplyTradeUpdate(
     return Error(ErrorCode::kOrderReportInvalid,
                  "trade fill amount cannot be compared");
   if (*overfill > 0) {
-    order.reconciliation = ReconciliationState::ResyncRequired;
+    order.confirmation = ConfirmationState::NeedsQuery;
     return Error(ErrorCode::kTradeExceedsOrderAmount,
                  "trade exceeds requested base amount");
   }
@@ -447,11 +447,11 @@ std::optional<OrderSnapshot> OrderTracker::Snapshot(
   return MakeSnapshot(found->second);
 }
 
-std::vector<ClientOrderId> OrderTracker::ReconciliationQueue() const {
+std::vector<ClientOrderId> OrderTracker::OrdersNeedingQuery() const {
   std::vector<ClientOrderId> ids;
   for (const auto& [client_id, order] : orders_) {
     if (order.completion_pending_fills ||
-        order.reconciliation != ReconciliationState::Confirmed)
+        order.confirmation != ConfirmationState::Confirmed)
       ids.emplace_back(client_id);
   }
   return ids;

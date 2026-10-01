@@ -108,18 +108,18 @@ TEST(MultiShardTest, CapitalRateAndAccountReportsStayWithinTheirShard) {
   auto overflow = (*router)->Route(update);
   EXPECT_EQ(overflow.failure, ErrorCode::kRouteQueueFull);
   EXPECT_TRUE(overflow.pause_account);
-  EXPECT_TRUE(overflow.request_reconcile);
+  EXPECT_TRUE(overflow.request_order_query);
   EXPECT_TRUE((*router)->IsAccountPaused(account));
   auto consumed = (*router)->TryPop(ShardId{1});
   ASSERT_TRUE(consumed);
   EXPECT_EQ(consumed->strategy_id.value, 2);
-  (*router)->MarkReconciled(account);
+  (*router)->MarkOrderQueried(account);
   EXPECT_FALSE((*router)->IsAccountPaused(account));
   update.client_id = ClientOrderId("BAD");
   auto unknown = (*router)->Route(update);
   EXPECT_EQ(unknown.disposition, RouteDisposition::Quarantined);
   EXPECT_TRUE(unknown.pause_account);
-  EXPECT_TRUE(unknown.request_reconcile);
+  EXPECT_TRUE(unknown.request_order_query);
 }
 
 TEST(MultiShardTest, EightShardRouterQueuesStaySeparate) {

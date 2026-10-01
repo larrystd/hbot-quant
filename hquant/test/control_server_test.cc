@@ -6,13 +6,13 @@
 int ProtocolContract() {
   hquant::ControlRequest request;
   request.request_id = 42;
-  request.payload = hquant::HistoryRequest{20, "abc"};
+  request.payload = hquant::OrderHistoryRequest{20, "abc"};
   auto encoded = hquant::EncodeControlRequest(request);
   if (!encoded.ok()) return 1;
   auto decoded = hquant::DecodeControlRequest(*encoded);
   if (!decoded.ok() || decoded->request_id != 42 ||
-      !std::holds_alternative<hquant::HistoryRequest>(decoded->payload) ||
-      std::get<hquant::HistoryRequest>(decoded->payload).cursor != "abc")
+      !std::holds_alternative<hquant::OrderHistoryRequest>(decoded->payload) ||
+      std::get<hquant::OrderHistoryRequest>(decoded->payload).cursor != "abc")
     return 2;
   hquant::ControlResponse response;
   response.request_id = 42;
@@ -75,31 +75,31 @@ int ProtocolContract() {
 #include "boost/asio/this_coro.hpp"
 #include "boost/asio/use_awaitable.hpp"
 #include "gtest/gtest.h"
-#include "storage/storage.h"
+#include "order_history/order_history.h"
 
 namespace hquant {
 namespace {
 
 TEST(ControlServerHistoryTest, DisplaysNegativeReasonNumbers) {
-  constexpr auto reason = ErrorCode::kStorageQueueFull;
-  HistoryPage page;
-  HistoryRecord prepared_record;
+  constexpr auto reason = ErrorCode::kOrderHistoryQueueFull;
+  OrderHistoryPage page;
+  OrderHistoryRecord prepared_record;
   PreparedOrder prepared;
   prepared.client_id = ClientOrderId{"P1"};
   prepared.request.base_amount = *Decimal::Parse("0.01");
   prepared_record.payload = prepared;
   page.rows.push_back(prepared_record);
-  HistoryRecord decision;
+  OrderHistoryRecord decision;
   ActionRecord action;
   action.reason = reason;
   decision.payload = action;
   page.rows.push_back(decision);
-  HistoryRecord gap;
-  gap.payload = HistoryGap{RunId{1}, ShardId{0}, 1, 2, reason};
+  OrderHistoryRecord gap;
+  gap.payload = OrderHistoryGap{RunId{1}, ShardId{0}, 1, 2, reason};
   page.rows.push_back(gap);
   page.incomplete_ranges.push_back(
-      HistoryGap{RunId{1}, ShardId{0}, 1, 2, reason});
-  const std::string json = HistoryJson(page);
+      OrderHistoryGap{RunId{1}, ShardId{0}, 1, 2, reason});
+  const std::string json = OrderHistoryJson(page);
   EXPECT_NE(json.find("\"kind\":\"prepared_order\""), std::string::npos);
   const std::string needle = "\"reason\":-17004";
   const auto first = json.find(needle);
@@ -120,13 +120,13 @@ TEST(ControlServerTest, StopCanPassAnInFlightHistoryRequest) {
       ControlSocketPath(directory),
       [&](ControlRequest request) -> boost::asio::awaitable<ControlResponse> {
         ControlResponse response;
-        if (std::holds_alternative<HistoryRequest>(request.payload)) {
+        if (std::holds_alternative<OrderHistoryRequest>(request.payload)) {
           history_entered = true;
           boost::asio::steady_timer timer(
               co_await boost::asio::this_coro::executor);
           timer.expires_after(std::chrono::milliseconds(250));
           co_await timer.async_wait(boost::asio::use_awaitable);
-          response.payload = HistoryResponse{"{\"rows\":[]}"};
+          response.payload = OrderHistoryResponse{"{\"rows\":[]}"};
         } else
           response.payload = StopResponse{true};
         co_return response;
@@ -141,7 +141,7 @@ TEST(ControlServerTest, StopCanPassAnInFlightHistoryRequest) {
   EXPECT_EQ(legacy_reply->schema_version, 1u);
   ControlRequest history;
   history.request_id = 1;
-  history.payload = HistoryRequest{};
+  history.payload = OrderHistoryRequest{};
   std::thread pending([&] {
     auto answer = SendControlRequest(directory, history);
     EXPECT_TRUE(answer.ok()) << answer.status();

@@ -37,23 +37,23 @@ int main() {
   Require(!hquant::ParseCliArguments(start_args).ok(), "start removed");
 
   const std::array<std::string_view, 7> history_args{
-      "history", "--state-dir", "/tmp/hquant", "--limit",
+      "order-history", "--state-dir", "/tmp/hquant", "--limit",
       "100",     "--cursor",    "next"};
   auto history = hquant::ParseCliArguments(history_args);
-  Require(history.ok() && history->history_limit == 100 &&
-              history->history_cursor == "next",
+  Require(history.ok() && history->order_history_limit == 100 &&
+              history->order_history_cursor == "next",
           "parse history");
   auto request = hquant::MakeControlRequest(*history, 17);
   Require(request.ok() && request->request_id == 17 &&
-              std::holds_alternative<hquant::HistoryRequest>(request->payload),
+              std::holds_alternative<hquant::OrderHistoryRequest>(request->payload),
           "history request");
-  const auto& payload = std::get<hquant::HistoryRequest>(request->payload);
+  const auto& payload = std::get<hquant::OrderHistoryRequest>(request->payload);
   Require(payload.limit == 100 && payload.cursor == "next",
           "history pagination");
   hquant::ControlResponse history_response;
   history_response.request_id = 17;
   history_response.payload =
-      hquant::HistoryResponse{"{\"orders\":[],\"next\":null}"};
+      hquant::OrderHistoryResponse{"{\"orders\":[],\"next\":null}"};
   auto formatted =
       hquant::FormatControlResponse(*history, history_response, 17);
   Require(formatted.ok() && formatted->find("orders") != std::string::npos,
@@ -63,14 +63,14 @@ int main() {
   hquant::ControlResponse engine_error;
   engine_error.request_id = 17;
   engine_error.payload = hquant::ControlError{
-      hquant::ErrorCode::kHistoryQueueFull, "reader queue full"};
+      hquant::ErrorCode::kOrderHistoryReaderQueueFull, "reader queue full"};
   auto command_error =
       hquant::FormatControlResponse(*history, engine_error, 17);
   Require(!command_error.ok() &&
               hquant::CodeOf(command_error.status()) ==
                   hquant::ErrorCode::kCliEngineError &&
               std::string(command_error.status().message())
-                      .find("HISTORY_QUEUE_FULL (-17007)") != std::string::npos,
+                      .find("ORDER_HISTORY_READER_QUEUE_FULL (-17007)") != std::string::npos,
           "engine error name and number");
 
   const std::array<std::string_view, 3> stop_args{"stop", "--state-dir",
@@ -86,16 +86,16 @@ int main() {
           "stop accepted");
 
   const std::array<std::string_view, 5> invalid_limit{
-      "history", "--state-dir", "/tmp/hquant", "--limit", "0"};
+      "order-history", "--state-dir", "/tmp/hquant", "--limit", "0"};
   Require(!hquant::ParseCliArguments(invalid_limit).ok(), "zero history limit");
   Require(hquant::CodeOf(hquant::ParseCliArguments(invalid_limit).status()) ==
               hquant::ErrorCode::kCliUsageInvalid,
           "usage code");
   const std::array<std::string_view, 5> max_limit{
-      "history", "--state-dir", "/tmp/hquant", "--limit", "500"};
+      "order-history", "--state-dir", "/tmp/hquant", "--limit", "500"};
   Require(hquant::ParseCliArguments(max_limit).ok(), "max history limit");
   const std::array<std::string_view, 5> over_limit{
-      "history", "--state-dir", "/tmp/hquant", "--limit", "501"};
+      "order-history", "--state-dir", "/tmp/hquant", "--limit", "501"};
   Require(!hquant::ParseCliArguments(over_limit).ok(),
           "history limit over maximum");
   const std::array<std::string_view, 5> duplicate_option{

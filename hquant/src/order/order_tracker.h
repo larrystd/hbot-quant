@@ -22,15 +22,15 @@ enum class OrderLifecycle {
   Failed,
   Expired
 };
-enum class ReconciliationState { Confirmed, SubmissionUnknown, ResyncRequired };
+enum class ConfirmationState { Confirmed, SubmissionUnknown, NeedsQuery };
 
 struct TrackerResult {
   OrderSnapshot snapshot;
   std::vector<TrackedOrderEvent> events;
   bool changed = false;
   bool cancel_pending = false;
-  bool needs_reconciliation = false;
-  ReconciliationState reconciliation = ReconciliationState::Confirmed;
+  bool needs_order_query = false;
+  ConfirmationState confirmation = ConfirmationState::Confirmed;
 };
 
 // Single-shard, synchronous state machine. It never calls a strategy or risk
@@ -47,11 +47,11 @@ class OrderTracker {
       const ClientOrderId& client_id);
   absl::StatusOr<TrackerResult> ApplyOrderUpdate(const OrderUpdate& update);
   absl::StatusOr<TrackerResult> ApplyTradeUpdate(const TradeUpdate& trade);
-  // REST/private reconciliation confirms the original client ID. No resend.
-  absl::StatusOr<TrackerResult> Reconcile(const OrderUpdate& update);
+  // REST/private confirmation confirms the original client ID. No resend.
+  absl::StatusOr<TrackerResult> ApplyQueriedOrder(const OrderUpdate& update);
 
   std::optional<OrderSnapshot> Snapshot(const ClientOrderId& client_id) const;
-  std::vector<ClientOrderId> ReconciliationQueue() const;
+  std::vector<ClientOrderId> OrdersNeedingQuery() const;
 
  private:
   struct TrackedOrder {
@@ -59,7 +59,7 @@ class OrderTracker {
     std::optional<ExchangeOrderId> exchange_id;
     OrderLifecycle lifecycle = OrderLifecycle::PendingCreate;
     bool cancel_pending = false;
-    ReconciliationState reconciliation = ReconciliationState::Confirmed;
+    ConfirmationState confirmation = ConfirmationState::Confirmed;
     bool completion_pending_fills = false;
     bool created_emitted = false;
     bool terminal_emitted = false;
@@ -93,7 +93,7 @@ class OrderTracker {
   absl::Status BindExchangeId(
       TrackedOrder& order, const std::optional<ExchangeOrderId>& exchange_id);
   absl::StatusOr<TrackerResult> Update(const OrderUpdate& update,
-                                       bool reconciled);
+                                       bool queried_order);
 
   std::map<std::string, TrackedOrder> orders_;
   std::map<ExchangeKey, std::string> exchange_index_;

@@ -139,7 +139,7 @@ absl::StatusOr<TrackerResult> ReplayStep(OrderTracker& tracker,
       update.cumulative_quote = D(*amount);
     update.time.receive_utc = At(step.stamp.at_us);
     update.time.receive_mono = MonoAt(step.stamp.at_us);
-    return kind == "reconcile" ? tracker.Reconcile(update)
+    return kind == "reconcile" ? tracker.ApplyQueriedOrder(update)
                                : tracker.ApplyOrderUpdate(update);
   }
   if (kind == "trade_update") {
@@ -268,7 +268,7 @@ TEST(OrderTrackerTest,
   ack.client_id = second.client_id;
   EXPECT_EQ(CodeOf(tracker.ApplyOrderUpdate(ack).status()),
             ErrorCode::kExchangeOrderIdConflict);
-  EXPECT_EQ(tracker.ReconciliationQueue().size(), 2);
+  EXPECT_EQ(tracker.OrdersNeedingQuery().size(), 2);
   TradeUpdate trade;
   trade.account = first.request.account;
   trade.market = first.request.market;
@@ -300,20 +300,20 @@ TEST(OrderTrackerTest, ReconcilesUnknownSubmissionUsingOriginalClientId) {
   ASSERT_TRUE(unknown.ok());
   EXPECT_EQ(unknown->snapshot.display_state,
             OrderDisplayState::SubmissionUnknown);
-  ASSERT_EQ(tracker.ReconciliationQueue().size(), 1);
+  ASSERT_EQ(tracker.OrdersNeedingQuery().size(), 1);
   OrderUpdate recovered;
   recovered.account = prepared.request.account;
   recovered.market = prepared.request.market;
   recovered.client_id = prepared.client_id;
   recovered.exchange_order_id = ExchangeOrderId{"E1"};
   recovered.exchange_status = ExchangeOrderStatus::Open;
-  auto reconciled = tracker.Reconcile(recovered);
-  ASSERT_TRUE(reconciled.ok()) << reconciled.status();
-  EXPECT_EQ(reconciled->reconciliation, ReconciliationState::Confirmed);
-  EXPECT_EQ(reconciled->snapshot.display_state, OrderDisplayState::Open);
-  ASSERT_EQ(reconciled->events.size(), 1);
-  EXPECT_EQ(EventName(reconciled->events[0]), "OrderOpened");
-  EXPECT_TRUE(tracker.ReconciliationQueue().empty());
+  auto queried_order = tracker.ApplyQueriedOrder(recovered);
+  ASSERT_TRUE(queried_order.ok()) << queried_order.status();
+  EXPECT_EQ(queried_order->confirmation, ConfirmationState::Confirmed);
+  EXPECT_EQ(queried_order->snapshot.display_state, OrderDisplayState::Open);
+  ASSERT_EQ(queried_order->events.size(), 1);
+  EXPECT_EQ(EventName(queried_order->events[0]), "OrderOpened");
+  EXPECT_TRUE(tracker.OrdersNeedingQuery().empty());
   auto duplicate = tracker.ApplyOrderUpdate(recovered);
   ASSERT_TRUE(duplicate.ok());
   EXPECT_TRUE(duplicate->events.empty());

@@ -33,25 +33,26 @@ cc_test(name = "order_gateway_test", srcs = ["order_gateway_test.cc"], deps = ["
 cc_test(name = "account_reports_test", srcs = ["account_reports_test.cc"], deps = ["//hquant/src/base:error", "//hquant/src/order:account_reports", "//hquant/src/order:order_tracker", "@boost.asio//:boost.asio", "@googletest//:gtest_main"])
 cc_test(name = "simple_pmm_test", srcs = ["simple_pmm_test.cc"], data = [":simple_pmm_data"], deps = [":fixture_loader", "//hquant/src/strategy:simple_pmm", "@googletest//:gtest_main", "@simdjson//:simdjson"])
 
-cc_test(name = "recorder_test", srcs = ["recorder_test.cc"], deps = ["//hquant/src/base:error", "//hquant/src/storage:history", "//hquant/src/storage:recorder", "@googletest//:gtest_main"])
-cc_test(name = "history_test", srcs = ["history_test.cc"], deps = ["//hquant/src/base:error", "//hquant/src/storage:history", "//hquant/src/storage:recorder", "@googletest//:gtest_main"])
-cc_test(name = "record_codec_test", srcs = ["record_codec_test.cc"], deps = ["//hquant/src/base:error", "//hquant/src/storage:record_codec", "@googletest//:gtest_main"])
+cc_test(name = "recorder_test", srcs = ["recorder_test.cc"], deps = ["//hquant/src/base:error", "//hquant/src/order_history:order_history_reader", "//hquant/src/order_history:order_history_writer", "@googletest//:gtest_main"])
+cc_test(name = "history_test", srcs = ["history_test.cc"], deps = ["//hquant/src/base:error", "//hquant/src/order_history:order_history_reader", "//hquant/src/order_history:order_history_writer", "@googletest//:gtest_main"])
+cc_test(name = "record_codec_test", srcs = ["record_codec_test.cc"], deps = ["//hquant/src/base:error", "//hquant/src/order_history:record_codec", "@googletest//:gtest_main"])
 cc_test(name = "shard_test", srcs = ["shard_test.cc"], deps = ["//hquant/src/shard:shard"])
 cc_test(name = "shard_trigger_test", srcs = ["shard_trigger_test.cc"], deps = ["//hquant/src/shard:shard", "//hquant/src/order:risk", "//hquant/src/order:simulated_exchange", "@googletest//:gtest_main"])
 cc_test(name = "action_executor_test", srcs = ["action_executor_test.cc"], deps = ["//hquant/src/shard:action_executor"])
 cc_test(name = "routing_test", srcs = ["routing_test.cc"], deps = ["//hquant/src/shard:routing", "@googletest//:gtest_main"])
 
-cc_test(name = "control_server_test", srcs = ["control_server_test.cc"], deps = ["//apps:bench_cli", "//hquant/src/application:control_server", "//hquant/src/storage:storage", "@boost.asio//:boost.asio", "@googletest//:gtest_main"])
+cc_test(name = "control_server_test", srcs = ["control_server_test.cc"], deps = ["//apps:bench_cli", "//hquant/src/application:control_server", "//hquant/src/order_history:order_history", "@boost.asio//:boost.asio", "@googletest//:gtest_main"])
 cc_test(name = "signal_shutdown_test", srcs = ["signal_shutdown_test.cc"], data = ["//apps:hquant_server", "//examples:simulated_replay.yaml", "//examples:replay_market.json"], deps = ["@googletest//:gtest_main", "@sqlite3//:sqlite3"])
+cc_test(name = "quant_server_stop_test", srcs = ["quant_server_stop_test.cc"], data = ["//examples:simulated_replay.yaml", "//examples:replay_market.json"], deps = ["//hquant/src/application:config", "//hquant/src/application:quant_server", "@googletest//:gtest_main"])
 cc_test(name = "config_test", srcs = ["config_test.cc"], deps = ["//hquant/src/application:config", "//hquant/src/base:error"])
 cc_test(name = "bench_cli_test", srcs = ["bench_cli_test.cc"], deps = ["//apps:bench_cli", "//hquant/src/base:error"])
 cc_test(name = "bench_control_test", srcs = ["bench_control_test.cc"], deps = ["//apps:bench_control", "//hquant/src/application:control_server", "@boost.asio//:boost.asio", "@googletest//:gtest_main"])
 cc_test(name = "bench_feed_test", srcs = ["bench_feed_test.cc"], deps = ["//apps:bench_feed", "@googletest//:gtest_main"])
 
-cc_test(name = "simulated_replay", srcs = ["simulated_replay_test.cc"], deps = ["//hquant/src/base:error", "//hquant/src/base:types", "//hquant/src/order:simulated_exchange", "//hquant/src/order:risk", "//hquant/src/shard:shard", "//hquant/src/storage:history", "//hquant/src/storage:recorder", "//hquant/src/strategy:simple_pmm", "@googletest//:gtest_main"])
+cc_test(name = "simulated_replay", srcs = ["simulated_replay_test.cc"], deps = ["//hquant/src/base:error", "//hquant/src/base:types", "//hquant/src/order:simulated_exchange", "//hquant/src/order:risk", "//hquant/src/shard:shard", "//hquant/src/order_history:order_history_reader", "//hquant/src/order_history:order_history_writer", "//hquant/src/strategy:simple_pmm", "@googletest//:gtest_main"])
 cc_test(name = "simulated_binance", srcs = ["simulated_binance_test.cc"], deps = ["//hquant/src/market:market_data_stream", "//hquant/src/order:simulated_exchange", "//hquant/src/base:net", "//hquant/src/order:risk", "//hquant/src/shard:shard", "//hquant/src/strategy:simple_pmm", "@boost.asio//:boost.asio", "@boost.beast//:boost.beast", "@googletest//:gtest_main"])
 cc_test(name = "multi_shard", srcs = ["multi_shard_test.cc"], deps = ["//hquant/src/base:rate_limit", "//hquant/src/order:risk", "//hquant/src/shard:routing", "@googletest//:gtest_main"])
-cc_test(name = "recovery", srcs = ["recovery_test.cc"], deps = ["//hquant/src/order:order_gateway", "//hquant/src/order:account_reports", "//hquant/src/order:order_tracker", "//hquant/src/order:risk", "//hquant/src/storage:history", "//hquant/src/storage:recorder", "@abseil-cpp//absl/status:status", "@boost.asio//:boost.asio", "@googletest//:gtest_main"])
+cc_test(name = "recovery", srcs = ["recovery_test.cc"], deps = ["//hquant/src/order:order_gateway", "//hquant/src/order:account_reports", "//hquant/src/order:order_tracker", "//hquant/src/order:risk", "//hquant/src/order_history:order_history_reader", "//hquant/src/order_history:order_history_writer", "@abseil-cpp//absl/status:status", "@boost.asio//:boost.asio", "@googletest//:gtest_main"])
 
 cc_test(
     name = "schema_test",

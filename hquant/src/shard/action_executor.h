@@ -9,7 +9,7 @@
 #include "base/order.h"
 #include "base/types.h"
 #include "order/risk.h"
-#include "storage/storage.h"
+#include "order_history/order_history.h"
 #include "strategy/strategy.h"
 
 namespace hquant {
@@ -38,7 +38,7 @@ struct ActionResult {
 // Executes one shard's strategy actions synchronously on the owning thread.
 class ActionExecutor {
  public:
-  ActionExecutor(RiskGate& risk, OrderGateway& gateway, HistoryWriter& recorder,
+  ActionExecutor(RiskGate& risk, OrderGateway& gateway, OrderHistoryWriter& recorder,
                  RunId run, ShardId shard, uint64_t& shard_sequence)
       : risk_(risk),
         gateway_(gateway),
@@ -49,20 +49,20 @@ class ActionExecutor {
 
   std::vector<ActionResult> Execute(const ActionBatch& batch,
                                     const ActionContext& context);
-  const std::vector<HistoryGap>& local_gaps() const { return local_gaps_; }
+  const std::vector<OrderHistoryGap>& local_gaps() const { return local_gaps_; }
 
  private:
-  bool Record(HistoryRecordPayload payload, const StrategyId& strategy_id,
+  bool Record(OrderHistoryRecordPayload payload, const StrategyId& strategy_id,
               UtcTime now);
   void Gap(uint64_t sequence);
 
   RiskGate& risk_;
   OrderGateway& gateway_;
-  HistoryWriter& recorder_;
+  OrderHistoryWriter& recorder_;
   RunId run_;
   ShardId shard_;
   uint64_t& shard_sequence_;
-  std::vector<HistoryGap> local_gaps_;
+  std::vector<OrderHistoryGap> local_gaps_;
 };
 
 }  // namespace hquant

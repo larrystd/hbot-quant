@@ -99,7 +99,7 @@ struct RouteResult {
   std::optional<RoutedAccountReport> local_report;
   std::optional<ShardId> wake_shard;
   bool pause_account = false;
-  bool request_reconcile = false;
+  bool request_order_query = false;
   bool quarantine_dropped = false;
 };
 
@@ -129,8 +129,8 @@ class AccountReportRouter {
   std::optional<RoutedAccountReport> TryPop(ShardId target_shard);
   std::optional<QuarantinedAccountReport> TryPopQuarantined();
   bool IsAccountPaused(const AccountId& account) const;
-  // Call only after REST/order/trade reconciliation has verified the gap.
-  void MarkReconciled(const AccountId& account);
+  // Call only after REST/order/trade confirmation has verified the gap.
+  void MarkOrderQueried(const AccountId& account);
   size_t QuarantineSize() const { return quarantine_.size(); }
   uint64_t DroppedQuarantineCount() const { return dropped_quarantine_count_; }
 

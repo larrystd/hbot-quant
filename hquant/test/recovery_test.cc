@@ -17,8 +17,8 @@
 #include "order/order_gateway.h"
 #include "order/order_tracker.h"
 #include "order/risk.h"
-#include "storage/history.h"
-#include "storage/recorder.h"
+#include "order_history/order_history_reader.h"
+#include "order_history/order_history_writer.h"
 
 namespace hquant {
 namespace {
@@ -138,10 +138,10 @@ TEST(RecoveryIntegrationTest, UnknownWriteAndCrashUseOriginalIdWithoutResend) {
   ASSERT_TRUE(prepared.ok()) << prepared.status();
   ASSERT_TRUE(
       original_risk.AttachClientId(hold->hold_id, prepared->client_id).ok());
-  auto recorder = SqliteHistoryWriter::Open(
+  auto recorder = SqliteOrderHistoryWriter::Open(
       {database.path(), RunId{42}, clock.UtcNow(), 8, 1});
   ASSERT_TRUE(recorder.ok()) << recorder.status();
-  HistoryRecord record;
+  OrderHistoryRecord record;
   record.run_id = RunId{42};
   record.shard = ShardId{0};
   record.shard_sequence = 1;
@@ -165,22 +165,22 @@ TEST(RecoveryIntegrationTest, UnknownWriteAndCrashUseOriginalIdWithoutResend) {
   EXPECT_EQ(transport.calls, 1);
   recorder->reset();  // abrupt exit: no clean-stop marker
 
-  auto recovered = LoadRecoverySnapshot(database.path(), RunId{42});
+  auto recovered = LoadPreviousRun(database.path(), RunId{42});
   ASSERT_TRUE(recovered.ok()) << recovered.status();
-  EXPECT_TRUE(recovered->crash_tail_possible);
-  EXPECT_TRUE(recovered->needs_reconciliation);
+  EXPECT_TRUE(recovered->may_have_unwritten_records);
+  EXPECT_TRUE(recovered->needs_order_query);
   ASSERT_EQ(recovered->context.recovered_prepared_orders.size(), 1);
   EXPECT_EQ(recovered->context.recovered_prepared_orders[0].client_id,
             prepared->client_id);
-  binance_spot::RestartReconciliationInput restart;
+  binance_spot::StartupQueryInput restart;
   restart.account = account;
   restart.assigned_markets = {market};
   restart.persisted_prepared_orders =
       recovered->context.recovered_prepared_orders;
   restart.history_complete = recovered->manifest.history_complete;
-  restart.previous_run_clean = !recovered->crash_tail_possible;
+  restart.previous_run_clean = !recovered->may_have_unwritten_records;
   restart.executor_checkpoints_complete = false;
-  auto plan = binance_spot::PlanRestart(restart);
+  auto plan = binance_spot::PlanStartupQueries(restart);
   ASSERT_TRUE(plan.ok()) << plan.status();
   ASSERT_EQ(plan->known_orders.size(), 1);
   EXPECT_EQ(plan->known_orders[0].original_client_id, prepared->client_id);
@@ -207,8 +207,8 @@ TEST(RecoveryIntegrationTest, UnknownWriteAndCrashUseOriginalIdWithoutResend) {
   FakeSignedRest missing;
   missing.responses.push_back(
       {404, R"({"code":-2013,"msg":"Order does not exist."})"});
-  binance_spot::ReconciliationClient missing_client(missing);
-  auto unresolved = RunAsync(missing_client.Query(
+  binance_spot::OrderQueryClient missing_client(missing);
+  auto unresolved = RunAsync(missing_client.QueryOrder(
       plan->known_orders[0], EventTime{{}, clock.UtcNow(), clock.MonoNow()},
       std::chrono::steady_clock::now() + std::chrono::seconds(2)));
   ASSERT_TRUE(unresolved.ok());
@@ -226,20 +226,20 @@ TEST(RecoveryIntegrationTest, UnknownWriteAndCrashUseOriginalIdWithoutResend) {
   rest.responses.push_back(
       {200,
        R"([{"symbol":"BTCUSDT","id":7,"orderId":123,"price":"100","qty":"0.01","quoteQty":"1","commission":"0.00001","commissionAsset":"BTC","time":1499827319559,"isMaker":true}])"});
-  binance_spot::ReconciliationClient client(rest);
-  auto reconciled = RunAsync(client.Query(
+  binance_spot::OrderQueryClient client(rest);
+  auto queried_order = RunAsync(client.QueryOrder(
       plan->known_orders[0], EventTime{{}, clock.UtcNow(), clock.MonoNow()},
       std::chrono::steady_clock::now() + std::chrono::seconds(2)));
-  ASSERT_TRUE(reconciled.ok()) << reconciled.status();
-  ASSERT_TRUE(reconciled->complete) << reconciled->unresolved_status;
-  ASSERT_TRUE(reconciled->order);
-  ASSERT_EQ(reconciled->trades.size(), 1);
+  ASSERT_TRUE(queried_order.ok()) << queried_order.status();
+  ASSERT_TRUE(queried_order->complete) << queried_order->unresolved_status;
+  ASSERT_TRUE(queried_order->order);
+  ASSERT_EQ(queried_order->trades.size(), 1);
   ASSERT_EQ(rest.targets.size(), 2);
   EXPECT_EQ(rest.targets[0], "/api/v3/order?symbol=BTCUSDT&origClientOrderId=" +
                                  prepared->client_id.value);
-  ASSERT_TRUE(tracker.ApplyTradeUpdate(reconciled->trades[0]).ok());
-  ASSERT_TRUE(tracker.ApplyTradeUpdate(reconciled->trades[0]).ok());
-  auto final = tracker.Reconcile(*reconciled->order);
+  ASSERT_TRUE(tracker.ApplyTradeUpdate(queried_order->trades[0]).ok());
+  ASSERT_TRUE(tracker.ApplyTradeUpdate(queried_order->trades[0]).ok());
+  auto final = tracker.ApplyQueriedOrder(*queried_order->order);
   ASSERT_TRUE(final.ok()) << final.status();
   EXPECT_EQ(final->snapshot.display_state, OrderDisplayState::Traded);
   EXPECT_EQ(*final->snapshot.cumulative_base.Compare(D("0.01")), 0);

@@ -14,7 +14,7 @@
 
 namespace hquant {
 
-struct HistoryGap {
+struct OrderHistoryGap {
   RunId run_id;
   ShardId shard;
   uint64_t first_seq = 0;
@@ -37,11 +37,11 @@ struct ActionRecord {
   std::string message;
   std::optional<ClientOrderId> client_id;
 };
-using HistoryRecordPayload =
+using OrderHistoryRecordPayload =
     std::variant<PreparedOrder, OrderUpdate, TradeUpdate, RecordedCheckpoint,
-                 HistoryGap, ActionRecord>;
+                 OrderHistoryGap, ActionRecord>;
 
-struct HistoryRecord {
+struct OrderHistoryRecord {
   uint32_t schema_version = 2;
   RunId run_id;
   ShardId shard;
@@ -49,18 +49,18 @@ struct HistoryRecord {
   std::optional<StrategyId> strategy_id;
   UtcTime received_at_utc{};
   std::optional<UtcTime> exchange_at_utc;
-  HistoryRecordPayload payload;
+  OrderHistoryRecordPayload payload;
 };
 
-struct StorageHealth {
+struct OrderHistoryWriterHealth {
   uint64_t dropped_count = 0;
   std::map<uint8_t, uint64_t> last_committed_seq_by_shard;
-  std::vector<HistoryGap> gap_ranges;
+  std::vector<OrderHistoryGap> gap_ranges;
   std::string last_error;
   uint64_t queue_watermark = 0;
 };
 
-struct RunManifest {
+struct RunInfo {
   RunId run_id;
   UtcTime started_at_utc{};
   std::optional<UtcTime> clean_stopped_at_utc;
@@ -68,7 +68,7 @@ struct RunManifest {
   std::map<uint8_t, uint64_t> last_committed_seq_by_shard;
 };
 
-struct HistoryQuery {
+struct OrderHistoryQuery {
   uint64_t request_id = 0;
   std::optional<AccountId> account;
   std::optional<StrategyId> strategy_id;
@@ -80,16 +80,16 @@ struct HistoryQuery {
   MonoTime deadline{};
 };
 
-struct HistoryPage {
+struct OrderHistoryPage {
   uint64_t request_id = 0;
   absl::Status status = absl::OkStatus();
-  std::vector<HistoryRecord> rows;
+  std::vector<OrderHistoryRecord> rows;
   std::optional<std::string> next_cursor;
-  std::vector<HistoryGap> incomplete_ranges;
+  std::vector<OrderHistoryGap> incomplete_ranges;
 };
 
-enum class RecoveryConfidence { Verified, Partial, Unresolved };
-struct RecoveryContext {
+enum class PreviousRunCompleteness { Verified, Partial, Unresolved };
+struct PreviousRunRecords {
   RunId run_id;
   std::vector<PreparedOrder> recovered_prepared_orders;
   std::vector<RecordedCheckpoint> checkpoints;
@@ -97,22 +97,22 @@ struct RecoveryContext {
   std::vector<TradeUpdate> exchange_trades;
   std::vector<Balance> balances;
   std::vector<ClientOrderId> unresolved_ids;
-  RecoveryConfidence confidence = RecoveryConfidence::Unresolved;
+  PreviousRunCompleteness confidence = PreviousRunCompleteness::Unresolved;
 };
 
 // A shard calls TryPush without blocking or waiting for a database commit.
-class HistoryWriter {
+class OrderHistoryWriter {
  public:
-  virtual ~HistoryWriter() = default;
-  virtual bool TryPush(HistoryRecord record) = 0;
+  virtual ~OrderHistoryWriter() = default;
+  virtual bool TryPush(OrderHistoryRecord record) = 0;
 };
 
 // Query submission and result collection are bounded and run off shard threads.
-class HistoryReader {
+class OrderHistoryReader {
  public:
-  virtual ~HistoryReader() = default;
-  virtual absl::Status TrySubmit(HistoryQuery query) = 0;
-  virtual std::optional<HistoryPage> TryReceive() = 0;
+  virtual ~OrderHistoryReader() = default;
+  virtual absl::Status TrySubmit(OrderHistoryQuery query) = 0;
+  virtual std::optional<OrderHistoryPage> TryReceive() = 0;
 };
 
 }  // namespace hquant

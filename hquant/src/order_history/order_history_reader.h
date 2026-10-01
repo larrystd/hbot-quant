@@ -12,13 +12,13 @@
 
 #include "absl/status/statusor.h"
 #include "boost/asio/any_io_executor.hpp"
-#include "storage/storage.h"
+#include "order_history/order_history.h"
 
 struct sqlite3;
 
 namespace hquant {
 
-class SqliteHistoryReader final : public HistoryReader {
+class SqliteOrderHistoryReader final : public OrderHistoryReader {
  public:
   struct Options {
     std::string path;
@@ -26,24 +26,24 @@ class SqliteHistoryReader final : public HistoryReader {
     uint32_t max_page_size = 500;
   };
 
-  static absl::StatusOr<std::unique_ptr<SqliteHistoryReader>> Open(
+  static absl::StatusOr<std::unique_ptr<SqliteOrderHistoryReader>> Open(
       Options options);
-  ~SqliteHistoryReader() override;
-  SqliteHistoryReader(const SqliteHistoryReader&) = delete;
-  SqliteHistoryReader& operator=(const SqliteHistoryReader&) = delete;
+  ~SqliteOrderHistoryReader() override;
+  SqliteOrderHistoryReader(const SqliteOrderHistoryReader&) = delete;
+  SqliteOrderHistoryReader& operator=(const SqliteOrderHistoryReader&) = delete;
 
-  absl::Status TrySubmit(HistoryQuery query) override;
+  absl::Status TrySubmit(OrderHistoryQuery query) override;
   absl::Status TrySubmitAsync(
-      HistoryQuery query, boost::asio::any_io_executor executor,
-      std::function<void(HistoryPage)> completion);
+      OrderHistoryQuery query, boost::asio::any_io_executor executor,
+      std::function<void(OrderHistoryPage)> completion);
   // nullopt means no response yet. Every accepted query eventually returns a
   // page with matching request_id and OK or non-OK status.
-  std::optional<HistoryPage> TryReceive() override;
+  std::optional<OrderHistoryPage> TryReceive() override;
 
  private:
-  SqliteHistoryReader(Options options, sqlite3* db, int storage_version);
+  SqliteOrderHistoryReader(Options options, sqlite3* db, int storage_version);
   void Run();
-  HistoryPage Query(const HistoryQuery& query);
+  OrderHistoryPage Query(const OrderHistoryQuery& query);
 
   Options options_;
   sqlite3* db_ = nullptr;
@@ -51,12 +51,12 @@ class SqliteHistoryReader final : public HistoryReader {
   std::mutex mutex_;
   std::condition_variable cv_;
   struct PendingQuery {
-    HistoryQuery query;
+    OrderHistoryQuery query;
     boost::asio::any_io_executor executor;
-    std::function<void(HistoryPage)> completion;
+    std::function<void(OrderHistoryPage)> completion;
   };
   std::deque<PendingQuery> pending_;
-  std::deque<HistoryPage> results_;
+  std::deque<OrderHistoryPage> results_;
   size_t outstanding_ = 0;
   bool stopping_ = false;
   std::thread worker_;
@@ -65,17 +65,17 @@ class SqliteHistoryReader final : public HistoryReader {
 // A read-only, point-in-time view of one previous run. Recorded order updates
 // and trades are historical evidence; the caller must reconcile against the
 // exchange before treating them as current state. Loading never sends orders.
-struct RecoverySnapshot {
-  RunManifest manifest;
-  RecoveryContext context;
-  std::vector<HistoryGap> gaps;
+struct PreviousRun {
+  RunInfo manifest;
+  PreviousRunRecords context;
+  std::vector<OrderHistoryGap> gaps;
   // An unclean run may have accepted or attempted records after the last
   // durable sequence. Its exact tail length cannot be inferred from SQLite.
-  bool crash_tail_possible = false;
-  bool needs_reconciliation = true;
+  bool may_have_unwritten_records = false;
+  bool needs_order_query = true;
 };
 
-absl::StatusOr<RecoverySnapshot> LoadRecoverySnapshot(const std::string& path,
+absl::StatusOr<PreviousRun> LoadPreviousRun(const std::string& path,
                                                       RunId run_id);
 
 }  // namespace hquant

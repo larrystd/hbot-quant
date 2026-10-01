@@ -14,8 +14,8 @@
 #include "order/risk.h"
 #include "order/simulated_exchange.h"
 #include "shard/shard.h"
-#include "storage/history.h"
-#include "storage/recorder.h"
+#include "order_history/order_history_reader.h"
+#include "order_history/order_history_writer.h"
 #include "strategy/simple_pmm.h"
 
 namespace hquant {
@@ -44,7 +44,7 @@ class TemporaryDatabase {
   std::string path_;
 };
 
-std::optional<HistoryPage> WaitPage(SqliteHistoryReader& reader) {
+std::optional<OrderHistoryPage> WaitPage(SqliteOrderHistoryReader& reader) {
   for (int i = 0; i < 1000; ++i) {
     if (auto page = reader.TryReceive()) return page;
     std::this_thread::sleep_for(std::chrono::milliseconds(1));
@@ -89,7 +89,7 @@ std::string ReplayOnce() {
     throw std::runtime_error("risk budget setup failed");
   }
   auto recorder =
-      SqliteHistoryWriter::Open({database.path(), RunId{1}, origin, 64, 8});
+      SqliteOrderHistoryWriter::Open({database.path(), RunId{1}, origin, 64, 8});
   if (!recorder.ok())
     throw std::runtime_error(std::string(recorder.status().message()));
   Shard shard({RunId{1}, ShardId{0}, strategy_id, account, spec, scale, rule},
@@ -170,9 +170,9 @@ std::string ReplayOnce() {
   }
   if (!(*recorder)->Flush().ok())
     throw std::runtime_error("SQLite flush failed");
-  auto reader = SqliteHistoryReader::Open({database.path(), 8, 100});
+  auto reader = SqliteOrderHistoryReader::Open({database.path(), 8, 100});
   if (!reader.ok()) throw std::runtime_error("history reader failed");
-  HistoryQuery query;
+  OrderHistoryQuery query;
   query.request_id = 1;
   query.page_size = 100;
   if (!(**reader).TrySubmit(query).ok())

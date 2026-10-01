@@ -7,7 +7,7 @@
 #include "base/types.h"
 #include "market/order_book.h"
 #include "shard/shard.h"
-#include "storage/storage.h"
+#include "order_history/order_history.h"
 #include "strategy/strategy.h"
 
 int main() {
@@ -29,7 +29,7 @@ int main() {
   hquant::ActionBatch batch;
   batch.ordered.emplace_back(
       hquant::SubmitOrder{hquant::StrategyId{}, request});
-  hquant::HistoryRecord record;
+  hquant::OrderHistoryRecord record;
   record.payload = hquant::PreparedOrder{};
   hquant::ControlRequest server_request;
   server_request.payload = hquant::StatusRequest{};

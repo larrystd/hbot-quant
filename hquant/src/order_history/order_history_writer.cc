@@ -1,4 +1,4 @@
-#include "storage/recorder.h"
+#include "order_history/order_history_writer.h"
 
 #include <algorithm>
 #include <chrono>
@@ -11,7 +11,7 @@
 
 #include "base/error.h"
 #include "sqlite3.h"
-#include "storage/record_codec.h"
+#include "order_history/record_codec.h"
 
 namespace hquant {
 namespace {
@@ -41,12 +41,12 @@ CREATE TABLE IF NOT EXISTS history_gaps(id INTEGER PRIMARY KEY AUTOINCREMENT, ru
 )sql";
 
 absl::Status SqlError(sqlite3* db, std::string prefix,
-                      ErrorCode code = ErrorCode::kStorageWriteFailed) {
+                      ErrorCode code = ErrorCode::kOrderHistoryWriteFailed) {
   return Error(code, std::move(prefix) + ": " +
                          (db ? sqlite3_errmsg(db) : "no database"));
 }
 absl::Status Exec(sqlite3* db, const char* sql,
-                  ErrorCode code = ErrorCode::kStorageWriteFailed) {
+                  ErrorCode code = ErrorCode::kOrderHistoryWriteFailed) {
   char* error = nullptr;
   const int rc = sqlite3_exec(db, sql, nullptr, nullptr, &error);
   if (rc == SQLITE_OK) return absl::OkStatus();
@@ -74,7 +74,7 @@ int64_t Us(UtcTime value) { return value.time_since_epoch().count(); }
 
 }  // namespace
 
-SqliteHistoryWriter::SqliteHistoryWriter(Options options, sqlite3* db)
+SqliteOrderHistoryWriter::SqliteOrderHistoryWriter(Options options, sqlite3* db)
     : options_(std::move(options)), db_(db) {
   for (auto& queue : queues_) {
     queue = std::make_unique<Queue>(options_.queue_capacity_per_shard);
@@ -83,25 +83,25 @@ SqliteHistoryWriter::SqliteHistoryWriter(Options options, sqlite3* db)
   manifest_.started_at_utc = options_.started_at_utc;
 }
 
-absl::StatusOr<std::unique_ptr<SqliteHistoryWriter>> SqliteHistoryWriter::Open(
+absl::StatusOr<std::unique_ptr<SqliteOrderHistoryWriter>> SqliteOrderHistoryWriter::Open(
     Options options) {
   if (options.path.empty() || !options.run_id.IsValid() ||
       options.queue_capacity_per_shard == 0 || options.batch_size == 0 ||
       options.queue_capacity_per_shard > 1'000'000 ||
       options.batch_size > 10'000)
-    return Error(ErrorCode::kStorageConfigInvalid, "invalid recorder options");
+    return Error(ErrorCode::kOrderHistoryConfigInvalid, "invalid recorder options");
   sqlite3* db = nullptr;
   if (sqlite3_open_v2(
           options.path.c_str(), &db,
           SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE | SQLITE_OPEN_NOMUTEX,
           nullptr) != SQLITE_OK) {
     absl::Status error =
-        SqlError(db, "open recorder database", ErrorCode::kStorageOpenFailed);
+        SqlError(db, "open recorder database", ErrorCode::kOrderHistoryOpenFailed);
     sqlite3_close(db);
     return error;
   }
   sqlite3_busy_timeout(db, 1000);
-  auto schema = Exec(db, kSchema, ErrorCode::kStorageOpenFailed);
+  auto schema = Exec(db, kSchema, ErrorCode::kOrderHistoryOpenFailed);
   if (!schema.ok()) {
     sqlite3_close(db);
     return schema;
@@ -126,7 +126,7 @@ absl::StatusOr<std::unique_ptr<SqliteHistoryWriter>> SqliteHistoryWriter::Open(
   version_query->reset();
   if (version < 0 || version > 2) {
     sqlite3_close(db);
-    return Error(ErrorCode::kStorageConfigInvalid,
+    return Error(ErrorCode::kOrderHistoryConfigInvalid,
                  "unsupported storage schema version");
   }
   if (version < 2) {
@@ -167,13 +167,13 @@ absl::StatusOr<std::unique_ptr<SqliteHistoryWriter>> SqliteHistoryWriter::Open(
     return error;
   }
   statement->reset();
-  auto recorder = std::unique_ptr<SqliteHistoryWriter>(
-      new SqliteHistoryWriter(std::move(options), db));
+  auto recorder = std::unique_ptr<SqliteOrderHistoryWriter>(
+      new SqliteOrderHistoryWriter(std::move(options), db));
   recorder->worker_ = std::thread([self = recorder.get()] { self->Run(); });
   return recorder;
 }
 
-SqliteHistoryWriter::~SqliteHistoryWriter() {
+SqliteOrderHistoryWriter::~SqliteOrderHistoryWriter() {
   {
     std::lock_guard lock(wake_mutex_);
     stopping_ = true;
@@ -183,7 +183,7 @@ SqliteHistoryWriter::~SqliteHistoryWriter() {
   if (db_) sqlite3_close(db_);
 }
 
-bool SqliteHistoryWriter::TryPush(HistoryRecord record) {
+bool SqliteOrderHistoryWriter::TryPush(OrderHistoryRecord record) {
   if (!record.shard.IsValid() || record.run_id != options_.run_id ||
       record.shard_sequence == 0 || record.schema_version != 2)
     return false;
@@ -214,7 +214,7 @@ bool SqliteHistoryWriter::TryPush(HistoryRecord record) {
   return true;
 }
 
-bool SqliteHistoryWriter::Pop(uint8_t shard, HistoryRecord* record) {
+bool SqliteOrderHistoryWriter::Pop(uint8_t shard, OrderHistoryRecord* record) {
   Queue& queue = *queues_[shard];
   const size_t head = queue.head.load(std::memory_order_relaxed);
   if (head == queue.tail.load(std::memory_order_acquire)) return false;
@@ -224,7 +224,7 @@ bool SqliteHistoryWriter::Pop(uint8_t shard, HistoryRecord* record) {
   return true;
 }
 
-void SqliteHistoryWriter::AddGap(const HistoryGap& gap) {
+void SqliteOrderHistoryWriter::AddGap(const OrderHistoryGap& gap) {
   if (gap.first_seq > gap.last_seq) return;
   pending_gaps_.push_back(gap);
   std::lock_guard lock(state_mutex_);
@@ -232,17 +232,17 @@ void SqliteHistoryWriter::AddGap(const HistoryGap& gap) {
   manifest_.history_complete = false;
 }
 
-void SqliteHistoryWriter::SetError(const absl::Status& status) {
+void SqliteOrderHistoryWriter::SetError(const absl::Status& status) {
   if (status.ok()) return;
   std::lock_guard lock(state_mutex_);
   health_.last_error = std::string(status.message());
 }
 
-absl::Status SqliteHistoryWriter::WriteBatch(
-    const std::vector<HistoryRecord>& batch) {
+absl::Status SqliteOrderHistoryWriter::WriteBatch(
+    const std::vector<OrderHistoryRecord>& batch) {
   if (batch.empty()) return absl::OkStatus();
   if (fail_writes_for_testing_.load(std::memory_order_acquire))
-    return Error(ErrorCode::kStorageWriteFailed,
+    return Error(ErrorCode::kOrderHistoryWriteFailed,
                  "injected SQLite write failure");
   auto begin = Exec(db_, "BEGIN IMMEDIATE");
   if (!begin.ok()) return begin;
@@ -333,10 +333,10 @@ absl::Status SqliteHistoryWriter::WriteBatch(
   return absl::OkStatus();
 }
 
-absl::Status SqliteHistoryWriter::PersistPendingGaps() {
+absl::Status SqliteOrderHistoryWriter::PersistPendingGaps() {
   if (pending_gaps_.empty()) return absl::OkStatus();
   if (fail_writes_for_testing_.load(std::memory_order_acquire))
-    return Error(ErrorCode::kStorageGapPersistFailed,
+    return Error(ErrorCode::kOrderHistoryGapPersistFailed,
                  "injected SQLite write failure");
   auto begin = Exec(db_, "BEGIN IMMEDIATE");
   if (!begin.ok()) return begin;
@@ -380,12 +380,12 @@ absl::Status SqliteHistoryWriter::PersistPendingGaps() {
   return absl::OkStatus();
 }
 
-absl::Status SqliteHistoryWriter::FinishManifest(UtcTime clean_time) {
+absl::Status SqliteOrderHistoryWriter::FinishManifest(UtcTime clean_time) {
   if (!pending_gaps_.empty())
-    return Error(ErrorCode::kStorageGapPersistFailed,
+    return Error(ErrorCode::kOrderHistoryGapPersistFailed,
                  "history gaps could not be persisted");
   if (fail_writes_for_testing_.load(std::memory_order_acquire))
-    return Error(ErrorCode::kStorageWriteFailed,
+    return Error(ErrorCode::kOrderHistoryWriteFailed,
                  "injected SQLite write failure");
   auto statement =
       Prepare(db_,
@@ -409,7 +409,7 @@ absl::Status SqliteHistoryWriter::FinishManifest(UtcTime clean_time) {
   return absl::OkStatus();
 }
 
-void SqliteHistoryWriter::Run() {
+void SqliteOrderHistoryWriter::Run() {
   uint8_t round_robin = 0;
   for (;;) {
     if (pause_worker_for_testing_.load(std::memory_order_acquire)) {
@@ -422,26 +422,26 @@ void SqliteHistoryWriter::Run() {
       });
       worker_paused_ = false;
     }
-    std::vector<HistoryRecord> batch;
+    std::vector<OrderHistoryRecord> batch;
     batch.reserve(options_.batch_size);
     for (uint8_t checked = 0; checked < 8 && batch.size() < options_.batch_size;
          ++checked) {
       uint8_t shard = (round_robin + checked) % 8;
-      HistoryRecord record;
+      OrderHistoryRecord record;
       while (batch.size() < options_.batch_size && Pop(shard, &record)) {
         if (record.shard_sequence > last_observed_seq_[shard] + 1) {
           const uint64_t last_dropped =
               queues_[shard]->last_dropped_seq.load(std::memory_order_acquire);
-          AddGap(HistoryGap{options_.run_id, ShardId{shard},
+          AddGap(OrderHistoryGap{options_.run_id, ShardId{shard},
                             last_observed_seq_[shard] + 1,
                             record.shard_sequence - 1,
                             last_dropped >= record.shard_sequence - 1
-                                ? ErrorCode::kStorageQueueFull
+                                ? ErrorCode::kOrderHistoryQueueFull
                                 : ErrorCode::kInternal});
         }
         last_observed_seq_[shard] =
             std::max(last_observed_seq_[shard], record.shard_sequence);
-        if (const auto* reported_gap = std::get_if<HistoryGap>(&record.payload))
+        if (const auto* reported_gap = std::get_if<OrderHistoryGap>(&record.payload))
           AddGap(*reported_gap);
         batch.push_back(std::move(record));
       }
@@ -455,9 +455,9 @@ void SqliteHistoryWriter::Run() {
       const uint64_t dropped =
           queue.last_dropped_seq.load(std::memory_order_acquire);
       if (dropped > last_observed_seq_[shard]) {
-        AddGap(HistoryGap{options_.run_id, ShardId{shard},
+        AddGap(OrderHistoryGap{options_.run_id, ShardId{shard},
                           last_observed_seq_[shard] + 1, dropped,
-                          ErrorCode::kStorageQueueFull});
+                          ErrorCode::kOrderHistoryQueueFull});
         last_observed_seq_[shard] = dropped;
       }
       queue.last_accounted_dropped_seq.store(dropped,
@@ -476,9 +476,9 @@ void SqliteHistoryWriter::Run() {
           health_.dropped_count += batch.size();
         }
         for (const auto& record : batch) {
-          AddGap(HistoryGap{options_.run_id, record.shard,
+          AddGap(OrderHistoryGap{options_.run_id, record.shard,
                             record.shard_sequence, record.shard_sequence,
-                            ErrorCode::kStorageWriteFailed});
+                            ErrorCode::kOrderHistoryWriteFailed});
         }
       }
       pending_records_.fetch_sub(batch.size(), std::memory_order_release);
@@ -507,7 +507,7 @@ void SqliteHistoryWriter::Run() {
   wake_cv_.notify_all();
 }
 
-absl::Status SqliteHistoryWriter::Flush() {
+absl::Status SqliteOrderHistoryWriter::Flush() {
   std::unique_lock lock(wake_mutex_);
   wake_cv_.notify_one();
   wake_cv_.wait(lock, [this] {
@@ -522,11 +522,11 @@ absl::Status SqliteHistoryWriter::Flush() {
   });
   std::lock_guard state_lock(state_mutex_);
   if (!health_.last_error.empty())
-    return Error(ErrorCode::kStorageWriteFailed, health_.last_error);
+    return Error(ErrorCode::kOrderHistoryWriteFailed, health_.last_error);
   return absl::OkStatus();
 }
 
-absl::Status SqliteHistoryWriter::Stop(UtcTime clean_stopped_at_utc) {
+absl::Status SqliteOrderHistoryWriter::Stop(UtcTime clean_stopped_at_utc) {
   {
     std::lock_guard lock(wake_mutex_);
     if (!worker_.joinable()) return final_status_;
@@ -539,25 +539,25 @@ absl::Status SqliteHistoryWriter::Stop(UtcTime clean_stopped_at_utc) {
   return final_status_;
 }
 
-StorageHealth SqliteHistoryWriter::Health() const {
+OrderHistoryWriterHealth SqliteOrderHistoryWriter::Health() const {
   std::lock_guard lock(state_mutex_);
-  StorageHealth copy = health_;
+  OrderHistoryWriterHealth copy = health_;
   for (const auto& queue : queues_)
     copy.dropped_count += queue->dropped_count.load(std::memory_order_acquire);
   copy.queue_watermark = queue_watermark_.load(std::memory_order_acquire);
   return copy;
 }
 
-RunManifest SqliteHistoryWriter::Manifest() const {
+RunInfo SqliteOrderHistoryWriter::Manifest() const {
   std::lock_guard lock(state_mutex_);
   return manifest_;
 }
 
-void SqliteHistoryWriter::SetWriteFailureForTesting(bool enabled) {
+void SqliteOrderHistoryWriter::SetWriteFailureForTesting(bool enabled) {
   fail_writes_for_testing_.store(enabled, std::memory_order_release);
 }
 
-void SqliteHistoryWriter::PauseWorkerForTesting(bool paused) {
+void SqliteOrderHistoryWriter::PauseWorkerForTesting(bool paused) {
   pause_worker_for_testing_.store(paused, std::memory_order_release);
   wake_cv_.notify_one();
   if (paused) {

@@ -1,4 +1,4 @@
-#include "storage/history.h"
+#include "order_history/order_history_reader.h"
 
 #include <unistd.h>
 
@@ -12,7 +12,7 @@
 #include "base/types.h"
 #include "gtest/gtest.h"
 #include "sqlite3.h"
-#include "storage/recorder.h"
+#include "order_history/order_history_writer.h"
 
 namespace hquant {
 namespace {
@@ -45,7 +45,7 @@ MarketId Market() {
   return MarketId{ExchangeId{"binance"}, InstrumentKind::Spot, "BTCUSDT"};
 }
 
-HistoryRecord PreparedRecord(uint64_t sequence, std::string client = "B1") {
+OrderHistoryRecord PreparedRecord(uint64_t sequence, std::string client = "B1") {
   PreparedOrder prepared;
   prepared.client_id = ClientOrderId{std::move(client)};
   prepared.strategy_id = MakeStrategyId();
@@ -59,7 +59,7 @@ HistoryRecord PreparedRecord(uint64_t sequence, std::string client = "B1") {
   prepared.config_revision = 7;
   prepared.executor_checkpoint =
       StrategyCheckpoint{1, MakeStrategyId(), 7, "prepared state"};
-  HistoryRecord record;
+  OrderHistoryRecord record;
   record.run_id = RunId{21};
   record.shard = ShardId{0};
   record.shard_sequence = sequence;
@@ -72,10 +72,10 @@ HistoryRecord PreparedRecord(uint64_t sequence, std::string client = "B1") {
 TEST(RecoveryTest, CleanRunLoadsTypedContextAndOpenClientIds) {
   TemporaryDatabase db;
   auto recorder =
-      SqliteHistoryWriter::Open({db.path(), RunId{21}, At(100), 8, 4});
+      SqliteOrderHistoryWriter::Open({db.path(), RunId{21}, At(100), 8, 4});
   ASSERT_TRUE(recorder.ok()) << recorder.status();
   ASSERT_TRUE((*recorder)->TryPush(PreparedRecord(1, "B1")));
-  HistoryRecord filled = PreparedRecord(2);
+  OrderHistoryRecord filled = PreparedRecord(2);
   OrderUpdate update;
   update.account = AccountId{"A1"};
   update.market = Market();
@@ -84,53 +84,53 @@ TEST(RecoveryTest, CleanRunLoadsTypedContextAndOpenClientIds) {
   filled.payload = update;
   ASSERT_TRUE((*recorder)->TryPush(std::move(filled)));
   ASSERT_TRUE((*recorder)->TryPush(PreparedRecord(3, "B2")));
-  HistoryRecord checkpoint = PreparedRecord(4);
+  OrderHistoryRecord checkpoint = PreparedRecord(4);
   checkpoint.payload = RecordedCheckpoint{
       StrategyCheckpoint{1, MakeStrategyId(), 8, "latest state"}, At(1004)};
   ASSERT_TRUE((*recorder)->TryPush(std::move(checkpoint)));
   ASSERT_TRUE((*recorder)->Stop(At(2000)).ok());
   recorder->reset();
 
-  auto recovered = LoadRecoverySnapshot(db.path(), RunId{21});
+  auto recovered = LoadPreviousRun(db.path(), RunId{21});
   ASSERT_TRUE(recovered.ok()) << recovered.status();
   EXPECT_TRUE(recovered->manifest.history_complete);
   ASSERT_TRUE(recovered->manifest.clean_stopped_at_utc);
   EXPECT_EQ(recovered->manifest.last_committed_seq_by_shard.at(0), 4);
-  EXPECT_FALSE(recovered->crash_tail_possible);
+  EXPECT_FALSE(recovered->may_have_unwritten_records);
   EXPECT_TRUE(recovered->gaps.empty());
   EXPECT_EQ(recovered->context.recovered_prepared_orders.size(), 2);
   EXPECT_EQ(recovered->context.exchange_orders.size(), 1);
   EXPECT_EQ(recovered->context.checkpoints.size(), 3);
   ASSERT_EQ(recovered->context.unresolved_ids.size(), 1);
   EXPECT_EQ(recovered->context.unresolved_ids[0].value, "B2");
-  EXPECT_EQ(recovered->context.confidence, RecoveryConfidence::Partial);
-  EXPECT_TRUE(recovered->needs_reconciliation);
+  EXPECT_EQ(recovered->context.confidence, PreviousRunCompleteness::Partial);
+  EXPECT_TRUE(recovered->needs_order_query);
 }
 
 TEST(RecoveryTest, UncleanStopReportsPossibleCrashTailWithoutInventingRange) {
   TemporaryDatabase db;
   {
     auto recorder =
-        SqliteHistoryWriter::Open({db.path(), RunId{21}, At(100), 8, 1});
+        SqliteOrderHistoryWriter::Open({db.path(), RunId{21}, At(100), 8, 1});
     ASSERT_TRUE(recorder.ok()) << recorder.status();
     ASSERT_TRUE((*recorder)->TryPush(PreparedRecord(1)));
     ASSERT_TRUE((*recorder)->Flush().ok());
     // Destruction simulates process termination without a clean stop marker.
   }
-  auto recovered = LoadRecoverySnapshot(db.path(), RunId{21});
+  auto recovered = LoadPreviousRun(db.path(), RunId{21});
   ASSERT_TRUE(recovered.ok()) << recovered.status();
-  EXPECT_TRUE(recovered->crash_tail_possible);
+  EXPECT_TRUE(recovered->may_have_unwritten_records);
   EXPECT_FALSE(recovered->manifest.clean_stopped_at_utc);
   EXPECT_TRUE(recovered->gaps.empty());
   EXPECT_EQ(recovered->manifest.last_committed_seq_by_shard.at(0), 1);
   ASSERT_EQ(recovered->context.unresolved_ids.size(), 1);
-  EXPECT_EQ(recovered->context.confidence, RecoveryConfidence::Unresolved);
+  EXPECT_EQ(recovered->context.confidence, PreviousRunCompleteness::Unresolved);
 }
 
 TEST(RecoveryTest, DistinguishesQueueDropFromDiskWriteFailure) {
   TemporaryDatabase db;
   auto recorder =
-      SqliteHistoryWriter::Open({db.path(), RunId{21}, At(100), 1, 1});
+      SqliteOrderHistoryWriter::Open({db.path(), RunId{21}, At(100), 1, 1});
   ASSERT_TRUE(recorder.ok()) << recorder.status();
   (*recorder)->PauseWorkerForTesting(true);
   ASSERT_TRUE((*recorder)->TryPush(PreparedRecord(1)));
@@ -144,31 +144,31 @@ TEST(RecoveryTest, DistinguishesQueueDropFromDiskWriteFailure) {
   ASSERT_TRUE((*recorder)->TryPush(PreparedRecord(4)));
   ASSERT_TRUE((*recorder)->Stop(At(2000)).ok());
 
-  auto recovered = LoadRecoverySnapshot(db.path(), RunId{21});
+  auto recovered = LoadPreviousRun(db.path(), RunId{21});
   ASSERT_TRUE(recovered.ok()) << recovered.status();
   EXPECT_FALSE(recovered->manifest.history_complete);
-  EXPECT_FALSE(recovered->crash_tail_possible);
+  EXPECT_FALSE(recovered->may_have_unwritten_records);
   bool queue_gap = false, disk_gap = false;
   for (const auto& gap : recovered->gaps) {
     queue_gap |=
-        gap.first_seq == 2 && gap.reason == ErrorCode::kStorageQueueFull;
+        gap.first_seq == 2 && gap.reason == ErrorCode::kOrderHistoryQueueFull;
     disk_gap |=
-        gap.first_seq == 3 && gap.reason == ErrorCode::kStorageWriteFailed;
+        gap.first_seq == 3 && gap.reason == ErrorCode::kOrderHistoryWriteFailed;
   }
   EXPECT_TRUE(queue_gap);
   EXPECT_TRUE(disk_gap);
-  EXPECT_EQ(recovered->context.confidence, RecoveryConfidence::Unresolved);
+  EXPECT_EQ(recovered->context.confidence, PreviousRunCompleteness::Unresolved);
 }
 
 TEST(RecoveryTest, RejectsCorruptedRecordAndMissingRun) {
   TemporaryDatabase db;
   auto recorder =
-      SqliteHistoryWriter::Open({db.path(), RunId{21}, At(100), 8, 1});
+      SqliteOrderHistoryWriter::Open({db.path(), RunId{21}, At(100), 8, 1});
   ASSERT_TRUE(recorder.ok()) << recorder.status();
   ASSERT_TRUE((*recorder)->TryPush(PreparedRecord(1)));
   ASSERT_TRUE((*recorder)->Stop(At(2000)).ok());
   recorder->reset();
-  EXPECT_EQ(LoadRecoverySnapshot(db.path(), RunId{22}).status().code(),
+  EXPECT_EQ(LoadPreviousRun(db.path(), RunId{22}).status().code(),
             absl::StatusCode::kNotFound);
   sqlite3* raw = nullptr;
   ASSERT_EQ(sqlite3_open(db.path().c_str(), &raw), SQLITE_OK);
@@ -179,14 +179,14 @@ TEST(RecoveryTest, RejectsCorruptedRecordAndMissingRun) {
           nullptr, nullptr, nullptr),
       SQLITE_OK);
   sqlite3_close(raw);
-  EXPECT_EQ(LoadRecoverySnapshot(db.path(), RunId{21}).status().code(),
+  EXPECT_EQ(LoadPreviousRun(db.path(), RunId{21}).status().code(),
             absl::StatusCode::kDataLoss);
 }
 
 TEST(RecoveryTest, RejectsUnknownStorageSchemaVersion) {
   TemporaryDatabase db;
   auto recorder =
-      SqliteHistoryWriter::Open({db.path(), RunId{21}, At(100), 8, 1});
+      SqliteOrderHistoryWriter::Open({db.path(), RunId{21}, At(100), 8, 1});
   ASSERT_TRUE(recorder.ok()) << recorder.status();
   ASSERT_TRUE((*recorder)->Stop(At(2000)).ok());
   recorder->reset();
@@ -199,7 +199,7 @@ TEST(RecoveryTest, RejectsUnknownStorageSchemaVersion) {
           nullptr, nullptr, nullptr),
       SQLITE_OK);
   sqlite3_close(raw);
-  EXPECT_EQ(LoadRecoverySnapshot(db.path(), RunId{21}).status().code(),
+  EXPECT_EQ(LoadPreviousRun(db.path(), RunId{21}).status().code(),
             absl::StatusCode::kInvalidArgument);
 }
 

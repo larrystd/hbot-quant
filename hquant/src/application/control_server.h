@@ -19,13 +19,13 @@
 namespace hquant {
 
 struct StatusRequest {};
-struct HistoryRequest {
+struct OrderHistoryRequest {
   uint32_t limit = 20;
   std::string cursor;
 };
 struct StopRequest {};
 using ControlRequestPayload =
-    std::variant<StatusRequest, HistoryRequest, StopRequest>;
+    std::variant<StatusRequest, OrderHistoryRequest, StopRequest>;
 
 struct ControlRequest {
   uint32_t schema_version = 2;
@@ -36,7 +36,7 @@ struct ControlRequest {
 struct StatusResponse {
   std::string json;
 };
-struct HistoryResponse {
+struct OrderHistoryResponse {
   std::string json;
 };
 struct StopResponse {
@@ -47,7 +47,7 @@ struct ControlError {
   std::string message;
 };
 using ControlResponsePayload =
-    std::variant<StatusResponse, HistoryResponse, StopResponse, ControlError>;
+    std::variant<StatusResponse, OrderHistoryResponse, StopResponse, ControlError>;
 
 struct ControlResponse {
   uint32_t schema_version = 2;
@@ -96,15 +96,15 @@ class ControlServer {
 
 class Shard;
 class SimpleSimulatedExchange;
-class SqliteHistoryWriter;
+class SqliteOrderHistoryWriter;
 struct MarketSpec;
-struct HistoryPage;
+struct OrderHistoryPage;
 
 std::string EscapeJson(std::string_view text);
 std::string StatusJson(const Shard& shard,
                        const SimpleSimulatedExchange& sim_exchange,
                        const MarketSpec& market,
-                       const SqliteHistoryWriter& recorder);
-std::string HistoryJson(const HistoryPage& page);
+                       const SqliteOrderHistoryWriter& recorder);
+std::string OrderHistoryJson(const OrderHistoryPage& page);
 
 }  // namespace hquant

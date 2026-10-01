@@ -739,6 +739,21 @@ absl::StatusOr<AppConfig> ParseConfig(std::string_view yaml_text) {
              std::chrono::microseconds(static_cast<int64_t>(*window))});
       }
     }
+    const bool live =
+        config.market_data_source == MarketDataSource::BinancePublic;
+    if (!config.risk.max_rule_age)
+      config.risk.max_rule_age = live ? std::chrono::hours(24)
+                                      : std::chrono::seconds(300);
+    for (auto& market : config.market_specs) {
+      if (!market.stale_after)
+        market.stale_after = live ? std::chrono::seconds(5)
+                                  : std::chrono::seconds(60);
+    }
+    for (auto& budget : config.risk_budgets) {
+      if (!budget.valid_for)
+        budget.valid_for = live ? std::chrono::hours(24)
+                                : std::chrono::hours(1);
+    }
     return config;
   } catch (const YAML::Exception&) {
     return Error(ErrorCode::kConfigSyntaxInvalid, "invalid YAML configuration");

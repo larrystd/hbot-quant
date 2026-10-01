@@ -149,10 +149,10 @@ std::string Describe(const ReplayInput& input, const TickLotSize& scale) {
       input.payload);
 }
 
-// 代替 SqliteHistoryWriter：shard 想记录的每一条都直接打印出来。
-class PrintingRecorder final : public HistoryWriter {
+// 代替 SqliteOrderHistoryWriter：shard 想记录的每一条都直接打印出来。
+class PrintingRecorder final : public OrderHistoryWriter {
  public:
-  bool TryPush(HistoryRecord record) override {
+  bool TryPush(OrderHistoryRecord record) override {
     std::cout << "    记录 #" << record.shard_sequence << "  ";
     std::visit(
         [](const auto& payload) {

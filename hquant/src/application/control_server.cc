@@ -12,8 +12,8 @@
 #include "order/simulated_exchange.h"
 #include "shard/shard.h"
 #include "simdjson.h"
-#include "storage/history.h"
-#include "storage/recorder.h"
+#include "order_history/order_history_reader.h"
+#include "order_history/order_history_writer.h"
 
 namespace hquant {
 namespace {
@@ -90,7 +90,7 @@ ErrorCode LegacyErrorCode(std::string_view name) {
     return ErrorCode::kControlMessageInvalid;
   if (name == "busy") return ErrorCode::kControlBusy;
   if (name == "timeout") return ErrorCode::kControlTimeout;
-  if (name == "history") return ErrorCode::kStorageQueryFailed;
+  if (name == "history") return ErrorCode::kOrderHistoryQueryFailed;
   return ErrorCode::kInternal;
 }
 
@@ -115,7 +115,7 @@ absl::StatusOr<std::string> EncodeControlRequest(const ControlRequest& request) 
   if (std::holds_alternative<StatusRequest>(request.payload)) {
     frame += ",\"kind\":\"status\"}";
   } else if (const auto* history =
-                 std::get_if<HistoryRequest>(&request.payload)) {
+                 std::get_if<OrderHistoryRequest>(&request.payload)) {
     if (history->limit == 0 || history->limit > 500) {
       return Error(ErrorCode::kControlMessageInvalid,
                    "history limit out of range");
@@ -153,7 +153,7 @@ absl::StatusOr<ControlRequest> DecodeControlRequest(std::string_view json) {
       return Error(ErrorCode::kControlMessageInvalid, "invalid history request");
     }
     request.payload =
-        HistoryRequest{static_cast<uint32_t>(limit), std::string(cursor)};
+        OrderHistoryRequest{static_cast<uint32_t>(limit), std::string(cursor)};
   } else
     return Error(ErrorCode::kControlMessageInvalid, "unknown request kind");
   return request;
@@ -172,7 +172,7 @@ absl::StatusOr<std::string> EncodeControlResponse(
     if (!json.ok()) return json.status();
     frame += ",\"kind\":\"status\",\"data\":" + *json + "}";
   } else if (const auto* history =
-                 std::get_if<HistoryResponse>(&response.payload)) {
+                 std::get_if<OrderHistoryResponse>(&response.payload)) {
     auto json = JsonObject(history->json);
     if (!json.ok()) return json.status();
     frame += ",\"kind\":\"history\",\"data\":" + *json + "}";
@@ -220,7 +220,7 @@ absl::StatusOr<ControlResponse> DecodeControlResponse(std::string_view json) {
     if (kind == "status")
       response.payload = StatusResponse{simdjson::minify(data)};
     else
-      response.payload = HistoryResponse{simdjson::minify(data)};
+      response.payload = OrderHistoryResponse{simdjson::minify(data)};
   } else if (kind == "stop") {
     bool accepted = false;
     if ((*root)["accepted"].get(accepted))
@@ -404,7 +404,7 @@ const char* BookStateName(BookSyncState state) {
 std::string StatusJson(const Shard& shard,
                        const SimpleSimulatedExchange& sim_exchange,
                        const MarketSpec& market,
-                       const SqliteHistoryWriter& recorder) {
+                       const SqliteOrderHistoryWriter& recorder) {
   const auto health = recorder.Health();
   return "{\"mode\":\"simulated\",\"exchange\":\"simulated\",\"book\":" +
          EscapeJson(BookStateName(shard.Book().State())) +
@@ -442,7 +442,7 @@ const char* OrderStatusName(ExchangeOrderStatus status) {
   return "Unknown";
 }
 
-std::string HistoryJson(const HistoryPage& page) {
+std::string OrderHistoryJson(const OrderHistoryPage& page) {
   std::string json = "{\"rows\":[";
   for (size_t index = 0; index < page.rows.size(); ++index) {
     const auto& row = page.rows[index];
@@ -484,7 +484,7 @@ std::string HistoryJson(const HistoryPage& page) {
       kind = "checkpoint";
     else {
       kind = "gap";
-      const auto& gap = std::get<HistoryGap>(row.payload);
+      const auto& gap = std::get<OrderHistoryGap>(row.payload);
       details = ",\"reason\":" + std::to_string(ErrorNumber(gap.reason)) +
                 ",\"reason_name\":" + EscapeJson(Info(gap.reason).name);
     }

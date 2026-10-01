@@ -16,7 +16,7 @@
 #include "market/order_book.h"
 #include "order/order_tracker.h"
 #include "shard/action_executor.h"
-#include "storage/storage.h"
+#include "order_history/order_history.h"
 #include "strategy/strategy.h"
 
 namespace hquant {
@@ -78,7 +78,7 @@ struct ShardReport {
   std::map<std::string, bool> market_readiness;
   std::map<std::string, bool> account_freshness;
   std::map<std::string, uint64_t> queue_watermarks;
-  StorageHealth storage_health;
+  OrderHistoryWriterHealth storage_health;
 };
 
 // G1 single-thread owner of strategy, book, Simulated events, tracker and risk.
@@ -97,7 +97,7 @@ class Shard {
   };
 
   Shard(Config config, const Clock& clock, Strategy& strategy,
-        SimulatedExchange& exchange, RiskGate& risk, HistoryWriter& recorder);
+        SimulatedExchange& exchange, RiskGate& risk, OrderHistoryWriter& recorder);
 
   BookApplyResult Subscribe(uint64_t connection_id);
   absl::Status OnSnapshot(const BookSnapshot& snapshot);
@@ -113,7 +113,7 @@ class Shard {
   std::optional<OrderSnapshot> Order(const ClientOrderId& id) const {
     return tracker_.Snapshot(id);
   }
-  const std::vector<HistoryGap>& local_gaps() const { return local_gaps_; }
+  const std::vector<OrderHistoryGap>& local_gaps() const { return local_gaps_; }
   uint64_t shard_sequence() const { return shard_sequence_; }
   uint64_t strategy_invocations() const { return strategy_invocations_; }
 
@@ -125,7 +125,7 @@ class Shard {
       Trigger why, InputTime stamp, bool allow_followup = true);
   absl::Status DrainSimulatedExchangeEvents();
   absl::Status ProcessAccountEvent(const AccountEvent& event);
-  absl::Status Record(HistoryRecordPayload payload,
+  absl::Status Record(OrderHistoryRecordPayload payload,
                       const StrategyId& strategy_id);
   void AddGap(uint64_t sequence);
   std::vector<OrderSnapshot> OrderViews() const;
@@ -138,7 +138,7 @@ class Shard {
   Strategy& strategy_;
   SimulatedExchange& exchange_;
   RiskGate& risk_;
-  HistoryWriter& recorder_;
+  OrderHistoryWriter& recorder_;
   OrderBookSync book_;
   OrderTracker tracker_;
   uint64_t shard_sequence_ = 0;
@@ -146,7 +146,7 @@ class Shard {
   ActionExecutor action_executor_;
   std::vector<ClientOrderId> order_ids_;
   std::map<std::string, HoldId> holds_;
-  std::vector<HistoryGap> local_gaps_;
+  std::vector<OrderHistoryGap> local_gaps_;
   std::optional<Decimal> last_trade_price_;
   MonoTime origin_mono_{};
   uint64_t event_ordinal_ = 0;

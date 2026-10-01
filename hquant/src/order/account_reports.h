@@ -15,7 +15,7 @@
 
 namespace hquant::binance_spot {
 
-struct AccountStreamBatch {
+struct AccountPushBatch {
   // For executionReport TRADE, the fill precedes its status update. The
   // OrderTracker handles duplicate trade IDs and either arrival order.
   std::vector<AccountEvent> events;
@@ -25,12 +25,12 @@ struct AccountStreamBatch {
 
 // Pure JSON adapter. Network subscription/reconnect and account-level routing
 // belong to their owning components; this object holds no mutable order state.
-class AccountStreamParser {
+class AccountPushParser {
  public:
-  AccountStreamParser(AccountId account, ExchangeId exchange)
+  AccountPushParser(AccountId account, ExchangeId exchange)
       : account_(std::move(account)), exchange_(std::move(exchange)) {}
 
-  absl::StatusOr<AccountStreamBatch> Parse(std::string_view json,
+  absl::StatusOr<AccountPushBatch> Parse(std::string_view json,
                                            EventTime received) const;
 
  private:
@@ -42,13 +42,13 @@ class AccountStreamParser {
 
 namespace hquant::binance_spot {
 
-struct ReconciliationTarget {
+struct OrderToQuery {
   AccountId account;
   MarketId market;
   ClientOrderId original_client_id;
 };
 
-struct RestartReconciliationInput {
+struct StartupQueryInput {
   AccountId account;
   std::vector<MarketId> assigned_markets;
   std::vector<PreparedOrder> persisted_prepared_orders;
@@ -58,16 +58,16 @@ struct RestartReconciliationInput {
   bool executor_checkpoints_complete = true;
 };
 
-struct RestartReconciliationPlan {
-  std::vector<ReconciliationTarget> known_orders;
+struct StartupQueryPlan {
+  std::vector<OrderToQuery> known_orders;
   // A crash/history gap can omit the prepared order itself. Scan these markets
   // for exchange orders before resuming trading or stateful executors.
   std::vector<MarketId> markets_to_scan;
   bool pause_stateful_executors = false;
 };
 
-absl::StatusOr<RestartReconciliationPlan> PlanRestart(
-    const RestartReconciliationInput& input);
+absl::StatusOr<StartupQueryPlan> PlanStartupQueries(
+    const StartupQueryInput& input);
 
 // The implementation adds timestamp, recvWindow, signature and API key,
 // applies rate limits, and performs GET through the existing HTTP transport.
@@ -80,8 +80,8 @@ class SignedRestClient {
       std::chrono::steady_clock::time_point deadline) = 0;
 };
 
-struct ReconciliationBatch {
-  ReconciliationTarget target;
+struct OrderQueryResult {
+  OrderToQuery target;
   // Present only when complete. Incomplete queries can still return verified
   // partial trades, but cannot confirm an uncertain submission.
   std::optional<OrderUpdate> order;
@@ -92,7 +92,7 @@ struct ReconciliationBatch {
   absl::Status unresolved_status;
 };
 
-class ReconciliationClient {
+class OrderQueryClient {
  public:
   struct Limits {
     size_t max_trade_pages = 8;
@@ -100,24 +100,24 @@ class ReconciliationClient {
     size_t max_response_bytes = 2 * 1024 * 1024;
   };
 
-  explicit ReconciliationClient(SignedRestClient& rest) : rest_(rest) {}
-  ReconciliationClient(SignedRestClient& rest, Limits limits)
+  explicit OrderQueryClient(SignedRestClient& rest) : rest_(rest) {}
+  OrderQueryClient(SignedRestClient& rest, Limits limits)
       : rest_(rest), limits_(limits) {}
 
-  boost::asio::awaitable<absl::StatusOr<ReconciliationBatch>> Query(
-      ReconciliationTarget target, EventTime received,
+  boost::asio::awaitable<absl::StatusOr<OrderQueryResult>> QueryOrder(
+      OrderToQuery target, EventTime received,
       std::chrono::steady_clock::time_point deadline);
 
   // Returns exchange-discovered client IDs after an unclean restart. The
   // caller still validates stable strategy_id identity and queries each
   // original ID.
-  boost::asio::awaitable<absl::StatusOr<std::vector<ReconciliationTarget>>>
-  DiscoverOpenOrders(AccountId account, MarketId market,
+  boost::asio::awaitable<absl::StatusOr<std::vector<OrderToQuery>>>
+  ListOpenOrders(AccountId account, MarketId market,
                      std::chrono::steady_clock::time_point deadline);
   // Scan a bounded 24-hour window for orders missing from local history after
   // a crash. A full 1000-row page is deliberately reported as incomplete.
-  boost::asio::awaitable<absl::StatusOr<std::vector<ReconciliationTarget>>>
-  DiscoverRecentOrders(AccountId account, MarketId market, UtcTime start,
+  boost::asio::awaitable<absl::StatusOr<std::vector<OrderToQuery>>>
+  ListRecentOrders(AccountId account, MarketId market, UtcTime start,
                        UtcTime end,
                        std::chrono::steady_clock::time_point deadline);
 

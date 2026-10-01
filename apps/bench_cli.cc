@@ -21,7 +21,7 @@
 namespace hquant {
 namespace {
 
-absl::StatusOr<uint32_t> HistoryLimit(std::string_view text) {
+absl::StatusOr<uint32_t> OrderHistoryLimit(std::string_view text) {
   uint32_t number = 0;
   auto [end, error] =
       std::from_chars(text.data(), text.data() + text.size(), number);
@@ -42,8 +42,8 @@ absl::StatusOr<CliOptions> ParseCliArguments(
   CliOptions options;
   if (arguments[0] == "status")
     options.verb = CliVerb::Status;
-  else if (arguments[0] == "history")
-    options.verb = CliVerb::History;
+  else if (arguments[0] == "order-history")
+    options.verb = CliVerb::OrderHistory;
   else if (arguments[0] == "stop")
     options.verb = CliVerb::Stop;
   else
@@ -62,14 +62,14 @@ absl::StatusOr<CliOptions> ParseCliArguments(
       options.state_dir = std::string(value);
       state_seen = true;
     } else if (key == "--limit" && !limit_seen &&
-               options.verb == CliVerb::History) {
-      auto limit = HistoryLimit(value);
+               options.verb == CliVerb::OrderHistory) {
+      auto limit = OrderHistoryLimit(value);
       if (!limit.ok()) return limit.status();
-      options.history_limit = *limit;
+      options.order_history_limit = *limit;
       limit_seen = true;
     } else if (key == "--cursor" && !cursor_seen &&
-               options.verb == CliVerb::History) {
-      options.history_cursor = std::string(value);
+               options.verb == CliVerb::OrderHistory) {
+      options.order_history_cursor = std::string(value);
       cursor_seen = true;
     } else {
       return Error(ErrorCode::kCliUsageInvalid,
@@ -90,12 +90,12 @@ absl::StatusOr<ControlRequest> MakeControlRequest(const CliOptions& options,
   request.request_id = request_id;
   if (options.verb == CliVerb::Status)
     request.payload = StatusRequest{};
-  else if (options.verb == CliVerb::History) {
-    if (options.history_limit == 0 || options.history_limit > 500) {
+  else if (options.verb == CliVerb::OrderHistory) {
+    if (options.order_history_limit == 0 || options.order_history_limit > 500) {
       return Error(ErrorCode::kCliUsageInvalid, "history limit out of range");
     }
     request.payload =
-        HistoryRequest{options.history_limit, options.history_cursor};
+        OrderHistoryRequest{options.order_history_limit, options.order_history_cursor};
   } else
     request.payload = StopRequest{};
   return request;
@@ -173,8 +173,8 @@ absl::StatusOr<std::string> FormatControlResponse(
                    "unexpected status response");
     return value->json + "\n";
   }
-  if (options.verb == CliVerb::History) {
-    const auto* value = std::get_if<HistoryResponse>(&response.payload);
+  if (options.verb == CliVerb::OrderHistory) {
+    const auto* value = std::get_if<OrderHistoryResponse>(&response.payload);
     if (!value)
       return Error(ErrorCode::kCliResponseInvalid,
                    "unexpected history response");

@@ -197,7 +197,7 @@ TEST(AccountReportRouterTest,
   auto full = router.Route(Update("C2-1"));
   EXPECT_EQ(full.disposition, RouteDisposition::Quarantined);
   EXPECT_EQ(full.failure, ErrorCode::kRouteQueueFull);
-  EXPECT_TRUE(full.pause_account && full.request_reconcile);
+  EXPECT_TRUE(full.pause_account && full.request_order_query);
   EXPECT_TRUE(router.IsAccountPaused(AccountId("account-a")));
   auto unknown = router.Route(Trade("unrecognized"));
   EXPECT_EQ(unknown.failure, ErrorCode::kRouteStrategyUnknown);
@@ -208,7 +208,7 @@ TEST(AccountReportRouterTest,
   EXPECT_EQ(router.TryPopQuarantined()->source_sequence, 2);
   EXPECT_EQ(router.TryPopQuarantined()->source_sequence, 3);
   EXPECT_FALSE(router.TryPopQuarantined());
-  router.MarkReconciled(AccountId("account-a"));
+  router.MarkOrderQueried(AccountId("account-a"));
   EXPECT_FALSE(router.IsAccountPaused(AccountId("account-a")));
 }
 

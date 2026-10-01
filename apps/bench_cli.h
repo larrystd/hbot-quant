@@ -12,13 +12,13 @@
 
 namespace hquant {
 
-enum class CliVerb { Status, History, Stop };
+enum class CliVerb { Status, OrderHistory, Stop };
 
 struct CliOptions {
   CliVerb verb = CliVerb::Status;
   std::string state_dir;
-  uint32_t history_limit = 20;
-  std::string history_cursor;
+  uint32_t order_history_limit = 20;
+  std::string order_history_cursor;
 };
 
 absl::StatusOr<CliOptions> ParseCliArguments(

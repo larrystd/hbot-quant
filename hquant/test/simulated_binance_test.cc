@@ -35,13 +35,13 @@ class FixedClock final : public Clock {
   }
 };
 
-class MemoryRecorder final : public HistoryWriter {
+class MemoryRecorder final : public OrderHistoryWriter {
  public:
-  bool TryPush(HistoryRecord record) override {
+  bool TryPush(OrderHistoryRecord record) override {
     rows.push_back(std::move(record));
     return true;
   }
-  std::vector<HistoryRecord> rows;
+  std::vector<OrderHistoryRecord> rows;
 };
 
 TEST(SimulatedBinanceTest,

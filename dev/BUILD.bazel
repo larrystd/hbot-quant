@@ -35,7 +35,7 @@ cc_test(
         "//hquant/src/market:order_book",
         "//hquant/src/base:net",
         "//hquant/src/shard:shard",
-        "//hquant/src/storage:storage",
+        "//hquant/src/order_history:order_history",
         "//hquant/src/strategy:strategy",
     ],
 )

@@ -16,13 +16,13 @@ namespace {
 
 Decimal D(const char* text) { return *Decimal::Parse(text); }
 
-class MemoryWriter final : public HistoryWriter {
+class MemoryWriter final : public OrderHistoryWriter {
  public:
-  bool TryPush(HistoryRecord record) override {
+  bool TryPush(OrderHistoryRecord record) override {
     rows.push_back(std::move(record));
     return true;
   }
-  std::vector<HistoryRecord> rows;
+  std::vector<OrderHistoryRecord> rows;
 };
 
 class ImmediateFillExchange final : public SimulatedExchange {
@@ -257,7 +257,7 @@ TEST(ShardTriggerTest, ImmediateFillQueuesOneFollowupWithoutRecursion) {
   EXPECT_EQ(strategy.calls[1], Trigger::Traded);
   EXPECT_FALSE(strategy.recursed);
   EXPECT_TRUE(std::any_of(writer.rows.begin(), writer.rows.end(),
-                          [](const HistoryRecord& row) {
+                          [](const OrderHistoryRecord& row) {
                             return std::holds_alternative<TradeUpdate>(row.payload);
                           }));
 }

@@ -112,8 +112,9 @@ int main() {
           valid->strategy_configs[0].timer_period.count() == 1'000'000 &&
           valid->simulated_exchange.maker_fee_rate.ToString() == "0.001" &&
           valid->risk.fee_buffer_rate.ToString() == "0" &&
-          !valid->risk.max_rule_age && !valid->market_specs[0].stale_after &&
-          !valid->risk_budgets[0].valid_for &&
+          valid->risk.max_rule_age == std::chrono::seconds(300) &&
+          valid->market_specs[0].stale_after == std::chrono::seconds(60) &&
+          valid->risk_budgets[0].valid_for == std::chrono::hours(1) &&
           valid->storage.writer_queue == 1024 &&
           valid->storage.writer_batch == 64 &&
           valid->storage.reader_queue == 32 &&
@@ -204,7 +205,12 @@ int main() {
   Require(public_market.ok() &&
               public_market->market_data_source ==
                   hquant::MarketDataSource::BinancePublic &&
-              !public_market->replay_fixture,
+              !public_market->replay_fixture &&
+              public_market->risk.max_rule_age == std::chrono::hours(24) &&
+              public_market->market_specs[0].stale_after ==
+                  std::chrono::seconds(5) &&
+              public_market->risk_budgets[0].valid_for ==
+                  std::chrono::hours(24),
           "explicit public source");
   auto conflicting_sources = hquant::ParseConfig(
       Replace(kValid, "replay_fixture: examples/replay_market.json",

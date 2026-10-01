@@ -12,12 +12,12 @@ namespace {
 
 hquant::Decimal D(const char* text) { return *hquant::Decimal::Parse(text); }
 
-struct FakeRecorder final : hquant::HistoryWriter {
+struct FakeRecorder final : hquant::OrderHistoryWriter {
   FakeRecorder(std::vector<std::string>* output, bool drop)
       : trace(output), drop_prepared(drop) {}
   std::vector<std::string>* trace = nullptr;
   bool drop_prepared = false;
-  bool TryPush(hquant::HistoryRecord record) override {
+  bool TryPush(hquant::OrderHistoryRecord record) override {
     const bool prepared =
         std::holds_alternative<hquant::PreparedOrder>(record.payload);
     trace->push_back(prepared ? "prepared" : "decision");

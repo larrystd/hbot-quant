@@ -1,8 +1,8 @@
 load("//:hquant_cc.bzl", "hquant_cc_library")
 
 hquant_cc_library(
-    name = "storage",
-    hdrs = ["storage.h"],
+    name = "order_history",
+    hdrs = ["order_history.h"],
     deps = [
         "//hquant/src/base:types",
         "//hquant/src/base:order",
@@ -17,22 +17,22 @@ hquant_cc_library(
     srcs = ["record_codec.cc"],
     hdrs = ["record_codec.h"],
     deps = [
-        ":storage",
+        ":order_history",
         "//hquant/src/base:types",
         "//hquant/src/base:error",
         "@abseil-cpp//absl/status:status",
         "@abseil-cpp//absl/status:statusor",
     ],
-    visibility = ["//hquant/src/storage:__pkg__", "//hquant/test:__pkg__"],
+    visibility = ["//hquant/src/order_history:__pkg__", "//hquant/test:__pkg__"],
 )
 
 hquant_cc_library(
-    name = "recorder",
-    srcs = ["recorder.cc"],
-    hdrs = ["recorder.h"],
+    name = "order_history_writer",
+    srcs = ["order_history_writer.cc"],
+    hdrs = ["order_history_writer.h"],
     data = ["schema.sql"],
     deps = [
-        ":storage",
+        ":order_history",
         ":record_codec",
         "//hquant/src/base:error",
         "@abseil-cpp//absl/status:status",
@@ -43,11 +43,11 @@ hquant_cc_library(
 )
 
 hquant_cc_library(
-    name = "history",
-    srcs = ["history.cc"],
-    hdrs = ["history.h"],
+    name = "order_history_reader",
+    srcs = ["order_history_reader.cc"],
+    hdrs = ["order_history_reader.h"],
     deps = [
-        ":storage",
+        ":order_history",
         ":record_codec",
         "//hquant/src/base:error",
         "@abseil-cpp//absl/status:status",

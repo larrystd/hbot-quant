@@ -67,7 +67,7 @@ absl::Status RiskBudgetAllocator::GrantInitial(RiskBudget budget, UtcTime now) {
   return absl::OkStatus();
 }
 
-absl::Status RiskBudgetAllocator::RenewAfterReconciliation(RiskBudget budget,
+absl::Status RiskBudgetAllocator::RenewAfterOrderQuery(RiskBudget budget,
                                                            UtcTime now,
                                                            bool account_fresh) {
   if (!account_fresh) {
@@ -138,7 +138,7 @@ absl::Status RiskGate::SetInitialBudget(RiskBudget budget) {
   return absl::OkStatus();
 }
 
-absl::Status RiskGate::RenewAfterReconciliation(RiskBudget budget, UtcTime now,
+absl::Status RiskGate::RenewAfterOrderQuery(RiskBudget budget, UtcTime now,
                                                 bool account_fresh) {
   if (emergency_stop_)
     return Error(ErrorCode::kRiskEmergencyStopped, "emergency stop");

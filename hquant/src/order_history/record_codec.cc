@@ -1,4 +1,4 @@
-#include "storage/record_codec.h"
+#include "order_history/record_codec.h"
 
 #include <chrono>
 #include <cstdint>
@@ -20,9 +20,9 @@ constexpr uint8_t kLegacyVersion = 1;
 ErrorCode LegacyGapReason(uint8_t reason) {
   switch (reason) {
     case 0:
-      return ErrorCode::kStorageQueueFull;
+      return ErrorCode::kOrderHistoryQueueFull;
     case 1:
-      return ErrorCode::kStorageWriteFailed;
+      return ErrorCode::kOrderHistoryWriteFailed;
     case 2:
       return ErrorCode::kRecoveryDataCorrupted;
     default:
@@ -200,7 +200,7 @@ class Reader {
 
 }  // namespace
 
-std::string EncodeRecord(const HistoryRecord& record) {
+std::string EncodeRecord(const OrderHistoryRecord& record) {
   Writer out;
   out.Byte(kVersion);
   out.U64(record.schema_version);
@@ -264,7 +264,7 @@ std::string EncodeRecord(const HistoryRecord& record) {
         } else if constexpr (std::is_same_v<T, RecordedCheckpoint>) {
           out.CheckpointValue(payload.state);
           out.I64(Us(payload.recorded_at));
-        } else if constexpr (std::is_same_v<T, HistoryGap>) {
+        } else if constexpr (std::is_same_v<T, OrderHistoryGap>) {
           out.U64(payload.run_id.value);
           out.Byte(payload.shard.value);
           out.U64(payload.first_seq);
@@ -286,9 +286,9 @@ std::string EncodeRecord(const HistoryRecord& record) {
   return std::move(out).Finish();
 }
 
-absl::StatusOr<HistoryRecord> DecodeRecord(std::string_view bytes) {
+absl::StatusOr<OrderHistoryRecord> DecodeRecord(std::string_view bytes) {
   Reader in(bytes);
-  HistoryRecord record;
+  OrderHistoryRecord record;
   uint8_t version = 0, shard = 0, present = 0, kind = 0;
   uint64_t schema_version = 0;
   int64_t timestamp = 0;
@@ -298,37 +298,37 @@ absl::StatusOr<HistoryRecord> DecodeRecord(std::string_view bytes) {
       schema_version > std::numeric_limits<uint32_t>::max() ||
       !in.U64(&record.run_id.value) || !in.Byte(&shard) || shard >= 8 ||
       !in.U64(&record.shard_sequence) || !in.Byte(&present) || present > 1)
-    return Error(ErrorCode::kHistoryRecordCorrupted, "invalid record header");
+    return Error(ErrorCode::kOrderHistoryRecordCorrupted, "invalid record header");
   record.schema_version = static_cast<uint32_t>(schema_version);
   record.shard.value = shard;
   if (present) {
     record.strategy_id.emplace();
     if (!in.StrategyIdField(&*record.strategy_id))
-      return Error(ErrorCode::kHistoryRecordCorrupted, "invalid strategy_id");
+      return Error(ErrorCode::kOrderHistoryRecordCorrupted, "invalid strategy_id");
   }
   if (!in.I64(&timestamp) || !in.Byte(&present) || present > 1)
-    return Error(ErrorCode::kHistoryRecordCorrupted, "invalid record time");
+    return Error(ErrorCode::kOrderHistoryRecordCorrupted, "invalid record time");
   record.received_at_utc = Utc(timestamp);
   if (present) {
     if (!in.I64(&timestamp))
-      return Error(ErrorCode::kHistoryRecordCorrupted, "invalid exchange time");
+      return Error(ErrorCode::kOrderHistoryRecordCorrupted, "invalid exchange time");
     record.exchange_at_utc = Utc(timestamp);
   }
   if (!in.Byte(&kind) || kind > 5)
-    return Error(ErrorCode::kHistoryRecordCorrupted, "invalid payload kind");
+    return Error(ErrorCode::kOrderHistoryRecordCorrupted, "invalid payload kind");
   if (kind == 0) {
     PreparedOrder value;
     if (!in.String(&value.client_id.value) ||
         !in.StrategyIdField(&value.strategy_id) ||
         !in.Request(&value.request) || !in.U64(&value.config_revision) ||
         !in.I64(&timestamp) || !in.Byte(&present) || present > 1)
-      return Error(ErrorCode::kHistoryRecordCorrupted,
+      return Error(ErrorCode::kOrderHistoryRecordCorrupted,
                    "invalid prepared order");
     value.created_at_utc = Utc(timestamp);
     if (present) {
       value.executor_checkpoint.emplace();
       if (!in.CheckpointValue(&*value.executor_checkpoint))
-        return Error(ErrorCode::kHistoryRecordCorrupted,
+        return Error(ErrorCode::kOrderHistoryRecordCorrupted,
                      "invalid prepared order checkpoint");
     }
     record.payload = std::move(value);
@@ -337,60 +337,60 @@ absl::StatusOr<HistoryRecord> DecodeRecord(std::string_view bytes) {
     uint8_t status = 0;
     if (!in.String(&value.account.value) || !in.Market(&value.market) ||
         !in.Byte(&present) || present > 1)
-      return Error(ErrorCode::kHistoryRecordCorrupted, "invalid order update");
+      return Error(ErrorCode::kOrderHistoryRecordCorrupted, "invalid order update");
     if (present) {
       value.client_id.emplace();
       if (!in.String(&value.client_id->value))
-        return Error(ErrorCode::kHistoryRecordCorrupted, "invalid client ID");
+        return Error(ErrorCode::kOrderHistoryRecordCorrupted, "invalid client ID");
     }
     if (!in.Byte(&present) || present > 1)
-      return Error(ErrorCode::kHistoryRecordCorrupted,
+      return Error(ErrorCode::kOrderHistoryRecordCorrupted,
                    "invalid exchange ID flag");
     if (present) {
       value.exchange_order_id.emplace();
       if (!in.String(&value.exchange_order_id->value))
-        return Error(ErrorCode::kHistoryRecordCorrupted, "invalid exchange ID");
+        return Error(ErrorCode::kOrderHistoryRecordCorrupted, "invalid exchange ID");
     }
     if (!in.Byte(&status) || status > 5 || !in.Byte(&present) || present > 1)
-      return Error(ErrorCode::kHistoryRecordCorrupted, "invalid order status");
+      return Error(ErrorCode::kOrderHistoryRecordCorrupted, "invalid order status");
     value.exchange_status = static_cast<ExchangeOrderStatus>(status);
     if (present) {
       value.cumulative_base.emplace();
       if (!in.DecimalValue(&*value.cumulative_base))
-        return Error(ErrorCode::kHistoryRecordCorrupted,
+        return Error(ErrorCode::kOrderHistoryRecordCorrupted,
                      "invalid cumulative base");
     }
     if (!in.Byte(&present) || present > 1)
-      return Error(ErrorCode::kHistoryRecordCorrupted,
+      return Error(ErrorCode::kOrderHistoryRecordCorrupted,
                    "invalid cumulative quote flag");
     if (present) {
       value.cumulative_quote.emplace();
       if (!in.DecimalValue(&*value.cumulative_quote))
-        return Error(ErrorCode::kHistoryRecordCorrupted,
+        return Error(ErrorCode::kOrderHistoryRecordCorrupted,
                      "invalid cumulative quote");
     }
     if (!in.Time(&value.time))
-      return Error(ErrorCode::kHistoryRecordCorrupted,
+      return Error(ErrorCode::kOrderHistoryRecordCorrupted,
                    "invalid order update time");
     record.payload = std::move(value);
   } else if (kind == 2) {
     TradeUpdate value;
     if (!in.String(&value.account.value) || !in.Market(&value.market) ||
         !in.Byte(&present) || present > 1)
-      return Error(ErrorCode::kHistoryRecordCorrupted, "invalid trade update");
+      return Error(ErrorCode::kOrderHistoryRecordCorrupted, "invalid trade update");
     if (present) {
       value.client_id.emplace();
       if (!in.String(&value.client_id->value))
-        return Error(ErrorCode::kHistoryRecordCorrupted,
+        return Error(ErrorCode::kOrderHistoryRecordCorrupted,
                      "invalid trade client ID");
     }
     if (!in.Byte(&present) || present > 1)
-      return Error(ErrorCode::kHistoryRecordCorrupted,
+      return Error(ErrorCode::kOrderHistoryRecordCorrupted,
                    "invalid trade exchange ID flag");
     if (present) {
       value.exchange_order_id.emplace();
       if (!in.String(&value.exchange_order_id->value))
-        return Error(ErrorCode::kHistoryRecordCorrupted,
+        return Error(ErrorCode::kOrderHistoryRecordCorrupted,
                      "invalid trade exchange ID");
     }
     uint64_t count = 0;
@@ -399,32 +399,32 @@ absl::StatusOr<HistoryRecord> DecodeRecord(std::string_view bytes) {
         !in.DecimalValue(&value.base_amount) ||
         !in.DecimalValue(&value.quote_amount) || !in.U64(&count) ||
         count > 1000)
-      return Error(ErrorCode::kHistoryRecordCorrupted, "invalid trade values");
+      return Error(ErrorCode::kOrderHistoryRecordCorrupted, "invalid trade values");
     for (uint64_t i = 0; i < count; ++i) {
       TradeFee fee;
       if (!in.String(&fee.asset.value) || !in.DecimalValue(&fee.signed_amount))
-        return Error(ErrorCode::kHistoryRecordCorrupted, "invalid trade fee");
+        return Error(ErrorCode::kOrderHistoryRecordCorrupted, "invalid trade fee");
       value.fees.push_back(std::move(fee));
     }
     if (!in.Byte(&present) || present > 1)
-      return Error(ErrorCode::kHistoryRecordCorrupted, "invalid maker flag");
+      return Error(ErrorCode::kOrderHistoryRecordCorrupted, "invalid maker flag");
     if (present) {
       uint8_t maker = 0;
       if (!in.Byte(&maker) || maker > 1)
-        return Error(ErrorCode::kHistoryRecordCorrupted, "invalid maker value");
+        return Error(ErrorCode::kOrderHistoryRecordCorrupted, "invalid maker value");
       value.maker = maker != 0;
     }
     if (!in.Time(&value.time))
-      return Error(ErrorCode::kHistoryRecordCorrupted, "invalid trade time");
+      return Error(ErrorCode::kOrderHistoryRecordCorrupted, "invalid trade time");
     record.payload = std::move(value);
   } else if (kind == 3) {
     RecordedCheckpoint value;
     if (!in.CheckpointValue(&value.state) || !in.I64(&timestamp))
-      return Error(ErrorCode::kHistoryRecordCorrupted, "invalid checkpoint");
+      return Error(ErrorCode::kOrderHistoryRecordCorrupted, "invalid checkpoint");
     value.recorded_at = Utc(timestamp);
     record.payload = std::move(value);
   } else if (kind == 4) {
-    HistoryGap value;
+    OrderHistoryGap value;
     uint8_t legacy_reason = 0;
     uint64_t reason = 0;
     if (!in.U64(&value.run_id.value) || !in.Byte(&value.shard.value) ||
@@ -433,7 +433,7 @@ absl::StatusOr<HistoryRecord> DecodeRecord(std::string_view bytes) {
         (version == kLegacyVersion
              ? (!in.Byte(&legacy_reason) || legacy_reason > 3)
              : (!in.U64(&reason) || reason == 0 || !ValidErrorCode(reason))))
-      return Error(ErrorCode::kHistoryRecordCorrupted, "invalid history gap");
+      return Error(ErrorCode::kOrderHistoryRecordCorrupted, "invalid history gap");
     value.reason = version == kLegacyVersion ? LegacyGapReason(legacy_reason)
                                              : StoredCode(reason);
     record.payload = std::move(value);
@@ -450,7 +450,7 @@ absl::StatusOr<HistoryRecord> DecodeRecord(std::string_view bytes) {
         (version == kVersion &&
          (!in.U64(&reason) || !ValidErrorCode(reason))) ||
         !in.String(&value.message) || !in.Byte(&present) || present > 1)
-      return Error(ErrorCode::kHistoryRecordCorrupted,
+      return Error(ErrorCode::kOrderHistoryRecordCorrupted,
                    "invalid decision record");
     value.action_index = static_cast<uint32_t>(action_index);
     value.action_kind = static_cast<ActionKind>(action_kind);
@@ -463,17 +463,17 @@ absl::StatusOr<HistoryRecord> DecodeRecord(std::string_view bytes) {
     if (present) {
       value.client_id.emplace();
       if (!in.String(&value.client_id->value))
-        return Error(ErrorCode::kHistoryRecordCorrupted,
+        return Error(ErrorCode::kOrderHistoryRecordCorrupted,
                      "invalid decision client ID");
     }
     record.payload = std::move(value);
   }
   if (!in.Done())
-    return Error(ErrorCode::kHistoryRecordCorrupted, "trailing record bytes");
+    return Error(ErrorCode::kOrderHistoryRecordCorrupted, "trailing record bytes");
   return record;
 }
 
-RecordIndex IndexRecord(const HistoryRecord& record) {
+RecordIndex IndexRecord(const OrderHistoryRecord& record) {
   RecordIndex index;
   index.payload_kind = static_cast<int>(record.payload.index());
   if (const auto* value = std::get_if<PreparedOrder>(&record.payload)) {

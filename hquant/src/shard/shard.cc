@@ -12,7 +12,7 @@ namespace hquant {
 
 Shard::Shard(Config config, const Clock& clock, Strategy& strategy,
              SimulatedExchange& exchange, RiskGate& risk,
-             HistoryWriter& recorder)
+             OrderHistoryWriter& recorder)
     : config_(std::move(config)),
       clock_(clock),
       strategy_(strategy),
@@ -200,14 +200,14 @@ absl::StatusOr<std::vector<ActionResult>> Shard::RunStrategy(
   return all_results;
 }
 
-absl::Status Shard::Record(HistoryRecordPayload payload,
+absl::Status Shard::Record(OrderHistoryRecordPayload payload,
                            const StrategyId& strategy_id) {
   if (shard_sequence_ == std::numeric_limits<uint64_t>::max()) {
     risk_.EmergencyStop();
     return Error(ErrorCode::kSequenceExhausted, "shard sequence exhausted");
   }
   const uint64_t sequence = ++shard_sequence_;
-  HistoryRecord record;
+  OrderHistoryRecord record;
   record.run_id = config_.run;
   record.shard = config_.shard;
   record.shard_sequence = sequence;
@@ -222,8 +222,8 @@ void Shard::AddGap(uint64_t sequence) {
   if (!local_gaps_.empty() && local_gaps_.back().last_seq + 1 == sequence) {
     local_gaps_.back().last_seq = sequence;
   } else {
-    local_gaps_.push_back(HistoryGap{config_.run, config_.shard, sequence,
-                                     sequence, ErrorCode::kStorageQueueFull});
+    local_gaps_.push_back(OrderHistoryGap{config_.run, config_.shard, sequence,
+                                     sequence, ErrorCode::kOrderHistoryQueueFull});
   }
 }
 

@@ -132,7 +132,7 @@ asio::awaitable<void> OneRequest(asio::io_context& io, const std::string& path,
   ControlRequest request;
   request.request_id = request_id;
   if (history)
-    request.payload = HistoryRequest{20, ""};
+    request.payload = OrderHistoryRequest{20, ""};
   else
     request.payload = StatusRequest{};
   auto response = co_await ExchangeControlRequest(io, path, request);
@@ -145,7 +145,7 @@ asio::awaitable<void> OneRequest(asio::io_context& io, const std::string& path,
     result.AddError(CodeOf(response.status()));
   } else if (response->request_id != request_id ||
              (history &&
-              !std::holds_alternative<HistoryResponse>(response->payload)) ||
+              !std::holds_alternative<OrderHistoryResponse>(response->payload)) ||
              (!history &&
               !std::holds_alternative<StatusResponse>(response->payload))) {
     if (const auto* error = std::get_if<ControlError>(&response->payload))
