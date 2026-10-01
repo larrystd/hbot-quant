@@ -6,7 +6,6 @@
 #include <chrono>
 #include <condition_variable>
 #include <filesystem>
-#include <future>
 #include <memory>
 #include <mutex>
 #include <optional>
@@ -22,6 +21,7 @@
 #include "boost/asio/detached.hpp"
 #include "boost/asio/post.hpp"
 #include "boost/asio/steady_timer.hpp"
+#include "boost/asio/this_coro.hpp"
 #include "boost/asio/use_awaitable.hpp"
 #include "market/market_data_stream.h"
 #include "market/replay_feed.h"
@@ -71,8 +71,12 @@ absl::Status ApplyReplayInput(const ReplayInput& input,
     if (!result.ok()) return result.status();
   } else if (const auto* trade =
                  std::get_if<ReplayPublicTrade>(&input.payload)) {
-    return shard.OnPublicTrade({market.spec.market, {}, trade->price_ticks,
-                                trade->quantity_lots, trade->side, time});
+    return shard.OnPublicTrade({market.spec.market,
+                                {},
+                                trade->price_ticks,
+                                trade->quantity_lots,
+                                trade->side,
+                                time});
   }
   return absl::OkStatus();
 }
@@ -100,7 +104,6 @@ struct QuantServer::Impl {
   std::unique_ptr<WebSocketClient> websocket;
   std::unique_ptr<binance_spot::MarketDataStream> stream;
   std::thread shard_thread;
-  std::mutex history_mutex;
   std::mutex stop_mutex;
   std::condition_variable stop_cv;
   std::atomic<bool> stopping{false};
@@ -158,38 +161,40 @@ struct QuantServer::Impl {
             : (live ? std::chrono::hours(24) : std::chrono::seconds(300))});
     for (const auto& budget : config.risk_budgets) {
       auto status = risk->SetInitialBudget(
-          {budget.account, budget.asset, budget.shard, 1,
-           budget.hard_limit,
-           started + budget.valid_for.value_or(
-                         live ? std::chrono::hours(24) : std::chrono::hours(1))});
+          {budget.account, budget.asset, budget.shard, 1, budget.hard_limit,
+           started + budget.valid_for.value_or(live ? std::chrono::hours(24)
+                                                    : std::chrono::hours(1))});
       if (!status.ok()) return status;
     }
-    auto opened = SqliteHistoryWriter::Open(
-        {storage_path, run, started, config.storage.writer_queue,
-         config.storage.writer_batch});
+    auto opened = SqliteHistoryWriter::Open({storage_path, run, started,
+                                             config.storage.writer_queue,
+                                             config.storage.writer_batch});
     if (!opened.ok()) return opened.status();
     writer = std::move(*opened);
-    Shard::Config shard_config{run, assignment.shard,
-                               strategy_config.strategy_id, account.account,
-                               market.spec, market.tick_lot_size, rule};
+    Shard::Config shard_config{run,
+                               assignment.shard,
+                               strategy_config.strategy_id,
+                               account.account,
+                               market.spec,
+                               market.tick_lot_size,
+                               rule};
     shard_config.stale_after_us = market.stale_after
                                       ? market.stale_after->count()
                                       : (live ? 5'000'000 : 60'000'000);
     shard = std::make_unique<Shard>(shard_config, *clock, *strategy, *exchange,
                                     *risk, *writer);
     if (!live) {
-      auto replay = ReadReplayFile(*config.replay_fixture,
-                                   [&](const ReplayInput& input) {
-                                     return ApplyReplayInput(input, market,
-                                                             *replay_clock, *shard);
-                                   });
+      auto replay =
+          ReadReplayFile(*config.replay_fixture, [&](const ReplayInput& input) {
+            return ApplyReplayInput(input, market, *replay_clock, *shard);
+          });
       if (!replay.ok()) return replay;
       auto flush = writer->Flush();
       if (!flush.ok()) return flush;
     }
-    auto read = SqliteHistoryReader::Open(
-        {storage_path, config.storage.reader_queue,
-         config.storage.reader_page_limit});
+    auto read =
+        SqliteHistoryReader::Open({storage_path, config.storage.reader_queue,
+                                   config.storage.reader_page_limit});
     if (!read.ok()) return read.status();
     reader = std::move(*read);
     return absl::OkStatus();
@@ -216,15 +221,18 @@ struct QuantServer::Impl {
   void StartFeed() {
     const auto& market = config.market_specs.front();
     io = std::make_unique<boost::asio::io_context>();
-    const TlsConfig rest_tls{true, true, {}, "data-api.binance.vision"};
-    const TlsConfig ws_tls{true, true, {}, "data-stream.binance.vision"};
-    http = std::make_unique<HttpClient>(*io, "data-api.binance.vision", "443",
-                                         rest_tls);
+    const auto& rest = config.binance_endpoints.rest;
+    const auto& ws = config.binance_endpoints.websocket;
+    const TlsConfig rest_tls{rest.tls, true, {}, rest.host};
+    const TlsConfig ws_tls{ws.tls, true, {}, ws.host};
+    http = std::make_unique<HttpClient>(*io, rest.host,
+                                        std::to_string(rest.port), rest_tls);
     std::string symbol = market.spec.market.native_symbol;
-    std::transform(symbol.begin(), symbol.end(), symbol.begin(),
-                   [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+    std::transform(
+        symbol.begin(), symbol.end(), symbol.begin(),
+        [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
     websocket = std::make_unique<WebSocketClient>(
-        *io, "data-stream.binance.vision", "443",
+        *io, ws.host, std::to_string(ws.port),
         "/stream?streams=" + symbol + "@depth/" + symbol + "@trade", ws_tls);
     binance_spot::StreamConfig stream_config;
     stream_config.symbol = market.spec.market.native_symbol;
@@ -260,15 +268,18 @@ QuantServer::QuantServer(std::unique_ptr<Impl> impl) : impl_(std::move(impl)) {}
 
 absl::StatusOr<std::unique_ptr<QuantServer>> QuantServer::Create(
     const AppConfig& config, std::string state_dir) {
-  const bool live = config.market_data_source == MarketDataSource::BinancePublic;
+  const bool live =
+      config.market_data_source == MarketDataSource::BinancePublic;
   if (config.mode != EngineMode::Simulated || config.accounts.size() != 1 ||
       config.market_specs.size() != 1 || config.strategy_configs.size() != 1 ||
       config.assignments.size() != 1 ||
       (live && config.loop_mode != LoopMode::Blocking) ||
       (!live && !config.replay_fixture)) {
     return Error(ErrorCode::kLaunchMultipleNotSupported,
-                 live ? "public Simulated v1 requires one blocking shard, account, market and strategy"
-                      : "G1 replay requires one Simulated account, market, strategy and shard");
+                 live ? "public Simulated v1 requires one blocking shard, "
+                        "account, market and strategy"
+                      : "G1 replay requires one Simulated account, market, "
+                        "strategy and shard");
   }
   const auto& account = config.accounts.front();
   const auto& market = config.market_specs.front();
@@ -290,10 +301,10 @@ absl::StatusOr<std::unique_ptr<QuantServer>> QuantServer::Create(
   if (error)
     return ErrorFromSystem(ErrorCode::kStateDirUnavailable, error,
                            impl->state_dir);
-  const auto path = std::filesystem::path(config.storage_path).is_absolute()
-                        ? std::filesystem::path(config.storage_path)
-                        : std::filesystem::path(impl->state_dir) /
-                              config.storage_path;
+  const auto path =
+      std::filesystem::path(config.storage_path).is_absolute()
+          ? std::filesystem::path(config.storage_path)
+          : std::filesystem::path(impl->state_dir) / config.storage_path;
   std::filesystem::create_directories(path.parent_path(), error);
   if (error)
     return ErrorFromSystem(ErrorCode::kStateDirUnavailable, error,
@@ -314,31 +325,38 @@ absl::Status QuantServer::Start() {
   auto status = impl_->Assemble();
   if (!status.ok()) return status;
   if (impl_->live) impl_->StartFeed();
-  auto handler = [this](const ControlRequest& request) {
+  auto handler =
+      [this](
+          ControlRequest request) -> boost::asio::awaitable<ControlResponse> {
     ControlResponse response;
     response.request_id = request.request_id;
     if (std::holds_alternative<StatusRequest>(request.payload)) {
-      auto result = Status();
-      if (result.ok()) response.payload = StatusResponse{*result};
-      else response.payload = ControlError{CodeOf(result.status()),
-                                            std::string(result.status().message())};
+      auto result = co_await StatusAsync();
+      if (result.ok())
+        response.payload = StatusResponse{*result};
+      else
+        response.payload = ControlError{CodeOf(result.status()),
+                                        std::string(result.status().message())};
     } else if (const auto* history =
                    std::get_if<HistoryRequest>(&request.payload)) {
       HistoryQuery query;
       query.request_id = request.request_id;
       query.page_size = history->limit;
       if (!history->cursor.empty()) query.cursor = history->cursor;
-      auto result = History(std::move(query));
-      if (result.ok()) response.payload = HistoryResponse{HistoryJson(*result)};
-      else response.payload = ControlError{CodeOf(result.status()),
-                                            std::string(result.status().message())};
+      auto result = co_await HistoryAsync(std::move(query));
+      if (result.ok())
+        response.payload = HistoryResponse{HistoryJson(*result)};
+      else
+        response.payload = ControlError{CodeOf(result.status()),
+                                        std::string(result.status().message())};
     } else {
       RequestStop();
       response.payload = StopResponse{true};
     }
-    return response;
+    co_return response;
   };
-  auto opened = ControlServer::Start(impl_->state_dir + "/control.sock", handler);
+  auto opened = ControlServer::Start(impl_->state_dir + "/control.sock",
+                                     handler, [this](int) { RequestStop(); });
   if (!opened.ok()) {
     RequestStop();
     if (impl_->shard_thread.joinable()) impl_->shard_thread.join();
@@ -377,48 +395,67 @@ void QuantServer::RequestStop() {
   impl_->stop_cv.notify_all();
 }
 
-absl::StatusOr<std::string> QuantServer::Status() {
+boost::asio::awaitable<absl::StatusOr<std::string>> QuantServer::StatusAsync() {
   const auto& market = impl_->config.market_specs.front();
   if (!impl_->live) {
-    return StatusJson(*impl_->shard, *impl_->exchange, market.spec,
-                      *impl_->writer);
+    co_return StatusJson(*impl_->shard, *impl_->exchange, market.spec,
+                         *impl_->writer);
   }
-  auto result = std::make_shared<std::promise<std::string>>();
-  auto ready = result->get_future();
-  boost::asio::post(*impl_->io, [this, result] {
-    auto json = StatusJson(*impl_->shard, *impl_->exchange,
-                           impl_->config.market_specs.front().spec,
-                           *impl_->writer);
+  auto executor = co_await boost::asio::this_coro::executor;
+  auto ready = std::make_shared<boost::asio::steady_timer>(executor);
+  auto result = std::make_shared<std::optional<absl::StatusOr<std::string>>>();
+  ready->expires_after(std::chrono::seconds(2));
+  boost::asio::post(*impl_->io, [this, ready, result, executor] {
+    auto json =
+        StatusJson(*impl_->shard, *impl_->exchange,
+                   impl_->config.market_specs.front().spec, *impl_->writer);
+    json.pop_back();
+    json +=
+        ",\"applied_diffs\":" + std::to_string(impl_->stream->AppliedDiffs()) +
+        ",\"resyncs\":" + std::to_string(impl_->stream->Resyncs()) +
+        ",\"strategy_invocations\":" +
+        std::to_string(impl_->shard->strategy_invocations()) + "}";
     if (!impl_->stream_error.ok()) {
       json.pop_back();
       const ErrorCode code = CodeOf(impl_->stream_error);
       json += ",\"market_stream_error\":{\"code\":" +
               std::to_string(ErrorNumber(code)) +
               ",\"name\":" + EscapeJson(Info(code).name) +
-              ",\"message\":" +
-              EscapeJson(impl_->stream_error.message()) + "}}";
+              ",\"message\":" + EscapeJson(impl_->stream_error.message()) +
+              "}}";
     }
-    result->set_value(std::move(json));
+    boost::asio::post(executor,
+                      [ready, result, json = std::move(json)]() mutable {
+                        *result = std::move(json);
+                        ready->cancel();
+                      });
   });
-  if (ready.wait_for(std::chrono::seconds(2)) != std::future_status::ready)
-    return Error(ErrorCode::kControlTimeout, "status query timed out");
-  return ready.get();
+  boost::system::error_code ec;
+  co_await ready->async_wait(
+      boost::asio::redirect_error(boost::asio::use_awaitable, ec));
+  if (result->has_value()) co_return std::move(**result);
+  co_return Error(ErrorCode::kControlTimeout, "status query timed out");
 }
 
-absl::StatusOr<HistoryPage> QuantServer::History(HistoryQuery query) {
-  std::lock_guard lock(impl_->history_mutex);
-  auto accepted = impl_->reader->TrySubmit(query);
-  if (!accepted.ok()) return accepted;
-  const auto deadline = std::chrono::steady_clock::now() +
-                        std::chrono::seconds(2);
-  while (std::chrono::steady_clock::now() < deadline) {
-    if (auto page = impl_->reader->TryReceive()) {
-      if (!page->status.ok()) return page->status;
-      return *page;
-    }
-    std::this_thread::sleep_for(std::chrono::milliseconds(2));
-  }
-  return Error(ErrorCode::kControlTimeout, "history query timed out");
+boost::asio::awaitable<absl::StatusOr<HistoryPage>> QuantServer::HistoryAsync(
+    HistoryQuery query) {
+  auto executor = co_await boost::asio::this_coro::executor;
+  auto ready = std::make_shared<boost::asio::steady_timer>(executor);
+  auto result = std::make_shared<std::optional<HistoryPage>>();
+  ready->expires_after(std::chrono::seconds(2));
+  auto accepted = impl_->reader->TrySubmitAsync(
+      std::move(query), executor, [ready, result](HistoryPage page) mutable {
+        *result = std::move(page);
+        ready->cancel();
+      });
+  if (!accepted.ok()) co_return accepted;
+  boost::system::error_code ec;
+  co_await ready->async_wait(
+      boost::asio::redirect_error(boost::asio::use_awaitable, ec));
+  if (!result->has_value())
+    co_return Error(ErrorCode::kControlTimeout, "history query timed out");
+  if (!(**result).status.ok()) co_return (**result).status;
+  co_return std::move(**result);
 }
 
 }  // namespace hquant

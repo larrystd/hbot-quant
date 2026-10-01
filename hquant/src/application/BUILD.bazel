@@ -22,6 +22,7 @@ hquant_cc_library(
     hdrs = ["control_server.h"],
     deps = [
         "//hquant/src/base:error",
+        "//hquant/src/base:line_stream",
         "//hquant/src/base:market",
         "//hquant/src/base:order",
         "//hquant/src/storage:history",
@@ -30,6 +31,7 @@ hquant_cc_library(
         "//hquant/src/shard:shard",
         "@abseil-cpp//absl/status:status",
         "@abseil-cpp//absl/status:statusor",
+        "@boost.asio//:boost.asio",
         "@simdjson//:simdjson",
     ],
     visibility = ["//visibility:public"],

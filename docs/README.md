@@ -17,18 +17,19 @@
 | [DEVELOPMENT.md](DEVELOPMENT.md) | C++ 写法约束、协程与关闭规则、多 Agent 协作和验证命令 | 写代码、提交与集成 |
 | [ERRORS.md](ERRORS.md) | 业务错误码：负数错误码、处理方式、完整注册表及兼容格式 | 新增或处理错误时 |
 | [GLOSSARY.md](GLOSSARY.md) | 当前代码与配置使用的交易术语 | 核对术语、类型和状态名 |
+| [BENCH.md](BENCH.md) | 管理入口与本地行情压测的命令、参数和指标 | 验证 Asio 网络链路或做性能对照 |
 
 文档冲突时的优先级：运行时与线程语义以 `ARCHITECTURE.md` 为准；文件名、target 与字段以 `STRUCTURE_AND_TYPES.md` 为准；订单簿算法以 `ORDER_BOOK.md` 为准；依赖版本以仓库根目录的 [`MODULE.bazel`](../MODULE.bazel) 为准。实现中发现冲突，先更新文档和对应测试，再改代码。
 
 ## 2. 一句话架构
 
 ```text
-hquant（CLI）──Unix socket──▶ hquant_engine
-                              ├─ 分片线程 × ≤8：行情 WS / 下单连接 / 私有 WS → 订单簿 / OrderTracker / 策略 / 分片风控 → 异步写
-                              ├─ 服务线程：QuantServer、账户额度、健康汇总
-                              ├─ SqliteHistoryWriter 线程：SQLite WAL 批量写（不阻塞发单）
-                              ├─ SqliteHistoryReader 线程：只读分页查询（history / 启动恢复）
-                              └─ Quill 线程：诊断日志
+hquant_bench（管理命令）──Unix socket──▶ hquant_server / ControlServer 管理线程
+                                              ├─ QuantServer：组装交易链
+                                              ├─ 分片线程：行情 WS → 订单簿 / 策略 / 风控 / 模拟撮合
+                                              ├─ SqliteHistoryWriter 线程：SQLite WAL 批量写
+                                              └─ SqliteHistoryReader 线程：异步历史查询
+hquant_bench feed（本地 HTTP + WS）──────────▶ 分片的公开行情连接
 ```
 
 ## 3. 基线与范围
@@ -42,13 +43,13 @@ hquant（CLI）──Unix socket──▶ hquant_engine
 固定行情模拟盘（离线）：
 
 ```bash
-bazel run //apps:hquant -- start   --config examples/simulated_replay.yaml --state-dir /tmp/hquant-simulated-demo
-bazel run //apps:hquant -- status  --state-dir /tmp/hquant-simulated-demo
-bazel run //apps:hquant -- history --state-dir /tmp/hquant-simulated-demo --limit 20
-bazel run //apps:hquant -- stop    --state-dir /tmp/hquant-simulated-demo
+bazel run //apps:hquant_server -- examples/simulated_replay.yaml /tmp/hquant-simulated-demo
+bazel run //apps:hquant_bench -- status  --state-dir /tmp/hquant-simulated-demo
+bazel run //apps:hquant_bench -- history --state-dir /tmp/hquant-simulated-demo --limit 20
+bazel run //apps:hquant_bench -- stop    --state-dir /tmp/hquant-simulated-demo
 ```
 
-真实公开行情驱动模拟盘：把配置换成 `examples/simulated_binance_pmm.yaml`。`start` 在前台运行，其余命令在另一个终端执行。全量测试：`bazel test //...`。
+真实公开行情驱动模拟盘：把配置换成 `examples/simulated_binance_pmm.yaml`。本地压测使用 `examples/bench_feed.yaml`，步骤见 [BENCH.md](BENCH.md)。`hquant_server` 在前台运行，其余命令在另一个终端执行。全量测试：`bazel test //...`。
 
 本机验收记录见 [`dev/VALIDATION_2026-09-27.md`](../dev/VALIDATION_2026-09-27.md)，Linux CI 状态见 [`dev/LINUX_VALIDATION.md`](../dev/LINUX_VALIDATION.md)。
 

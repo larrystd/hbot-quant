@@ -27,7 +27,7 @@ flowchart LR
 2. **触发到动作：** 盘口变化、公开成交、自己的订单或成交回报、定时器按 `TriggerPolicy` 触发策略；`Shard` 合并及限频后组装 `StrategyInput`，`ActionExecutor` 依次冻结额度、准备订单、记录并执行动作。撮合及回报处理先于策略决策；执行期间的触发最多补跑一次。
 3. **回报到状态：** 模拟交易所的账户事件由 `Shard` 提取，先经 `OrderTracker` 去重及状态转移，再做风险记账和记录；管理查询通过 `ControlServer` 读取状态或由 Reader 查询历史。
 
-当前回放模式在 `Start()` 同步跑完输入，再开放管理入口；实时模式在一个分片 `io_context` 线程运行行情和定时器。管理入口目前使用 accept 线程和每请求一个工作线程；下一阶段按 [Asio 计划](refactor/ASIO_BENCH_PLAN.md)改为独立 `io_context` 管理线程。Writer 和 Reader 各有一个线程。
+当前回放模式在 `Start()` 同步跑完输入，再开放管理入口；实时模式在一个分片 `io_context` 线程运行行情和定时器。`ControlServer` 在独立的管理 `io_context` 线程上以 Asio 协程处理 Unix socket，请求不创建工作线程。HistoryReader 完成查询后将结果投回管理线程；`SIGINT`、`SIGTERM` 与 `stop` 走同一收尾流程。Writer 和 Reader 各有一个线程。回放模式空闲时共 4 个线程（主线程、管理线程、Writer、Reader），实时模式再加一个分片线程。
 
 以下多分片、私有交易通道及线程图描述目标架构；当前可运行范围以上述单分片实现为准。
 
@@ -35,11 +35,11 @@ flowchart LR
 
 ```mermaid
 flowchart LR
-    subgraph FRONT["前台进程 hquant（CLI）"]
-        CLI["start / status / stop / history"]
+    subgraph FRONT["工具进程 hquant_bench"]
+        CLI["status / history / stop / control / feed"]
     end
 
-    subgraph ENGINE["服务进程 hquant_engine"]
+    subgraph ENGINE["服务进程 hquant_server"]
         subgraph S1["分片线程 1（默认忙轮询 + 绑核）"]
             SH1["行情 WS + 下单连接 + 私有 WS<br/>盘口 / OrderTracker / 策略 / 分片风控"]
         end
@@ -79,13 +79,13 @@ flowchart LR
 | 线程 | 数量 | 延迟要求 | 做什么 |
 | --- | --- | --- | --- |
 | 分片线程 | 默认 8，可配置 | 最高 | 独占策略依赖的连接、账户风险状态、订单和盘口；处理行情、回报、决策与异步写入发起 |
-| 控制线程（目标架构为 ControlServer 管理线程） | 1 | `stop`/紧急停止需及时 | CLI 请求、健康汇总、额度再分配；只通过命令队列影响分片 |
+| ControlServer 管理线程 | 1 | `stop`/紧急停止需及时 | Asio `LineServer`、`SIGINT`/`SIGTERM`、状态及异步历史查询；会话为协程，不按请求增线程 |
 | Recorder 线程 | 1 | 无 | 从各分片的记录队列取事件，攒批写 SQLite |
 | HistoryReader 线程 | 1 | 无 | 独立只读连接处理分页 `history` 与启动恢复查询，结果异步返回控制线程 |
 | Quill 线程 | 1 | 无 | 日志格式化与写文件 |
 | 计算工作线程 | 0..M，按需 | 非热路径 | 耗时的 Controller 指标/历史特征计算；只处理不可变快照，结果回分片复核 |
 
-默认 8 个分片线程，加上控制、Recorder、HistoryReader、Quill，显式线程共 12 个（另有可选计算工作线程）。分片数上限为 8；实际只启动分到了标的的分片，并受可用 CPU 核数约束（见第 2.1 节）。分片划分首先保证**一个策略依赖的所有市场只有一个状态所有者**。将来同一账户可按标的组拆到多个分片，但必须先验证第 5 节的账户级额度与回报路由；分片之间不互相下单，跨分片只读行情通过安全发布的快照实现。
+目标架构若启动 8 个分片线程，再加控制、Recorder、HistoryReader、Quill，显式线程共 12 个（另有可选计算工作线程）。分片数上限为 8；实际只启动分到了标的的分片，并受可用 CPU 核数约束（见第 2.1 节）。分片划分首先保证**一个策略依赖的所有市场只有一个状态所有者**。将来同一账户可按标的组拆到多个分片，但必须先验证第 5 节的账户级额度与回报路由；分片之间不互相下单，跨分片只读行情通过安全发布的快照实现。
 
 ## 2. 一个分片内部有什么
 

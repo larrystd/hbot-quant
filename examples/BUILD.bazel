@@ -1,6 +1,6 @@
 load("@rules_cc//cc:defs.bzl", "cc_binary")
 
-exports_files(["simulated_replay.yaml", "simulated_binance_pmm.yaml", "replay_market.json"], visibility = ["//visibility:public"])
+exports_files(["simulated_replay.yaml", "simulated_binance_pmm.yaml", "bench_feed.yaml", "replay_market.json"], visibility = ["//visibility:public"])
 
 # 逐条打印回放过程的教学示例：bazel run //examples:replay_walkthrough
 cc_binary(

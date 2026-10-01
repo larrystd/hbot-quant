@@ -10,6 +10,7 @@
 #include <thread>
 #include <vector>
 
+#include "apps/bench_feed.h"
 #include "base/error.h"
 #include "base/net.h"
 #include "boost/asio/co_spawn.hpp"
@@ -30,6 +31,38 @@ MarketId ParserMarket() {
 }
 TickLotSize ParserScale() {
   return TickLotSize{ParserD("0.01"), ParserD("0.001"), 1};
+}
+
+TEST(DepthParserTest, ParsesBenchFeedSnapshotDiffAndTrade) {
+  const auto scale = ParserScale();
+  DepthParser parser(ParserMarket(), scale);
+  const std::vector<BookLevel> bids{{PriceTicks{9999}, QuantityLots{100}}};
+  const std::vector<BookLevel> asks{{PriceTicks{10001}, QuantityLots{100}}};
+  auto snapshot = parser.ParseSnapshot(
+      BenchSnapshotBody(10, bids, asks, scale.price_per_tick,
+                        scale.amount_per_lot),
+      1, {});
+  ASSERT_TRUE(snapshot.ok()) << snapshot.status();
+  ASSERT_EQ(snapshot->bids.size(), 1);
+  EXPECT_EQ(snapshot->bids[0].price_ticks.value, 9999);
+  EXPECT_EQ(snapshot->bids[0].quantity_lots.value, 100);
+
+  auto diff = parser.ParseDiff(
+      BenchDepthFrame("BTCUSDT", 10, 11, {}, {}, scale.price_per_tick,
+                      scale.amount_per_lot),
+      1, {});
+  ASSERT_TRUE(diff.ok()) << diff.status();
+  EXPECT_EQ(diff->first_sequence, 10);
+  EXPECT_EQ(diff->last_sequence, 11);
+
+  auto trade = parser.ParseTrade(
+      BenchTradeFrame("BTCUSDT", 1, PriceTicks{10100}, QuantityLots{10},
+                      Side::Buy, scale.price_per_tick, scale.amount_per_lot),
+      {});
+  ASSERT_TRUE(trade.ok()) << trade.status();
+  EXPECT_EQ(trade->price_ticks.value, 10100);
+  EXPECT_EQ(trade->quantity_lots.value, 10);
+  EXPECT_EQ(trade->side, Side::Buy);
 }
 
 TEST(DepthParserTest, SnapshotAndOverlappingDiffReplayThroughBookSync) {

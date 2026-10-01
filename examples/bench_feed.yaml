@@ -1,0 +1,65 @@
+schema_version: 1
+mode: simulated
+loop_mode: blocking
+market_data_source: binance_public
+exchange_endpoints:
+  binance:
+    rest: {host: 127.0.0.1, port: 18080, tls: false}
+    websocket: {host: 127.0.0.1, port: 18080, tls: false}
+storage_path: history.sqlite
+
+accounts:
+  - account: simulated
+    initial_balances:
+      BTC: "0.02"
+      USDT: "10"
+
+market_specs:
+  - market: BTCUSDT
+    exchange: binance
+    base_asset: BTC
+    quote_asset: USDT
+    tick_lot_size:
+      price_per_tick: "0.01"
+      amount_per_lot: "0.001"
+      tick_lot_version: 1
+    trading_rule:
+      price_increment: "0.01"
+      base_increment: "0.001"
+      min_base_amount: "0.001"
+      min_notional: "0.01"
+
+strategy_configs:
+  - strategy_id: 1
+    strategy: simple_pmm
+    account: simulated
+    markets: [BTCUSDT]
+    order_amount: "0.01"
+    bid_spread: "0.001"
+    ask_spread: "0.001"
+    refresh_interval: 15s
+
+assignments:
+  - shard: 0
+    markets: [BTCUSDT]
+    strategy_ids: [1]
+    accounts: [simulated]
+
+risk_budgets:
+  - account: simulated
+    asset: BTC
+    shard: 0
+    hard_limit: "0.02"
+  - account: simulated
+    asset: USDT
+    shard: 0
+    hard_limit: "10"
+
+rate_budgets:
+  - account: simulated
+    shard: 0
+    ip: local
+    endpoint: order
+    limit: 100
+    cancel_reserve: 20
+    window_us: 1000000

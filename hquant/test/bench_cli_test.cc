@@ -1,4 +1,4 @@
-#include "cli/cli.h"
+#include "apps/bench_cli.h"
 
 #include <array>
 #include <cstdlib>
@@ -21,17 +21,20 @@ void Require(bool condition, const char* label) {
 }  // namespace
 
 int main() {
-  const std::array<std::string_view, 5> start_args{
-      "start", "--config", "simulated.yaml", "--state-dir", "/tmp/hquant"};
-  auto start = hquant::ParseCliArguments(start_args);
-  Require(start.ok() && start->verb == hquant::CliVerb::Start &&
-              start->config_path == "simulated.yaml",
-          "parse start");
-  Require(hquant::ControlSocketPath(start->state_dir) ==
+  const std::array<std::string_view, 3> status_args{"status", "--state-dir",
+                                                    "/tmp/hquant"};
+  auto status = hquant::ParseCliArguments(status_args);
+  Require(status.ok() && status->verb == hquant::CliVerb::Status,
+          "parse status");
+  Require(hquant::ControlSocketPath(status->state_dir) ==
               "/tmp/hquant/control.sock",
           "server socket path");
-  Require(!hquant::MakeControlRequest(*start, 1).ok(),
-          "start has no server request");
+  Require(std::holds_alternative<hquant::StatusRequest>(
+              hquant::MakeControlRequest(*status, 1)->payload),
+          "status request");
+  const std::array<std::string_view, 5> start_args{
+      "start", "--config", "simulated.yaml", "--state-dir", "/tmp/hquant"};
+  Require(!hquant::ParseCliArguments(start_args).ok(), "start removed");
 
   const std::array<std::string_view, 7> history_args{
       "history", "--state-dir", "/tmp/hquant", "--limit",
@@ -51,7 +54,8 @@ int main() {
   history_response.request_id = 17;
   history_response.payload =
       hquant::HistoryResponse{"{\"orders\":[],\"next\":null}"};
-  auto formatted = hquant::FormatControlResponse(*history, history_response, 17);
+  auto formatted =
+      hquant::FormatControlResponse(*history, history_response, 17);
   Require(formatted.ok() && formatted->find("orders") != std::string::npos,
           "history response");
   Require(!hquant::FormatControlResponse(*history, history_response, 18).ok(),
@@ -60,7 +64,8 @@ int main() {
   engine_error.request_id = 17;
   engine_error.payload = hquant::ControlError{
       hquant::ErrorCode::kHistoryQueueFull, "reader queue full"};
-  auto command_error = hquant::FormatControlResponse(*history, engine_error, 17);
+  auto command_error =
+      hquant::FormatControlResponse(*history, engine_error, 17);
   Require(!command_error.ok() &&
               hquant::CodeOf(command_error.status()) ==
                   hquant::ErrorCode::kCliEngineError &&

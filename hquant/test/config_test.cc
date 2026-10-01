@@ -106,47 +106,80 @@ int main() {
           "parsed budgets");
   Require(valid->replay_fixture == "examples/replay_market.json",
           "replay source");
-  Require(valid->strategy_configs[0].maker_fee_rate.ToString() == "0.001" &&
-              valid->strategy_configs[0].price_type == hquant::PmmPriceType::Mid &&
-              valid->strategy_configs[0].timer_period.count() == 1'000'000 &&
-              valid->simulated_exchange.maker_fee_rate.ToString() == "0.001" &&
-              valid->risk.fee_buffer_rate.ToString() == "0" &&
-              !valid->risk.max_rule_age &&
-              !valid->market_specs[0].stale_after &&
-              !valid->risk_budgets[0].valid_for &&
-              valid->storage.writer_queue == 1024 &&
-              valid->storage.writer_batch == 64 &&
-              valid->storage.reader_queue == 32 &&
-              valid->storage.reader_page_limit == 500,
-          "new field defaults");
+  Require(
+      valid->strategy_configs[0].maker_fee_rate.ToString() == "0.001" &&
+          valid->strategy_configs[0].price_type == hquant::PmmPriceType::Mid &&
+          valid->strategy_configs[0].timer_period.count() == 1'000'000 &&
+          valid->simulated_exchange.maker_fee_rate.ToString() == "0.001" &&
+          valid->risk.fee_buffer_rate.ToString() == "0" &&
+          !valid->risk.max_rule_age && !valid->market_specs[0].stale_after &&
+          !valid->risk_budgets[0].valid_for &&
+          valid->storage.writer_queue == 1024 &&
+          valid->storage.writer_batch == 64 &&
+          valid->storage.reader_queue == 32 &&
+          valid->storage.reader_page_limit == 500 &&
+          valid->binance_endpoints.rest.host == "data-api.binance.vision" &&
+          valid->binance_endpoints.websocket.host ==
+              "data-stream.binance.vision" &&
+          valid->binance_endpoints.rest.port == 443 &&
+          valid->binance_endpoints.rest.tls,
+      "new field defaults");
+  const std::string endpoints =
+      "exchange_endpoints:\n  binance:\n"
+      "    rest: {host: 127.0.0.1, port: 18080, tls: false}\n"
+      "    websocket: {host: 127.0.0.1, port: 18081, tls: false}\n";
+  auto local = hquant::ParseConfig(
+      Replace(kValid, "accounts:\n", endpoints + "accounts:\n"));
+  Require(local.ok() && local->binance_endpoints.rest.port == 18080 &&
+              local->binance_endpoints.websocket.port == 18081 &&
+              !local->binance_endpoints.rest.tls,
+          "local exchange endpoints");
+  for (const auto& [from, to] :
+       std::vector<std::pair<std::string, std::string>>{
+           {"port: 18080", "port: 0"},
+           {"port: 18080", "port: 65536"},
+           {"tls: false", "tls: maybe"},
+           {"host: 127.0.0.1", "host: bad/path"},
+       }) {
+    Require(!hquant::ParseConfig(
+                 Replace(kValid, "accounts:\n",
+                         Replace(endpoints, from, to) + "accounts:\n"))
+                 .ok(),
+            "invalid exchange endpoint rejected");
+  }
   std::string configured = kValid;
-  configured = Replace(configured, "storage_path: /tmp/hquant-simulated_exchange/history.sqlite",
-                       "storage_path: /tmp/hquant-simulated_exchange/history.sqlite\n"
-                       "storage: {writer_queue: 128, writer_batch: 16, reader_queue: 8, reader_page_limit: 25}\n"
-                       "risk: {fee_buffer_rate: '0.02', max_rule_age: 2h}\n"
-                       "simulated_exchange: {maker_fee_rate: '0.003'}");
+  configured = Replace(
+      configured, "storage_path: /tmp/hquant-simulated_exchange/history.sqlite",
+      "storage_path: /tmp/hquant-simulated_exchange/history.sqlite\n"
+      "storage: {writer_queue: 128, writer_batch: 16, reader_queue: 8, "
+      "reader_page_limit: 25}\n"
+      "risk: {fee_buffer_rate: '0.02', max_rule_age: 2h}\n"
+      "simulated_exchange: {maker_fee_rate: '0.003'}");
   configured = Replace(configured, "    trading_rule:\n",
                        "    stale_after: 7s\n    trading_rule:\n");
-  configured = Replace(configured, "    refresh_interval: 15s\n",
-                       "    refresh_interval: 15s\n    maker_fee_rate: '0.004'\n"
-                       "    price_type: last\n    timer_period: 250ms\n");
+  configured =
+      Replace(configured, "    refresh_interval: 15s\n",
+              "    refresh_interval: 15s\n    maker_fee_rate: '0.004'\n"
+              "    price_type: last\n    timer_period: 250ms\n");
   configured = Replace(configured, "    hard_limit: \"50\"\n",
                        "    hard_limit: \"50\"\n    valid_for: 3h\n");
   auto custom = hquant::ParseConfig(configured);
   Require(custom.ok(), "custom settings parsed");
-  Require(custom->market_specs[0].stale_after->count() == 7'000'000 &&
-              custom->strategy_configs[0].maker_fee_rate.ToString() == "0.004" &&
-              custom->strategy_configs[0].price_type == hquant::PmmPriceType::Last &&
-              custom->strategy_configs[0].timer_period.count() == 250'000 &&
-              custom->simulated_exchange.maker_fee_rate.ToString() == "0.003" &&
-              custom->risk.fee_buffer_rate.ToString() == "0.02" &&
-              custom->risk.max_rule_age->count() == 7'200'000'000 &&
-              custom->risk_budgets[0].valid_for->count() == 10'800'000'000 &&
-              custom->storage.writer_queue == 128 &&
-              custom->storage.writer_batch == 16 &&
-              custom->storage.reader_queue == 8 &&
-              custom->storage.reader_page_limit == 25,
-          "custom settings values");
+  Require(
+      custom->market_specs[0].stale_after->count() == 7'000'000 &&
+          custom->strategy_configs[0].maker_fee_rate.ToString() == "0.004" &&
+          custom->strategy_configs[0].price_type ==
+              hquant::PmmPriceType::Last &&
+          custom->strategy_configs[0].timer_period.count() == 250'000 &&
+          custom->simulated_exchange.maker_fee_rate.ToString() == "0.003" &&
+          custom->risk.fee_buffer_rate.ToString() == "0.02" &&
+          custom->risk.max_rule_age->count() == 7'200'000'000 &&
+          custom->risk_budgets[0].valid_for->count() == 10'800'000'000 &&
+          custom->storage.writer_queue == 128 &&
+          custom->storage.writer_batch == 16 &&
+          custom->storage.reader_queue == 8 &&
+          custom->storage.reader_page_limit == 25,
+      "custom settings values");
   for (const auto& [field, bad] :
        std::vector<std::pair<std::string, std::string>>{
            {"stale_after: 7s", "stale_after: 0s"},

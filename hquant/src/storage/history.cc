@@ -14,6 +14,7 @@
 
 #include "absl/status/status.h"
 #include "base/error.h"
+#include "boost/asio/post.hpp"
 #include "sqlite3.h"
 #include "storage/record_codec.h"
 
@@ -154,7 +155,29 @@ absl::Status SqliteHistoryReader::TrySubmit(HistoryQuery query) {
                  "history reader is stopping");
   if (outstanding_ == options_.queue_capacity)
     return Error(ErrorCode::kHistoryQueueFull, "history query queue is full");
-  pending_.push_back(std::move(query));
+  pending_.push_back({std::move(query), {}, {}});
+  ++outstanding_;
+  cv_.notify_one();
+  return absl::OkStatus();
+}
+
+absl::Status SqliteHistoryReader::TrySubmitAsync(
+    HistoryQuery query, boost::asio::any_io_executor executor,
+    std::function<void(HistoryPage)> completion) {
+  if (!completion || query.page_size == 0 ||
+      query.page_size > options_.max_page_size)
+    return Error(ErrorCode::kStorageConfigInvalid,
+                 "history page size outside configured bound");
+  if (query.cursor && !ParseUnsigned(*query.cursor).ok())
+    return Error(ErrorCode::kHistoryCursorInvalid, "invalid history cursor");
+  std::lock_guard lock(mutex_);
+  if (stopping_)
+    return Error(ErrorCode::kHistoryReaderStopping,
+                 "history reader is stopping");
+  if (outstanding_ == options_.queue_capacity)
+    return Error(ErrorCode::kHistoryQueueFull, "history query queue is full");
+  pending_.push_back(
+      {std::move(query), std::move(executor), std::move(completion)});
   ++outstanding_;
   cv_.notify_one();
   return absl::OkStatus();
@@ -171,15 +194,26 @@ std::optional<HistoryPage> SqliteHistoryReader::TryReceive() {
 
 void SqliteHistoryReader::Run() {
   for (;;) {
-    HistoryQuery query;
+    PendingQuery pending;
     {
       std::unique_lock lock(mutex_);
       cv_.wait(lock, [this] { return stopping_ || !pending_.empty(); });
       if (stopping_) break;
-      query = std::move(pending_.front());
+      pending = std::move(pending_.front());
       pending_.pop_front();
     }
-    HistoryPage result = Query(query);
+    HistoryPage result = Query(pending.query);
+    if (pending.completion) {
+      {
+        std::lock_guard lock(mutex_);
+        --outstanding_;
+      }
+      boost::asio::post(
+          pending.executor,
+          [completion = std::move(pending.completion),
+           page = std::move(result)]() mutable { completion(std::move(page)); });
+      continue;
+    }
     {
       std::lock_guard lock(mutex_);
       results_.push_back(std::move(result));

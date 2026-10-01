@@ -1,19 +1,20 @@
 #pragma once
 
-#include <atomic>
 #include <cstdint>
 #include <functional>
 #include <memory>
-#include <mutex>
 #include <string>
 #include <string_view>
 #include <thread>
 #include <variant>
-#include <vector>
 
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "base/error.h"
+#include "base/line_stream.h"
+#include "boost/asio/awaitable.hpp"
+#include "boost/asio/io_context.hpp"
+#include "boost/asio/signal_set.hpp"
 
 namespace hquant {
 
@@ -62,14 +63,16 @@ absl::StatusOr<std::string> EncodeControlResponse(
     const ControlResponse& response);
 absl::StatusOr<ControlResponse> DecodeControlResponse(std::string_view json);
 
-// One JSON request and response line per Unix stream connection. Requests are
-// handled on bounded workers so a history query cannot delay status or stop.
+// One JSON request and response line per Unix stream connection. Sessions run
+// as coroutines on the management io_context.
 class ControlServer {
  public:
-  using Handler = std::function<ControlResponse(const ControlRequest&)>;
+  using Handler = std::function<boost::asio::awaitable<ControlResponse>(
+      ControlRequest)>;
 
   static absl::StatusOr<std::unique_ptr<ControlServer>> Start(
-      std::string socket_path, Handler handler);
+      std::string socket_path, Handler handler,
+      std::function<void(int)> on_signal = {});
   ~ControlServer();
   ControlServer(const ControlServer&) = delete;
   ControlServer& operator=(const ControlServer&) = delete;
@@ -80,23 +83,15 @@ class ControlServer {
   const std::string& socket_path() const { return socket_path_; }
 
  private:
-  ControlServer(std::string path, Handler handler, int listen_fd);
-  void AcceptLoop();
-  void HandleConnection(int fd);
-
-  struct Worker {
-    std::thread thread;
-    std::shared_ptr<std::atomic<bool>> done;
-  };
+  ControlServer(std::string path, Handler handler);
+  boost::asio::awaitable<std::string> HandleFrame(std::string frame);
 
   std::string socket_path_;
   Handler handler_;
-  int listen_fd_ = -1;
-  std::atomic<bool> stopping_{false};
-  std::atomic<int> active_{0};
-  std::thread accept_thread_;
-  std::mutex workers_mutex_;
-  std::vector<Worker> workers_;
+  boost::asio::io_context io_;
+  std::unique_ptr<boost::asio::signal_set> signals_;
+  std::unique_ptr<LineServer> line_server_;
+  std::thread thread_;
 };
 
 class Shard;

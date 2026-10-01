@@ -230,6 +230,11 @@ asio::awaitable<absl::StatusOr<HttpResponse>> HttpClient::Send(
       if (!ec) {
         auto response = parser.release();
         HttpResponse result{response.result_int(), std::move(response.body())};
+        for (const auto& field : response.base()) {
+          result.headers.emplace_back(
+              std::string(field.name_string().data(), field.name_string().size()),
+              std::string(field.value().data(), field.value().size()));
+        }
         const auto retry_after = response[http::field::retry_after];
         if (!retry_after.empty()) {
           uint64_t seconds = 0;

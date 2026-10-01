@@ -5,14 +5,14 @@
 当前可从仓库根目录运行回放服务，并在另一终端查询或停止：
 
 ```sh
-bazelisk build //apps:hquant
-bazel-bin/apps/hquant start --config examples/simulated_replay.yaml --state-dir /tmp/hquant-demo
-bazel-bin/apps/hquant status --state-dir /tmp/hquant-demo
-bazel-bin/apps/hquant history --state-dir /tmp/hquant-demo --limit 20
-bazel-bin/apps/hquant stop --state-dir /tmp/hquant-demo
+bazelisk build //apps:hquant_server //apps:hquant_bench
+bazel-bin/apps/hquant_server examples/simulated_replay.yaml /tmp/hquant-demo
+bazel-bin/apps/hquant_bench status --state-dir /tmp/hquant-demo
+bazel-bin/apps/hquant_bench history --state-dir /tmp/hquant-demo --limit 20
+bazel-bin/apps/hquant_bench stop --state-dir /tmp/hquant-demo
 ```
 
-管理请求使用 `<state_dir>/control.sock`。`start` 在前台运行；其余三个命令连接已启动的进程。
+管理请求使用 `<state_dir>/control.sock`。`hquant_server` 在前台运行；其余三个命令连接已启动的进程。
 
 可选配置项包括 `strategy_configs[].maker_fee_rate`、`price_type`（`mid`/`last`）和 `timer_period`，`simulated_exchange.maker_fee_rate`，`risk.fee_buffer_rate`、`max_rule_age`，`risk_budgets[].valid_for`，`market_specs[].stale_after`，以及 `storage.writer_queue`、`writer_batch`、`reader_queue`、`reader_page_limit`。时间项使用 `us`、`ms`、`s`、`m`、`h` 单位；省略时保持原行为。订单簿过期时间在实时模式默认 5 秒、回放模式默认 60 秒。
 
@@ -38,7 +38,7 @@ bazel-bin/apps/hquant stop --state-dir /tmp/hquant-demo
 | 包 / target | 负责什么 | 不负责什么 |
 | --- | --- | --- |
 | `//hquant/src/base:{error,types,market,order}` | 业务错误码与恢复方式、Decimal、强 ID/时间、行情与订单拥有值、网关端口 | socket 操作、SQLite、策略逻辑 |
-| `//hquant/src/base:{net,rate_limit}` | HTTP、WS、TLS、本地限速与全局熔断 | 策略决策、订单归属 |
+| `//hquant/src/base:{net,net_server,line_stream,rate_limit}` | HTTP、WS、TLS、Unix/TCP 按行收发、本地限速与全局熔断 | 策略决策、订单归属 |
 | `//hquant/src/market:{order_book,replay_feed,market_data_stream}` | L2 簿和只读视图、固定行情回放、Binance 公开行情 | 下单与账户私有回报 |
 | `//hquant/src/order:{order_tracker,risk,simulated_exchange}` | 双 ID 跟踪、成交去重、风险额度、模拟盘 | 分片线程调度 |
 | `//hquant/src/order:{order_gateway,account_reports}` | Binance 签名/下撤单与私有回报/对账 | 跨交易所通用状态机 |
@@ -46,7 +46,7 @@ bazel-bin/apps/hquant stop --state-dir /tmp/hquant-demo
 | `//hquant/src/shard:{shard,action_executor,routing}` | 分片 `io_context`、动作执行、账户级回报路由 | 全局 SQLite 连接与具体组件装配 |
 | `//hquant/src/storage:{storage,record_codec,recorder,history}` | 入队端口、WAL 写入、分页查询、恢复与 schema | 决定策略何时发单 |
 | `//hquant/src/application:{config,control_server,quant_server,launcher}` | YAML 配置、控制协议/服务、线程启动与组件装配 | 策略算法 |
-| `//hquant/src/cli:cli`、`//apps:{hquant,hquant_engine}` | 前台命令和进程入口 | 交易状态 |
+| `//apps:{hquant_server,hquant_bench,bench_cli,bench_control,bench_feed}` | 服务进程、管理命令与本地压测工具 | 交易状态 |
 | `//hquant/test/...`、`//dev/...` | 单元、协议、夹具、端到端和契约编译 | 正式运行链路 |
 
 `strategy` 只读取市场的 `OrderBookView` 和基础值类型；`market` 与 `order` 互不依赖。`shard` 通过端口运行分片，`application` 装配具体实现。用 Bazel `visibility` 约束反向依赖。
@@ -56,7 +56,7 @@ bazel-bin/apps/hquant stop --state-dir /tmp/hquant-demo
 | 执行位置 | 数量 | 唯一可变状态与任务 |
 | --- | --- | --- |
 | 分片线程 | 配置最多 8；只启动分到市场的分片 | 一个 `io_context`，独占其 socket、盘口、OrderTracker、策略、RiskGate 和本地限速桶 |
-| 控制线程 | 1 | Unix socket、启动/停止命令、账户额度与健康汇总；通过有界命令队列控制分片 |
+| ControlServer 管理线程 | 1 | 独立 `io_context` 处理 Unix socket 的 `status/history/stop`、SIGINT/SIGTERM；历史结果异步返回，请求不增线程 |
 | Recorder 线程 | 1 | SQLite WAL 写连接，轮转消费各分片 SPSC，批量写入 |
 | HistoryReader 线程 | 1 | 独立只读连接，有界分页查询；结果投回控制线程 |
 | Quill 后台线程 | 1 | 诊断日志格式化和落盘 |

@@ -28,5 +28,7 @@
 | shard | 分片 | 一个线程独占一组交易对的交易状态 |
 | QuantServer | 交易核心 | 负责组装和运行行情、分片、策略、风控、成交、历史记录与管理入口 |
 | ControlServer | 管理入口 | 通过 `<state_dir>/control.sock` 提供状态、历史和停止请求 |
+| hquant_bench control | 管理入口压测 | 闭环或开环发出 `status/history` 请求，记录吞吐、延迟和错误码 |
+| hquant_bench feed | 本地行情压测 | 在 HTTP/WS 端口模拟 Binance 公开行情，驱动 QuantServer 交易链 |
 | reconciliation | 对账 | 向交易所查询，核对本地和真实状态 |
 | submission unknown | 结果未知 | 请求已发出，但不知道交易所是否收到；按原 ID 对账 |

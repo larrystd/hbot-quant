@@ -321,6 +321,7 @@ void MarketDataStream::Report(const BookApplyResult& result) const {
 }
 
 absl::Status MarketDataStream::Fault(absl::Status status) {
+  if (CodeOf(status) != ErrorCode::kFeedStopped) ++resyncs_;
   websocket_.Cancel();
   if (book_.View().State() != BookSyncState::Resyncing) {
     Report(book_.OnDisconnect());
@@ -373,6 +374,7 @@ boost::asio::awaitable<absl::Status> MarketDataStream::RunCycle(
     if (!diff.ok()) co_return Fault(diff.status());
     first_update = diff->first_sequence;
     auto result = book_.OnDiff(*diff);
+    if (result.applied) ++applied_diffs_;
     Report(result);
     if (result.state == BookSyncState::Resyncing) {
       co_return Fault(Error(result.reason, "buffered depth invalid"));
@@ -439,6 +441,7 @@ boost::asio::awaitable<absl::Status> MarketDataStream::RunCycle(
     auto diff = parser_.ParseDiff(*text, epoch_, Now());
     if (!diff.ok()) co_return Fault(diff.status());
     auto result = book_.OnDiff(*diff);
+    if (result.applied) ++applied_diffs_;
     if (result.state == BookSyncState::Live) cycle_became_live_ = true;
     Report(result);
     if (result.state == BookSyncState::Resyncing) {

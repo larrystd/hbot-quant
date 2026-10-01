@@ -115,14 +115,14 @@ class Shard {
   }
   const std::vector<HistoryGap>& local_gaps() const { return local_gaps_; }
   uint64_t shard_sequence() const { return shard_sequence_; }
+  uint64_t strategy_invocations() const { return strategy_invocations_; }
 
  private:
   absl::Status UpdateSimulatedExchangeBbo();
   absl::Status AfterBookApply(const BookApplyResult& result);
   absl::Status RunPendingTrigger(std::optional<Trigger> explicit_trigger);
-  absl::StatusOr<std::vector<ActionResult>> RunStrategy(Trigger why,
-                                                       InputTime stamp,
-                                                       bool allow_followup = true);
+  absl::StatusOr<std::vector<ActionResult>> RunStrategy(
+      Trigger why, InputTime stamp, bool allow_followup = true);
   absl::Status DrainSimulatedExchangeEvents();
   absl::Status ProcessAccountEvent(const AccountEvent& event);
   absl::Status Record(HistoryRecordPayload payload,
@@ -151,6 +151,7 @@ class Shard {
   MonoTime origin_mono_{};
   uint64_t event_ordinal_ = 0;
   bool in_strategy_ = false;
+  uint64_t strategy_invocations_ = 0;
   std::optional<Trigger> pending_trigger_;
   std::optional<MonoTime> last_strategy_at_;
 };

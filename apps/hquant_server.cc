@@ -6,7 +6,7 @@
 
 int main(int argc, char** argv) {
   if (argc != 3) {
-    std::cerr << "usage: hquant_engine CONFIG STATE_DIR\n";
+    std::cerr << "usage: hquant_server CONFIG STATE_DIR\n";
     return 2;
   }
   auto config = hquant::LoadConfig(argv[1]);

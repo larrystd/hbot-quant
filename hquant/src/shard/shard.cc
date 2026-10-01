@@ -76,8 +76,9 @@ absl::Status Shard::AfterBookApply(const BookApplyResult& result) {
       result.applied &&
       (policy.book_mode == BookTriggerMode::EveryAppliedBatch ||
        (policy.book_mode == BookTriggerMode::BboChanged && result.top_changed));
-  return RunPendingTrigger(book_trigger ? std::optional<Trigger>(Trigger::BookChanged)
-                                        : std::nullopt);
+  return RunPendingTrigger(book_trigger
+                               ? std::optional<Trigger>(Trigger::BookChanged)
+                               : std::nullopt);
 }
 
 absl::Status Shard::OnPublicTrade(const PublicTrade& trade) {
@@ -158,14 +159,21 @@ absl::StatusOr<std::vector<ActionResult>> Shard::RunStrategy(
     auto execute = [&]() -> absl::StatusOr<std::vector<ActionResult>> {
       auto orders = OrderViews();
       auto balances = BalanceViews();
-      StrategyInput strategy_input{book_.View(), config_.scale, config_.rule,
+      StrategyInput strategy_input{book_.View(),
+                                   config_.scale,
+                                   config_.rule,
                                    last_trade_price_,
                                    book_.View().State() == BookSyncState::Live,
-                                   orders, balances, stamp, clock_};
+                                   orders,
+                                   balances,
+                                   stamp,
+                                   clock_};
+      ++strategy_invocations_;
       auto batch = strategy_.Decide(strategy_input, why);
       ActionContext action_context{
-          config_.strategy_id, ActionBatchId{next_action_batch_id_++},
-          config_.market, config_.rule, clock_.UtcNow(), clock_.MonoNow(),
+          config_.strategy_id,  ActionBatchId{next_action_batch_id_++},
+          config_.market,       config_.rule,
+          clock_.UtcNow(),      clock_.MonoNow(),
           strategy_input.ready, true};
       auto results = action_executor_.Execute(batch, action_context);
       for (const auto& result : results) {

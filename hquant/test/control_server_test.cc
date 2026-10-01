@@ -17,7 +17,7 @@ int ProtocolContract() {
   hquant::ControlResponse response;
   response.request_id = 42;
   response.payload = hquant::ControlError{hquant::ErrorCode::kControlBusy,
-                                         "history \"timeout\"\n"};
+                                          "history \"timeout\"\n"};
   auto reply = hquant::EncodeControlResponse(response);
   if (!reply.ok() || reply->find("\"code\":-19008,\"name\":\"CONTROL_BUSY\"") ==
                          std::string::npos)
@@ -70,7 +70,10 @@ int ProtocolContract() {
 #include <filesystem>
 #include <thread>
 
-#include "cli/cli.h"
+#include "apps/bench_cli.h"
+#include "boost/asio/steady_timer.hpp"
+#include "boost/asio/this_coro.hpp"
+#include "boost/asio/use_awaitable.hpp"
 #include "gtest/gtest.h"
 #include "storage/storage.h"
 
@@ -114,15 +117,19 @@ TEST(ControlServerTest, StopCanPassAnInFlightHistoryRequest) {
   ASSERT_NE(mkdtemp(directory.data()), nullptr);
   std::atomic<bool> history_entered{false};
   auto server = ControlServer::Start(
-      ControlSocketPath(directory), [&](const ControlRequest& request) {
+      ControlSocketPath(directory),
+      [&](ControlRequest request) -> boost::asio::awaitable<ControlResponse> {
         ControlResponse response;
         if (std::holds_alternative<HistoryRequest>(request.payload)) {
           history_entered = true;
-          std::this_thread::sleep_for(std::chrono::milliseconds(250));
+          boost::asio::steady_timer timer(
+              co_await boost::asio::this_coro::executor);
+          timer.expires_after(std::chrono::milliseconds(250));
+          co_await timer.async_wait(boost::asio::use_awaitable);
           response.payload = HistoryResponse{"{\"rows\":[]}"};
         } else
           response.payload = StopResponse{true};
-        return response;
+        co_return response;
       });
   ASSERT_TRUE(server.ok()) << server.status();
   ControlRequest legacy;

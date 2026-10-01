@@ -42,5 +42,5 @@ hquant_cc_library(
         "@abseil-cpp//absl/status:statusor",
         "@simdjson//:simdjson",
     ],
-    visibility = ["//examples:__pkg__", "//hquant/src/application:__pkg__", "//hquant/test:__pkg__"],
+    visibility = ["//apps:__pkg__", "//examples:__pkg__", "//hquant/src/application:__pkg__", "//hquant/test:__pkg__"],
 )

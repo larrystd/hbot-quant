@@ -1,5 +1,6 @@
 #include "base/net.h"
 
+#include <algorithm>
 #include <chrono>
 #include <string>
 #include <thread>
@@ -69,6 +70,11 @@ TEST(HttpClientTest, ReusesKeepAliveConnection) {
   EXPECT_EQ(results[0]->status, 200);
   EXPECT_EQ(results[0]->body, "1");
   EXPECT_EQ(results[0]->retry_after, std::chrono::seconds(7));
+  EXPECT_TRUE(std::any_of(results[0]->headers.begin(), results[0]->headers.end(),
+                          [](const auto& header) {
+                            return header.first == "Retry-After" &&
+                                   header.second == "7";
+                          }));
   EXPECT_EQ(results[1]->body, "2");
   EXPECT_EQ(results[1]->retry_after,
             std::chrono::steady_clock::duration::zero());

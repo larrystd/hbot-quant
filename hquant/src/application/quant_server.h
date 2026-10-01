@@ -6,6 +6,7 @@
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "application/config.h"
+#include "boost/asio/awaitable.hpp"
 #include "storage/storage.h"
 
 namespace hquant {
@@ -22,8 +23,9 @@ class QuantServer {
   absl::Status Start();
   absl::Status Wait();
   void RequestStop();
-  absl::StatusOr<std::string> Status();
-  absl::StatusOr<HistoryPage> History(HistoryQuery query);
+  boost::asio::awaitable<absl::StatusOr<std::string>> StatusAsync();
+  boost::asio::awaitable<absl::StatusOr<HistoryPage>> HistoryAsync(
+      HistoryQuery query);
 
  private:
   struct Impl;

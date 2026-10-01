@@ -1,15 +1,63 @@
-load("@rules_cc//cc:defs.bzl", "cc_binary")
+load("@rules_cc//cc:defs.bzl", "cc_binary", "cc_library")
 
-cc_binary(
-    name = "hquant",
-    srcs = ["hquant.cc"],
-    data = ["//examples:simulated_replay.yaml", "//examples:simulated_binance_pmm.yaml", "//examples:replay_market.json"],
-    deps = ["//hquant/src/application:launcher", "//hquant/src/cli:cli"],
+cc_library(
+    name = "bench_cli",
+    srcs = ["bench_cli.cc"],
+    hdrs = ["bench_cli.h"],
+    deps = [
+        "//hquant/src/application:control_server",
+        "//hquant/src/base:error",
+        "//hquant/src/base:line_stream",
+        "@abseil-cpp//absl/status:status",
+        "@abseil-cpp//absl/status:statusor",
+        "@boost.asio//:boost.asio",
+    ],
+    visibility = ["//hquant/test:__pkg__"],
 )
 
 cc_binary(
-    name = "hquant_engine",
-    srcs = ["hquant_engine.cc"],
-    data = ["//examples:simulated_replay.yaml", "//examples:simulated_binance_pmm.yaml", "//examples:replay_market.json"],
+    name = "hquant_server",
+    srcs = ["hquant_server.cc"],
+    data = ["//examples:simulated_replay.yaml", "//examples:simulated_binance_pmm.yaml", "//examples:bench_feed.yaml", "//examples:replay_market.json"],
     deps = ["//hquant/src/application:launcher", "//hquant/src/application:config"],
+    visibility = ["//hquant/test:__pkg__"],
+)
+
+cc_library(
+    name = "bench_control",
+    srcs = ["bench_control.cc"],
+    hdrs = ["bench_control.h"],
+    deps = [
+        ":bench_cli",
+        "//hquant/src/application:control_server",
+        "//hquant/src/base:error",
+        "@abseil-cpp//absl/status:statusor",
+        "@boost.asio//:boost.asio",
+    ],
+    visibility = ["//hquant/test:__pkg__"],
+)
+
+cc_library(
+    name = "bench_feed",
+    srcs = ["bench_feed.cc"],
+    hdrs = ["bench_feed.h"],
+    deps = [
+        ":bench_cli",
+        "//hquant/src/application:control_server",
+        "//hquant/src/base:error",
+        "//hquant/src/base:market",
+        "//hquant/src/base:net_server",
+        "//hquant/src/base:types",
+        "//hquant/src/market:replay_feed",
+        "@abseil-cpp//absl/status:statusor",
+        "@boost.asio//:boost.asio",
+    ],
+    visibility = ["//hquant/test:__pkg__"],
+)
+
+cc_binary(
+    name = "hquant_bench",
+    srcs = ["hquant_bench.cc"],
+    data = ["//examples:replay_market.json"],
+    deps = [":bench_cli", ":bench_control", ":bench_feed"],
 )

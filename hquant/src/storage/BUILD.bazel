@@ -52,6 +52,7 @@ hquant_cc_library(
         "//hquant/src/base:error",
         "@abseil-cpp//absl/status:status",
         "@abseil-cpp//absl/status:statusor",
+        "@boost.asio//:boost.asio",
         "@sqlite3//:sqlite3",
     ],
     visibility = ["//hquant/src/application:__pkg__", "//hquant/test:__pkg__"],

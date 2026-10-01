@@ -74,6 +74,8 @@ class MarketDataStream {
   boost::asio::awaitable<void> Run();
   void Stop();
   uint64_t StreamEpoch() const { return epoch_; }
+  uint64_t AppliedDiffs() const { return applied_diffs_; }
+  uint64_t Resyncs() const { return resyncs_; }
 
  private:
   EventTime Now() const;
@@ -88,6 +90,8 @@ class MarketDataStream {
   const Clock& clock_;
   StreamCallbacks callbacks_;
   uint64_t epoch_ = 0;
+  uint64_t applied_diffs_ = 0;
+  uint64_t resyncs_ = 0;
   bool stopped_ = false;
   bool cycle_became_live_ = false;
   std::chrono::steady_clock::duration retry_after_{};

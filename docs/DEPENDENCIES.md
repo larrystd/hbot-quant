@@ -20,9 +20,9 @@
 | 出站 JSON | 自研 `JsonWriter` | — | 体量小；按原文输出 Decimal，签名覆盖最终字节 |
 | 配置 | yaml-cpp | `yaml-cpp 0.9.0.bcr.1` | 兼容现有 YAML；只在配置边界使用 |
 | 存储 | SQLite C API | `sqlite3 3.53.4` | 意图、检查点、订单/成交历史；项目内 RAII 封装 |
-| 命令行 | CLI11 | `cli11 2.6.2` | `start/status/stop/history` 子命令 |
+| 命令行 | 项目内参数解析 | — | `hquant_bench` 的 `status/history/stop/control/feed` |
 
-**明确不用：** CMake/vcpkg（由 Bazel 取代）、Boost.Multiprecision（由 libmpdec 取代）、nlohmann/json（入站 simdjson，出站自研）、Abseil Logging 与 Abseil Flags（分别由 Quill、CLI11 负责）、BoringSSL（无稳定版本号且缺 Keccak）。
+**明确不用：** CMake/vcpkg（由 Bazel 取代）、Boost.Multiprecision（由 libmpdec 取代）、nlohmann/json（入站 simdjson，出站自研）、Abseil Logging 与 Abseil Flags（分别由 Quill、项目内参数解析负责）、BoringSSL（无稳定版本号且缺 Keccak）。
 
 ## 2. 构建：Bazel
 
@@ -111,7 +111,7 @@ try-import %workspace%/user.bazelrc
 - **出站：** `JsonWriter` 负责字符串转义，并按交易所格式把 Decimal 写成数字或字符串；签名覆盖 writer 产出的最终字节。
 - 测试夹具和 CLI 的 JSON 输出同样用 simdjson 读、`JsonWriter` 写，不引入第二个 JSON 库。
 
-### 3.7 yaml-cpp、SQLite、CLI11
+### 3.7 yaml-cpp、SQLite、命令行
 
 - **yaml-cpp：** 只在 `//hquant/src/application:config` 使用。数值先以标量文本读出，再转换为强类型 `AppConfig`；缺字段或非法值返回 `Status`。配置带 `schema_version`。
 - **SQLite：**
@@ -119,7 +119,7 @@ try-import %workspace%/user.bazelrc
   - **写：** 只有 Recorder 线程持有写连接；每个分片一条有界 SPSC 队列，Recorder 轮转消费、批量提交。分片 `try_push` 失败或后台事务失败都只标记历史缺口，不阻止已通过风控的订单。
   - **读：** HistoryReader 线程持有独立只读连接，处理分页 `history` 与启动恢复查询，限制行数与耗时并及时结束读事务（长读事务会阻碍 WAL checkpoint）。控制线程不执行 SQL。
   - 交易数值存十进制字符串；schema 带版本，建表脚本在 `hquant/src/storage/schema.sql`。Python 的 `SqliteDecimal(6)` 会截断精度，所以不直接读写 Python 数据库，只提供一次性导入工具。
-- **CLI11：** 只在 `//hquant/src/cli:cli` 使用。
+- **命令行：** `//apps:{bench_cli,bench_control,bench_feed}` 使用项目内的参数解析；CLI11 仍在依赖清单中，但当前程序没有调用它。
 
 ## 4. 仍需实测的项目
 

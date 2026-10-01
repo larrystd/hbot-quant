@@ -125,7 +125,7 @@ absl::StatusOr<std::chrono::microseconds> RefreshInterval(
 }
 
 absl::StatusOr<std::chrono::microseconds> Duration(const YAML::Node& node,
-                                                    const char* field) {
+                                                   const char* field) {
   auto scalar = Scalar(node, field);
   if (!scalar.ok()) return scalar.status();
   std::string_view value(*scalar);
@@ -162,8 +162,7 @@ absl::StatusOr<std::chrono::microseconds> Duration(const YAML::Node& node,
   return std::chrono::microseconds(static_cast<int64_t>(count * multiplier));
 }
 
-absl::StatusOr<size_t> PositiveSize(const YAML::Node& node,
-                                    const char* field) {
+absl::StatusOr<size_t> PositiveSize(const YAML::Node& node, const char* field) {
   auto value = Unsigned(node, field);
   if (!value.ok()) return value.status();
   if (*value == 0 || *value > std::numeric_limits<uint32_t>::max())
@@ -179,6 +178,29 @@ absl::Status CheckRate(const Decimal& rate, const char* field) {
   if (*compare >= 0)
     return Error(ErrorCode::kConfigFieldInvalid,
                  std::string("rate must be below one: ") + field);
+  return absl::OkStatus();
+}
+
+absl::Status ParseExchangeEndpoint(const YAML::Node& node,
+                                   ExchangeEndpoint* endpoint) {
+  if (!node.IsMap())
+    return Error(ErrorCode::kConfigFieldInvalid,
+                 "exchange endpoint must be a map");
+  auto host = Scalar(node, "host");
+  auto port = Unsigned(node, "port");
+  if (!host.ok()) return host.status();
+  if (!port.ok() || *port == 0 || *port > 65535)
+    return Error(ErrorCode::kConfigFieldInvalid, "exchange port out of range");
+  if (host->find('/') != std::string::npos ||
+      host->find(':') != std::string::npos)
+    return Error(ErrorCode::kConfigFieldInvalid, "invalid exchange host");
+  auto tls = Scalar(node, "tls");
+  if (!tls.ok()) return tls.status();
+  if (*tls != "true" && *tls != "false")
+    return Error(ErrorCode::kConfigFieldInvalid,
+                 "exchange tls must be boolean");
+  *endpoint =
+      ExchangeEndpoint{*host, static_cast<uint16_t>(*port), *tls == "true"};
   return absl::OkStatus();
 }
 
@@ -346,6 +368,22 @@ absl::StatusOr<AppConfig> ParseConfig(std::string_view yaml_text) {
       } else
         return Error(ErrorCode::kConfigFieldInvalid,
                      "unsupported market_data_source");
+    }
+    if (root["exchange_endpoints"]) {
+      auto endpoints = Mapping(root, "exchange_endpoints");
+      if (!endpoints.ok()) return endpoints.status();
+      auto binance = Mapping(*endpoints, "binance");
+      if (!binance.ok()) return binance.status();
+      if ((*binance)["rest"]) {
+        auto status = ParseExchangeEndpoint((*binance)["rest"],
+                                            &config.binance_endpoints.rest);
+        if (!status.ok()) return status;
+      }
+      if ((*binance)["websocket"]) {
+        auto status = ParseExchangeEndpoint(
+            (*binance)["websocket"], &config.binance_endpoints.websocket);
+        if (!status.ok()) return status;
+      }
     }
     if (config.market_data_source == MarketDataSource::Replay) {
       auto replay_fixture = Scalar(root, "replay_fixture");
@@ -516,10 +554,13 @@ absl::StatusOr<AppConfig> ParseConfig(std::string_view yaml_text) {
       if (item["price_type"]) {
         auto value = Scalar(item, "price_type");
         if (!value.ok()) return value.status();
-        if (*value == "mid") config_entry.price_type = PmmPriceType::Mid;
-        else if (*value == "last") config_entry.price_type = PmmPriceType::Last;
-        else return Error(ErrorCode::kConfigFieldInvalid,
-                          "price_type must be mid or last");
+        if (*value == "mid")
+          config_entry.price_type = PmmPriceType::Mid;
+        else if (*value == "last")
+          config_entry.price_type = PmmPriceType::Last;
+        else
+          return Error(ErrorCode::kConfigFieldInvalid,
+                       "price_type must be mid or last");
       }
       if (item["timer_period"]) {
         auto period = Duration(item, "timer_period");

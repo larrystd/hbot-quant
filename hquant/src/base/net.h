@@ -42,6 +42,7 @@ struct HttpResponse {
   unsigned status = 0;
   std::string body;
   std::chrono::steady_clock::duration retry_after{};
+  std::vector<std::pair<std::string, std::string>> headers;
 };
 
 class HttpTransport {

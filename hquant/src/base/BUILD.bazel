@@ -59,6 +59,33 @@ hquant_cc_library(
 )
 
 hquant_cc_library(
+    name = "line_stream",
+    srcs = ["line_stream.cc"],
+    hdrs = ["line_stream.h"],
+    deps = [
+        ":error",
+        "@abseil-cpp//absl/status:status",
+        "@abseil-cpp//absl/status:statusor",
+        "@boost.asio//:boost.asio",
+    ],
+    visibility = ["//visibility:public"],
+)
+
+hquant_cc_library(
+    name = "net_server",
+    srcs = ["net_server.cc"],
+    hdrs = ["net_server.h"],
+    deps = [
+        ":net",
+        ":error",
+        "@abseil-cpp//absl/status:statusor",
+        "@boost.asio//:boost.asio",
+        "@boost.beast//:boost.beast",
+    ],
+    visibility = ["//visibility:public"],
+)
+
+hquant_cc_library(
     name = "rate_limit",
     srcs = ["rate_limit.cc"],
     hdrs = ["rate_limit.h"],

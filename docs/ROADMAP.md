@@ -6,7 +6,7 @@
 
 - **源码基线：** `../../hummingbot` 的 `9af100d6822da7d2d0291a906c730ef172284ee2`，包版本 `2.17.0`。源仓库后续更新须单独评估，避免迁移目标漂移。保留源项目 Apache-2.0 许可证及必要的来源说明。
 - **最终目标：** 不依赖 Python/Cython 运行时的 C++20 交易引擎，覆盖实时交易、模拟盘、V2 Controller 回测、持久化和命令行操作：能接行情、运行策略、控制资金与订单、记录历史、断线和重启后对账。
-- **首条链路：** Binance 现货公开行情 → 订单簿 → `simple_pmm` 定时刷新 → 风控 → SimpleSimulatedExchange → 订单/成交事件 → SQLite 历史 → `hquant status/history/stop`。先用录制行情和本地协议服务器验证，再连真实公开行情；此阶段不发实盘订单。
+- **首条链路：** Binance 现货公开行情 → 订单簿 → `simple_pmm` 定时刷新 → 风控 → SimpleSimulatedExchange → 订单/成交事件 → SQLite 历史 → `hquant_bench status/history/stop`。先用录制行情和本地协议服务器验证，再连真实公开行情；此阶段不发实盘订单。
 - **首版实盘范围：** 一个现货连接器、固定策略与市场配置、静态账户额度和限速切分；实盘验收必须覆盖**多个活跃分片和同账户共享资源**。配置显式区分 `simulated` 与 `live`，启动日志和 `status` 显示模式、账户、市场及是否允许新单。
 - 各阶段按可观察行为验收：配置、事件、订单状态、余额、费用和结果。策略收益不是工程验收指标。
 
@@ -29,7 +29,7 @@
 | 关口 | 阶段 | 主要内容 | 进入下一关的证据 |
 | --- | --- | --- | --- |
 | G0 契约与基线 | D0 工程与基线 | `//dev:dependency_smoke` 链接全部首批依赖；公共头文件、模块 API、夹具 v1 schema 与 loader；从 Python 提取脱敏盘口、订单、`simple_pmm` 夹具 | `//dev:contract_compile`、`//hquant/test:schema_test` 通过；Python 版本固定；macOS 依赖 smoke 通过 |
-| G1 单分片离线模拟盘 | D1 领域内核、D2 分片与模拟撮合、D3 存储与进程控制 | Decimal、ID/规则/事件、OrderTracker、L2 订单簿；`Shard`、两种事件循环、`TriggerPolicy`、ActionExecutor、RiskGate、模拟盘、ReplayClock；Recorder、HistoryReader、`hquant_engine` 与 CLI | `//hquant/test:simulated_replay`：同一输入得到确定的动作顺序、余额、费用；无公网可运行；`history` 大查询不阻塞 `stop`；Linux 构建与 CLI 通过 |
+| G1 单分片离线模拟盘 | D1 领域内核、D2 分片与模拟撮合、D3 存储与进程控制 | Decimal、ID/规则/事件、OrderTracker、L2 订单簿；`Shard`、两种事件循环、`TriggerPolicy`、ActionExecutor、RiskGate、模拟盘、ReplayClock；Recorder、HistoryReader、`hquant_server` 与 CLI | `//hquant/test:simulated_replay`：同一输入得到确定的动作顺序、余额、费用；无公网可运行；`history` 大查询不阻塞 `stop`；Linux 构建与 CLI 通过 |
 | G2 公开行情模拟盘 | D4 | Asio/Beast 传输、Binance 公开 WS/REST 快照、重连、同步状态机、模拟盘端到端 | `//hquant/test:simulated_binance` 覆盖快照/增量、缺口重同步、重连、超时；不可用市场停止新单 |
 | G3 多分片账户边界 | D5 | 多活跃分片、静态资金/限速额度、归属索引、账户级私有流路由、全局熔断、CPU 模式与绑核 | `//hquant/test:multi_shard` 证明额度不重复授予、未知单占额、未知归属/队列满降级；8 分片故障与延迟数据齐全 |
 | G4 首个实盘连接器 | D6 | Binance 现货只读余额/规则、签名下单/撤单、私有流、查询对账、client ID 规则 | `//hquant/test:recovery` 与隔离环境试单通过；结果未知不盲重发；崩溃与 SQLite 故障有明确结果 |
@@ -63,6 +63,6 @@ G5 按实际使用的连接器和策略逐项排期；源码目录数量不能�
 ## 6. 下一步
 
 1. 首次 Linux CI 运行，补入 [`dev/LINUX_VALIDATION.md`](../dev/LINUX_VALIDATION.md)，并在 Linux 上跑业务目标的 ASan/TSan。
-2. G3：多活跃分片装配进 `hquant_engine`，跑 8 分片压力与忙轮询/阻塞模式延迟对比。
+2. G3：多活跃分片装配进 `hquant_server`，跑 8 分片压力与忙轮询/阻塞模式延迟对比。
 3. G4：隔离账户联机试单与重启对账（按第 5 节）。
 4. 建立 Git 基线，之后各 Agent 使用独立 worktree（见 [DEVELOPMENT.md](DEVELOPMENT.md) 第 3 节）。

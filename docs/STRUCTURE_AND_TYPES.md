@@ -5,7 +5,7 @@
 ## 1. 范围与约定
 
 - 全项目用 Bazel 编译为 C++20；普通业务代码优先用清楚的 C++17/20 写法，Asio 网络协程使用 C++20。一个含 `BUILD.bazel` 的目录就是一个 Bazel package；头文件和实现放同目录，引用写 `#include "base/types.h"` 等从 `hquant/src` 起算的路径。
-- `//hquant/src/base:{types,market,order}` 不接触 socket、SQLite、YAML；网络操作集中在 `//hquant/src/base:net`。所有公共值类型拥有自己的字符串/数组，不能保存 simdjson、Beast 缓冲区的 `string_view`。跨线程队列只传拥有值或明确不可变共享快照。
+- `//hquant/src/base:{types,market,order}` 不接触 socket、SQLite、YAML；网络操作集中在 `//hquant/src/base:{net,net_server,line_stream}`。所有公共值类型拥有自己的字符串/数组，不能保存 simdjson、Beast 缓冲区的 `string_view`。跨线程队列只传拥有值或明确不可变共享快照。
 - 业务错误码、恢复方式与 `absl::Status/StatusOr` 的关系见 [ERRORS.md](ERRORS.md)；`absl::flat_hash_map` 做身份索引，`absl::btree_map` 做有序远端盘口价位。哈希遍历顺序不能决定发单顺序。资金、手续费和下单规则使用 libmpdec `Decimal`；原始 JSON 十进制文本不经过 `double`。
 - 可变盘口、Tracker、策略、RiskGate、网关及 socket 只由所属分片线程访问。`OrderBookView` 与其他借用视图仅在同步策略回调期间有效。Asio 协程在分片执行器上挂起和恢复；策略、订单簿、Tracker、风控是短时同步状态机。
 - 首版同账户多分片使用**静态资金/限速额度、账户级私有回报路由、本地令牌桶和全局熔断**。动态额度再平衡、全局原子令牌池、跨分片行情快照及 L3 留后续；不为它们在 G0 建空包。
@@ -43,7 +43,7 @@ hummingbot-cpp/
 | Bazel package / target | 主要文件 | 责任 |
 | --- | --- | --- |
 | `//hquant/src/base:{error,types,market,order}` | `error.h/.cc`、`types.h/.cc`、`market.h`、`order.h` | 业务错误码、恢复方式、Decimal、强 ID/时间、行情/订单/账户拥有值和订单网关端口 |
-| `//hquant/src/base:{net,rate_limit}` | `net.h/.cc`、`rate_limit.h/.cc` | HTTP、WebSocket、TLS、本地限速和全局熔断 |
+| `//hquant/src/base:{net,net_server,line_stream,rate_limit}` | `net.h/.cc`、`net_server.h/.cc`、`line_stream.h/.cc`、`rate_limit.h/.cc` | HTTP、WebSocket、TLS、Unix/TCP 按行消息、本地限速和全局熔断 |
 | `//hquant/src/market:{order_book,replay_feed,market_data_stream}` | 各 target 同名 `.h/.cc` | L2 簿与同步/只读视图、固定行情回放、Binance 公开行情 |
 | `//hquant/src/order:{order_tracker,risk,simulated_exchange}` | 各 target 同名 `.h/.cc` | 双 ID 和成交去重、额度/准入/资金冻结、模拟盘 |
 | `//hquant/src/order:{order_gateway,account_reports}` | 各 target 同名 `.h/.cc` | Binance ID/签名/下撤单与私有回报/对账 |
@@ -51,7 +51,7 @@ hummingbot-cpp/
 | `//hquant/src/shard:{shard,action_executor,routing}` | 各 target 同名 `.h/.cc` | 分片状态和时钟、动作顺序、跨分片账户回报路由 |
 | `//hquant/src/storage:{storage,record_codec,recorder,history}` | `storage.h`、各实现同名 `.h/.cc`、`schema.sql` | 有界入队、WAL 写入、只读分页、恢复和持久化格式 |
 | `//hquant/src/application:{config,control_server,quant_server,launcher}` | 各 target 同名 `.h/.cc` | YAML 校验、管理消息/服务、交易链组件装配与启动 |
-| `//hquant/src/cli:cli`、`//apps:{hquant,hquant_engine}` | `cli.h/.cc`、`apps/hquant.cc`、`apps/hquant_engine.cc` | 前台 `start/status/history/stop` 与引擎入口 |
+| `//apps:{hquant_server,hquant_bench,bench_cli,bench_control,bench_feed}` | `apps/hquant_server.cc`、`apps/hquant_bench.cc`、`apps/bench_*.h/.cc` | 服务入口、管理命令、控制入口负载与本地行情压测 |
 | `//hquant/test:{fixture_loader,schema_test,simulated_exchange_schema_test}` | `fixture_loader.h/.cc`、`fixture_schema_test.cc`、`fixtures/` | Python 对照夹具的读取与校验 |
 | `//hquant/test:{simulated_replay,simulated_binance,multi_shard,recovery}` | 对应 `*_test.cc` | 离线/本地 mock 端到端链路 |
 | `//dev:contract_compile` | `dev/contract_compile_test.cc` | 编译检查全部公开头文件 |

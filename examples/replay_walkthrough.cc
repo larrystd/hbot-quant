@@ -263,7 +263,7 @@ void PrintState(const Shard& shard, const SimpleSimulatedExchange& sim_exchange,
 
 absl::Status Run(const std::string& config_path,
                  const std::string& market_path) {
-  // ---- 1. 读配置（与 hquant start 用同一个 yaml）----
+  // ---- 1. 读配置（与 hquant_server 用同一个 yaml）----
   auto config = LoadConfig(config_path);
   if (!config.ok()) return config.status();
   if (config->accounts.size() != 1 || config->market_specs.size() != 1 ||

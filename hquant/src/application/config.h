@@ -86,6 +86,17 @@ struct StaticRateBudgetConfig {
   std::chrono::microseconds window{0};
 };
 
+struct ExchangeEndpoint {
+  std::string host;
+  uint16_t port = 443;
+  bool tls = true;
+};
+
+struct BinanceEndpoints {
+  ExchangeEndpoint rest{"data-api.binance.vision", 443, true};
+  ExchangeEndpoint websocket{"data-stream.binance.vision", 443, true};
+};
+
 struct AppConfig {
   uint32_t schema_version = 1;
   EngineMode mode = EngineMode::Simulated;
@@ -100,6 +111,7 @@ struct AppConfig {
   RiskConfig risk;
   SimulatedExchangeOptions simulated_exchange;
   StorageOptions storage;
+  BinanceEndpoints binance_endpoints;
   std::string storage_path;
   std::optional<std::string> replay_fixture;
 };

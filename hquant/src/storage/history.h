@@ -3,6 +3,7 @@
 #include <condition_variable>
 #include <cstddef>
 #include <deque>
+#include <functional>
 #include <memory>
 #include <mutex>
 #include <string>
@@ -10,6 +11,7 @@
 #include <vector>
 
 #include "absl/status/statusor.h"
+#include "boost/asio/any_io_executor.hpp"
 #include "storage/storage.h"
 
 struct sqlite3;
@@ -31,6 +33,9 @@ class SqliteHistoryReader final : public HistoryReader {
   SqliteHistoryReader& operator=(const SqliteHistoryReader&) = delete;
 
   absl::Status TrySubmit(HistoryQuery query) override;
+  absl::Status TrySubmitAsync(
+      HistoryQuery query, boost::asio::any_io_executor executor,
+      std::function<void(HistoryPage)> completion);
   // nullopt means no response yet. Every accepted query eventually returns a
   // page with matching request_id and OK or non-OK status.
   std::optional<HistoryPage> TryReceive() override;
@@ -45,7 +50,12 @@ class SqliteHistoryReader final : public HistoryReader {
   int storage_version_ = 0;
   std::mutex mutex_;
   std::condition_variable cv_;
-  std::deque<HistoryQuery> pending_;
+  struct PendingQuery {
+    HistoryQuery query;
+    boost::asio::any_io_executor executor;
+    std::function<void(HistoryPage)> completion;
+  };
+  std::deque<PendingQuery> pending_;
   std::deque<HistoryPage> results_;
   size_t outstanding_ = 0;
   bool stopping_ = false;

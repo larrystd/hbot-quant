@@ -43,7 +43,16 @@ flowchart LR
 - **请求/应答：** 我们发一个请求，交易所回一个结果，一问一答。
 - **私有：** 涉及自己的账户，每个请求都要用 API 密钥签名。
 
-另外还有一条和交易所无关的内部连接：⑥ CLI 与引擎之间的 Unix socket。
+另外还有一条和交易所无关的内部连接：⑥ `hquant_bench` 与 `hquant_server` 之间的 Unix socket。
+
+当前可运行的 Binance 公开行情模拟盘使用下列连接；私有通道仍是后续目标：
+
+| 连接 | 当前实现 | 地址来源 |
+| --- | --- | --- |
+| ① 公开行情 WS | 每个活跃单分片一条 `WebSocketClient` | `exchange_endpoints.binance.websocket`，默认 `data-stream.binance.vision:443`、TLS |
+| ② 深度快照 REST | `HttpClient`，与 WS 独立；请求失败后按行情流状态机重试 | `exchange_endpoints.binance.rest`，默认 `data-api.binance.vision:443`、TLS |
+| ⑥ 管理 Unix socket | `<state_dir>/control.sock`；每个请求一条 JSON 行，最多 16 个并发会话 | 本机 state dir |
+| 本地压测 feed | `hquant_bench feed` 在一个 TCP 端口上提供 REST 快照和 WS 推送 | `--listen`；server 配置为同一地址，见 [BENCH.md](BENCH.md) |
 
 ## 2. 每条通道逐一说明
 
@@ -100,13 +109,13 @@ flowchart LR
 | 好处 | 连接一直开着，每次下单不用发完整的 HTTP 请求，延迟更低；同一条连接上可以连续发多个请求，不用等前一个 |
 | 首版 | 先用 ③ REST 下单；接口设计成可替换，后续按交易所支持情况加上 |
 
-### ⑥ CLI ↔ 引擎：内部控制连接
+### ⑥ hquant_bench ↔ hquant_server：内部控制连接
 
 | 项目 | 说明 |
 | --- | --- |
 | 方式 | 本机 Unix socket |
-| 内容 | `status`、`stop`、`history` 等命令 |
-| 归属 | 控制线程，不经过分片线程 |
+| 内容 | `status`、`stop`、`history` 等命令；一条 JSON 请求和响应各占一行 |
+| 归属 | `ControlServer` 管理线程；实时状态经分片 executor 异步获取，历史查询由 Reader 异步返回 |
 
 ## 3. 一个分片需要开多少条连接
 
@@ -153,7 +162,7 @@ flowchart TB
 | ②③ REST 连接 | 暂时发不了请求 | 自动重连；下单请求如果已经发出但没收到应答，**不重发**，改为按原订单号查询 |
 | ④ 私有回报 WS | 看不到成交 | 该连接器进入降级，禁止新单、允许撤单；重连后补查，完成后恢复 |
 | ⑤ WS 下单 | 暂时发不了单 | 同 ③ |
-| ⑥ CLI 连接 | 只影响命令行查询 | 重连即可，不影响交易 |
+| ⑥ 管理连接 | 只影响命令行查询 | 重连即可，不影响交易 |
 
 ## 6. 美股券商或交易所有什么不同
 
