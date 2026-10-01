@@ -1,4 +1,4 @@
-#include "service/dispatcher.h"
+#include "service/action_executor.h"
 
 #include <chrono>
 #include <string>
@@ -92,31 +92,31 @@ int main() {
   FakeRecorder recorder{&trace, true};
   FakeGateway gateway{&trace};
   uint64_t sequence = 0;
-  hquant::ActionDispatcher dispatcher(risk, gateway, recorder, hquant::RunId{1},
+  hquant::ActionExecutor action_executor(risk, gateway, recorder, hquant::RunId{1},
                                       hquant::ShardId{0}, sequence);
-  hquant::DispatchContext context{
-      strategy_id, hquant::DecisionId{1}, spec, rule,
+  hquant::ActionContext context{
+      strategy_id, hquant::ActionBatchId{1}, spec, rule,
       now,         hquant::MonoTime{},    true, true};
-  auto results = dispatcher.Dispatch(batch, context);
+  auto results = action_executor.Execute(batch, context);
   if (results.size() != 2 || !results[0].accepted || !results[1].accepted ||
       results[1].client_id != hquant::ClientOrderId("B1"))
     return 2;
   const std::vector<std::string> expected{"cancel",   "decision", "prepare",
                                           "prepared", "start",    "decision"};
   if (trace != expected || sequence != 3 ||
-      dispatcher.local_gaps().size() != 1 ||
-      dispatcher.local_gaps()[0].first_seq != 2)
+      action_executor.local_gaps().size() != 1 ||
+      action_executor.local_gaps()[0].first_seq != 2)
     return 3;
   buy.limit_price = D("100.0549");
   hquant::ActionBatch quantized;
   quantized.ordered.emplace_back(hquant::SubmitOrder{strategy_id, buy});
-  auto next = dispatcher.Dispatch(quantized, context);
+  auto next = action_executor.Execute(quantized, context);
   if (next.size() != 1 || !next[0].accepted || !next[0].prepared ||
       !next[0].prepared->request.limit_price ||
       *next[0].prepared->request.limit_price->Compare(D("100.05")) != 0)
     return 4;
   context.market_live = false;
-  auto rejected = dispatcher.Dispatch(quantized, context);
+  auto rejected = action_executor.Execute(quantized, context);
   if (rejected.size() != 1 || rejected[0].accepted ||
       rejected[0].reason != hquant::ErrorCode::kRiskMarketNotLive ||
       !rejected[0].message.empty())
@@ -125,7 +125,7 @@ int main() {
   buy.limit_price.reset();
   hquant::ActionBatch invalid;
   invalid.ordered.emplace_back(hquant::SubmitOrder{strategy_id, buy});
-  rejected = dispatcher.Dispatch(invalid, context);
+  rejected = action_executor.Execute(invalid, context);
   if (rejected.size() != 1 || rejected[0].accepted ||
       rejected[0].reason != hquant::ErrorCode::kOrderPriceOrAmountInvalid ||
       !rejected[0].message.empty())

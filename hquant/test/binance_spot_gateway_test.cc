@@ -119,7 +119,7 @@ ApprovedOrder Approved(const TestClock& clock) {
   request.type = OrderType::LimitMaker;
   request.base_amount = D("0.0109");
   request.limit_price = D("99.999");
-  return ApprovedOrder{MakeStrategyId(), request, HoldId{1}, DecisionId{1},
+  return ApprovedOrder{MakeStrategyId(), request, HoldId{1}, ActionBatchId{1},
                        clock.MonoNow() + std::chrono::seconds(1)};
 }
 

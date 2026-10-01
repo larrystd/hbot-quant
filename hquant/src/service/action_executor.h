@@ -14,9 +14,9 @@
 
 namespace hquant {
 
-struct DispatchContext {
+struct ActionContext {
   StrategyId strategy_id;
-  DecisionId decision_id;
+  ActionBatchId action_batch_id;
   MarketSpec market;
   TradingRule rule;
   UtcTime now_utc{};
@@ -25,7 +25,7 @@ struct DispatchContext {
   bool account_fresh = false;
 };
 
-struct DispatchResult {
+struct ActionResult {
   uint32_t action_index = 0;
   bool accepted = false;
   ErrorCode reason = ErrorCode::kOk;
@@ -35,10 +35,10 @@ struct DispatchResult {
   std::optional<HoldId> hold_id;
 };
 
-// Single-shard synchronous dispatcher. Only the owning shard calls Dispatch.
-class ActionDispatcher {
+// Executes one shard's strategy actions synchronously on the owning thread.
+class ActionExecutor {
  public:
-  ActionDispatcher(RiskGate& risk, OrderGateway& gateway,
+  ActionExecutor(RiskGate& risk, OrderGateway& gateway,
                    RecorderPort& recorder, RunId run, ShardId shard,
                    uint64_t& shard_sequence)
       : risk_(risk),
@@ -48,8 +48,8 @@ class ActionDispatcher {
         shard_(shard),
         shard_sequence_(shard_sequence) {}
 
-  std::vector<DispatchResult> Dispatch(const ActionBatch& batch,
-                                       const DispatchContext& context);
+  std::vector<ActionResult> Execute(const ActionBatch& batch,
+                                    const ActionContext& context);
   const std::vector<HistoryGap>& local_gaps() const { return local_gaps_; }
 
  private:

@@ -16,9 +16,9 @@ hquant_cc_library(
 )
 
 hquant_cc_library(
-    name = "dispatcher",
-    srcs = ["dispatcher.cc"],
-    hdrs = ["dispatcher.h"],
+    name = "action_executor",
+    srcs = ["action_executor.cc"],
+    hdrs = ["action_executor.h"],
     deps = [
         "//hquant/src/base:error",
         "//hquant/src/base:types",
@@ -38,7 +38,7 @@ hquant_cc_library(
     srcs = ["shard.cc"],
     hdrs = ["shard.h"],
     deps = [
-        ":dispatcher",
+        ":action_executor",
         "//hquant/src/base:error",
         "//hquant/src/base:types",
         "//hquant/src/base:market",

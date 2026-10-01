@@ -26,19 +26,19 @@ struct Checkpoint {
   ExecutorCheckpoint state;
   UtcTime recorded_at{};
 };
-enum class DecisionActionKind { Submit, Cancel };
-struct DecisionRecord {
-  DecisionId decision_id;
+enum class ActionKind { Submit, Cancel };
+struct ActionRecord {
+  ActionBatchId action_batch_id;
   StrategyId strategy_id;
   uint32_t action_index = 0;
-  DecisionActionKind action_kind = DecisionActionKind::Submit;
+  ActionKind action_kind = ActionKind::Submit;
   bool accepted = false;
   ErrorCode reason = ErrorCode::kOk;
   std::string message;
   std::optional<ClientOrderId> client_id;
 };
 using RecordPayload = std::variant<PreparedOrder, OrderUpdate, TradeUpdate,
-                                   Checkpoint, HistoryGap, DecisionRecord>;
+                                   Checkpoint, HistoryGap, ActionRecord>;
 
 struct RecordEnvelope {
   uint32_t schema_version = 2;

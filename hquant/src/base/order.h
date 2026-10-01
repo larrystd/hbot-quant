@@ -66,7 +66,7 @@ struct ApprovedOrder {
   StrategyId strategy_id;
   OrderRequest request;
   HoldId hold_id;
-  DecisionId decision_id;
+  ActionBatchId action_batch_id;
   MonoTime expires_at_mono{};
 };
 

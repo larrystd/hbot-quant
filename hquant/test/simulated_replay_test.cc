@@ -185,7 +185,7 @@ std::string ReplayOnce() {
   size_t prepared_orders = 0, trades = 0, decisions = 0;
   for (const auto& row : page->rows) {
     if (std::holds_alternative<PreparedOrder>(row.payload)) ++prepared_orders;
-    if (std::holds_alternative<DecisionRecord>(row.payload)) ++decisions;
+    if (std::holds_alternative<ActionRecord>(row.payload)) ++decisions;
     if (const auto* trade = std::get_if<TradeUpdate>(&row.payload)) {
       ++trades;
       if (trade->fees.size() != 1 ||

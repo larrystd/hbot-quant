@@ -20,7 +20,7 @@ ShardRuntime::ShardRuntime(Config config, const Clock& clock,
       recorder_(recorder),
       book_(config_.market.market, config_.scale.scale_version, 8192, 1024,
             config_.stale_after_us),
-      dispatcher_(risk_, exchange_, recorder_, config_.run, config_.shard,
+      action_executor_(risk_, exchange_, recorder_, config_.run, config_.shard,
                   shard_sequence_) {}
 
 BookApplyResult ShardRuntime::Subscribe(uint64_t stream_epoch) {
@@ -98,7 +98,7 @@ std::vector<Balance> ShardRuntime::BalanceViews() const {
   return result;
 }
 
-absl::StatusOr<std::vector<DispatchResult>> ShardRuntime::OnTimer(
+absl::StatusOr<std::vector<ActionResult>> ShardRuntime::OnTimer(
     InputStamp stamp) {
   if (stamp.at_us < 0)
     return Error(ErrorCode::kInputTimeInvalid, "negative input time");
@@ -116,12 +116,12 @@ absl::StatusOr<std::vector<DispatchResult>> ShardRuntime::OnTimer(
                                stamp,
                                clock_};
   auto batch = strategy_.OnTimer(strategy_input);
-  DispatchContext dispatch_context{
-      config_.strategy_id,  DecisionId{next_decision_id_++},
+  ActionContext action_context{
+      config_.strategy_id,  ActionBatchId{next_action_batch_id_++},
       config_.market,       config_.rule,
       clock_.UtcNow(),      clock_.MonoNow(),
       strategy_input.ready, true};
-  auto results = dispatcher_.Dispatch(batch, dispatch_context);
+  auto results = action_executor_.Execute(batch, action_context);
   for (const auto& result : results) {
     if (!result.prepared) continue;
     auto registered = tracker_.Register(*result.prepared);

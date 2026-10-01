@@ -98,9 +98,9 @@ struct HoldId {
   uint64_t value = 0;
   bool operator==(const HoldId&) const = default;
 };
-struct DecisionId {
+struct ActionBatchId {
   uint64_t value = 0;
-  bool operator==(const DecisionId&) const = default;
+  bool operator==(const ActionBatchId&) const = default;
 };
 
 using UtcTime = std::chrono::sys_time<std::chrono::microseconds>;

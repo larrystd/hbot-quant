@@ -571,7 +571,7 @@ std::string HistoryJson(const HistoryPage& page) {
       }
       details += "]";
     } else if (const auto* decision =
-                   std::get_if<DecisionRecord>(&row.payload)) {
+                   std::get_if<ActionRecord>(&row.payload)) {
       kind = "decision";
       details = std::string(",\"accepted\":") +
                 (decision->accepted ? "true" : "false") +

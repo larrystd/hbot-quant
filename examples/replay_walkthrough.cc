@@ -162,9 +162,9 @@ class PrintingRecorder final : public RecorderPort {
                       << SideName(payload.request.side) << " "
                       << Plain(payload.request.base_amount) << " @ "
                       << Plain(*payload.request.limit_price);
-          } else if constexpr (std::is_same_v<T, DecisionRecord>) {
+          } else if constexpr (std::is_same_v<T, ActionRecord>) {
             std::cout << "[决策] "
-                      << (payload.action_kind == DecisionActionKind::Submit
+                      << (payload.action_kind == ActionKind::Submit
                               ? "下单"
                               : "撤单")
                       << (payload.accepted ? " 已受理" : " 被拒绝");

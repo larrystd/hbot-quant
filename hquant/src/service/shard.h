@@ -16,7 +16,7 @@
 #include "market/order_book.h"
 #include "offline/storage.h"
 #include "order/order_tracker.h"
-#include "service/dispatcher.h"
+#include "service/action_executor.h"
 
 namespace hquant {
 
@@ -107,7 +107,7 @@ class ShardRuntime {
   // shard after each applied batch. All calls remain on the owning shard.
   BookSync& MutableBookSync() { return book_; }
   absl::Status OnBookApplied() { return UpdateSimulatedExchangeBbo(); }
-  absl::StatusOr<std::vector<DispatchResult>> OnTimer(InputStamp stamp);
+  absl::StatusOr<std::vector<ActionResult>> OnTimer(InputStamp stamp);
 
   const BookView& Book() const { return book_.View(); }
   std::optional<OrderSnapshot> Order(const ClientOrderId& id) const {
@@ -136,8 +136,8 @@ class ShardRuntime {
   BookSync book_;
   OrderTracker tracker_;
   uint64_t shard_sequence_ = 0;
-  uint64_t next_decision_id_ = 1;
-  ActionDispatcher dispatcher_;
+  uint64_t next_action_batch_id_ = 1;
+  ActionExecutor action_executor_;
   std::vector<ClientOrderId> order_ids_;
   std::map<std::string, HoldId> holds_;
   std::vector<HistoryGap> local_gaps_;

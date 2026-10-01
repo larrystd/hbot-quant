@@ -35,7 +35,7 @@ cc_test(name = "recorder_test", srcs = ["recorder_test.cc"], deps = ["//hquant/s
 cc_test(name = "history_test", srcs = ["history_test.cc"], deps = ["//hquant/src/base:error", "//hquant/src/offline:history", "//hquant/src/offline:recorder", "@googletest//:gtest_main"])
 cc_test(name = "record_codec_test", srcs = ["record_codec_test.cc"], deps = ["//hquant/src/base:error", "//hquant/src/offline:record_codec", "@googletest//:gtest_main"])
 cc_test(name = "shard_test", srcs = ["shard_test.cc"], deps = ["//hquant/src/service:shard"])
-cc_test(name = "dispatcher_test", srcs = ["dispatcher_test.cc"], deps = ["//hquant/src/service:dispatcher"])
+cc_test(name = "action_executor_test", srcs = ["action_executor_test.cc"], deps = ["//hquant/src/service:action_executor"])
 cc_test(name = "routing_test", srcs = ["routing_test.cc"], deps = ["//hquant/src/service:routing", "@googletest//:gtest_main"])
 
 cc_test(name = "control_test", srcs = ["control_test.cc"], deps = ["//hquant/src/application:control", "//hquant/src/cli:cli", "//hquant/src/offline:storage", "@googletest//:gtest_main"])

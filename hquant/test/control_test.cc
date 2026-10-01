@@ -87,7 +87,7 @@ TEST(ControlHistoryTest, DisplaysNegativeReasonNumbers) {
   prepared_record.payload = prepared;
   page.rows.push_back(prepared_record);
   RecordEnvelope decision;
-  DecisionRecord action;
+  ActionRecord action;
   action.reason = reason;
   decision.payload = action;
   page.rows.push_back(decision);

@@ -270,8 +270,8 @@ std::string EncodeRecord(const RecordEnvelope& record) {
           out.U64(payload.first_seq);
           out.U64(payload.last_seq);
           out.U64(StoredErrorNumber(payload.reason));
-        } else if constexpr (std::is_same_v<T, DecisionRecord>) {
-          out.U64(payload.decision_id.value);
+        } else if constexpr (std::is_same_v<T, ActionRecord>) {
+          out.U64(payload.action_batch_id.value);
           out.StrategyIdField(payload.strategy_id);
           out.U64(payload.action_index);
           out.Byte(static_cast<uint8_t>(payload.action_kind));
@@ -438,11 +438,11 @@ absl::StatusOr<RecordEnvelope> DecodeRecord(std::string_view bytes) {
                                              : StoredCode(reason);
     record.payload = std::move(value);
   } else {
-    DecisionRecord value;
+    ActionRecord value;
     uint64_t action_index = 0;
     uint8_t action_kind = 0, accepted = 0;
     uint64_t reason = 0;
-    if (!in.U64(&value.decision_id.value) ||
+    if (!in.U64(&value.action_batch_id.value) ||
         !in.StrategyIdField(&value.strategy_id) || !in.U64(&action_index) ||
         action_index > std::numeric_limits<uint32_t>::max() ||
         !in.Byte(&action_kind) || action_kind > 1 || !in.Byte(&accepted) ||
@@ -453,7 +453,7 @@ absl::StatusOr<RecordEnvelope> DecodeRecord(std::string_view bytes) {
       return Error(ErrorCode::kHistoryRecordCorrupted,
                    "invalid decision record");
     value.action_index = static_cast<uint32_t>(action_index);
-    value.action_kind = static_cast<DecisionActionKind>(action_kind);
+    value.action_kind = static_cast<ActionKind>(action_kind);
     value.accepted = accepted != 0;
     // Legacy records retained arbitrary reason text; preserve it verbatim.
     value.reason =

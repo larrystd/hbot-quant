@@ -244,24 +244,24 @@ TEST(StorageTest, TwoShardProducersKeepIndependentSequenceOrder) {
   EXPECT_TRUE((*recorder)->Stop(At(2000)).ok());
 }
 
-TEST(StorageTest, DecisionRecordsPreserveActionOrderAndRejectionReason) {
+TEST(StorageTest, ActionRecordsPreserveActionOrderAndRejectionReason) {
   TemporaryDatabase db;
   auto recorder = SqliteRecorder::Open({db.path(), RunId{11}, At(100), 8, 8});
   ASSERT_TRUE(recorder.ok()) << recorder.status();
   RecordEnvelope first = PreparedRecord(1);
-  first.payload = DecisionRecord{DecisionId{19},
+  first.payload = ActionRecord{ActionBatchId{19},
                                  MakeStrategyId(),
                                  0,
-                                 DecisionActionKind::Cancel,
+                                 ActionKind::Cancel,
                                  true,
                                  ErrorCode::kOk,
                                  "cancel requested",
                                  ClientOrderId{"B1"}};
   RecordEnvelope second = PreparedRecord(2);
-  second.payload = DecisionRecord{DecisionId{19},
+  second.payload = ActionRecord{ActionBatchId{19},
                                   MakeStrategyId(),
                                   1,
-                                  DecisionActionKind::Submit,
+                                  ActionKind::Submit,
                                   false,
                                   ErrorCode::kRiskBudgetExhausted,
                                   "InsufficientBalance",
@@ -279,18 +279,18 @@ TEST(StorageTest, DecisionRecordsPreserveActionOrderAndRejectionReason) {
   ASSERT_TRUE(page);
   ASSERT_TRUE(page->status.ok()) << page->status;
   ASSERT_EQ(page->rows.size(), 2);
-  const auto& cancel = std::get<DecisionRecord>(page->rows[0].payload);
-  const auto& submit = std::get<DecisionRecord>(page->rows[1].payload);
-  EXPECT_EQ(cancel.decision_id.value, 19);
+  const auto& cancel = std::get<ActionRecord>(page->rows[0].payload);
+  const auto& submit = std::get<ActionRecord>(page->rows[1].payload);
+  EXPECT_EQ(cancel.action_batch_id.value, 19);
   EXPECT_EQ(cancel.action_index, 0);
-  EXPECT_EQ(cancel.action_kind, DecisionActionKind::Cancel);
+  EXPECT_EQ(cancel.action_kind, ActionKind::Cancel);
   EXPECT_TRUE(cancel.accepted);
   EXPECT_EQ(cancel.reason, ErrorCode::kOk);
   EXPECT_EQ(cancel.message, "cancel requested");
   ASSERT_TRUE(cancel.client_id);
   EXPECT_EQ(cancel.client_id->value, "B1");
   EXPECT_EQ(submit.action_index, 1);
-  EXPECT_EQ(submit.action_kind, DecisionActionKind::Submit);
+  EXPECT_EQ(submit.action_kind, ActionKind::Submit);
   EXPECT_FALSE(submit.accepted);
   EXPECT_EQ(submit.reason, ErrorCode::kRiskBudgetExhausted);
   EXPECT_EQ(submit.message, "InsufficientBalance");

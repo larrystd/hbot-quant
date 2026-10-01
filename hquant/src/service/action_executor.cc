@@ -1,4 +1,4 @@
-#include "service/dispatcher.h"
+#include "service/action_executor.h"
 
 #include <chrono>
 #include <limits>
@@ -42,7 +42,7 @@ ErrorCode NormalizeOrder(const OrderRequest& raw, const TradingRule& rule,
 
 }  // namespace
 
-bool ActionDispatcher::Record(RecordPayload payload,
+bool ActionExecutor::Record(RecordPayload payload,
                               const StrategyId& strategy_id, UtcTime now) {
   if (shard_sequence_ == std::numeric_limits<uint64_t>::max()) {
     risk_.EmergencyStop();
@@ -63,7 +63,7 @@ bool ActionDispatcher::Record(RecordPayload payload,
   return true;
 }
 
-void ActionDispatcher::Gap(uint64_t sequence) {
+void ActionExecutor::Gap(uint64_t sequence) {
   if (!local_gaps_.empty() && local_gaps_.back().last_seq + 1 == sequence) {
     local_gaps_.back().last_seq = sequence;
     return;
@@ -72,13 +72,13 @@ void ActionDispatcher::Gap(uint64_t sequence) {
                                    ErrorCode::kStorageQueueFull});
 }
 
-std::vector<DispatchResult> ActionDispatcher::Dispatch(
-    const ActionBatch& batch, const DispatchContext& context) {
-  std::vector<DispatchResult> results;
+std::vector<ActionResult> ActionExecutor::Execute(
+    const ActionBatch& batch, const ActionContext& context) {
+  std::vector<ActionResult> results;
   results.reserve(batch.ordered.size());
   for (uint32_t index = 0; index < batch.ordered.size(); ++index) {
     const StrategyAction& action = batch.ordered[index];
-    DispatchResult result;
+    ActionResult result;
     result.action_index = index;
     const StrategyId& action_strategy_id = std::visit(
         [](const auto& value) -> const StrategyId& {
@@ -114,7 +114,7 @@ std::vector<DispatchResult> ActionDispatcher::Dispatch(
           result.reason = reserve_code;
         } else {
           ApprovedOrder approved{order.strategy_id, *normalized, hold.hold_id,
-                                 context.decision_id,
+                                 context.action_batch_id,
                                  context.now_mono + std::chrono::seconds(1)};
           auto prepared = gateway_.PrepareSubmit(std::move(approved));
           if (!prepared.ok()) {
@@ -157,17 +157,17 @@ std::vector<DispatchResult> ActionDispatcher::Dispatch(
         }
       }
     }
-    DecisionRecord decision;
-    decision.decision_id = context.decision_id;
-    decision.strategy_id = action_strategy_id;
-    decision.action_index = index;
-    decision.action_kind =
-        submit ? DecisionActionKind::Submit : DecisionActionKind::Cancel;
-    decision.accepted = result.accepted;
-    decision.reason = result.reason;
-    decision.message = result.message;
-    decision.client_id = result.client_id;
-    Record(std::move(decision), action_strategy_id, context.now_utc);
+    ActionRecord action_record;
+    action_record.action_batch_id = context.action_batch_id;
+    action_record.strategy_id = action_strategy_id;
+    action_record.action_index = index;
+    action_record.action_kind =
+        submit ? ActionKind::Submit : ActionKind::Cancel;
+    action_record.accepted = result.accepted;
+    action_record.reason = result.reason;
+    action_record.message = result.message;
+    action_record.client_id = result.client_id;
+    Record(std::move(action_record), action_strategy_id, context.now_utc);
     results.push_back(std::move(result));
   }
   return results;

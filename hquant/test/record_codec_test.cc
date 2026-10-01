@@ -33,14 +33,14 @@ TEST(RecordCodecTest, VersionTwoPreservesFullWidthReasonCodesAndMessages) {
   ASSERT_FALSE(rejected_gap.ok());
   EXPECT_EQ(CodeOf(rejected_gap.status()), ErrorCode::kHistoryRecordCorrupted);
 
-  auto decision = Record(DecisionRecord{
-      DecisionId{7}, StrategyId{1, StrategyName{"test"}}, 0,
-      DecisionActionKind::Submit, false, ErrorCode::kRiskBudgetExhausted,
+  auto decision = Record(ActionRecord{
+      ActionBatchId{7}, StrategyId{1, StrategyName{"test"}}, 0,
+      ActionKind::Submit, false, ErrorCode::kRiskBudgetExhausted,
       "insufficient quote", std::nullopt});
   auto decoded_decision =
       storage_internal::DecodeRecord(storage_internal::EncodeRecord(decision));
   ASSERT_TRUE(decoded_decision.ok()) << decoded_decision.status();
-  const auto& value = std::get<DecisionRecord>(decoded_decision->payload);
+  const auto& value = std::get<ActionRecord>(decoded_decision->payload);
   EXPECT_EQ(value.reason, ErrorCode::kRiskBudgetExhausted);
   EXPECT_EQ(value.message, "insufficient quote");
 }
@@ -60,9 +60,9 @@ TEST(RecordCodecTest, ReadsLegacyGapAndPreservesArbitraryDecisionText) {
             ErrorCode::kStorageQueueFull);
 
   constexpr std::string_view kLegacyText = "Unmapped legacy rejection";
-  auto decision = Record(DecisionRecord{
-      DecisionId{7}, StrategyId{1, StrategyName{"test"}}, 0,
-      DecisionActionKind::Submit, false, ErrorCode::kRiskBudgetExhausted,
+  auto decision = Record(ActionRecord{
+      ActionBatchId{7}, StrategyId{1, StrategyName{"test"}}, 0,
+      ActionKind::Submit, false, ErrorCode::kRiskBudgetExhausted,
       std::string(kLegacyText), std::nullopt});
   std::string old_decision = storage_internal::EncodeRecord(decision);
   old_decision[0] = 1;
@@ -72,7 +72,7 @@ TEST(RecordCodecTest, ReadsLegacyGapAndPreservesArbitraryDecisionText) {
   old_decision.erase(code_position, 8);  // Version 1 stored only reason text.
   auto decoded_decision = storage_internal::DecodeRecord(old_decision);
   ASSERT_TRUE(decoded_decision.ok()) << decoded_decision.status();
-  const auto& value = std::get<DecisionRecord>(decoded_decision->payload);
+  const auto& value = std::get<ActionRecord>(decoded_decision->payload);
   EXPECT_FALSE(value.accepted);
   EXPECT_EQ(value.reason, ErrorCode::kInternal);
   EXPECT_EQ(value.message, kLegacyText);

@@ -132,7 +132,7 @@ TEST(RecoveryIntegrationTest, UnknownWriteAndCrashUseOriginalIdWithoutResend) {
       io, transport, clock, config, [&](binance_spot::GatewayEvent event) {
         events.push_back(std::move(event));
       });
-  ApprovedOrder approved{strategy_id, request, hold->hold_id, DecisionId{1},
+  ApprovedOrder approved{strategy_id, request, hold->hold_id, ActionBatchId{1},
                          clock.MonoNow() + std::chrono::seconds(1)};
   auto prepared = gateway.PrepareSubmit(std::move(approved));
   ASSERT_TRUE(prepared.ok()) << prepared.status();
