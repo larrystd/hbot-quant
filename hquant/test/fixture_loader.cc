@@ -77,10 +77,10 @@ bool ValidateSetup(const std::string& family, simdjson::dom::element setup) {
   if (!String(setup, "market", &market) || market.empty()) return false;
   if (family == "order_book") {
     uint64_t scale = 0, epoch = 0;
-    return PositiveDecimalString(setup, "quote_per_tick") &&
-           PositiveDecimalString(setup, "base_per_lot") &&
-           U64(setup, "scale_version", &scale) && scale > 0 &&
-           U64(setup, "stream_epoch", &epoch) && epoch > 0;
+    return PositiveDecimalString(setup, "price_per_tick") &&
+           PositiveDecimalString(setup, "amount_per_lot") &&
+           U64(setup, "tick_lot_version", &scale) && scale > 0 &&
+           U64(setup, "connection_id", &epoch) && epoch > 0;
   }
   std::string account;
   uint64_t strategy_id = 0;
@@ -146,7 +146,7 @@ bool ValidateEvent(const std::string& family, simdjson::dom::element event) {
       return false;
     if (kind == "snapshot" || kind == "diff") {
       uint64_t epoch = 0, last = 0;
-      if (!U64(event, "stream_epoch", &epoch) ||
+      if (!U64(event, "connection_id", &epoch) ||
           !U64(event, "last_sequence", &last) || !Levels(event, "bids") ||
           !Levels(event, "asks"))
         return false;
@@ -225,8 +225,8 @@ bool ValidateOutput(const std::string& family, simdjson::dom::element output) {
     bool applied = false;
     simdjson::dom::element bbo;
     if (!String(output, "state", &state) ||
-        !OneOf(state, {"Subscribing", "Buffering", "Replaying", "Live", "Stale",
-                       "Resyncing"}) ||
+        !OneOf(state, {"Subscribing", "WaitingSnapshot", "CatchingUp", "Live",
+                       "Stale", "Resyncing"}) ||
         !String(output, "reason", &reason) ||
         !OneOf(reason, {"None", "OldDiff", "Gap", "CrossedBook", "InvalidScale",
                         "InvalidMessage", "BufferOverflow", "Disconnected",
@@ -397,7 +397,7 @@ absl::StatusOr<FixtureCase> LoadFixture(const std::string& path) {
   result.setup_json = simdjson::minify(setup);
 
   auto expectation = expected.begin();
-  InputStamp previous{-1, 0};
+  InputTime previous{-1, 0};
   for (auto input : inputs) {
     auto exp = *expectation++;
     uint64_t at = 0, ordinal = 0, expected_at = 0, expected_ordinal = 0;
@@ -425,7 +425,7 @@ absl::StatusOr<FixtureCase> LoadFixture(const std::string& path) {
       risk_json = simdjson::minify(risk);
     }
     result.steps.push_back(FixtureStep{
-        InputStamp{static_cast<int64_t>(at), ordinal}, simdjson::minify(event),
+        InputTime{static_cast<int64_t>(at), ordinal}, simdjson::minify(event),
         simdjson::minify(output), std::move(risk_json)});
     previous = result.steps.back().stamp;
   }

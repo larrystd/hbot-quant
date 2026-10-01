@@ -40,13 +40,13 @@ struct QuantityLots {
   bool operator==(const QuantityLots&) const = default;
 };
 
-struct BookScale {
-  Decimal quote_per_tick;
-  Decimal base_per_lot;
-  uint64_t scale_version = 0;
+struct TickLotSize {
+  Decimal price_per_tick;
+  Decimal amount_per_lot;
+  uint64_t tick_lot_version = 0;
   bool IsValid() const {
-    return quote_per_tick.IsStrictlyPositive() &&
-           base_per_lot.IsStrictlyPositive() && scale_version > 0;
+    return price_per_tick.IsStrictlyPositive() &&
+           amount_per_lot.IsStrictlyPositive() && tick_lot_version > 0;
   }
 };
 
@@ -59,8 +59,8 @@ struct BookLevel {
 
 struct BookSnapshot {
   MarketId market;
-  uint64_t scale_version = 0;
-  uint64_t stream_epoch = 0;
+  uint64_t tick_lot_version = 0;
+  uint64_t connection_id = 0;
   uint64_t last_sequence = 0;
   std::vector<BookLevel> bids;
   std::vector<BookLevel> asks;
@@ -69,8 +69,8 @@ struct BookSnapshot {
 
 struct BookDiff {
   MarketId market;
-  uint64_t scale_version = 0;
-  uint64_t stream_epoch = 0;
+  uint64_t tick_lot_version = 0;
+  uint64_t connection_id = 0;
   uint64_t first_sequence = 0;
   uint64_t last_sequence = 0;
   std::vector<BookLevel> bids;

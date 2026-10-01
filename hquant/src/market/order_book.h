@@ -16,8 +16,8 @@ namespace hquant {
 
 enum class BookSyncState {
   Subscribing,
-  Buffering,
-  Replaying,
+  WaitingSnapshot,
+  CatchingUp,
   Live,
   Stale,
   Resyncing
@@ -33,29 +33,29 @@ struct BookApplyResult {
   BookApplyOutcome outcome = BookApplyOutcome::Normal;
 };
 
-class BookView;
+class OrderBookView;
 class OrderBook;
 
 // Owns synchronization and one mutable book on its shard thread. The adapter
 // supplies normalized, ordered sequence intervals and integer levels.
-class BookSync {
+class OrderBookSync {
  public:
-  BookSync(MarketId market, uint64_t scale_version, size_t dense_span = 8192,
-           size_t max_buffered_diffs = 1024,
-           uint64_t stale_after_us = 5'000'000);
-  ~BookSync();
-  BookSync(BookSync&&) noexcept;
-  BookSync& operator=(BookSync&&) noexcept;
-  BookSync(const BookSync&) = delete;
-  BookSync& operator=(const BookSync&) = delete;
+  OrderBookSync(MarketId market, uint64_t tick_lot_version,
+                size_t dense_span = 8192, size_t max_buffered_diffs = 1024,
+                uint64_t stale_after_us = 5'000'000);
+  ~OrderBookSync();
+  OrderBookSync(OrderBookSync&&) noexcept;
+  OrderBookSync& operator=(OrderBookSync&&) noexcept;
+  OrderBookSync(const OrderBookSync&) = delete;
+  OrderBookSync& operator=(const OrderBookSync&) = delete;
 
-  BookApplyResult Subscribe(uint64_t stream_epoch);
+  BookApplyResult Subscribe(uint64_t connection_id);
   BookApplyResult OnSnapshot(const BookSnapshot& snapshot);
   BookApplyResult OnDiff(const BookDiff& diff);
   BookApplyResult OnTimer(uint64_t now_us);
   BookApplyResult OnDisconnect();
   BookApplyResult OnInvalidScale();
-  const BookView& View() const;
+  const OrderBookView& View() const;
 
  private:
   BookApplyResult Result(bool applied = false,
@@ -66,8 +66,8 @@ class BookSync {
   bool ValidLevels(const std::vector<BookLevel>& levels, bool allow_zero) const;
 
   MarketId market_;
-  uint64_t scale_version_;
-  uint64_t stream_epoch_ = 0;
+  uint64_t tick_lot_version_;
+  uint64_t connection_id_ = 0;
   size_t max_buffered_diffs_;
   uint64_t stale_after_us_;
   uint64_t last_update_us_ = 0;
@@ -78,9 +78,9 @@ class BookSync {
 };
 
 // Borrowed view: valid only in the owning shard's synchronous callback.
-class BookView {
+class OrderBookView {
  public:
-  virtual ~BookView() = default;
+  virtual ~OrderBookView() = default;
   virtual BookSyncState State() const = 0;
   virtual std::optional<uint64_t> LastSequence() const = 0;
   virtual std::optional<BookLevel> BestBid() const = 0;
@@ -90,7 +90,7 @@ class BookView {
 
 // One shard owns this mutable L2 book. The dense ladder covers nearby ticks;
 // distant prices live in the ordered overflow maps. Quantities are absolute.
-class OrderBook final : public BookView {
+class OrderBook final : public OrderBookView {
  public:
   explicit OrderBook(size_t dense_span = 8192);
 

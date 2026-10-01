@@ -44,20 +44,20 @@ absl::Status ApplyReplayInput(const ReplayInput& input,
   if (!advanced.ok()) return advanced;
   const EventTime time{{}, clock.UtcNow(), clock.MonoNow()};
   if (const auto* subscribe = std::get_if<ReplaySubscribe>(&input.payload)) {
-    shard.Subscribe(subscribe->stream_epoch);
+    shard.Subscribe(subscribe->connection_id);
   } else if (const auto* snapshot =
                  std::get_if<ReplaySnapshot>(&input.payload)) {
     BookSnapshot event{market.spec.market,
-                       market.book_scale.scale_version,
-                       snapshot->stream_epoch,
+                       market.tick_lot_size.tick_lot_version,
+                       snapshot->connection_id,
                        snapshot->last_sequence,
                        snapshot->bids,
                        snapshot->asks,
                        time};
     return shard.OnSnapshot(event);
   } else if (const auto* diff = std::get_if<ReplayDiff>(&input.payload)) {
-    BookDiff event{market.spec.market,  market.book_scale.scale_version,
-                   diff->stream_epoch,  diff->first_sequence,
+    BookDiff event{market.spec.market,  market.tick_lot_size.tick_lot_version,
+                   diff->connection_id, diff->first_sequence,
                    diff->last_sequence, diff->bids,
                    diff->asks,          time};
     return shard.OnDiff(event);
@@ -154,7 +154,7 @@ absl::Status RunSimulatedBinanceEngine(const AppConfig& config,
   if (!recorder.ok()) return recorder.status();
   ShardRuntime shard(
       {run, assignment.shard, strategy_config.strategy_id, account.account,
-       market.spec, market.book_scale, rule, 5'000'000},
+       market.spec, market.tick_lot_size, rule, 5'000'000},
       clock, strategy, sim_exchange, risk, **recorder);
   auto reader = HistoryReader::Open({storage_path.string(), 32, 500});
   if (!reader.ok()) return reader.status();
@@ -175,7 +175,7 @@ absl::Status RunSimulatedBinanceEngine(const AppConfig& config,
   absl::Status stream_error;
   binance_spot::MarketDataStream stream(
       stream_config,
-      binance_spot::DepthParser(market.spec.market, market.book_scale), http,
+      binance_spot::DepthParser(market.spec.market, market.tick_lot_size), http,
       websocket, shard.MutableBookSync(), clock,
       {[&](const BookApplyResult& result) {
          if (result.state == BookSyncState::Live)
@@ -370,7 +370,7 @@ absl::Status Launch(const AppConfig& config, const std::string& state_dir) {
       SqliteRecorder::Open({storage_path.string(), run, origin, 1024, 64});
   if (!recorder.ok()) return recorder.status();
   ShardRuntime shard({run, assignment.shard, strategy_config.strategy_id,
-                      account.account, market.spec, market.book_scale, rule},
+                      account.account, market.spec, market.tick_lot_size, rule},
                      clock, strategy, sim_exchange, risk, **recorder);
   auto replay =
       ReadReplayFile(*config.replay_fixture, [&](const ReplayInput& input) {

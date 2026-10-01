@@ -49,12 +49,12 @@ std::optional<Decimal> SimplePmm::ReferencePrice(
   const auto bid = context.book.BestBid();
   const auto ask = context.book.BestAsk();
   if (!bid || !ask || bid->price_ticks.value <= 0 ||
-      ask->price_ticks.value <= 0 || !context.book_scale.IsValid())
+      ask->price_ticks.value <= 0 || !context.tick_lot_size.IsValid())
     return std::nullopt;
   auto bid_price = D(std::to_string(bid->price_ticks.value))
-                       .Multiply(context.book_scale.quote_per_tick);
+                       .Multiply(context.tick_lot_size.price_per_tick);
   auto ask_price = D(std::to_string(ask->price_ticks.value))
-                       .Multiply(context.book_scale.quote_per_tick);
+                       .Multiply(context.tick_lot_size.price_per_tick);
   if (!bid_price.ok() || !ask_price.ok()) return std::nullopt;
   auto sum = bid_price->Add(*ask_price);
   if (!sum.ok()) return std::nullopt;

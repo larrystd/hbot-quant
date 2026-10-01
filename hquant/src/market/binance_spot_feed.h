@@ -16,28 +16,28 @@
 
 namespace hquant::binance_spot {
 
-// Parses Binance Spot JSON only. Fixed BookScale is checked before any integer
-// conversion; no floating-point price or quantity enters the book.
+// Parses Binance Spot JSON only. Fixed TickLotSize is checked before any
+// integer conversion; no floating-point price or quantity enters the book.
 class DepthParser {
  public:
-  DepthParser(MarketId market, BookScale scale)
+  DepthParser(MarketId market, TickLotSize scale)
       : market_(std::move(market)), scale_(std::move(scale)) {}
 
   absl::StatusOr<BookSnapshot> ParseSnapshot(std::string_view json,
-                                             uint64_t stream_epoch,
+                                             uint64_t connection_id,
                                              EventTime received) const;
   absl::StatusOr<BookDiff> ParseDiff(std::string_view json,
-                                     uint64_t stream_epoch,
+                                     uint64_t connection_id,
                                      EventTime received) const;
   absl::StatusOr<PublicTrade> ParseTrade(std::string_view json,
                                          EventTime received) const;
 
   const MarketId& Market() const { return market_; }
-  const BookScale& Scale() const { return scale_; }
+  const TickLotSize& Scale() const { return scale_; }
 
  private:
   MarketId market_;
-  BookScale scale_;
+  TickLotSize scale_;
 };
 
 struct StreamConfig {
@@ -67,7 +67,7 @@ class MarketDataStream {
  public:
   MarketDataStream(StreamConfig config, DepthParser parser,
                    HttpTransport& snapshot_http, WebSocketClient& websocket,
-                   BookSync& book, const Clock& clock,
+                   OrderBookSync& book, const Clock& clock,
                    StreamCallbacks callbacks = {});
 
   boost::asio::awaitable<absl::Status> RunCycle(size_t max_depth_messages = 0);
@@ -84,7 +84,7 @@ class MarketDataStream {
   DepthParser parser_;
   HttpTransport& snapshot_http_;
   WebSocketClient& websocket_;
-  BookSync& book_;
+  OrderBookSync& book_;
   const Clock& clock_;
   StreamCallbacks callbacks_;
   uint64_t epoch_ = 0;

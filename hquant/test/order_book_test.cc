@@ -151,10 +151,10 @@ std::string StateName(BookSyncState state) {
   switch (state) {
     case BookSyncState::Subscribing:
       return "Subscribing";
-    case BookSyncState::Buffering:
-      return "Buffering";
-    case BookSyncState::Replaying:
-      return "Replaying";
+    case BookSyncState::WaitingSnapshot:
+      return "WaitingSnapshot";
+    case BookSyncState::CatchingUp:
+      return "CatchingUp";
     case BookSyncState::Live:
       return "Live";
     case BookSyncState::Stale:
@@ -197,8 +197,8 @@ hquant::EventTime TimeAt(int64_t at_us) {
 }
 
 void CheckOutput(const hquant::BookApplyResult& actual,
-                 const hquant::BookView& view, simdjson::dom::element expected,
-                 const std::string& where) {
+                 const hquant::OrderBookView& view,
+                 simdjson::dom::element expected, const std::string& where) {
   Require(StateName(actual.state) == String(expected, "state"),
           where + " state");
   Require(ReasonName(actual) == String(expected, "reason"), where + " reason");
@@ -243,13 +243,13 @@ void Replay(const std::filesystem::path& path) {
   simdjson::dom::element setup;
   Require(!setup_parser.parse(fixture->setup_json).get(setup), "setup parse");
   const std::string market_name = String(setup, "market");
-  const uint64_t scale_version = U64(setup, "scale_version");
+  const uint64_t tick_lot_version = U64(setup, "tick_lot_version");
   uint64_t stale_after = 5'000'000;
   if (!setup["stale_after_us"].error())
     stale_after = U64(setup, "stale_after_us");
   hquant::MarketId market{hquant::ExchangeId("binance"),
                           hquant::InstrumentKind::Spot, market_name};
-  hquant::BookSync sync(market, scale_version, 8192, 1024, stale_after);
+  hquant::OrderBookSync sync(market, tick_lot_version, 8192, 1024, stale_after);
 
   for (size_t index = 0; index < fixture->steps.size(); ++index) {
     const auto& step = fixture->steps[index];
@@ -259,12 +259,12 @@ void Replay(const std::filesystem::path& path) {
     const std::string kind = String(event, "kind");
     hquant::BookApplyResult result;
     if (kind == "subscribe") {
-      result = sync.Subscribe(U64(event, "stream_epoch"));
+      result = sync.Subscribe(U64(event, "connection_id"));
     } else if (kind == "snapshot") {
       hquant::BookSnapshot snapshot;
       snapshot.market = market;
-      snapshot.scale_version = scale_version;
-      snapshot.stream_epoch = U64(event, "stream_epoch");
+      snapshot.tick_lot_version = tick_lot_version;
+      snapshot.connection_id = U64(event, "connection_id");
       snapshot.last_sequence = U64(event, "last_sequence");
       snapshot.bids = Levels(event, "bids");
       snapshot.asks = Levels(event, "asks");
@@ -273,8 +273,8 @@ void Replay(const std::filesystem::path& path) {
     } else if (kind == "diff") {
       hquant::BookDiff diff;
       diff.market = market;
-      diff.scale_version = scale_version;
-      diff.stream_epoch = U64(event, "stream_epoch");
+      diff.tick_lot_version = tick_lot_version;
+      diff.connection_id = U64(event, "connection_id");
       diff.first_sequence = U64(event, "first_sequence");
       diff.last_sequence = U64(event, "last_sequence");
       diff.bids = Levels(event, "bids");
@@ -301,23 +301,24 @@ void Replay(const std::filesystem::path& path) {
 void CheckSyncEdges() {
   hquant::MarketId market{hquant::ExchangeId("binance"),
                           hquant::InstrumentKind::Spot, "BTC-USDT"};
-  hquant::BookSync sync(market, 1, 16, 2, 100);
-  Require(sync.Subscribe(1).state == BookSyncState::Buffering, "subscribe");
+  hquant::OrderBookSync sync(market, 1, 16, 2, 100);
+  Require(sync.Subscribe(1).state == BookSyncState::WaitingSnapshot,
+          "subscribe");
   hquant::BookSnapshot snapshot;
   snapshot.market = market;
-  snapshot.scale_version = 1;
-  snapshot.stream_epoch = 1;
+  snapshot.tick_lot_version = 1;
+  snapshot.connection_id = 1;
   snapshot.last_sequence = 10;
   snapshot.bids = {{{99}, {1}}};
   snapshot.asks = {{{101}, {1}}};
   snapshot.time = TimeAt(10);
-  Require(sync.OnSnapshot(snapshot).state == BookSyncState::Replaying,
+  Require(sync.OnSnapshot(snapshot).state == BookSyncState::CatchingUp,
           "snapshot awaits first bridge");
   Require(!sync.View().BestBid(), "replaying book is hidden");
   hquant::BookDiff bridge;
   bridge.market = market;
-  bridge.scale_version = 1;
-  bridge.stream_epoch = 1;
+  bridge.tick_lot_version = 1;
+  bridge.connection_id = 1;
   bridge.first_sequence = 9;
   bridge.last_sequence = 11;
   bridge.time = TimeAt(11);
@@ -332,7 +333,7 @@ void CheckSyncEdges() {
           "longer silence resynchronizes");
 
   sync.Subscribe(2);
-  bridge.stream_epoch = 2;
+  bridge.connection_id = 2;
   bridge.first_sequence = 1;
   bridge.last_sequence = 1;
   sync.OnDiff(bridge);

@@ -302,17 +302,18 @@ absl::StatusOr<AppConfig> ParseConfig(std::string_view yaml_text) {
           MarketId{ExchangeId(*exchange), InstrumentKind::Spot, *name};
       market.spec.base_asset = AssetId(*base);
       market.spec.quote_asset = AssetId(*quote);
-      const YAML::Node scale = item["book_scale"] ? item["book_scale"] : item;
-      auto tick = Number(scale, "quote_per_tick", true);
-      auto lot = Number(scale, "base_per_lot", true);
-      auto scale_version = Unsigned(scale, "scale_version");
+      const YAML::Node scale =
+          item["tick_lot_size"] ? item["tick_lot_size"] : item;
+      auto tick = Number(scale, "price_per_tick", true);
+      auto lot = Number(scale, "amount_per_lot", true);
+      auto tick_lot_version = Unsigned(scale, "tick_lot_version");
       if (!tick.ok()) return tick.status();
       if (!lot.ok()) return lot.status();
-      if (!scale_version.ok()) return scale_version.status();
-      if (*scale_version == 0)
+      if (!tick_lot_version.ok()) return tick_lot_version.status();
+      if (*tick_lot_version == 0)
         return Error(ErrorCode::kConfigFieldInvalid,
-                     "scale_version must be positive");
-      market.book_scale = BookScale{*tick, *lot, *scale_version};
+                     "tick_lot_version must be positive");
+      market.tick_lot_size = TickLotSize{*tick, *lot, *tick_lot_version};
       const YAML::Node rule =
           item["trading_rule"] ? item["trading_rule"] : item;
       auto price_increment = Number(rule, "price_increment", true);

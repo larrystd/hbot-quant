@@ -16,7 +16,7 @@ struct VisibleTop {
   size_t ask_count = 0;
 };
 
-VisibleTop CaptureTop(const BookView& view) {
+VisibleTop CaptureTop(const OrderBookView& view) {
   VisibleTop top;
   top.bid_count = view.CopyTopN(Side::Buy, top.bids);
   top.ask_count = view.CopyTopN(Side::Sell, top.asks);
@@ -46,45 +46,47 @@ uint64_t ReceiveUs(const EventTime& time) {
 
 }  // namespace
 
-BookSync::BookSync(MarketId market, uint64_t scale_version, size_t dense_span,
-                   size_t max_buffered_diffs, uint64_t stale_after_us)
+OrderBookSync::OrderBookSync(MarketId market, uint64_t tick_lot_version,
+                             size_t dense_span, size_t max_buffered_diffs,
+                             uint64_t stale_after_us)
     : market_(std::move(market)),
-      scale_version_(scale_version),
+      tick_lot_version_(tick_lot_version),
       max_buffered_diffs_(std::max<size_t>(max_buffered_diffs, 1)),
       stale_after_us_(std::max<uint64_t>(stale_after_us, 1)),
       book_(std::make_unique<OrderBook>(dense_span)) {}
 
-BookSync::~BookSync() = default;
-BookSync::BookSync(BookSync&&) noexcept = default;
-BookSync& BookSync::operator=(BookSync&&) noexcept = default;
+OrderBookSync::~OrderBookSync() = default;
+OrderBookSync::OrderBookSync(OrderBookSync&&) noexcept = default;
+OrderBookSync& OrderBookSync::operator=(OrderBookSync&&) noexcept = default;
 
-BookApplyResult BookSync::Result(bool applied, ErrorCode reason,
-                                 bool top_changed, BookApplyOutcome outcome) {
+BookApplyResult OrderBookSync::Result(bool applied, ErrorCode reason,
+                                      bool top_changed,
+                                      BookApplyOutcome outcome) {
   book_->SetMetadata(state_, sequence_);
   return BookApplyResult{state_,      applied, sequence_,
                          top_changed, reason,  outcome};
 }
 
-BookApplyResult BookSync::Resync(ErrorCode reason) {
+BookApplyResult OrderBookSync::Resync(ErrorCode reason) {
   state_ = BookSyncState::Resyncing;
   book_->Reset();
   buffered_diffs_.clear();
   return Result(false, reason);
 }
 
-BookApplyResult BookSync::Subscribe(uint64_t stream_epoch) {
-  if (stream_epoch == 0) return Resync(ErrorCode::kFeedConfigInvalid);
-  stream_epoch_ = stream_epoch;
+BookApplyResult OrderBookSync::Subscribe(uint64_t connection_id) {
+  if (connection_id == 0) return Resync(ErrorCode::kFeedConfigInvalid);
+  connection_id_ = connection_id;
   sequence_.reset();
   last_update_us_ = 0;
   buffered_diffs_.clear();
   book_->Reset();
-  state_ = BookSyncState::Buffering;
+  state_ = BookSyncState::WaitingSnapshot;
   return Result();
 }
 
-bool BookSync::ValidLevels(const std::vector<BookLevel>& levels,
-                           bool allow_zero) const {
+bool OrderBookSync::ValidLevels(const std::vector<BookLevel>& levels,
+                                bool allow_zero) const {
   for (const auto& level : levels) {
     if (level.price_ticks.value <= 0 ||
         (!allow_zero && level.quantity_lots.value == 0))
@@ -93,18 +95,18 @@ bool BookSync::ValidLevels(const std::vector<BookLevel>& levels,
   return true;
 }
 
-BookApplyResult BookSync::OnSnapshot(const BookSnapshot& snapshot) {
-  if (state_ != BookSyncState::Buffering &&
-      state_ != BookSyncState::Replaying && state_ != BookSyncState::Live &&
+BookApplyResult OrderBookSync::OnSnapshot(const BookSnapshot& snapshot) {
+  if (state_ != BookSyncState::WaitingSnapshot &&
+      state_ != BookSyncState::CatchingUp && state_ != BookSyncState::Live &&
       state_ != BookSyncState::Stale) {
     return Result(false, ErrorCode::kFeedMessageInvalid);
   }
   if (snapshot.market != market_) return Resync(ErrorCode::kFeedWrongMarket);
-  if (snapshot.stream_epoch < stream_epoch_)
+  if (snapshot.connection_id < connection_id_)
     return Result(false, ErrorCode::kOk, false, BookApplyOutcome::OldDiff);
-  if (snapshot.scale_version != scale_version_)
+  if (snapshot.tick_lot_version != tick_lot_version_)
     return Resync(ErrorCode::kFeedTickSizeMismatch);
-  if (snapshot.stream_epoch != stream_epoch_ ||
+  if (snapshot.connection_id != connection_id_ ||
       snapshot.last_sequence == std::numeric_limits<uint64_t>::max() ||
       !ValidLevels(snapshot.bids, false) ||
       !ValidLevels(snapshot.asks, false)) {
@@ -116,7 +118,7 @@ BookApplyResult BookSync::OnSnapshot(const BookSnapshot& snapshot) {
   if (book_->IsCrossed()) return Resync(ErrorCode::kBookCrossed);
   sequence_ = snapshot.last_sequence;
   last_update_us_ = ReceiveUs(snapshot.time);
-  state_ = BookSyncState::Replaying;
+  state_ = BookSyncState::CatchingUp;
   book_->SetMetadata(state_, sequence_);
 
   while (!buffered_diffs_.empty()) {
@@ -125,8 +127,8 @@ BookApplyResult BookSync::OnSnapshot(const BookSnapshot& snapshot) {
     if (diff.last_sequence <= *sequence_) continue;
     if (diff.first_sequence > *sequence_ + 1)
       return Resync(ErrorCode::kBookSequenceGap);
-    if (diff.scale_version != scale_version_ ||
-        diff.stream_epoch != stream_epoch_) {
+    if (diff.tick_lot_version != tick_lot_version_ ||
+        diff.connection_id != connection_id_) {
       return Resync(ErrorCode::kFeedMessageInvalid);
     }
     book_->ApplyDiff(diff.bids, diff.asks);
@@ -139,26 +141,26 @@ BookApplyResult BookSync::OnSnapshot(const BookSnapshot& snapshot) {
   return Result(true, ErrorCode::kOk, Different(previous, CaptureTop(*book_)));
 }
 
-BookApplyResult BookSync::OnDiff(const BookDiff& diff) {
+BookApplyResult OrderBookSync::OnDiff(const BookDiff& diff) {
   if (diff.market != market_) return Resync(ErrorCode::kFeedWrongMarket);
-  if (diff.stream_epoch < stream_epoch_)
+  if (diff.connection_id < connection_id_)
     return Result(false, ErrorCode::kOk, false, BookApplyOutcome::OldDiff);
-  if (diff.scale_version != scale_version_)
+  if (diff.tick_lot_version != tick_lot_version_)
     return Resync(ErrorCode::kFeedTickSizeMismatch);
-  if (diff.stream_epoch != stream_epoch_ || diff.first_sequence == 0 ||
+  if (diff.connection_id != connection_id_ || diff.first_sequence == 0 ||
       diff.first_sequence > diff.last_sequence ||
       diff.last_sequence == std::numeric_limits<uint64_t>::max() ||
       !ValidLevels(diff.bids, true) || !ValidLevels(diff.asks, true)) {
     return Resync(ErrorCode::kFeedMessageInvalid);
   }
-  if (state_ == BookSyncState::Buffering) {
+  if (state_ == BookSyncState::WaitingSnapshot) {
     if (buffered_diffs_.size() >= max_buffered_diffs_) {
       return Resync(ErrorCode::kBookBufferOverflow);
     }
     buffered_diffs_.push_back(diff);
     return Result();
   }
-  if (state_ != BookSyncState::Replaying && state_ != BookSyncState::Live &&
+  if (state_ != BookSyncState::CatchingUp && state_ != BookSyncState::Live &&
       state_ != BookSyncState::Stale) {
     return Result(false, ErrorCode::kFeedMessageInvalid);
   }
@@ -180,7 +182,7 @@ BookApplyResult BookSync::OnDiff(const BookDiff& diff) {
   return Result(true, ErrorCode::kOk, Different(previous, CaptureTop(*book_)));
 }
 
-BookApplyResult BookSync::OnTimer(uint64_t now_us) {
+BookApplyResult OrderBookSync::OnTimer(uint64_t now_us) {
   if (state_ != BookSyncState::Live && state_ != BookSyncState::Stale)
     return Result();
   if (now_us <= last_update_us_ ||
@@ -198,15 +200,15 @@ BookApplyResult BookSync::OnTimer(uint64_t now_us) {
   return Result(false, ErrorCode::kBookStale);
 }
 
-BookApplyResult BookSync::OnDisconnect() {
+BookApplyResult OrderBookSync::OnDisconnect() {
   return Resync(ErrorCode::kFeedDisconnected);
 }
 
-BookApplyResult BookSync::OnInvalidScale() {
+BookApplyResult OrderBookSync::OnInvalidScale() {
   return Resync(ErrorCode::kFeedTickSizeMismatch);
 }
 
-const BookView& BookSync::View() const { return *book_; }
+const OrderBookView& OrderBookSync::View() const { return *book_; }
 
 }  // namespace hquant
 

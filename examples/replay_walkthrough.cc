@@ -59,10 +59,10 @@ const char* StateName(BookSyncState state) {
   switch (state) {
     case BookSyncState::Subscribing:
       return "Subscribing";
-    case BookSyncState::Buffering:
-      return "Buffering（等快照）";
-    case BookSyncState::Replaying:
-      return "Replaying（等第一条增量）";
+    case BookSyncState::WaitingSnapshot:
+      return "WaitingSnapshot（等快照）";
+    case BookSyncState::CatchingUp:
+      return "CatchingUp（等第一条增量）";
     case BookSyncState::Live:
       return "Live（可用）";
     case BookSyncState::Stale:
@@ -93,19 +93,19 @@ const char* StatusName(ExchangeOrderStatus status) {
 
 const char* SideName(Side side) { return side == Side::Buy ? "买" : "卖"; }
 
-// ticks/lots 是整数，乘以 BookScale 换算成真实价格/数量。
-std::string Price(const BookScale& scale, PriceTicks ticks) {
+// ticks/lots 是整数，乘以 TickLotSize 换算成真实价格/数量。
+std::string Price(const TickLotSize& scale, PriceTicks ticks) {
   auto value =
-      D(std::to_string(ticks.value).c_str()).Multiply(scale.quote_per_tick);
+      D(std::to_string(ticks.value).c_str()).Multiply(scale.price_per_tick);
   return value.ok() ? Plain(*value) : "?";
 }
-std::string Amount(const BookScale& scale, QuantityLots lots) {
+std::string Amount(const TickLotSize& scale, QuantityLots lots) {
   auto value =
-      D(std::to_string(lots.value).c_str()).Multiply(scale.base_per_lot);
+      D(std::to_string(lots.value).c_str()).Multiply(scale.amount_per_lot);
   return value.ok() ? Plain(*value) : "?";
 }
 
-std::string Levels(const BookScale& scale,
+std::string Levels(const TickLotSize& scale,
                    const std::vector<BookLevel>& levels) {
   if (levels.empty()) return "无变化";
   std::string text;
@@ -120,13 +120,13 @@ std::string Levels(const BookScale& scale,
 }
 
 // 一条回放输入的中文描述。
-std::string Describe(const ReplayInput& input, const BookScale& scale) {
+std::string Describe(const ReplayInput& input, const TickLotSize& scale) {
   return std::visit(
       [&](const auto& payload) -> std::string {
         using T = std::decay_t<decltype(payload)>;
         if constexpr (std::is_same_v<T, ReplaySubscribe>) {
-          return "subscribe：开始订阅，连接编号 epoch=" +
-                 std::to_string(payload.stream_epoch);
+          return "subscribe：开始订阅，连接编号 connection_id=" +
+                 std::to_string(payload.connection_id);
         } else if constexpr (std::is_same_v<T, ReplaySnapshot>) {
           return "snapshot：完整订单簿，截至序号 " +
                  std::to_string(payload.last_sequence) +
@@ -164,9 +164,8 @@ class PrintingRecorder final : public RecorderPort {
                       << Plain(*payload.request.limit_price);
           } else if constexpr (std::is_same_v<T, ActionRecord>) {
             std::cout << "[决策] "
-                      << (payload.action_kind == ActionKind::Submit
-                              ? "下单"
-                              : "撤单")
+                      << (payload.action_kind == ActionKind::Submit ? "下单"
+                                                                    : "撤单")
                       << (payload.accepted ? " 已受理" : " 被拒绝");
             if (!payload.accepted || !payload.message.empty()) {
               std::cout << "（" << Info(payload.reason).name;
@@ -203,14 +202,15 @@ absl::Status Apply(const ReplayInput& input, const MarketConfig& market,
   if (!advanced.ok()) return advanced;
   const EventTime time{{}, clock.UtcNow(), clock.MonoNow()};
   if (const auto* p = std::get_if<ReplaySubscribe>(&input.payload)) {
-    shard.Subscribe(p->stream_epoch);
+    shard.Subscribe(p->connection_id);
   } else if (const auto* p = std::get_if<ReplaySnapshot>(&input.payload)) {
-    return shard.OnSnapshot({market.spec.market,
-                             market.book_scale.scale_version, p->stream_epoch,
-                             p->last_sequence, p->bids, p->asks, time});
+    return shard.OnSnapshot(
+        {market.spec.market, market.tick_lot_size.tick_lot_version,
+         p->connection_id, p->last_sequence, p->bids, p->asks, time});
   } else if (const auto* p = std::get_if<ReplayDiff>(&input.payload)) {
-    return shard.OnDiff({market.spec.market, market.book_scale.scale_version,
-                         p->stream_epoch, p->first_sequence, p->last_sequence,
+    return shard.OnDiff({market.spec.market,
+                         market.tick_lot_size.tick_lot_version,
+                         p->connection_id, p->first_sequence, p->last_sequence,
                          p->bids, p->asks, time});
   } else if (std::holds_alternative<ReplayTimer>(input.payload)) {
     auto results = shard.OnTimer(input.stamp);
@@ -231,7 +231,7 @@ void PrintState(const ShardRuntime& shard,
                 const SimpleSimulatedExchange& sim_exchange,
                 const RiskGate& risk, const AccountId& account,
                 const MarketConfig& market) {
-  const auto& scale = market.book_scale;
+  const auto& scale = market.tick_lot_size;
   const auto& book = shard.Book();
   std::cout << "  盘口: " << StateName(book.State());
   if (auto bid = book.BestBid()) {
@@ -311,7 +311,7 @@ absl::Status Run(const std::string& config_path,
   PrintingRecorder recorder;
   // 总管：把订单簿、策略、风控、交易所、记录器串起来。
   ShardRuntime shard({RunId{1}, assignment.shard, strategy_config.strategy_id,
-                      account.account, market.spec, market.book_scale, rule},
+                      account.account, market.spec, market.tick_lot_size, rule},
                      clock, strategy, sim_exchange, risk, recorder);
 
   std::cout << "初始状态\n";
@@ -321,7 +321,7 @@ absl::Status Run(const std::string& config_path,
   int index = 0;
   return ReadReplayFile(market_path, [&](const ReplayInput& input) {
     std::cout << "\n==== 输入 " << ++index << "  t=" << input.stamp.at_us
-              << "us  " << Describe(input, market.book_scale) << "\n";
+              << "us  " << Describe(input, market.tick_lot_size) << "\n";
     auto status = Apply(input, market, clock, shard);
     if (!status.ok()) return status;
     PrintState(shard, sim_exchange, risk, account.account, market);

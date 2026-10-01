@@ -484,10 +484,10 @@ const char* BookStateName(BookSyncState state) {
   switch (state) {
     case BookSyncState::Subscribing:
       return "Subscribing";
-    case BookSyncState::Buffering:
-      return "Buffering";
-    case BookSyncState::Replaying:
-      return "Replaying";
+    case BookSyncState::WaitingSnapshot:
+      return "WaitingSnapshot";
+    case BookSyncState::CatchingUp:
+      return "CatchingUp";
     case BookSyncState::Live:
       return "Live";
     case BookSyncState::Stale:
@@ -570,8 +570,7 @@ std::string HistoryJson(const HistoryPage& page) {
                    EscapeJson(trade->fees[fee].signed_amount.ToString()) + "}";
       }
       details += "]";
-    } else if (const auto* decision =
-                   std::get_if<ActionRecord>(&row.payload)) {
+    } else if (const auto* decision = std::get_if<ActionRecord>(&row.payload)) {
       kind = "decision";
       details = std::string(",\"accepted\":") +
                 (decision->accepted ? "true" : "false") +

@@ -113,10 +113,10 @@ struct EventTime {
   MonoTime receive_mono{};
 };
 
-struct InputStamp {
+struct InputTime {
   int64_t at_us = 0;
   uint64_t ordinal = 0;
-  bool operator==(const InputStamp&) const = default;
+  bool operator==(const InputTime&) const = default;
 };
 
 class Clock {

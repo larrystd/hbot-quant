@@ -26,7 +26,7 @@ class ReplayClock final : public Clock {
   ReplayClock(UtcTime utc_origin, MonoTime mono_origin)
       : utc_origin_(utc_origin), mono_origin_(mono_origin) {}
 
-  absl::Status Advance(InputStamp stamp) {
+  absl::Status Advance(InputTime stamp) {
     if (stamp.at_us < 0 || (last_ && (stamp.at_us < last_->at_us ||
                                       (stamp.at_us == last_->at_us &&
                                        stamp.ordinal <= last_->ordinal)))) {
@@ -43,12 +43,12 @@ class ReplayClock final : public Clock {
   MonoTime MonoNow() const override {
     return mono_origin_ + std::chrono::microseconds(last_ ? last_->at_us : 0);
   }
-  std::optional<InputStamp> LastInput() const { return last_; }
+  std::optional<InputTime> LastInput() const { return last_; }
 
  private:
   UtcTime utc_origin_;
   MonoTime mono_origin_;
-  std::optional<InputStamp> last_;
+  std::optional<InputTime> last_;
 };
 
 struct StopNewOrders {
@@ -81,7 +81,7 @@ struct ShardReport {
 };
 
 // G1 single-thread owner of strategy, book, Simulated events, tracker and risk.
-// The caller advances the clock and feeds inputs in InputStamp order.
+// The caller advances the clock and feeds inputs in InputTime order.
 class ShardRuntime {
  public:
   struct Config {
@@ -90,7 +90,7 @@ class ShardRuntime {
     StrategyId strategy_id;
     AccountId account;
     MarketSpec market;
-    BookScale scale;
+    TickLotSize scale;
     TradingRule rule;
     uint64_t stale_after_us = 60'000'000;
   };
@@ -99,17 +99,17 @@ class ShardRuntime {
                SimulatedExchange& exchange, RiskGate& risk,
                RecorderPort& recorder);
 
-  BookApplyResult Subscribe(uint64_t stream_epoch);
+  BookApplyResult Subscribe(uint64_t connection_id);
   absl::Status OnSnapshot(const BookSnapshot& snapshot);
   absl::Status OnDiff(const BookDiff& diff);
   absl::Status OnPublicTrade(const PublicTrade& trade);
-  // An external public stream may update this same BookSync and notify the
+  // An external public stream may update this same OrderBookSync and notify the
   // shard after each applied batch. All calls remain on the owning shard.
-  BookSync& MutableBookSync() { return book_; }
+  OrderBookSync& MutableBookSync() { return book_; }
   absl::Status OnBookApplied() { return UpdateSimulatedExchangeBbo(); }
-  absl::StatusOr<std::vector<ActionResult>> OnTimer(InputStamp stamp);
+  absl::StatusOr<std::vector<ActionResult>> OnTimer(InputTime stamp);
 
-  const BookView& Book() const { return book_.View(); }
+  const OrderBookView& Book() const { return book_.View(); }
   std::optional<OrderSnapshot> Order(const ClientOrderId& id) const {
     return tracker_.Snapshot(id);
   }
@@ -133,7 +133,7 @@ class ShardRuntime {
   SimulatedExchange& exchange_;
   RiskGate& risk_;
   RecorderPort& recorder_;
-  BookSync book_;
+  OrderBookSync book_;
   OrderTracker tracker_;
   uint64_t shard_sequence_ = 0;
   uint64_t next_action_batch_id_ = 1;

@@ -118,7 +118,7 @@ absl::StatusOr<uint64_t> ToUnits(std::string_view raw, const Decimal& quantum) {
     return Error(ErrorCode::kFeedTickSizeMismatch, exact.status().message());
   if (*exact != 0)
     return Error(ErrorCode::kFeedTickSizeMismatch,
-                 "raw level not divisible by BookScale");
+                 "raw level not divisible by TickLotSize");
   auto quotient = value->Divide(quantum);
   if (!quotient.ok())
     return Error(ErrorCode::kFeedTickSizeMismatch, quotient.status().message());
@@ -127,7 +127,7 @@ absl::StatusOr<uint64_t> ToUnits(std::string_view raw, const Decimal& quantum) {
 
 absl::StatusOr<std::vector<BookLevel>> Levels(simdjson::dom::element object,
                                               const char* key,
-                                              const BookScale& scale,
+                                              const TickLotSize& scale,
                                               bool allow_zero_quantity) {
   simdjson::dom::array raw_levels;
   if (object[key].get(raw_levels))
@@ -142,8 +142,8 @@ absl::StatusOr<std::vector<BookLevel>> Levels(simdjson::dom::element object,
     if (pair.at(0).get(price_text) || pair.at(1).get(quantity_text)) {
       return Invalid("level price and quantity must be strings");
     }
-    auto price = ToUnits(price_text, scale.quote_per_tick);
-    auto quantity = ToUnits(quantity_text, scale.base_per_lot);
+    auto price = ToUnits(price_text, scale.price_per_tick);
+    auto quantity = ToUnits(quantity_text, scale.amount_per_lot);
     if (!price.ok()) return price.status();
     if (!quantity.ok()) return quantity.status();
     if (*price == 0 || *price > uint64_t(std::numeric_limits<int64_t>::max()) ||
@@ -167,9 +167,10 @@ void ExchangeEventTime(simdjson::dom::element object, EventTime* time) {
 }  // namespace
 
 absl::StatusOr<BookSnapshot> DepthParser::ParseSnapshot(
-    std::string_view json, uint64_t stream_epoch, EventTime received) const {
-  if (!scale_.IsValid() || stream_epoch == 0)
-    return Error(ErrorCode::kFeedConfigInvalid, "invalid BookScale or epoch");
+    std::string_view json, uint64_t connection_id, EventTime received) const {
+  if (!scale_.IsValid() || connection_id == 0)
+    return Error(ErrorCode::kFeedConfigInvalid,
+                 "invalid TickLotSize or connection_id");
   simdjson::dom::parser parser;
   auto parsed = ParseRoot(&parser, json);
   if (!parsed.ok()) return parsed.status();
@@ -182,8 +183,8 @@ absl::StatusOr<BookSnapshot> DepthParser::ParseSnapshot(
   if (!asks.ok()) return asks.status();
   BookSnapshot snapshot;
   snapshot.market = market_;
-  snapshot.scale_version = scale_.scale_version;
-  snapshot.stream_epoch = stream_epoch;
+  snapshot.tick_lot_version = scale_.tick_lot_version;
+  snapshot.connection_id = connection_id;
   snapshot.last_sequence = *sequence;
   snapshot.bids = std::move(*bids);
   snapshot.asks = std::move(*asks);
@@ -192,10 +193,11 @@ absl::StatusOr<BookSnapshot> DepthParser::ParseSnapshot(
 }
 
 absl::StatusOr<BookDiff> DepthParser::ParseDiff(std::string_view json,
-                                                uint64_t stream_epoch,
+                                                uint64_t connection_id,
                                                 EventTime received) const {
-  if (!scale_.IsValid() || stream_epoch == 0)
-    return Error(ErrorCode::kFeedConfigInvalid, "invalid BookScale or epoch");
+  if (!scale_.IsValid() || connection_id == 0)
+    return Error(ErrorCode::kFeedConfigInvalid,
+                 "invalid TickLotSize or connection_id");
   simdjson::dom::parser parser;
   auto parsed = ParseRoot(&parser, json);
   if (!parsed.ok()) return parsed.status();
@@ -218,8 +220,8 @@ absl::StatusOr<BookDiff> DepthParser::ParseDiff(std::string_view json,
   ExchangeEventTime(*parsed, &received);
   BookDiff diff;
   diff.market = market_;
-  diff.scale_version = scale_.scale_version;
-  diff.stream_epoch = stream_epoch;
+  diff.tick_lot_version = scale_.tick_lot_version;
+  diff.connection_id = connection_id;
   diff.first_sequence = *first;
   diff.last_sequence = *last;
   diff.bids = std::move(*bids);
@@ -231,7 +233,7 @@ absl::StatusOr<BookDiff> DepthParser::ParseDiff(std::string_view json,
 absl::StatusOr<PublicTrade> DepthParser::ParseTrade(std::string_view json,
                                                     EventTime received) const {
   if (!scale_.IsValid())
-    return Error(ErrorCode::kFeedConfigInvalid, "invalid BookScale");
+    return Error(ErrorCode::kFeedConfigInvalid, "invalid TickLotSize");
   simdjson::dom::parser parser;
   auto parsed = ParseRoot(&parser, json);
   if (!parsed.ok()) return parsed.status();
@@ -246,8 +248,8 @@ absl::StatusOr<PublicTrade> DepthParser::ParseTrade(std::string_view json,
   auto quantity_text = Text(*parsed, "q");
   if (!price_text.ok()) return price_text.status();
   if (!quantity_text.ok()) return quantity_text.status();
-  auto price = ToUnits(*price_text, scale_.quote_per_tick);
-  auto quantity = ToUnits(*quantity_text, scale_.base_per_lot);
+  auto price = ToUnits(*price_text, scale_.price_per_tick);
+  auto quantity = ToUnits(*quantity_text, scale_.amount_per_lot);
   if (!price.ok()) return price.status();
   if (!quantity.ok()) return quantity.status();
   if (*price == 0 || *price > uint64_t(std::numeric_limits<int64_t>::max()) ||
@@ -299,8 +301,8 @@ absl::StatusOr<std::string> EventKind(std::string_view json) {
 
 MarketDataStream::MarketDataStream(StreamConfig config, DepthParser parser,
                                    HttpTransport& snapshot_http,
-                                   WebSocketClient& websocket, BookSync& book,
-                                   const Clock& clock,
+                                   WebSocketClient& websocket,
+                                   OrderBookSync& book, const Clock& clock,
                                    StreamCallbacks callbacks)
     : config_(std::move(config)),
       parser_(std::move(parser)),
@@ -329,7 +331,8 @@ absl::Status MarketDataStream::Fault(absl::Status status) {
 
 boost::asio::awaitable<absl::Status> MarketDataStream::RunCycle(
     size_t max_depth_messages) {
-  if (stopped_) co_return Error(ErrorCode::kFeedStopped, "market stream stopped");
+  if (stopped_)
+    co_return Error(ErrorCode::kFeedStopped, "market stream stopped");
   cycle_became_live_ = false;
   retry_after_ = std::chrono::steady_clock::duration::zero();
   if (epoch_ == std::numeric_limits<uint64_t>::max()) {
@@ -473,7 +476,7 @@ boost::asio::awaitable<void> MarketDataStream::Run() {
       if (consecutive_scale_mismatches >= 3) {
         if (callbacks_.on_error)
           callbacks_.on_error(Error(ErrorCode::kFeedConfigInvalid,
-                                    "repeated BookScale mismatch"));
+                                    "repeated TickLotSize mismatch"));
         break;
       }
       if (consecutive_resyncs >= 8) break;

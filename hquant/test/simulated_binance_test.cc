@@ -85,7 +85,7 @@ TEST(SimulatedBinanceTest,
   const MarketId market{ExchangeId("binance"), InstrumentKind::Spot, "BTCUSDT"};
   const MarketSpec spec{market, AssetId("BTC"), AssetId("USDT")};
   const StrategyId strategy_id{1, StrategyName("simple_pmm")};
-  const BookScale scale{D("0.01"), D("0.001"), 1};
+  const TickLotSize scale{D("0.01"), D("0.001"), 1};
   const TradingRule rule{market,    D("0.01"), D("0.001"), D("0.001"),
                          D("0.01"), {},        1,          clock.UtcNow()};
   SimplePmm strategy({strategy_id, account, spec, D("0.01"), D("0.001"),

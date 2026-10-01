@@ -13,18 +13,18 @@
 namespace hquant {
 
 struct ReplaySubscribe {
-  uint64_t stream_epoch = 0;
+  uint64_t connection_id = 0;
 };
 
 struct ReplaySnapshot {
-  uint64_t stream_epoch = 0;
+  uint64_t connection_id = 0;
   uint64_t last_sequence = 0;
   std::vector<BookLevel> bids;
   std::vector<BookLevel> asks;
 };
 
 struct ReplayDiff {
-  uint64_t stream_epoch = 0;
+  uint64_t connection_id = 0;
   uint64_t first_sequence = 0;
   uint64_t last_sequence = 0;
   std::vector<BookLevel> bids;
@@ -43,7 +43,7 @@ using ReplayPayload = std::variant<ReplaySubscribe, ReplaySnapshot, ReplayDiff,
                                    ReplayTimer, ReplayPublicTrade>;
 
 struct ReplayInput {
-  InputStamp stamp;
+  InputTime stamp;
   ReplayPayload payload;
 };
 

@@ -39,14 +39,14 @@ struct TriggerPolicy {
 };
 
 struct StrategyInput {
-  const BookView& book;
-  const BookScale& book_scale;
+  const OrderBookView& book;
+  const TickLotSize& tick_lot_size;
   const TradingRule& trading_rule;
   std::optional<Decimal> last_trade_price;
   bool ready = false;
   std::span<const OrderSnapshot> orders;
   std::span<const Balance> balances;
-  InputStamp input;
+  InputTime input;
   const Clock& clock;
 };
 

@@ -10,7 +10,7 @@
 namespace hquant::fixtures {
 
 struct FixtureStep {
-  InputStamp stamp;
+  InputTime stamp;
   std::string event_json;
   std::string output_json;
   std::string risk_expectation_json;

@@ -61,7 +61,7 @@ std::string ReplayOnce() {
                         "BTCUSDT"};
   const MarketSpec spec{market, AssetId("BTC"), AssetId("USDT")};
   const StrategyId strategy_id{1, StrategyName("simple_pmm")};
-  const BookScale scale{D("0.01"), D("0.001"), 1};
+  const TickLotSize scale{D("0.01"), D("0.001"), 1};
   const TradingRule rule{market,    D("0.01"),    D("0.001"), D("0.001"),
                          D("0.01"), std::nullopt, 1,          origin};
   SimplePmmConfig strategy_config{strategy_id,
@@ -97,13 +97,13 @@ std::string ReplayOnce() {
       strategy, sim_exchange, risk, **recorder);
 
   if (!clock.Advance({0, 1}).ok() ||
-      shard.Subscribe(1).state != BookSyncState::Buffering) {
+      shard.Subscribe(1).state != BookSyncState::WaitingSnapshot) {
     throw std::runtime_error("subscribe failed");
   }
   BookSnapshot snapshot;
   snapshot.market = market;
-  snapshot.scale_version = 1;
-  snapshot.stream_epoch = 1;
+  snapshot.tick_lot_version = 1;
+  snapshot.connection_id = 1;
   snapshot.last_sequence = 10;
   snapshot.bids = {{{9999}, {100}}};
   snapshot.asks = {{{10001}, {100}}};
@@ -112,8 +112,8 @@ std::string ReplayOnce() {
     throw std::runtime_error("snapshot failed");
   BookDiff bridge;
   bridge.market = market;
-  bridge.scale_version = 1;
-  bridge.stream_epoch = 1;
+  bridge.tick_lot_version = 1;
+  bridge.connection_id = 1;
   bridge.first_sequence = 11;
   bridge.last_sequence = 11;
   bridge.time = snapshot.time;

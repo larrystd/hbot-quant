@@ -38,9 +38,9 @@ int RunDomainChecks() {
   auto tick = hquant::Decimal::Parse("0.01");
   auto lot = hquant::Decimal::Parse("0.001");
   if (!tick.ok() || !lot.ok()) return 3;
-  hquant::BookScale scale{*tick, *lot, 1};
+  hquant::TickLotSize scale{*tick, *lot, 1};
   if (!scale.IsValid()) return 4;
-  scale.base_per_lot = hquant::Decimal();
+  scale.amount_per_lot = hquant::Decimal();
   if (scale.IsValid()) return 5;
   return 0;
 }

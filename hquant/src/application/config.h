@@ -25,7 +25,7 @@ struct AccountConfig {
 
 struct MarketConfig {
   MarketSpec spec;
-  BookScale book_scale;
+  TickLotSize tick_lot_size;
   TradingRule trading_rule;
 };
 

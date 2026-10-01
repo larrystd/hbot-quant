@@ -24,10 +24,10 @@ market_specs:
     exchange: binance
     base_asset: BTC
     quote_asset: USDT
-    book_scale:
-      quote_per_tick: "0.01"
-      base_per_lot: "0.001"
-      scale_version: 1
+    tick_lot_size:
+      price_per_tick: "0.01"
+      amount_per_lot: "0.001"
+      tick_lot_version: 1
     trading_rule:
       price_increment: "0.01"
       base_increment: "0.001"
@@ -37,10 +37,10 @@ market_specs:
     exchange: binance
     base_asset: ETH
     quote_asset: USDT
-    book_scale:
-      quote_per_tick: "0.01"
-      base_per_lot: "0.001"
-      scale_version: 1
+    tick_lot_size:
+      price_per_tick: "0.01"
+      amount_per_lot: "0.001"
+      tick_lot_version: 1
     trading_rule:
       price_increment: "0.01"
       base_increment: "0.001"

@@ -81,11 +81,11 @@ absl::Status ReadReplayFile(const std::string& path, const ReplaySink& sink) {
     if (!kind.ok()) return kind.status();
     ReplayInput event{{*at, *ordinal}, ReplayTimer{}};
     if (*kind == "subscribe") {
-      auto epoch = Unsigned(input, "stream_epoch");
+      auto epoch = Unsigned(input, "connection_id");
       if (!epoch.ok()) return epoch.status();
       event.payload = ReplaySubscribe{*epoch};
     } else if (*kind == "snapshot" || *kind == "diff") {
-      auto epoch = Unsigned(input, "stream_epoch");
+      auto epoch = Unsigned(input, "connection_id");
       auto bids = Levels(input, "bids");
       auto asks = Levels(input, "asks");
       if (!epoch.ok()) return epoch.status();

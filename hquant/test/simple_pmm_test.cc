@@ -33,7 +33,7 @@ int64_t PriceTicksFor(std::string text) {
   return std::stoll(digits);
 }
 
-class FakeBook final : public BookView {
+class FakeBook final : public OrderBookView {
  public:
   void SetMid(std::string text) { price_ = PriceTicksFor(std::move(text)); }
   BookSyncState State() const override { return BookSyncState::Live; }
@@ -102,7 +102,7 @@ TEST(SimplePmmTest, ReplaysEveryPythonFixtureStep) {
     SimplePmm strategy(config);
     FakeBook book;
     FakeClock clock;
-    BookScale scale{D("0.000001"), D("0.001"), 1};
+    TickLotSize scale{D("0.000001"), D("0.001"), 1};
     TradingRule rule{config.market.market,
                      D("0.01"),
                      D("0.001"),

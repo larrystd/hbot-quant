@@ -11,10 +11,10 @@
   "divergence_reason": "Python tracker has no explicit per-book Stale state or new-order gate; C++ marks the book Stale after the configured silence interval and resumes only on a contiguous update.",
   "setup": {
     "market": "BTC-USDT",
-    "quote_per_tick": "0.01",
-    "base_per_lot": "0.001",
-    "scale_version": 1,
-    "stream_epoch": 1,
+    "price_per_tick": "0.01",
+    "amount_per_lot": "0.001",
+    "tick_lot_version": 1,
+    "connection_id": 1,
     "stale_after_us": 5000000
   },
   "inputs": [
@@ -23,7 +23,7 @@
       "ordinal": 0,
       "event": {
         "kind": "subscribe",
-        "stream_epoch": 1
+        "connection_id": 1
       }
     },
     {
@@ -31,7 +31,7 @@
       "ordinal": 0,
       "event": {
         "kind": "diff",
-        "stream_epoch": 1,
+        "connection_id": 1,
         "first_sequence": 101,
         "last_sequence": 101,
         "bids": [],
@@ -43,7 +43,7 @@
       "ordinal": 0,
       "event": {
         "kind": "snapshot",
-        "stream_epoch": 1,
+        "connection_id": 1,
         "last_sequence": 100,
         "bids": [
           [
@@ -79,7 +79,7 @@
       "ordinal": 0,
       "event": {
         "kind": "diff",
-        "stream_epoch": 1,
+        "connection_id": 1,
         "first_sequence": 102,
         "last_sequence": 102,
         "bids": [
@@ -97,7 +97,7 @@
       "at_us": 0,
       "ordinal": 0,
       "output": {
-        "state": "Buffering",
+        "state": "WaitingSnapshot",
         "last_sequence": null,
         "applied": false,
         "reason": "None",
@@ -113,7 +113,7 @@
       "at_us": 100,
       "ordinal": 0,
       "output": {
-        "state": "Buffering",
+        "state": "WaitingSnapshot",
         "last_sequence": null,
         "applied": false,
         "reason": "None",

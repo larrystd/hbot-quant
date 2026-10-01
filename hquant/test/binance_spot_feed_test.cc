@@ -28,14 +28,14 @@ Decimal ParserD(const char* text) { return *Decimal::Parse(text); }
 MarketId ParserMarket() {
   return MarketId{ExchangeId("binance"), InstrumentKind::Spot, "BTCUSDT"};
 }
-BookScale ParserScale() {
-  return BookScale{ParserD("0.01"), ParserD("0.001"), 1};
+TickLotSize ParserScale() {
+  return TickLotSize{ParserD("0.01"), ParserD("0.001"), 1};
 }
 
 TEST(DepthParserTest, SnapshotAndOverlappingDiffReplayThroughBookSync) {
   DepthParser parser(ParserMarket(), ParserScale());
-  BookSync sync(ParserMarket(), 1);
-  EXPECT_EQ(sync.Subscribe(1).state, BookSyncState::Buffering);
+  OrderBookSync sync(ParserMarket(), 1);
+  EXPECT_EQ(sync.Subscribe(1).state, BookSyncState::WaitingSnapshot);
   auto diff = parser.ParseDiff(R"({"e":"depthUpdate","E":1700000000000,
     "s":"BTCUSDT","U":99,"u":103,"b":[["99.90","0"],
     ["100.00","2.000"]],"a":[["100.10","1.000"]]})",
@@ -48,7 +48,7 @@ TEST(DepthParserTest, SnapshotAndOverlappingDiffReplayThroughBookSync) {
   EXPECT_EQ(diff->bids[0].quantity_lots.value, 0);
   EXPECT_EQ(diff->bids[1].quantity_lots.value, 2000);
   EXPECT_TRUE(diff->time.exchange_utc.has_value());
-  EXPECT_EQ(sync.OnDiff(*diff).state, BookSyncState::Buffering);
+  EXPECT_EQ(sync.OnDiff(*diff).state, BookSyncState::WaitingSnapshot);
 
   auto snapshot = parser.ParseSnapshot(R"({"lastUpdateId":100,
     "bids":[["99.90","1.000"],["99.80","1.000"]],
@@ -103,12 +103,13 @@ TEST(DepthParserTest, RejectsInvalidRawScaleAndWrongSymbol) {
 }
 
 TEST(DepthParserTest, WrongMarketResynchronizesBook) {
-  BookSync sync(ParserMarket(), 1);
+  OrderBookSync sync(ParserMarket(), 1);
   sync.Subscribe(1);
   BookDiff wrong;
-  wrong.market = MarketId{ExchangeId("binance"), InstrumentKind::Spot, "ETHUSDT"};
-  wrong.scale_version = 1;
-  wrong.stream_epoch = 1;
+  wrong.market =
+      MarketId{ExchangeId("binance"), InstrumentKind::Spot, "ETHUSDT"};
+  wrong.tick_lot_version = 1;
+  wrong.connection_id = 1;
   wrong.first_sequence = 1;
   wrong.last_sequence = 1;
   const auto result = sync.OnDiff(wrong);
@@ -209,8 +210,8 @@ void RunLocalCycle(uint64_t second_first, bool retry_snapshot,
   asio::io_context io;
   HttpClient http_client(io, "127.0.0.1", http_port);
   WebSocketClient websocket(io, "127.0.0.1", ws_port, "/ws/btcusdt@depth");
-  BookScale scale{D("0.01"), D("0.001"), 1};
-  BookSync book(Market(), 1);
+  TickLotSize scale{D("0.01"), D("0.001"), 1};
+  OrderBookSync book(Market(), 1);
   TestClock clock;
   StreamConfig config;
   config.symbol = "BTCUSDT";
@@ -279,7 +280,7 @@ TEST(MarketDataStreamTest, InvalidConfigStopsRun) {
   asio::io_context io;
   HttpClient http_client(io, "127.0.0.1", "1");
   WebSocketClient websocket(io, "127.0.0.1", "1", "/ws");
-  BookSync book(Market(), 1);
+  OrderBookSync book(Market(), 1);
   TestClock clock;
   StreamConfig config;
   config.symbol = "ETHUSDT";
@@ -364,7 +365,7 @@ TEST(MarketDataStreamTest, InvalidMessageReconnectsAndRecovers) {
   asio::io_context io;
   HttpClient http_client(io, "127.0.0.1", http_port);
   WebSocketClient websocket_client(io, "127.0.0.1", ws_port, "/ws");
-  BookSync book(Market(), 1);
+  OrderBookSync book(Market(), 1);
   TestClock clock;
   StreamConfig config;
   config.symbol = "BTCUSDT";
@@ -431,7 +432,7 @@ std::string RawLevels(simdjson::dom::element event, const char* key) {
   return result + "]";
 }
 
-void ExpectBbo(simdjson::dom::element expected, const BookView& view) {
+void ExpectBbo(simdjson::dom::element expected, const OrderBookView& view) {
   auto bbo = expected["bbo"].value();
   for (const auto& [name, actual] :
        {std::pair<const char*, std::optional<BookLevel>>{"bid", view.BestBid()},
@@ -462,9 +463,9 @@ TEST(F1AdapterTest, ReplaysOrderBookFixturesThroughRawBinanceJson) {
     ASSERT_TRUE(fixture.ok()) << fixture.status();
     SCOPED_TRACE(name);
     MarketId market{ExchangeId("binance"), InstrumentKind::Spot, "BTCUSDT"};
-    DepthParser parser(market, BookScale{*Decimal::Parse("0.01"),
-                                         *Decimal::Parse("0.001"), 1});
-    BookSync sync(market, 1);
+    DepthParser parser(market, TickLotSize{*Decimal::Parse("0.01"),
+                                           *Decimal::Parse("0.001"), 1});
+    OrderBookSync sync(market, 1);
     for (const auto& step : fixture->steps) {
       SCOPED_TRACE(step.stamp.at_us);
       simdjson::dom::parser input_parser, output_parser;
@@ -473,14 +474,14 @@ TEST(F1AdapterTest, ReplaysOrderBookFixturesThroughRawBinanceJson) {
       std::string_view kind = event["kind"];
       BookApplyResult result;
       if (kind == "subscribe") {
-        result = sync.Subscribe(uint64_t(event["stream_epoch"]));
+        result = sync.Subscribe(uint64_t(event["connection_id"]));
       } else if (kind == "snapshot") {
         std::string json = "{\"lastUpdateId\":" +
                            std::to_string(uint64_t(event["last_sequence"])) +
                            ",\"bids\":" + RawLevels(event, "bids") +
                            ",\"asks\":" + RawLevels(event, "asks") + "}";
         auto snapshot =
-            parser.ParseSnapshot(json, uint64_t(event["stream_epoch"]), {});
+            parser.ParseSnapshot(json, uint64_t(event["connection_id"]), {});
         ASSERT_TRUE(snapshot.ok()) << snapshot.status();
         result = sync.OnSnapshot(*snapshot);
       } else if (kind == "diff") {
@@ -490,14 +491,17 @@ TEST(F1AdapterTest, ReplaysOrderBookFixturesThroughRawBinanceJson) {
             ",\"u\":" + std::to_string(uint64_t(event["last_sequence"])) +
             ",\"b\":" + RawLevels(event, "bids") +
             ",\"a\":" + RawLevels(event, "asks") + "}";
-        auto diff = parser.ParseDiff(json, uint64_t(event["stream_epoch"]), {});
+        auto diff =
+            parser.ParseDiff(json, uint64_t(event["connection_id"]), {});
         ASSERT_TRUE(diff.ok()) << diff.status();
         result = sync.OnDiff(*diff);
       } else
         FAIL() << "unexpected F1 event";
 
       std::string_view state = expected["state"];
-      EXPECT_EQ(result.state == BookSyncState::Buffering ? "Buffering" : "Live",
+      EXPECT_EQ(result.state == BookSyncState::WaitingSnapshot
+                    ? "WaitingSnapshot"
+                    : "Live",
                 state);
       auto sequence = expected["last_sequence"].value();
       if (sequence.is_null())

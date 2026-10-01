@@ -18,25 +18,25 @@ ShardRuntime::ShardRuntime(Config config, const Clock& clock,
       exchange_(exchange),
       risk_(risk),
       recorder_(recorder),
-      book_(config_.market.market, config_.scale.scale_version, 8192, 1024,
+      book_(config_.market.market, config_.scale.tick_lot_version, 8192, 1024,
             config_.stale_after_us),
       action_executor_(risk_, exchange_, recorder_, config_.run, config_.shard,
-                  shard_sequence_) {}
+                       shard_sequence_) {}
 
-BookApplyResult ShardRuntime::Subscribe(uint64_t stream_epoch) {
-  return book_.Subscribe(stream_epoch);
+BookApplyResult ShardRuntime::Subscribe(uint64_t connection_id) {
+  return book_.Subscribe(connection_id);
 }
 
 absl::StatusOr<Decimal> ShardRuntime::Price(PriceTicks ticks) const {
   auto count = Decimal::Parse(std::to_string(ticks.value));
   if (!count.ok()) return count.status();
-  return count->Multiply(config_.scale.quote_per_tick);
+  return count->Multiply(config_.scale.price_per_tick);
 }
 
 absl::StatusOr<Decimal> ShardRuntime::Amount(QuantityLots lots) const {
   auto count = Decimal::Parse(std::to_string(lots.value));
   if (!count.ok()) return count.status();
-  return count->Multiply(config_.scale.base_per_lot);
+  return count->Multiply(config_.scale.amount_per_lot);
 }
 
 absl::Status ShardRuntime::UpdateSimulatedExchangeBbo() {
@@ -99,7 +99,7 @@ std::vector<Balance> ShardRuntime::BalanceViews() const {
 }
 
 absl::StatusOr<std::vector<ActionResult>> ShardRuntime::OnTimer(
-    InputStamp stamp) {
+    InputTime stamp) {
   if (stamp.at_us < 0)
     return Error(ErrorCode::kInputTimeInvalid, "negative input time");
   const auto now_us = clock_.MonoNow().time_since_epoch().count();
