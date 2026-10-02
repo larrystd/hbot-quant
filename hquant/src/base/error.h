@@ -72,7 +72,7 @@ enum class ErrorCode : int32_t {
   kOrderTypeUnsupported = -13022,
   kOrderPriceOrAmountInvalid = -13023,
   kOrderBelowMinAmount = -13024,
-  kOrderBelowMinNotional = -13025,
+  kOrderBelowMinOrderValue = -13025,
   kOrderAboveMaxAmount = -13026,
   kOrderNotOnTick = -13027,
   kExchangeOrderIdConflict = -13028,

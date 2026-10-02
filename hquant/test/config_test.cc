@@ -34,7 +34,7 @@ market_specs:
       price_increment: "0.01"
       base_increment: "0.001"
       min_base_amount: "0.001"
-      min_notional: "0.01"
+      min_order_value: "0.01"
 strategy_configs:
   - strategy_id: 1
     strategy: simple_pmm

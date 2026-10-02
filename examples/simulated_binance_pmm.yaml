@@ -23,7 +23,7 @@ market_specs:
       price_increment: "0.01"
       base_increment: "0.001"
       min_base_amount: "0.001"
-      min_notional: "5"
+      min_order_value: "5"
 
 strategy_configs:
   - strategy_id: 1

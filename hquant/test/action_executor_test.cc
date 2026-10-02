@@ -67,7 +67,7 @@ int main() {
   rule.price_increment = D("0.01");
   rule.base_increment = D("0.001");
   rule.min_base_amount = D("0.001");
-  rule.min_notional = D("1");
+  rule.min_order_value = D("1");
   rule.revision = 1;
   rule.observed_at = now;
   hquant::RiskGate risk(

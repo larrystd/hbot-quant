@@ -129,13 +129,13 @@ absl::Status SimpleSimulatedExchange::ValidateAndQuantize(
     return Error(ErrorCode::kOrderBelowMinAmount,
                  "Simulated order below minimum amount");
   }
-  auto notional = amount->Multiply(*price);
-  if (!notional.ok())
+  auto order_value = amount->Multiply(*price);
+  if (!order_value.ok())
     return Error(ErrorCode::kDecimalArithmeticFailed,
-                 "Simulated order notional cannot be calculated");
-  if (!AtLeast(*notional, config_.trading_rule.min_notional)) {
-    return Error(ErrorCode::kOrderBelowMinNotional,
-                 "Simulated order below min notional");
+                 "Simulated order value cannot be calculated");
+  if (!AtLeast(*order_value, config_.trading_rule.min_order_value)) {
+    return Error(ErrorCode::kOrderBelowMinOrderValue,
+                 "Simulated order below minimum order value");
   }
   if (config_.trading_rule.max_base_amount &&
       !AtLeast(*config_.trading_rule.max_base_amount, *amount)) {

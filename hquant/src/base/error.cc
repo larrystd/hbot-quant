@@ -123,7 +123,7 @@ constexpr std::array<ErrorInfo, 125> kErrors{{
      Recovery::Reject, absl::StatusCode::kInvalidArgument},
     {ErrorCode::kOrderBelowMinAmount, "ORDER_BELOW_MIN_AMOUNT",
      Recovery::Reject, absl::StatusCode::kFailedPrecondition},
-    {ErrorCode::kOrderBelowMinNotional, "ORDER_BELOW_MIN_NOTIONAL",
+    {ErrorCode::kOrderBelowMinOrderValue, "ORDER_BELOW_MIN_ORDER_VALUE",
      Recovery::Reject, absl::StatusCode::kFailedPrecondition},
     {ErrorCode::kOrderAboveMaxAmount, "ORDER_ABOVE_MAX_AMOUNT",
      Recovery::Reject, absl::StatusCode::kFailedPrecondition},

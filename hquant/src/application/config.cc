@@ -462,16 +462,16 @@ absl::StatusOr<AppConfig> ParseConfig(std::string_view yaml_text) {
       auto price_increment = Number(rule, "price_increment", true);
       auto base_increment = Number(rule, "base_increment", true);
       auto min_base = Number(rule, "min_base_amount", false);
-      auto min_notional = Number(rule, "min_notional", false);
+      auto min_order_value = Number(rule, "min_order_value", false);
       if (!price_increment.ok()) return price_increment.status();
       if (!base_increment.ok()) return base_increment.status();
       if (!min_base.ok()) return min_base.status();
-      if (!min_notional.ok()) return min_notional.status();
+      if (!min_order_value.ok()) return min_order_value.status();
       market.trading_rule.market = market.spec.market;
       market.trading_rule.price_increment = *price_increment;
       market.trading_rule.base_increment = *base_increment;
       market.trading_rule.min_base_amount = *min_base;
-      market.trading_rule.min_notional = *min_notional;
+      market.trading_rule.min_order_value = *min_order_value;
       if (item["stale_after"]) {
         auto age = Duration(item, "stale_after");
         if (!age.ok()) return age.status();

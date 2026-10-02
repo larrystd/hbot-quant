@@ -128,7 +128,7 @@ struct PublicTrade {
 // 一个交易对的下单规则，订单发出前检查。
 //   price_increment / base_increment：价格、数量向下取整到这两个步长；
 //       没对齐步长的订单被拒绝（ORDER_NOT_ON_TICK）。
-//   min_base_amount / max_base_amount / min_notional：数量和金额的限制，
+//   min_base_amount / max_base_amount / min_order_value：数量和金额的限制，
 //       金额 = 数量 × 价格。
 //   revision / observed_at：规则是什么时候得到的；规则超过 RiskGate 的
 //       max_rule_age 后，拒绝下单（RISK_TRADING_RULE_STALE）。
@@ -139,7 +139,7 @@ struct TradingRule {
   Decimal price_increment;
   Decimal base_increment;
   Decimal min_base_amount;
-  Decimal min_notional;
+  Decimal min_order_value;
   std::optional<Decimal> max_base_amount;
   uint64_t revision = 0;
   UtcTime observed_at{};

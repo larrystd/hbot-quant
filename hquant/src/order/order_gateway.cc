@@ -251,13 +251,13 @@ absl::Status BinanceOrderGateway::ValidateAndQuantize(
     return Error(ErrorCode::kOrderBelowMinAmount,
                  "Binance quantity below minimum amount");
   }
-  auto notional = amount->Multiply(*price);
-  if (!notional.ok())
+  auto order_value = amount->Multiply(*price);
+  if (!order_value.ok())
     return Error(ErrorCode::kDecimalArithmeticFailed,
-                 "Binance order notional cannot be calculated");
-  if (!AtLeast(*notional, config_.trading_rule.min_notional))
-    return Error(ErrorCode::kOrderBelowMinNotional,
-                 "Binance order below minimum notional");
+                 "Binance order value cannot be calculated");
+  if (!AtLeast(*order_value, config_.trading_rule.min_order_value))
+    return Error(ErrorCode::kOrderBelowMinOrderValue,
+                 "Binance order below minimum order value");
   if (config_.trading_rule.max_base_amount &&
       !AtLeast(*config_.trading_rule.max_base_amount, *amount))
     return Error(ErrorCode::kOrderAboveMaxAmount,

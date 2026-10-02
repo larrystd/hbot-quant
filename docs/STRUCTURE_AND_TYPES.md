@@ -118,7 +118,7 @@ flowchart LR
 
 | 类型 / 位置 | 必有字段、状态或约束 |
 | --- | --- |
-| `TradingRule` / `base/market.h` | `{market, price_increment, base_increment, min_base_amount, min_notional, max_base_amount?, revision, observed_at}`，金额是 `Decimal`，规则有效期由风险门检查。限价单价格和数量按下单规则量化。 |
+| `TradingRule` / `base/market.h` | `{market, price_increment, base_increment, min_base_amount, min_order_value, max_base_amount?, revision, observed_at}`，金额是 `Decimal`，规则有效期由风险门检查。限价单价格和数量按下单规则量化。 |
 | `OrderRequest` / `base/order.h` | `{account, market, side, type, base_amount: Decimal, limit_price?: Decimal, time_in_force?}`；首版只接受现货 Limit/LimitMaker，`type` 与 price/TIF 的组合严格校验。显式 account 使后续 XEMM 两账户动作无歧义；衍生品杠杆/仓位另扩展。 |
 | `SubmitOrder`、`CancelOrder`、`ActionBatch` / `strategy/strategy.h` | `SubmitOrder={strategy_id, request}`，`CancelOrder={strategy_id, client_id}`；`ActionBatch={ordered vector<variant<SubmitOrder,CancelOrder>>}`。策略短同步回调返回批次；`ActionExecutor` **按 vector 顺序**验证/执行，并生成可观测拒绝事件。 |
 | `TriggerPolicy` / `strategy/strategy.h` | `{book_mode: None/BboChanged/EveryAppliedBatch, on_public_trade, on_order_update, on_fill, timer_period?, coalesce_window?, min_action_interval}`；`simple_pmm` 首版靠 15 秒 Timer 刷新，盘口只更新可读状态。 |

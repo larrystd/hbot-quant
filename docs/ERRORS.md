@@ -157,7 +157,7 @@ payload 中的业务码以十进制 ASCII 编码；读取到未知编号、非�
 | -13022 | `ORDER_TYPE_UNSUPPORTED` | Reject | InvalidArgument | 不支持的订单类型或 timeInForce 组合 | `shard/action_executor`、`order/order_gateway` |
 | -13023 | `ORDER_PRICE_OR_AMOUNT_INVALID` | Reject | InvalidArgument | 价格或数量不为正，或缺少限价 | `shard/action_executor`、`order/risk` |
 | -13024 | `ORDER_BELOW_MIN_AMOUNT` | Reject | FailedPrecondition | 订单数量低于交易规则下限 | `order/risk` |
-| -13025 | `ORDER_BELOW_MIN_NOTIONAL` | Reject | FailedPrecondition | 订单名义金额低于交易规则下限 | `order/risk` |
+| -13025 | `ORDER_BELOW_MIN_ORDER_VALUE` | Reject | FailedPrecondition | 订单金额低于交易规则下限 | `order/risk` |
 | -13026 | `ORDER_ABOVE_MAX_AMOUNT` | Reject | FailedPrecondition | 订单数量超过交易规则上限 | `order/risk` |
 | -13027 | `ORDER_NOT_ON_TICK` | Reject | FailedPrecondition | 价格或数量未对齐交易步长 | `order/risk` |
 | -13028 | `EXCHANGE_ORDER_ID_CONFLICT` | Reconcile | FailedPrecondition | 交易所订单号冲突或在回报中变化 | `order/order_tracker` |

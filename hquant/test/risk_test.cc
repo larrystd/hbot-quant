@@ -25,7 +25,7 @@ int RiskGateTestMain() {
   rule.price_increment = D("0.01");
   rule.base_increment = D("0.001");
   rule.min_base_amount = D("0.001");
-  rule.min_notional = D("1");
+  rule.min_order_value = D("1");
   rule.revision = 1;
   rule.observed_at = now;
   hquant::RiskGate gate(
@@ -159,7 +159,7 @@ int BudgetTestMain() {
   rule.price_increment = BudgetD("0.01");
   rule.base_increment = BudgetD("0.001");
   rule.min_base_amount = BudgetD("0.001");
-  rule.min_notional = BudgetD("1");
+  rule.min_order_value = BudgetD("1");
   rule.revision = 1;
   rule.observed_at = now;
   const StrategyId strategy_id{1, StrategyName("simple_pmm")};

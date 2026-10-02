@@ -259,16 +259,17 @@ ErrorCode RiskGate::TryHoldCode(const StrategyId& strategy_id,
     if (*max_amount > 0)
       return reject(ErrorCode::kOrderAboveMaxAmount, "above maximum amount");
   }
-  auto notional = request.quantity.Multiply(*request.limit_price);
-  if (!notional.ok())
+  auto order_value = request.quantity.Multiply(*request.limit_price);
+  if (!order_value.ok())
     return reject(ErrorCode::kDecimalArithmeticFailed,
-                  "notional calculation failed");
-  auto min_notional = notional->Compare(rule.min_notional);
-  if (!min_notional.ok())
+                  "order value calculation failed");
+  auto min_order_value = order_value->Compare(rule.min_order_value);
+  if (!min_order_value.ok())
     return reject(ErrorCode::kDecimalArithmeticFailed,
-                  "minimum notional comparison failed");
-  if (*min_notional < 0)
-    return reject(ErrorCode::kOrderBelowMinNotional, "below minimum notional");
+                  "minimum order value comparison failed");
+  if (*min_order_value < 0)
+    return reject(ErrorCode::kOrderBelowMinOrderValue,
+                  "below minimum order value");
 
   const AssetId& spent_asset =
       request.side == Side::Buy ? market.quote_asset : market.base_asset;
