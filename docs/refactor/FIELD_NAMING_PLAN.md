@@ -104,6 +104,8 @@ grep -rnw "base_amount\|quote_amount\|cumulative_base\|cumulative_quote\|reporte
 
 `hquant_bench order-history` 输出的 JSON 是对外格式，改了会影响读取它的脚本。**执行前先和需求方确认要不要改。** 确认要改时：
 
+执行状态：暂缓。当前继续输出 `"client_id"` 和记录级 `"amount"`，保持现有脚本兼容。因此第 1 步的旧名搜索仍会命中 `control_server.cc` 中保留的 JSON 键。
+
 | 现在 | 改成 | 位置 |
 |---|---|---|
 | `"client_id"` | `"client_order_id"` | `application/control_server.cc` 的 `OrderHistoryJson`（约第 490–507 行） |
