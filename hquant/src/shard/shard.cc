@@ -361,7 +361,7 @@ absl::Status Shard::ProcessAccountEvent(const AccountEvent& event) {
       auto status = risk_.ApplyTrade(
           it->second,
           buy ? config_.market.quote_asset : config_.market.base_asset,
-          buy ? trade->quote_amount : trade->base_amount, Decimal());
+          buy ? trade->value : trade->quantity, Decimal());
       if (!status.ok()) return status;
     }
     auto status = Record(*trade, updated->snapshot.strategy_id);

@@ -121,7 +121,7 @@ ActionBatch SimplePmm::Decide(const StrategyInput& context, Trigger /*why*/) {
     order.market = config_.market.market;
     order.side = side;
     order.type = OrderType::Limit;
-    order.base_amount = amount;
+    order.quantity = amount;
     order.limit_price = price;
     order.time_in_force = TimeInForce::Gtc;
     return order;

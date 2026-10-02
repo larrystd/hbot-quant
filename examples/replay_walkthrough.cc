@@ -160,7 +160,7 @@ class PrintingRecorder final : public OrderHistoryWriter {
           if constexpr (std::is_same_v<T, PreparedOrder>) {
             std::cout << "[待发订单] " << payload.client_order_id.value << "："
                       << SideName(payload.request.side) << " "
-                      << Plain(payload.request.base_amount) << " @ "
+                      << Plain(payload.request.quantity) << " @ "
                       << Plain(*payload.request.limit_price);
           } else if constexpr (std::is_same_v<T, ActionRecord>) {
             std::cout << "[决策] "
@@ -179,7 +179,7 @@ class PrintingRecorder final : public OrderHistoryWriter {
                       << StatusName(payload.exchange_status);
           } else if constexpr (std::is_same_v<T, TradeUpdate>) {
             std::cout << "[成交] " << payload.client_order_id->value << " 成交 "
-                      << Plain(payload.base_amount) << " @ "
+                      << Plain(payload.quantity) << " @ "
                       << Plain(payload.price);
             for (const auto& fee : payload.fees) {
               std::cout << "，手续费 " << Plain(fee.signed_amount) << " "
@@ -245,7 +245,7 @@ void PrintState(const Shard& shard, const SimpleSimulatedExchange& sim_exchange,
   for (const auto& order : orders) {
     std::cout << " [" << order.client_order_id.value << " "
               << SideName(order.request.side) << " "
-              << Plain(order.request.base_amount) << " @ "
+              << Plain(order.request.quantity) << " @ "
               << Plain(*order.request.limit_price) << "]";
   }
   std::cout << "\n  余额:";

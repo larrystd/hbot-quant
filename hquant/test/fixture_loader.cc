@@ -93,7 +93,7 @@ bool ValidateSetup(const std::string& family, simdjson::dom::element setup) {
     std::string client_order_id, side;
     return String(setup, "client_order_id", &client_order_id) && !client_order_id.empty() &&
            String(setup, "side", &side) && OneOf(side, {"Buy", "Sell"}) &&
-           PositiveDecimalString(setup, "base_amount") &&
+           PositiveDecimalString(setup, "quantity") &&
            PositiveDecimalString(setup, "limit_price") &&
            DecimalMap(setup, "initial_reservation_by_asset");
   }
@@ -177,8 +177,8 @@ bool ValidateEvent(const std::string& family, simdjson::dom::element event) {
       std::string trade_id, price, amount, quote;
       return String(event, "trade_id", &trade_id) &&
              DecimalString(event, "price") &&
-             DecimalString(event, "base_amount") &&
-             DecimalString(event, "quote_amount") &&
+             DecimalString(event, "quantity") &&
+             DecimalString(event, "value") &&
              DecimalMap(event, "fees_by_asset");
     }
     return true;
@@ -258,8 +258,8 @@ bool ValidateOutput(const std::string& family, simdjson::dom::element output) {
         !OneOf(state, {"Absent", "PendingCreate", "Open", "PartiallyTraded",
                        "PendingCancel", "SubmissionUnknown", "AwaitingTrades",
                        "Traded", "Canceled", "Failed", "Expired"}) ||
-        !DecimalString(output, "cumulative_base") ||
-        !DecimalString(output, "cumulative_quote") ||
+        !DecimalString(output, "traded_quantity") ||
+        !DecimalString(output, "traded_value") ||
         !DecimalString(output, "remaining_base") ||
         !DecimalMap(output, "fees_by_asset") ||
         !Array(output, "events", &events))

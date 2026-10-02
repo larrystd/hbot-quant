@@ -18,7 +18,7 @@
     "strategy_id": 1,
     "client_order_id": "B1",
     "side": "Buy",
-    "base_amount": "1",
+    "quantity": "1",
     "limit_price": "100",
     "initial_reservation_by_asset": {
       "USDT": "100.10"
@@ -65,8 +65,8 @@
         "client_order_id": "B1",
         "exchange_order_id": "E1",
         "exchange_status": "Traded",
-        "cumulative_base": "1",
-        "cumulative_quote": "100"
+        "traded_quantity": "1",
+        "traded_value": "100"
       }
     },
     {
@@ -78,8 +78,8 @@
         "exchange_order_id": "E1",
         "trade_id": "T1",
         "price": "100",
-        "base_amount": "1",
-        "quote_amount": "100",
+        "quantity": "1",
+        "value": "100",
         "fees_by_asset": {
           "USDT": "0.10"
         }
@@ -93,8 +93,8 @@
       "output": {
         "display_state": "PendingCreate",
         "events": [],
-        "cumulative_base": "0",
-        "cumulative_quote": "0",
+        "traded_quantity": "0",
+        "traded_value": "0",
         "fees_by_asset": {},
         "remaining_base": "1"
       },
@@ -112,8 +112,8 @@
         "events": [
           "OrderOpened"
         ],
-        "cumulative_base": "0",
-        "cumulative_quote": "0",
+        "traded_quantity": "0",
+        "traded_value": "0",
         "fees_by_asset": {},
         "remaining_base": "1"
       },
@@ -129,8 +129,8 @@
       "output": {
         "display_state": "AwaitingTrades",
         "events": [],
-        "cumulative_base": "0",
-        "cumulative_quote": "0",
+        "traded_quantity": "0",
+        "traded_value": "0",
         "fees_by_asset": {},
         "remaining_base": "1"
       },
@@ -149,8 +149,8 @@
           "OrderTraded",
           "OrderFullyTraded"
         ],
-        "cumulative_base": "1",
-        "cumulative_quote": "100",
+        "traded_quantity": "1",
+        "traded_value": "100",
         "fees_by_asset": {
           "USDT": "0.10"
         },

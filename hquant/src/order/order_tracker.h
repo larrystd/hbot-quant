@@ -76,11 +76,12 @@ class OrderTracker {
   // PendingCreate。订单号重复时返回错误。
   absl::StatusOr<TrackerResult> Register(PreparedOrder prepared);
   // 标记"正在撤单"，显示为 PendingCancel，直到收到撤单结果。终态订单不能撤。
-  absl::StatusOr<TrackerResult> RequestCancel(const ClientOrderId& client_order_id);
+  absl::StatusOr<TrackerResult> RequestCancel(
+      const ClientOrderId& client_order_id);
   // 发送前就失败了（能证明一个字节都没发出去）：直接把订单置为 Failed。
   // 只有在订单仍是 PendingCreate、没有交易所订单号、没有任何成交时才允许。
-  absl::StatusOr<TrackerResult> FailBeforeWrite(const ClientOrderId& client_order_id,
-                                                std::string reason);
+  absl::StatusOr<TrackerResult> FailBeforeWrite(
+      const ClientOrderId& client_order_id, std::string reason);
   // 发出后结果未知（超时、5xx）：置为 SubmissionUnknown，等回报或查询确认。
   absl::StatusOr<TrackerResult> MarkSubmissionUnknown(
       const ClientOrderId& client_order_id);
@@ -93,7 +94,8 @@ class OrderTracker {
   absl::StatusOr<TrackerResult> ApplyQueriedOrder(const OrderUpdate& update);
 
   // 某张订单当前的快照；不存在返回空。
-  std::optional<OrderSnapshot> Snapshot(const ClientOrderId& client_order_id) const;
+  std::optional<OrderSnapshot> Snapshot(
+      const ClientOrderId& client_order_id) const;
   // 需要向交易所查询的订单：成交明细未到齐，或者状态不是 Confirmed。
   std::vector<ClientOrderId> OrdersNeedingQuery() const;
 
@@ -107,10 +109,7 @@ class OrderTracker {
   //                             说明还有成交明细没到。
   //   created_emitted / terminal_emitted：已经发过"已挂上"、"已结束"事件，
   //                                       防止重复发出。
-  //   cumulative_base / cumulative_quote / fees_by_asset：由逐笔成交累计而来。
-  //   reported_cumulative_base / reported_cumulative_quote：交易所在状态回报里
-  //       报告的累计值。可能的优化：目前只被赋值、从未被读取，可以用来和本地
-  //       累计值核对，或者删掉。
+  //   traded_quantity / traded_value / fees_by_asset：由逐笔成交累计而来。
   struct TrackedOrder {
     PreparedOrder prepared;
     std::optional<ExchangeOrderId> exchange_order_id;
@@ -120,11 +119,9 @@ class OrderTracker {
     bool completion_pending_fills = false;
     bool created_emitted = false;
     bool terminal_emitted = false;
-    Decimal cumulative_base;
-    Decimal cumulative_quote;
+    Decimal traded_quantity;
+    Decimal traded_value;
     std::map<std::string, Decimal> fees_by_asset;
-    std::optional<Decimal> reported_cumulative_base;
-    std::optional<Decimal> reported_cumulative_quote;
     EventTime last_update_time;
   };
   // 索引的 key：（账户，交易所，品种，交易对符号，交易所订单号或成交编号）。
@@ -151,7 +148,8 @@ class OrderTracker {
       const std::optional<ClientOrderId>& client_order_id,
       const std::optional<ExchangeOrderId>& exchange_order_id);
   absl::Status BindExchangeId(
-      TrackedOrder& order, const std::optional<ExchangeOrderId>& exchange_order_id);
+      TrackedOrder& order,
+      const std::optional<ExchangeOrderId>& exchange_order_id);
   absl::StatusOr<TrackerResult> Update(const OrderUpdate& update,
                                        bool queried_order);
 

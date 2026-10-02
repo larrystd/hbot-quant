@@ -224,14 +224,14 @@ ErrorCode RiskGate::TryHoldCode(const StrategyId& strategy_id,
                   "trading rule stale or invalid");
   }
   if (!request.limit_price || !request.limit_price->IsStrictlyPositive() ||
-      !request.base_amount.IsStrictlyPositive()) {
+      !request.quantity.IsStrictlyPositive()) {
     return reject(ErrorCode::kOrderPriceOrAmountInvalid,
                   "limit price and amount must be positive");
   }
   auto price =
       request.limit_price->Quantize(rule.price_increment, RoundingMode::Down);
   auto amount =
-      request.base_amount.Quantize(rule.base_increment, RoundingMode::Down);
+      request.quantity.Quantize(rule.base_increment, RoundingMode::Down);
   if (!price.ok())
     return reject(ErrorCode::kDecimalArithmeticFailed,
                   "price quantization failed");
@@ -239,27 +239,27 @@ ErrorCode RiskGate::TryHoldCode(const StrategyId& strategy_id,
     return reject(ErrorCode::kDecimalArithmeticFailed,
                   "amount quantization failed");
   auto price_cmp = price->Compare(*request.limit_price);
-  auto amount_cmp = amount->Compare(request.base_amount);
+  auto amount_cmp = amount->Compare(request.quantity);
   if (!price_cmp.ok() || !amount_cmp.ok() || *price_cmp != 0 ||
       *amount_cmp != 0) {
     return reject(ErrorCode::kOrderNotOnTick,
                   "order not aligned with trading rule");
   }
-  auto min_amount = request.base_amount.Compare(rule.min_base_amount);
+  auto min_amount = request.quantity.Compare(rule.min_base_amount);
   if (!min_amount.ok())
     return reject(ErrorCode::kDecimalArithmeticFailed,
                   "minimum amount comparison failed");
   if (*min_amount < 0)
     return reject(ErrorCode::kOrderBelowMinAmount, "below minimum amount");
   if (rule.max_base_amount) {
-    auto max_amount = request.base_amount.Compare(*rule.max_base_amount);
+    auto max_amount = request.quantity.Compare(*rule.max_base_amount);
     if (!max_amount.ok())
       return reject(ErrorCode::kDecimalArithmeticFailed,
                     "maximum amount comparison failed");
     if (*max_amount > 0)
       return reject(ErrorCode::kOrderAboveMaxAmount, "above maximum amount");
   }
-  auto notional = request.base_amount.Multiply(*request.limit_price);
+  auto notional = request.quantity.Multiply(*request.limit_price);
   if (!notional.ok())
     return reject(ErrorCode::kDecimalArithmeticFailed,
                   "notional calculation failed");
@@ -281,8 +281,8 @@ ErrorCode RiskGate::TryHoldCode(const StrategyId& strategy_id,
   }
   absl::StatusOr<Decimal> principal =
       request.side == Side::Buy
-          ? request.base_amount.Multiply(*request.limit_price)
-          : absl::StatusOr<Decimal>(request.base_amount);
+          ? request.quantity.Multiply(*request.limit_price)
+          : absl::StatusOr<Decimal>(request.quantity);
   if (!principal.ok())
     return reject(ErrorCode::kDecimalArithmeticFailed,
                   "principal calculation failed");

@@ -18,7 +18,7 @@
     "strategy_id": 1,
     "client_order_id": "B1",
     "side": "Buy",
-    "base_amount": "1",
+    "quantity": "1",
     "limit_price": "100",
     "initial_reservation_by_asset": {
       "USDT": "100.10"
@@ -66,8 +66,8 @@
         "exchange_order_id": "E1",
         "trade_id": "T1",
         "price": "100",
-        "base_amount": "0.4",
-        "quote_amount": "40",
+        "quantity": "0.4",
+        "value": "40",
         "fees_by_asset": {
           "USDT": "0.04"
         }
@@ -81,8 +81,8 @@
         "client_order_id": "B1",
         "exchange_order_id": "E1",
         "exchange_status": "PartiallyTraded",
-        "cumulative_base": "0.4",
-        "cumulative_quote": "40"
+        "traded_quantity": "0.4",
+        "traded_value": "40"
       }
     },
     {
@@ -94,8 +94,8 @@
         "exchange_order_id": "E1",
         "trade_id": "T2",
         "price": "100",
-        "base_amount": "0.6",
-        "quote_amount": "60",
+        "quantity": "0.6",
+        "value": "60",
         "fees_by_asset": {
           "USDT": "0.06"
         }
@@ -109,8 +109,8 @@
         "client_order_id": "B1",
         "exchange_order_id": "E1",
         "exchange_status": "Traded",
-        "cumulative_base": "1",
-        "cumulative_quote": "100"
+        "traded_quantity": "1",
+        "traded_value": "100"
       }
     }
   ],
@@ -121,8 +121,8 @@
       "output": {
         "display_state": "PendingCreate",
         "events": [],
-        "cumulative_base": "0",
-        "cumulative_quote": "0",
+        "traded_quantity": "0",
+        "traded_value": "0",
         "fees_by_asset": {},
         "remaining_base": "1"
       },
@@ -140,8 +140,8 @@
         "events": [
           "OrderOpened"
         ],
-        "cumulative_base": "0",
-        "cumulative_quote": "0",
+        "traded_quantity": "0",
+        "traded_value": "0",
         "fees_by_asset": {},
         "remaining_base": "1"
       },
@@ -159,8 +159,8 @@
         "events": [
           "OrderTraded"
         ],
-        "cumulative_base": "0.4",
-        "cumulative_quote": "40",
+        "traded_quantity": "0.4",
+        "traded_value": "40",
         "fees_by_asset": {
           "USDT": "0.04"
         },
@@ -178,8 +178,8 @@
       "output": {
         "display_state": "PartiallyTraded",
         "events": [],
-        "cumulative_base": "0.4",
-        "cumulative_quote": "40",
+        "traded_quantity": "0.4",
+        "traded_value": "40",
         "fees_by_asset": {
           "USDT": "0.04"
         },
@@ -199,8 +199,8 @@
         "events": [
           "OrderTraded"
         ],
-        "cumulative_base": "1",
-        "cumulative_quote": "100",
+        "traded_quantity": "1",
+        "traded_value": "100",
         "fees_by_asset": {
           "USDT": "0.10"
         },
@@ -218,8 +218,8 @@
         "events": [
           "OrderFullyTraded"
         ],
-        "cumulative_base": "1",
-        "cumulative_quote": "100",
+        "traded_quantity": "1",
+        "traded_value": "100",
         "fees_by_asset": {
           "USDT": "0.10"
         },

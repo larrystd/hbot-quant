@@ -89,7 +89,7 @@ class CountingStrategy final : public Strategy {
       order.market = market;
       order.side = Side::Sell;
       order.type = OrderType::Limit;
-      order.base_amount = D("0.01");
+      order.quantity = D("0.01");
       order.limit_price = D("100.1");
       order.time_in_force = TimeInForce::Gtc;
       actions.ordered.emplace_back(SubmitOrder{id, order});

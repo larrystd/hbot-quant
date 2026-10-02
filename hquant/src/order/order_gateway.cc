@@ -223,7 +223,7 @@ absl::Status BinanceOrderGateway::ValidateAndQuantize(
     return Error(ErrorCode::kOrderMarketInvalid,
                  "order market is not the gateway market");
   if (!request.limit_price || !request.limit_price->IsStrictlyPositive() ||
-      !request.base_amount.IsStrictlyPositive())
+      !request.quantity.IsStrictlyPositive())
     return Error(ErrorCode::kOrderPriceOrAmountInvalid,
                  "limit price and amount must be positive");
   if (clock_.MonoNow() >= approved->expires_at_mono)
@@ -233,7 +233,7 @@ absl::Status BinanceOrderGateway::ValidateAndQuantize(
     return Error(ErrorCode::kOrderTypeUnsupported,
                  "LIMIT_MAKER cannot specify timeInForce");
   }
-  auto amount = request.base_amount.Quantize(
+  auto amount = request.quantity.Quantize(
       config_.trading_rule.base_increment, RoundingMode::Down);
   auto price = request.limit_price->Quantize(
       config_.trading_rule.price_increment, RoundingMode::Down);
@@ -262,7 +262,7 @@ absl::Status BinanceOrderGateway::ValidateAndQuantize(
       !AtLeast(*config_.trading_rule.max_base_amount, *amount))
     return Error(ErrorCode::kOrderAboveMaxAmount,
                  "Binance quantity above maximum amount");
-  request.base_amount = *amount;
+  request.quantity = *amount;
   request.limit_price = *price;
   return absl::OkStatus();
 }
@@ -315,7 +315,7 @@ absl::StatusOr<HttpRequest> BinanceOrderGateway::MakeSubmitRequest(
                                        : tif == TimeInForce::Ioc ? "IOC"
                                                                  : "FOK");
   }
-  params.emplace_back("quantity", request.base_amount.ToString());
+  params.emplace_back("quantity", request.quantity.ToString());
   params.emplace_back("price", request.limit_price->ToString());
   params.emplace_back("newClientOrderId", order.prepared.client_order_id.value);
   params.emplace_back("newOrderRespType", "RESULT");

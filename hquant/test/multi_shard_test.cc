@@ -47,7 +47,7 @@ TEST(MultiShardTest, CapitalRateAndAccountReportsStayWithinTheirShard) {
   request.account = account;
   request.market = market;
   request.side = Side::Buy;
-  request.base_amount = D("1");
+  request.quantity = D("1");
   request.limit_price = D("30");
   auto first = risk0.TryHold(owner0, request, spec, rule, now, true, true);
   auto second = risk1.TryHold(owner1, request, spec, rule, now, true, true);

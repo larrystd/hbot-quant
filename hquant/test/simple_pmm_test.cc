@@ -167,7 +167,7 @@ TEST(SimplePmmTest, ReplaysEveryPythonFixtureStep) {
                     S(wanted, "side") == "Buy" ? Side::Buy : Side::Sell);
           ASSERT_TRUE(action.request.limit_price.has_value());
           CompareDecimal(*action.request.limit_price, S(wanted, "price"));
-          CompareDecimal(action.request.base_amount, S(wanted, "amount"));
+          CompareDecimal(action.request.quantity, S(wanted, "amount"));
         }
         ++index;
       }

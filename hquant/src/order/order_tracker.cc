@@ -106,8 +106,8 @@ OrderSnapshot OrderTracker::MakeSnapshot(const TrackedOrder& order) const {
   snapshot.strategy_id = order.prepared.strategy_id;
   snapshot.request = order.prepared.request;
   snapshot.display_state = Display(order);
-  snapshot.cumulative_base = order.cumulative_base;
-  snapshot.cumulative_quote = order.cumulative_quote;
+  snapshot.traded_quantity = order.traded_quantity;
+  snapshot.traded_value = order.traded_value;
   snapshot.last_update_time = order.last_update_time;
   for (const auto& [asset, amount] : order.fees_by_asset)
     snapshot.fees.push_back(TradeFee{AssetId{asset}, amount});
@@ -139,7 +139,7 @@ absl::StatusOr<TrackerResult> OrderTracker::Register(PreparedOrder prepared) {
   if (prepared.request.market.exchange.value.empty() ||
       prepared.request.market.native_symbol.empty())
     return Error(ErrorCode::kOrderMarketInvalid, "empty order market");
-  if (!prepared.request.base_amount.IsStrictlyPositive() ||
+  if (!prepared.request.quantity.IsStrictlyPositive() ||
       !prepared.request.limit_price ||
       !prepared.request.limit_price->IsStrictlyPositive())
     return Error(ErrorCode::kOrderPriceOrAmountInvalid,
@@ -250,7 +250,7 @@ absl::StatusOr<TrackerResult> OrderTracker::FailBeforeWrite(
   if (found == orders_.end())
     return Error(ErrorCode::kOrderNotFound, "order not tracked");
   auto& order = found->second;
-  auto compared = order.cumulative_base.Compare(Decimal{});
+  auto compared = order.traded_quantity.Compare(Decimal{});
   if (!compared.ok())
     return Error(ErrorCode::kDecimalArithmeticFailed,
                  "tracked cumulative amount cannot be compared");
@@ -330,12 +330,7 @@ absl::StatusOr<TrackerResult> OrderTracker::Update(const OrderUpdate& update,
     order.confirmation = ConfirmationState::Confirmed;
     changed = true;
   }
-  if (update.cumulative_base) {
-    order.reported_cumulative_base = update.cumulative_base;
-    changed = true;
-  }
-  if (update.cumulative_quote) {
-    order.reported_cumulative_quote = update.cumulative_quote;
+  if (update.traded_quantity || update.traded_value) {
     changed = true;
   }
   if (Terminal(order.lifecycle) && order.cancel_pending) {
@@ -344,7 +339,7 @@ absl::StatusOr<TrackerResult> OrderTracker::Update(const OrderUpdate& update,
   }
   if (order.lifecycle == OrderLifecycle::Traded) {
     auto comparison =
-        order.cumulative_base.Compare(order.prepared.request.base_amount);
+        order.traded_quantity.Compare(order.prepared.request.quantity);
     if (!comparison.ok())
       return Error(ErrorCode::kDecimalArithmeticFailed,
                    "reported cumulative amount cannot be compared");
@@ -383,8 +378,8 @@ absl::StatusOr<TrackerResult> OrderTracker::ApplyTradeUpdate(
   if (!bind.ok()) return bind;
   const bool bound = previous_exchange != order.exchange_order_id;
   if (trade.exchange_trade_id.value.empty() ||
-      !trade.base_amount.IsStrictlyPositive() ||
-      !trade.price.IsStrictlyPositive() || !trade.quote_amount.IsNonnegative())
+      !trade.quantity.IsStrictlyPositive() ||
+      !trade.price.IsStrictlyPositive() || !trade.value.IsNonnegative())
     return Error(ErrorCode::kOrderReportInvalid, "invalid trade update");
   const auto key =
       TradeIndexKey(trade.account, trade.market, trade.exchange_trade_id);
@@ -396,15 +391,15 @@ absl::StatusOr<TrackerResult> OrderTracker::ApplyTradeUpdate(
     }
     return MakeResult(order, bound);
   }
-  auto base = order.cumulative_base.Add(trade.base_amount);
-  auto quote = order.cumulative_quote.Add(trade.quote_amount);
+  auto base = order.traded_quantity.Add(trade.quantity);
+  auto quote = order.traded_value.Add(trade.value);
   if (!base.ok())
     return Error(ErrorCode::kOrderReportInvalid,
                  "trade cumulative base cannot be calculated");
   if (!quote.ok())
     return Error(ErrorCode::kOrderReportInvalid,
                  "trade cumulative quote cannot be calculated");
-  auto overfill = base->Compare(order.prepared.request.base_amount);
+  auto overfill = base->Compare(order.prepared.request.quantity);
   if (!overfill.ok())
     return Error(ErrorCode::kOrderReportInvalid,
                  "trade fill amount cannot be compared");
@@ -423,8 +418,8 @@ absl::StatusOr<TrackerResult> OrderTracker::ApplyTradeUpdate(
                    "trade fee total cannot be calculated");
     fees[fee.asset.value] = *sum;
   }
-  order.cumulative_base = *base;
-  order.cumulative_quote = *quote;
+  order.traded_quantity = *base;
+  order.traded_value = *quote;
   order.fees_by_asset = std::move(fees);
   order.last_update_time = trade.time;
   seen_trades_[key] = order.prepared.client_order_id.value;

@@ -18,7 +18,7 @@
     "strategy_id": 1,
     "client_order_id": "B1",
     "side": "Buy",
-    "base_amount": "1",
+    "quantity": "1",
     "limit_price": "100",
     "initial_reservation_by_asset": {
       "USDT": "100.10"
@@ -65,8 +65,8 @@
       "output": {
         "display_state": "PendingCreate",
         "events": [],
-        "cumulative_base": "0",
-        "cumulative_quote": "0",
+        "traded_quantity": "0",
+        "traded_value": "0",
         "fees_by_asset": {},
         "remaining_base": "1"
       },
@@ -84,8 +84,8 @@
         "events": [
           "OrderOpened"
         ],
-        "cumulative_base": "0",
-        "cumulative_quote": "0",
+        "traded_quantity": "0",
+        "traded_value": "0",
         "fees_by_asset": {},
         "remaining_base": "1"
       },

@@ -59,7 +59,7 @@ OrderHistoryRecord PreparedRecord(uint64_t sequence, RunId run = RunId{11},
   prepared.request.market = Market();
   prepared.request.side = Side::Buy;
   prepared.request.type = OrderType::Limit;
-  prepared.request.base_amount = D("0.01");
+  prepared.request.quantity = D("0.01");
   prepared.request.limit_price = D("99.9");
   prepared.created_at_utc = At(1000);
   prepared.config_revision = 7;
@@ -83,8 +83,8 @@ OrderHistoryRecord Update(uint64_t sequence) {
   update.client_order_id = ClientOrderId{"B1"};
   update.exchange_order_id = ExchangeOrderId{"E1"};
   update.exchange_status = ExchangeOrderStatus::PartiallyTraded;
-  update.cumulative_base = D("0.004");
-  update.cumulative_quote = D("0.3996");
+  update.traded_quantity = D("0.004");
+  update.traded_value = D("0.3996");
   update.time = EventTime{At(999), At(1000 + sequence), MonoAt(42)};
   record.payload = std::move(update);
   return record;
@@ -99,8 +99,8 @@ OrderHistoryRecord Trade(uint64_t sequence) {
   trade.exchange_order_id = ExchangeOrderId{"E1"};
   trade.exchange_trade_id = ExchangeTradeId{"T1"};
   trade.price = D("99.9");
-  trade.base_amount = D("0.004");
-  trade.quote_amount = D("0.3996");
+  trade.quantity = D("0.004");
+  trade.value = D("0.3996");
   trade.fees.push_back(TradeFee{AssetId{"USDT"}, D("0.0004")});
   trade.maker = true;
   trade.time = EventTime{At(999), At(1000 + sequence), MonoAt(43)};
@@ -151,7 +151,7 @@ TEST(StorageTest, PersistsTypedRecordsAndPagesThroughReadOnlyConnection) {
   ASSERT_EQ(second->rows.size(), 2);
   const auto& trade = std::get<TradeUpdate>(second->rows[0].payload);
   EXPECT_EQ(trade.exchange_trade_id.value, "T1");
-  EXPECT_EQ(trade.quote_amount.ToString(), "0.3996");
+  EXPECT_EQ(trade.value.ToString(), "0.3996");
   ASSERT_EQ(trade.fees.size(), 1);
   EXPECT_EQ(trade.fees[0].signed_amount.ToString(), "0.0004");
   EXPECT_TRUE(

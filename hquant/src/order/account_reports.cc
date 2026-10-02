@@ -117,16 +117,16 @@ absl::StatusOr<AccountPushBatch> ExecutionReport(simdjson::dom::element data,
   auto execution = field::Text(data, "x");
   auto raw_status = field::Text(data, "X");
   auto order_id = field::Integer(data, "i");
-  auto cumulative_base = field::Amount(data, "z");
-  auto cumulative_quote = field::Amount(data, "Z");
+  auto traded_quantity = field::Amount(data, "z");
+  auto traded_value = field::Amount(data, "Z");
   auto time = ReportTime(data, received);
   if (!symbol.ok()) return symbol.status();
   if (!client.ok()) return client.status();
   if (!execution.ok()) return execution.status();
   if (!raw_status.ok()) return raw_status.status();
   if (!order_id.ok()) return order_id.status();
-  if (!cumulative_base.ok()) return cumulative_base.status();
-  if (!cumulative_quote.ok()) return cumulative_quote.status();
+  if (!traded_quantity.ok()) return traded_quantity.status();
+  if (!traded_value.ok()) return traded_value.status();
   if (!time.ok()) return time.status();
   if (symbol->empty() || (*order_id < 0 && *order_id != -1)) {
     return field::Invalid("invalid executionReport order identity");
@@ -173,8 +173,8 @@ absl::StatusOr<AccountPushBatch> ExecutionReport(simdjson::dom::element data,
     trade.exchange_order_id = exchange_order_id;
     trade.exchange_trade_id = ExchangeTradeId(std::to_string(*trade_id));
     trade.price = *price;
-    trade.base_amount = *base;
-    trade.quote_amount = *quote;
+    trade.quantity = *base;
+    trade.value = *quote;
     trade.maker = *maker;
     trade.time = *time;
     if (commission->IsStrictlyPositive()) {
@@ -194,8 +194,8 @@ absl::StatusOr<AccountPushBatch> ExecutionReport(simdjson::dom::element data,
   order.client_order_id = client_order_id;
   order.exchange_order_id = exchange_order_id;
   order.exchange_status = *mapped_status;
-  order.cumulative_base = *cumulative_base;
-  order.cumulative_quote = *cumulative_quote;
+  order.traded_quantity = *traded_quantity;
+  order.traded_value = *traded_value;
   order.time = *time;
   batch.events.emplace_back(std::move(order));
   return batch;
@@ -351,11 +351,11 @@ absl::StatusOr<OrderUpdate> ParseOrder(std::string_view json,
   order.client_order_id = target.client_order_id;
   order.exchange_order_id = ExchangeOrderId(std::to_string(*id));
   order.exchange_status = *mapped;
-  order.cumulative_base = *filled;
+  order.traded_quantity = *filled;
   // Binance documents negative historical quote totals as unavailable.
   auto quote = Decimal::Parse(*quote_text);
   if (!quote.ok()) return quote.status();
-  if (quote->IsNonnegative()) order.cumulative_quote = *quote;
+  if (quote->IsNonnegative()) order.traded_value = *quote;
   order.time = received;
   return order;
 }
@@ -406,8 +406,8 @@ absl::StatusOr<std::vector<IdTrade>> ParseTrades(
     trade.exchange_order_id = exchange_order_id;
     trade.exchange_trade_id = ExchangeTradeId(std::to_string(*trade_id));
     trade.price = *price;
-    trade.base_amount = *base;
-    trade.quote_amount = *quote;
+    trade.quantity = *base;
+    trade.value = *quote;
     trade.maker = *maker;
     trade.time = received;
     trade.time.exchange_utc = *utc;
@@ -614,8 +614,8 @@ OrderQueryClient::QueryOrder(OrderToQuery target, EventTime received,
   Decimal base_total;
   Decimal quote_total;
   for (const auto& trade : batch.trades) {
-    auto base = base_total.Add(trade.base_amount);
-    auto quote = quote_total.Add(trade.quote_amount);
+    auto base = base_total.Add(trade.quantity);
+    auto quote = quote_total.Add(trade.value);
     if (!base.ok() || !quote.ok()) {
       batch.unresolved_status =
           Error(ErrorCode::kOrderQueryResponseInvalid, "trade total overflow");
@@ -624,14 +624,14 @@ OrderQueryClient::QueryOrder(OrderToQuery target, EventTime received,
     base_total = *base;
     quote_total = *quote;
   }
-  auto same_base = base_total.Compare(*order->cumulative_base);
+  auto same_base = base_total.Compare(*order->traded_quantity);
   if (!same_base.ok() || *same_base != 0) {
     batch.unresolved_status = Error(ErrorCode::kOrderQueryIdentityMismatch,
                                     "order and trade base totals disagree");
     co_return batch;
   }
-  if (order->cumulative_quote) {
-    auto same_quote = quote_total.Compare(*order->cumulative_quote);
+  if (order->traded_value) {
+    auto same_quote = quote_total.Compare(*order->traded_value);
     if (!same_quote.ok() || *same_quote != 0) {
       batch.unresolved_status = Error(ErrorCode::kOrderQueryIdentityMismatch,
                                       "order and trade quote totals disagree");

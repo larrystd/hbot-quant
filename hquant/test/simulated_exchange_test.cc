@@ -66,7 +66,7 @@ std::vector<NormalizedEvent> Normalize(std::vector<AccountEvent> events) {
       event.client_order_id = trade->client_order_id->value;
       event.trade_id = trade->exchange_trade_id.value;
       event.price = trade->price;
-      event.amount = trade->base_amount;
+      event.amount = trade->quantity;
       if (!trade->fees.empty()) {
         event.fee_asset = trade->fees.front().asset.value;
         event.fee = trade->fees.front().signed_amount;
@@ -167,7 +167,7 @@ TEST(SimulatedExchangeTest, ReplaysAllSimulatedExchangeCasesStepByStep) {
         request.market = config.market.market;
         request.side = ParseSide(event);
         request.type = OrderType::Limit;
-        request.base_amount = D(S(event, "amount"));
+        request.quantity = D(S(event, "amount"));
         request.limit_price = D(S(event, "price"));
         request.time_in_force = TimeInForce::Gtc;
         ApprovedOrder approved{strategy_id, request, HoldId{1},
@@ -230,7 +230,7 @@ TEST(SimulatedExchangeTest, ReplaysAllSimulatedExchangeCasesStepByStep) {
         EXPECT_EQ(actual.request.side, ParseSide(wanted));
         ASSERT_TRUE(actual.request.limit_price);
         ExpectDecimal(*actual.request.limit_price, S(wanted, "price"));
-        ExpectDecimal(actual.request.base_amount, S(wanted, "amount"));
+        ExpectDecimal(actual.request.quantity, S(wanted, "amount"));
       }
       for (auto [asset, raw] : simdjson::dom::object(expected["balances"])) {
         std::string_view balance = raw;
@@ -280,7 +280,7 @@ TEST(SimulatedExchangeTest, AbortedPreparationNeverCreatesAnOrder) {
   request.market =
       MarketId{ExchangeId("simulated"), InstrumentKind::Spot, "BTC-USDT"};
   request.side = Side::Buy;
-  request.base_amount = D("0.01");
+  request.quantity = D("0.01");
   request.limit_price = D("100");
   auto prepared = sim_exchange.PrepareSubmit(
       ApprovedOrder{strategy_id, request, {}, {}, {}});

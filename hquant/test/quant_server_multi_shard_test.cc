@@ -121,7 +121,7 @@ RunResult InspectRun(const std::string& path, std::string status) {
     if (const auto* order = std::get_if<PreparedOrder>(&record->payload)) {
       result.orders[shard].push_back(
           std::to_string(static_cast<int>(order->request.side)) + ":" +
-          order->request.base_amount.ToString() + ":" +
+          order->request.quantity.ToString() + ":" +
           (order->request.limit_price
                ? order->request.limit_price->ToString()
                : std::string("market")));

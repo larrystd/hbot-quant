@@ -67,7 +67,7 @@ enum class OrderDisplayState {
 
 // 策略想下的单，还没经过任何检查。由策略放在 SubmitOrder 里给出；
 // ActionExecutor 先按交易规则把价格和数量取整，再交给风控检查。
-//   base_amount：以基础资产计的数量。
+//   quantity：以基础资产计的数量。
 //   limit_price：必填，目前只支持限价单。
 //   time_in_force：LimitMaker 必须为空（Binance 会拒绝）。
 struct OrderRequest {
@@ -75,7 +75,7 @@ struct OrderRequest {
   MarketId market;
   Side side = Side::Buy;
   OrderType type = OrderType::Limit;
-  Decimal base_amount;
+  Decimal quantity;
   std::optional<Decimal> limit_price;
   std::optional<TimeInForce> time_in_force;
 };
@@ -117,7 +117,7 @@ struct PreparedOrder {
 
 // 交易所（或模拟交易所）发来的"订单 X 的状态变成了 Y"。
 // client_order_id 和 exchange_order_id 至少有一个能确定是哪张订单。
-//   cumulative_base / cumulative_quote：到目前为止的累计成交量和成交额（如果
+//   traded_quantity / traded_value：到目前为止的累计成交量和成交额（如果
 //       交易所提供）。它们可能比逐笔的 TradeUpdate 先到；这时 OrderTracker
 //       显示 AwaitingTrades，直到成交明细到齐。
 struct OrderUpdate {
@@ -126,14 +126,14 @@ struct OrderUpdate {
   std::optional<ClientOrderId> client_order_id;
   std::optional<ExchangeOrderId> exchange_order_id;
   ExchangeOrderStatus exchange_status = ExchangeOrderStatus::Open;
-  std::optional<Decimal> cumulative_base;
-  std::optional<Decimal> cumulative_quote;
+  std::optional<Decimal> traded_quantity;
+  std::optional<Decimal> traded_value;
   EventTime time;
 };
 
 // "订单 X 刚成交了一笔"：我们自己订单的一笔成交。
 //   exchange_trade_id：每笔成交唯一；OrderTracker 据此去掉重复推送。
-//   price / base_amount / quote_amount：只是这一笔，不是累计值。
+//   price / quantity / value：只是这一笔，不是累计值。
 //   maker：我们是否是挂单方（如果交易所提供）。
 struct TradeUpdate {
   AccountId account;
@@ -142,8 +142,8 @@ struct TradeUpdate {
   std::optional<ExchangeOrderId> exchange_order_id;
   ExchangeTradeId exchange_trade_id;
   Decimal price;
-  Decimal base_amount;
-  Decimal quote_amount;
+  Decimal quantity;
+  Decimal value;
   std::vector<TradeFee> fees;
   std::optional<bool> maker;
   EventTime time;
@@ -155,20 +155,20 @@ struct TradeUpdate {
 //   exchange_order_id：交易所确认之前为空（模拟盘始终为空）。
 //   request：原始的下单请求。
 //   display_state：使用者只需看这一个状态，见 OrderDisplayState。
-//   cumulative_base / cumulative_quote：到目前为止的累计成交量和成交额。
+//   traded_quantity / traded_value：到目前为止的累计成交量和成交额。
 //   fees：累计手续费，每种资产一项。
 // 可能的优化：每次运行策略前，Shard::OrderViews() 都要为所有提交过的订单
 // （包括已结束的）生成快照，开销随运行时间增长；只给未结束的订单（或定期
-// 清理已结束的订单）可以避免。另外可以加一个 remaining_base 字段，免得使用者
-// 自己计算 request.base_amount - cumulative_base。
+// 清理已结束的订单）可以避免。还可以加 remaining_quantity，
+// 免得使用者计算 request.quantity - traded_quantity。
 struct OrderSnapshot {
   ClientOrderId client_order_id;
   std::optional<ExchangeOrderId> exchange_order_id;
   StrategyId strategy_id;
   OrderRequest request;
   OrderDisplayState display_state = OrderDisplayState::PendingCreate;
-  Decimal cumulative_base;
-  Decimal cumulative_quote;
+  Decimal traded_quantity;
+  Decimal traded_value;
   std::vector<TradeFee> fees;
   EventTime last_update_time;
 };

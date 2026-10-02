@@ -82,7 +82,7 @@ int main() {
   buy.account = hquant::AccountId("A1");
   buy.market = market;
   buy.side = hquant::Side::Buy;
-  buy.base_amount = D("0.01");
+  buy.quantity = D("0.01");
   buy.limit_price = D("100");
   hquant::ActionBatch batch;
   batch.ordered.emplace_back(

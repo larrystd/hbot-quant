@@ -44,7 +44,7 @@ int RiskGateTestMain() {
   buy.account = account;
   buy.market = market;
   buy.side = hquant::Side::Buy;
-  buy.base_amount = D("1");
+  buy.quantity = D("1");
   buy.limit_price = D("100");
   hquant::FundsHold rejected;
   rejected.hold_id = hquant::HoldId{777};
@@ -71,10 +71,10 @@ int RiskGateTestMain() {
   available = gate.Available(account, quote);
   if (!available.ok() || available->ToString() != "60.1") return 9;
 
-  buy.base_amount = D("0.0015");
+  buy.quantity = D("0.0015");
   if (gate.TryHold(strategy_id, buy, spec, rule, now, true, true).ok())
     return 10;
-  buy.base_amount = D("0.01");
+  buy.quantity = D("0.01");
   if (gate.TryHold(strategy_id, buy, spec, rule, now, false, true).ok())
     return 11;
   gate.EmergencyStop();
@@ -173,7 +173,7 @@ int BudgetTestMain() {
   request.account = account;
   request.market = market;
   request.side = Side::Buy;
-  request.base_amount = BudgetD("0.6");
+  request.quantity = BudgetD("0.6");
   request.limit_price = BudgetD("100");
   auto unknown =
       gate0.TryHold(strategy_id, request, spec, rule, now, true, true);
@@ -184,7 +184,7 @@ int BudgetTestMain() {
       CodeOf(gate0.TryHold(strategy_id, request, spec, rule, now, true, true)
                  .status()) == ErrorCode::kRiskBudgetExhausted);
 
-  request.base_amount = BudgetD("0.4");
+  request.quantity = BudgetD("0.4");
   auto other_shard =
       gate1.TryHold(strategy_id, request, spec, rule, now, true, true);
   REQUIRE(other_shard.ok());
@@ -202,7 +202,7 @@ int BudgetTestMain() {
   forged.hard_limit = BudgetD("61");
   REQUIRE(!gate0.RenewAfterOrderQuery(forged, expiry, true).ok());
   REQUIRE(gate0.RenewAfterOrderQuery(renewed, expiry, true).ok());
-  request.base_amount = BudgetD("0.6");
+  request.quantity = BudgetD("0.6");
   auto new_order =
       gate0.TryHold(strategy_id, request, spec, rule, expiry, true, true);
   REQUIRE(new_order.ok() && new_order->budget_version == 2);

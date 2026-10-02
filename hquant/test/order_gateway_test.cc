@@ -117,7 +117,7 @@ ApprovedOrder Approved(const TestClock& clock) {
   request.market = Config().market;
   request.side = Side::Buy;
   request.type = OrderType::LimitMaker;
-  request.base_amount = D("0.0109");
+  request.quantity = D("0.0109");
   request.limit_price = D("99.999");
   return ApprovedOrder{MakeStrategyId(), request, HoldId{1}, ActionBatchId{1},
                        clock.MonoNow() + std::chrono::seconds(1)};
@@ -172,13 +172,13 @@ TEST(BinanceOrderGatewayTest,
       io, transport, clock, config,
       [&](GatewayEvent event) { events.push_back(std::move(event)); });
   auto invalid = Approved(clock);
-  invalid.request.base_amount = D("0");
+  invalid.request.quantity = D("0");
   EXPECT_EQ(CodeOf(gateway.PrepareSubmit(std::move(invalid)).status()),
             ErrorCode::kOrderPriceOrAmountInvalid);
   EXPECT_EQ(gateway.PendingSubmitCount(), 0);
   auto prepared = gateway.PrepareSubmit(Approved(clock));
   ASSERT_TRUE(prepared.ok());
-  EXPECT_EQ(prepared->request.base_amount.ToString(), "0.01");
+  EXPECT_EQ(prepared->request.quantity.ToString(), "0.01");
   EXPECT_EQ(prepared->request.limit_price->ToString(), "99.99");
   EXPECT_TRUE(gateway.StartPrepared(prepared->client_order_id).ok());
   clock.Advance(std::chrono::seconds(2));

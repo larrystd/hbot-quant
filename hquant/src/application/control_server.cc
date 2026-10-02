@@ -488,7 +488,7 @@ std::string OrderHistoryJson(const OrderHistoryPage& page) {
       kind = "prepared_order";
       details =
           ",\"client_id\":" + EscapeJson(prepared->client_order_id.value) +
-          ",\"amount\":" + EscapeJson(prepared->request.base_amount.ToString());
+          ",\"amount\":" + EscapeJson(prepared->request.quantity.ToString());
     } else if (const auto* update = std::get_if<OrderUpdate>(&row.payload)) {
       kind = "order";
       if (update->client_order_id)
@@ -498,7 +498,7 @@ std::string OrderHistoryJson(const OrderHistoryPage& page) {
     } else if (const auto* trade = std::get_if<TradeUpdate>(&row.payload)) {
       kind = "trade";
       details = ",\"trade_id\":" + EscapeJson(trade->exchange_trade_id.value) +
-                ",\"amount\":" + EscapeJson(trade->base_amount.ToString()) +
+                ",\"amount\":" + EscapeJson(trade->quantity.ToString()) +
                 ",\"price\":" + EscapeJson(trade->price.ToString()) +
                 ",\"fees\":[";
       for (size_t fee = 0; fee < trade->fees.size(); ++fee) {

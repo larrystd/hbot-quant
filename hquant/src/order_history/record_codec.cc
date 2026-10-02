@@ -78,7 +78,7 @@ class Writer {
     Market(request.market);
     Byte(static_cast<uint8_t>(request.side));
     Byte(static_cast<uint8_t>(request.type));
-    DecimalValue(request.base_amount);
+    DecimalValue(request.quantity);
     Byte(request.limit_price.has_value());
     if (request.limit_price) DecimalValue(*request.limit_price);
     Byte(request.time_in_force.has_value());
@@ -166,7 +166,7 @@ class Reader {
     uint8_t side = 0, type = 0, present = 0;
     if (!String(&request->account.value) || !Market(&request->market) ||
         !Byte(&side) || side > 1 || !Byte(&type) || type > 1 ||
-        !DecimalValue(&request->base_amount) || !Byte(&present) || present > 1)
+        !DecimalValue(&request->quantity) || !Byte(&present) || present > 1)
       return false;
     request->side = static_cast<Side>(side);
     request->type = static_cast<OrderType>(type);
@@ -234,12 +234,12 @@ std::string EncodeRecord(const OrderHistoryRecord& record) {
           if (payload.exchange_order_id)
             out.String(payload.exchange_order_id->value);
           out.Byte(static_cast<uint8_t>(payload.exchange_status));
-          out.Byte(payload.cumulative_base.has_value());
-          if (payload.cumulative_base)
-            out.DecimalValue(*payload.cumulative_base);
-          out.Byte(payload.cumulative_quote.has_value());
-          if (payload.cumulative_quote)
-            out.DecimalValue(*payload.cumulative_quote);
+          out.Byte(payload.traded_quantity.has_value());
+          if (payload.traded_quantity)
+            out.DecimalValue(*payload.traded_quantity);
+          out.Byte(payload.traded_value.has_value());
+          if (payload.traded_value)
+            out.DecimalValue(*payload.traded_value);
           out.Time(payload.time);
         } else if constexpr (std::is_same_v<T, TradeUpdate>) {
           out.String(payload.account.value);
@@ -251,8 +251,8 @@ std::string EncodeRecord(const OrderHistoryRecord& record) {
             out.String(payload.exchange_order_id->value);
           out.String(payload.exchange_trade_id.value);
           out.DecimalValue(payload.price);
-          out.DecimalValue(payload.base_amount);
-          out.DecimalValue(payload.quote_amount);
+          out.DecimalValue(payload.quantity);
+          out.DecimalValue(payload.value);
           out.U64(payload.fees.size());
           for (const auto& fee : payload.fees) {
             out.String(fee.asset.value);
@@ -355,8 +355,8 @@ absl::StatusOr<OrderHistoryRecord> DecodeRecord(std::string_view bytes) {
       return Error(ErrorCode::kOrderHistoryRecordCorrupted, "invalid order status");
     value.exchange_status = static_cast<ExchangeOrderStatus>(status);
     if (present) {
-      value.cumulative_base.emplace();
-      if (!in.DecimalValue(&*value.cumulative_base))
+      value.traded_quantity.emplace();
+      if (!in.DecimalValue(&*value.traded_quantity))
         return Error(ErrorCode::kOrderHistoryRecordCorrupted,
                      "invalid cumulative base");
     }
@@ -364,8 +364,8 @@ absl::StatusOr<OrderHistoryRecord> DecodeRecord(std::string_view bytes) {
       return Error(ErrorCode::kOrderHistoryRecordCorrupted,
                    "invalid cumulative quote flag");
     if (present) {
-      value.cumulative_quote.emplace();
-      if (!in.DecimalValue(&*value.cumulative_quote))
+      value.traded_value.emplace();
+      if (!in.DecimalValue(&*value.traded_value))
         return Error(ErrorCode::kOrderHistoryRecordCorrupted,
                      "invalid cumulative quote");
     }
@@ -396,8 +396,8 @@ absl::StatusOr<OrderHistoryRecord> DecodeRecord(std::string_view bytes) {
     uint64_t count = 0;
     if (!in.String(&value.exchange_trade_id.value) ||
         !in.DecimalValue(&value.price) ||
-        !in.DecimalValue(&value.base_amount) ||
-        !in.DecimalValue(&value.quote_amount) || !in.U64(&count) ||
+        !in.DecimalValue(&value.quantity) ||
+        !in.DecimalValue(&value.value) || !in.U64(&count) ||
         count > 1000)
       return Error(ErrorCode::kOrderHistoryRecordCorrupted, "invalid trade values");
     for (uint64_t i = 0; i < count; ++i) {

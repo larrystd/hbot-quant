@@ -30,12 +30,12 @@ ErrorCode NormalizeOrder(const OrderRequest& raw, const TradingRule& rule,
                          std::optional<OrderRequest>* normalized) {
   if (!raw.limit_price) return ErrorCode::kOrderPriceOrAmountInvalid;
   auto amount =
-      raw.base_amount.Quantize(rule.base_increment, RoundingMode::Down);
+      raw.quantity.Quantize(rule.base_increment, RoundingMode::Down);
   auto price =
       raw.limit_price->Quantize(rule.price_increment, RoundingMode::Down);
   if (!amount.ok() || !price.ok()) return ErrorCode::kDecimalArithmeticFailed;
   normalized->emplace(raw);
-  (*normalized)->base_amount = *amount;
+  (*normalized)->quantity = *amount;
   (*normalized)->limit_price = *price;
   return ErrorCode::kOk;
 }

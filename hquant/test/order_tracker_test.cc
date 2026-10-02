@@ -106,7 +106,7 @@ PreparedOrder PreparedFromFixture(simdjson::dom::element setup) {
   prepared.request.side =
       String(setup, "side") == "Buy" ? Side::Buy : Side::Sell;
   prepared.request.type = OrderType::Limit;
-  prepared.request.base_amount = D(String(setup, "base_amount"));
+  prepared.request.quantity = D(String(setup, "quantity"));
   prepared.request.limit_price = D(String(setup, "limit_price"));
   return prepared;
 }
@@ -133,10 +133,10 @@ absl::StatusOr<TrackerResult> ReplayStep(OrderTracker& tracker,
     if (auto id = OptionalString(event, "exchange_order_id"))
       update.exchange_order_id = ExchangeOrderId{*id};
     update.exchange_status = Status(String(event, "exchange_status"));
-    if (auto amount = OptionalString(event, "cumulative_base"))
-      update.cumulative_base = D(*amount);
-    if (auto amount = OptionalString(event, "cumulative_quote"))
-      update.cumulative_quote = D(*amount);
+    if (auto amount = OptionalString(event, "traded_quantity"))
+      update.traded_quantity = D(*amount);
+    if (auto amount = OptionalString(event, "traded_value"))
+      update.traded_value = D(*amount);
     update.time.receive_utc = At(step.stamp.at_us);
     update.time.receive_mono = MonoAt(step.stamp.at_us);
     return kind == "reconcile" ? tracker.ApplyQueriedOrder(update)
@@ -152,8 +152,8 @@ absl::StatusOr<TrackerResult> ReplayStep(OrderTracker& tracker,
       trade.exchange_order_id = ExchangeOrderId{*id};
     trade.exchange_trade_id = ExchangeTradeId{String(event, "trade_id")};
     trade.price = D(String(event, "price"));
-    trade.base_amount = D(String(event, "base_amount"));
-    trade.quote_amount = D(String(event, "quote_amount"));
+    trade.quantity = D(String(event, "quantity"));
+    trade.value = D(String(event, "value"));
     simdjson::dom::object fees;
     if (event["fees_by_asset"].get(fees))
       return absl::InvalidArgumentError("fixture fees missing");
@@ -177,12 +177,12 @@ void CheckOutput(const TrackerResult& result, const PreparedOrder& prepared,
   ASSERT_FALSE(parser.parse(step.output_json).get(expected));
   EXPECT_EQ(State(result.snapshot.display_state),
             String(expected, "display_state"));
-  ExpectDecimal(result.snapshot.cumulative_base,
-                String(expected, "cumulative_base"));
-  ExpectDecimal(result.snapshot.cumulative_quote,
-                String(expected, "cumulative_quote"));
+  ExpectDecimal(result.snapshot.traded_quantity,
+                String(expected, "traded_quantity"));
+  ExpectDecimal(result.snapshot.traded_value,
+                String(expected, "traded_value"));
   auto remaining =
-      prepared.request.base_amount.Subtract(result.snapshot.cumulative_base);
+      prepared.request.quantity.Subtract(result.snapshot.traded_quantity);
   ASSERT_TRUE(remaining.ok()) << remaining.status();
   ExpectDecimal(*remaining, String(expected, "remaining_base"));
   std::vector<std::string> events;
@@ -252,7 +252,7 @@ TEST(OrderTrackerTest,
   first.request.account = AccountId{"A1"};
   first.request.market =
       MarketId{ExchangeId{"simulated"}, InstrumentKind::Spot, "BTC-USDT"};
-  first.request.base_amount = D("1");
+  first.request.quantity = D("1");
   first.request.limit_price = D("100");
   ASSERT_TRUE(tracker.Register(first).ok());
   auto second = first;
@@ -276,13 +276,13 @@ TEST(OrderTrackerTest,
   trade.exchange_order_id = ExchangeOrderId{"E1"};
   trade.exchange_trade_id = ExchangeTradeId{"T1"};
   trade.price = D("100");
-  trade.base_amount = D("1.1");
-  trade.quote_amount = D("110");
+  trade.quantity = D("1.1");
+  trade.value = D("110");
   EXPECT_EQ(CodeOf(tracker.ApplyTradeUpdate(trade).status()),
             ErrorCode::kTradeExceedsOrderAmount);
   auto snapshot = tracker.Snapshot(first.client_order_id);
   ASSERT_TRUE(snapshot);
-  ExpectDecimal(snapshot->cumulative_base, "0");
+  ExpectDecimal(snapshot->traded_quantity, "0");
 }
 
 TEST(OrderTrackerTest, ReconcilesUnknownSubmissionUsingOriginalClientId) {
@@ -293,7 +293,7 @@ TEST(OrderTrackerTest, ReconcilesUnknownSubmissionUsingOriginalClientId) {
   prepared.request.account = AccountId{"A1"};
   prepared.request.market =
       MarketId{ExchangeId{"simulated"}, InstrumentKind::Spot, "BTC-USDT"};
-  prepared.request.base_amount = D("1");
+  prepared.request.quantity = D("1");
   prepared.request.limit_price = D("100");
   ASSERT_TRUE(tracker.Register(prepared).ok());
   auto unknown = tracker.MarkSubmissionUnknown(prepared.client_order_id);
@@ -327,7 +327,7 @@ TEST(OrderTrackerTest, RoutesExchangeOnlyReportAndDoesNotRegressOnStaleStatus) {
   prepared.request.account = AccountId{"A1"};
   prepared.request.market =
       MarketId{ExchangeId{"simulated"}, InstrumentKind::Spot, "BTC-USDT"};
-  prepared.request.base_amount = D("1");
+  prepared.request.quantity = D("1");
   prepared.request.limit_price = D("100");
   ASSERT_TRUE(tracker.Register(prepared).ok());
   OrderUpdate update;
@@ -359,7 +359,7 @@ TEST(OrderTrackerTest,
   prepared.request.account = AccountId{"A1"};
   prepared.request.market =
       MarketId{ExchangeId{"simulated"}, InstrumentKind::Spot, "BTC-USDT"};
-  prepared.request.base_amount = D("1");
+  prepared.request.quantity = D("1");
   prepared.request.limit_price = D("100");
   ASSERT_TRUE(tracker.Register(prepared).ok());
   auto failed =

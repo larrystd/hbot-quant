@@ -106,7 +106,7 @@ TEST(RecoveryIntegrationTest, UnknownWriteAndCrashUseOriginalIdWithoutResend) {
   request.market = market;
   request.side = Side::Buy;
   request.type = OrderType::LimitMaker;
-  request.base_amount = D("0.01");
+  request.quantity = D("0.01");
   request.limit_price = D("100");
   RiskGate original_risk({ShardId{0}, D("0"), std::chrono::seconds(300)});
   ASSERT_TRUE(
@@ -242,7 +242,7 @@ TEST(RecoveryIntegrationTest, UnknownWriteAndCrashUseOriginalIdWithoutResend) {
   auto final = tracker.ApplyQueriedOrder(*queried_order->order);
   ASSERT_TRUE(final.ok()) << final.status();
   EXPECT_EQ(final->snapshot.display_state, OrderDisplayState::Traded);
-  EXPECT_EQ(*final->snapshot.cumulative_base.Compare(D("0.01")), 0);
+  EXPECT_EQ(*final->snapshot.traded_quantity.Compare(D("0.01")), 0);
   ASSERT_TRUE(
       restored_risk
           .ApplyTrade(restored_hold->hold_id, AssetId("USDT"), D("1"), D("0"))

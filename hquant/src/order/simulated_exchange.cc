@@ -39,7 +39,7 @@ Decimal SimpleSimulatedExchange::AvailableBalance(const AssetId& asset) const {
     if (order.request.side == Side::Buy &&
         asset == config_.market.quote_asset) {
       auto hold =
-          order.request.base_amount.Multiply(*order.request.limit_price);
+          order.request.quantity.Multiply(*order.request.limit_price);
       if (hold.ok() && !config_.buy_fee_from_returns) {
         auto fee = hold->Multiply(config_.maker_fee_rate);
         if (fee.ok()) hold = hold->Add(*fee);
@@ -50,7 +50,7 @@ Decimal SimpleSimulatedExchange::AvailableBalance(const AssetId& asset) const {
       }
     } else if (order.request.side == Side::Sell &&
                asset == config_.market.base_asset) {
-      auto remaining = result.Subtract(order.request.base_amount);
+      auto remaining = result.Subtract(order.request.quantity);
       if (remaining.ok()) result = *remaining;
     }
   }
@@ -77,9 +77,9 @@ void SimpleSimulatedExchange::EmitOrder(const RestingOrder& order,
   update.exchange_status = status;
   update.time = Now();
   if (status == ExchangeOrderStatus::Traded) {
-    update.cumulative_base = order.request.base_amount;
-    auto quote = order.request.base_amount.Multiply(*order.request.limit_price);
-    if (quote.ok()) update.cumulative_quote = *quote;
+    update.traded_quantity = order.request.quantity;
+    auto quote = order.request.quantity.Multiply(*order.request.limit_price);
+    if (quote.ok()) update.traded_value = *quote;
   }
   events_.emplace_back(std::move(update));
 }
@@ -107,11 +107,11 @@ absl::Status SimpleSimulatedExchange::ValidateAndQuantize(
                  "order market is not the simulated market");
   if (request.type != OrderType::Limit && request.type != OrderType::LimitMaker)
     return Error(ErrorCode::kOrderTypeUnsupported, "only limit orders");
-  if (!request.limit_price || !request.base_amount.IsStrictlyPositive() ||
+  if (!request.limit_price || !request.quantity.IsStrictlyPositive() ||
       !request.limit_price->IsStrictlyPositive())
     return Error(ErrorCode::kOrderPriceOrAmountInvalid,
                  "limit price and amount must be positive");
-  auto amount = request.base_amount.Quantize(
+  auto amount = request.quantity.Quantize(
       config_.trading_rule.base_increment, RoundingMode::Down);
   auto price = request.limit_price->Quantize(
       config_.trading_rule.price_increment, RoundingMode::Down);
@@ -142,7 +142,7 @@ absl::Status SimpleSimulatedExchange::ValidateAndQuantize(
     return Error(ErrorCode::kOrderAboveMaxAmount,
                  "Simulated order above max amount");
   }
-  request.base_amount = *amount;
+  request.quantity = *amount;
   request.limit_price = *price;
   return absl::OkStatus();
 }
@@ -181,8 +181,8 @@ absl::Status SimpleSimulatedExchange::StartPrepared(
                                   : config_.market.base_asset;
   auto required =
       order.request.side == Side::Buy
-          ? order.request.base_amount.Multiply(*order.request.limit_price)
-          : absl::StatusOr<Decimal>(order.request.base_amount);
+          ? order.request.quantity.Multiply(*order.request.limit_price)
+          : absl::StatusOr<Decimal>(order.request.quantity);
   if (!required.ok())
     return Error(ErrorCode::kDecimalArithmeticFailed,
                  "Simulated order collateral cannot be calculated");
@@ -234,7 +234,7 @@ absl::Status SimpleSimulatedExchange::StartCancel(
 absl::Status SimpleSimulatedExchange::Fill(size_t index) {
   RestingOrder order = orders_.at(index);
   const Decimal& price = *order.request.limit_price;
-  const Decimal& amount = order.request.base_amount;
+  const Decimal& amount = order.request.quantity;
   auto quote = price.Multiply(amount);
   if (!quote.ok())
     return Error(ErrorCode::kDecimalArithmeticFailed,
@@ -288,8 +288,8 @@ absl::Status SimpleSimulatedExchange::Fill(size_t index) {
   trade.exchange_trade_id =
       ExchangeTradeId("T" + std::to_string(next_trade_id_++));
   trade.price = price;
-  trade.base_amount = amount;
-  trade.quote_amount = *quote;
+  trade.quantity = amount;
+  trade.value = *quote;
   trade.fees.push_back(TradeFee{fee_asset, *fee});
   trade.maker = true;
   trade.time = Now();

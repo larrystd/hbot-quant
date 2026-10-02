@@ -35,7 +35,7 @@ EventTime Received() {
 
 std::string Report(const char* execution, const char* status, const char* last,
                    const char* cumulative, const char* last_quote,
-                   const char* cumulative_quote, int trade_id = -1,
+                   const char* traded_value, int trade_id = -1,
                    const char* client = "C1", const char* original = "",
                    const char* fee = "0", const char* fee_asset_json = "null") {
   return std::string("{\"e\":\"executionReport\",\"E\":1000,\"T\":1001,") +
@@ -43,7 +43,7 @@ std::string Report(const char* execution, const char* status, const char* last,
          "\",\"i\":123,\"x\":\"" + execution + "\",\"X\":\"" + status +
          "\",\"t\":" + std::to_string(trade_id) + ",\"l\":\"" + last +
          "\",\"z\":\"" + cumulative + "\",\"L\":\"100\",\"Y\":\"" + last_quote +
-         "\",\"Z\":\"" + cumulative_quote + "\",\"n\":\"" + fee +
+         "\",\"Z\":\"" + traded_value + "\",\"n\":\"" + fee +
          "\",\"N\":" + fee_asset_json + ",\"m\":true}";
 }
 
@@ -103,7 +103,7 @@ TEST(AccountStreamParserTest, EmitsTradeBeforeStatusAndTrackerDeduplicates) {
   prepared.strategy_id = StrategyId{1, StrategyName("simple_pmm")};
   prepared.request.account = AccountId("A1");
   prepared.request.market = Market();
-  prepared.request.base_amount = D("1");
+  prepared.request.quantity = D("1");
   prepared.request.limit_price = D("100");
   prepared.created_at_utc = Received().receive_utc;
   ASSERT_TRUE(tracker.Register(prepared).ok());
@@ -129,7 +129,7 @@ TEST(AccountStreamParserTest, EmitsTradeBeforeStatusAndTrackerDeduplicates) {
   ASSERT_TRUE(duplicate.ok());
   EXPECT_TRUE(duplicate->events.empty());
   EXPECT_TRUE(
-      Equal(tracker.Snapshot(ClientOrderId("C1"))->cumulative_base, "0.4"));
+      Equal(tracker.Snapshot(ClientOrderId("C1"))->traded_quantity, "0.4"));
 
   auto stale =
       stream.Parse(Report("NEW", "NEW", "0", "0", "0", "0"), Received());
@@ -141,8 +141,8 @@ TEST(AccountStreamParserTest, EmitsTradeBeforeStatusAndTrackerDeduplicates) {
 
   OrderUpdate filled = std::get<OrderUpdate>(first->events[1]);
   filled.exchange_status = ExchangeOrderStatus::Traded;
-  filled.cumulative_base = D("1");
-  filled.cumulative_quote = D("100");
+  filled.traded_quantity = D("1");
+  filled.traded_value = D("100");
   auto awaiting = tracker.ApplyOrderUpdate(filled);
   ASSERT_TRUE(awaiting.ok());
   EXPECT_EQ(awaiting->snapshot.display_state,
