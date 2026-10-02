@@ -225,22 +225,10 @@ RouteResult AccountReportRouter::Quarantine(AccountReport report,
 }
 
 RouteResult AccountReportRouter::Route(AccountReport report) {
-  const AccountId& account = std::visit(
-      [](const auto& value) -> const AccountId& { return value.account; },
-      report);
-  const MarketId& market = std::visit(
-      [](const auto& value) -> const MarketId& { return value.market; },
-      report);
-  const std::optional<ClientOrderId>& client_order_id = std::visit(
-      [](const auto& value) -> const std::optional<ClientOrderId>& {
-        return value.client_order_id;
-      },
-      report);
-  const std::optional<ExchangeOrderId>& exchange_order_id = std::visit(
-      [](const auto& value) -> const std::optional<ExchangeOrderId>& {
-        return value.exchange_order_id;
-      },
-      report);
+  const AccountId& account = report.account;
+  const MarketId& market = report.market;
+  const std::optional<ClientOrderId> client_order_id = report.client_order_id;
+  const std::optional<ExchangeOrderId> exchange_order_id;
 
   RouteResult result;
   result.account = account;

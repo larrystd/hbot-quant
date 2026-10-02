@@ -122,12 +122,10 @@ RunResult InspectRun(const std::string& path, std::string status) {
     auto record =
         storage_internal::DecodeRecord(std::string_view(blob, length));
     if (!record.ok()) throw std::runtime_error("decode history failed");
-    if (const auto* order = std::get_if<PreparedOrder>(&record->payload)) {
+    if (const auto* order = std::get_if<Order>(&record->payload)) {
       result.orders[shard].push_back(
-          std::to_string(static_cast<int>(order->request.side)) + ":" +
-          order->request.quantity.ToString() + ":" +
-          (order->request.limit_price ? order->request.limit_price->ToString()
-                                      : std::string("market")));
+          std::to_string(static_cast<int>(order->side)) + ":" +
+          order->quantity.ToString() + ":" + order->price.ToString());
     }
   }
   sqlite3_finalize(query);
@@ -182,8 +180,9 @@ TEST(QuantServerMultiShardTest, ReplayMatchesIndependentShardsAndStopsCleanly) {
   const auto multi = RunReplay(*loaded);
   EXPECT_TRUE(multi.clean);
   ASSERT_EQ(multi.rows.size(), 2);
-  EXPECT_EQ(multi.rows.at(0).size(), 20);
-  EXPECT_EQ(multi.rows.at(1).size(), 20);
+  // Each fill now carries its terminal order status in one history record.
+  EXPECT_EQ(multi.rows.at(0).size(), 18);
+  EXPECT_EQ(multi.rows.at(1).size(), 18);
   EXPECT_NE(multi.status.find("\"active_shards\":2"), std::string::npos);
   EXPECT_NE(multi.status.find("\"market\":\"BTC-USDT\",\"book\":\"Live\""),
             std::string::npos);

@@ -22,26 +22,13 @@ StrategyId MakeStrategyId(uint64_t key) {
   return StrategyId{key, StrategyName("simple_pmm")};
 }
 
-OrderUpdate Update(std::string client, std::string exchange = "") {
+OrderUpdate Update(std::string client) {
   OrderUpdate update;
   update.account = AccountId("account-a");
   update.market = Market();
   if (!client.empty())
     update.client_order_id = ClientOrderId(std::move(client));
-  if (!exchange.empty())
-    update.exchange_order_id = ExchangeOrderId(std::move(exchange));
   return update;
-}
-
-TradeUpdate Trade(std::string client, std::string exchange = "") {
-  TradeUpdate trade;
-  trade.account = AccountId("account-a");
-  trade.market = Market();
-  if (!client.empty()) trade.client_order_id = ClientOrderId(std::move(client));
-  if (!exchange.empty())
-    trade.exchange_order_id = ExchangeOrderId(std::move(exchange));
-  trade.exchange_trade_id = ExchangeTradeId("T1");
-  return trade;
 }
 
 OrderStrategyIndex Index() {
@@ -165,7 +152,7 @@ TEST(AccountReportRouterTest,
   ASSERT_TRUE(local.local_report);
   EXPECT_EQ(local.local_report->strategy_id, MakeStrategyId(1));
   EXPECT_EQ(local.source_sequence, 1);
-  auto first = router.Route(Trade("C2-0"));
+  auto first = router.Route(Update("C2-0"));
   EXPECT_EQ(first.disposition, RouteDisposition::Forwarded);
   ASSERT_TRUE(first.wake_shard);
   EXPECT_EQ(first.wake_shard->value, 2);
@@ -177,8 +164,8 @@ TEST(AccountReportRouterTest,
   ASSERT_TRUE(popped_first && popped_second);
   EXPECT_EQ(popped_first->source_sequence, 2);
   EXPECT_EQ(popped_second->source_sequence, 3);
-  EXPECT_TRUE(std::holds_alternative<TradeUpdate>(popped_first->report));
-  EXPECT_TRUE(std::holds_alternative<OrderUpdate>(popped_second->report));
+  EXPECT_EQ(popped_first->report.client_order_id.value, "C2-0");
+  EXPECT_EQ(popped_second->report.client_order_id.value, "C2-7");
   EXPECT_FALSE(router.TryPop(ShardId{2}));
 }
 
@@ -200,7 +187,7 @@ TEST(AccountReportRouterTest,
   EXPECT_EQ(full.failure, ErrorCode::kRouteQueueFull);
   EXPECT_TRUE(full.pause_account && full.request_order_query);
   EXPECT_TRUE(router.IsAccountPaused(AccountId("account-a")));
-  auto unknown = router.Route(Trade("unrecognized"));
+  auto unknown = router.Route(Update("unrecognized"));
   EXPECT_EQ(unknown.failure, ErrorCode::kRouteStrategyUnknown);
   EXPECT_EQ(router.QuarantineSize(), 2);
   auto dropped = router.Route(Update(""));

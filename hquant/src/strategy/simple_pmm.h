@@ -36,7 +36,6 @@ class SimplePmm final : public Strategy {
  private:
   std::optional<Decimal> ReferencePrice(const StrategyInput& context) const;
   Decimal Available(const StrategyInput& context, const AssetId& asset) const;
-  bool Active(const OrderSnapshot& order) const;
 
   SimplePmmConfig config_;
   bool ready_to_trade_ = false;

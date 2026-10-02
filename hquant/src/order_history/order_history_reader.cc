@@ -594,7 +594,8 @@ absl::StatusOr<PreviousRun> LoadPreviousRun(const std::string& path,
                      decoded.status().message());
       if (decoded->run_id != run_id || decoded->shard.value != shard ||
           decoded->shard_sequence != static_cast<uint64_t>(sequence) ||
-          (decoded->schema_version != 1 && decoded->schema_version != 2) ||
+          (decoded->schema_version != 1 && decoded->schema_version != 2 &&
+           decoded->schema_version != 3) ||
           decoded->schema_version != indexed_version ||
           static_cast<uint64_t>(sequence) <= last_seen[shard]) {
         return Error(ErrorCode::kRecoveryDataCorrupted,
@@ -606,29 +607,37 @@ absl::StatusOr<PreviousRun> LoadPreviousRun(const std::string& path,
       }
       last_seen[shard] = static_cast<uint64_t>(sequence);
       if (const auto* prepared =
-              std::get_if<PreparedOrder>(&decoded->payload)) {
+              std::get_if<LegacyPreparedOrder>(&decoded->payload)) {
         if (prepared->client_order_id.value.empty()) {
           return Error(ErrorCode::kRecoveryDataCorrupted,
                        "empty client ID in recovered prepared order");
         }
-        snapshot.context.recovered_prepared_orders.push_back(*prepared);
+        snapshot.context.recovered_legacy_orders.push_back(*prepared);
         if (prepared->executor_checkpoint) {
-          snapshot.context.checkpoints.push_back(RecordedCheckpoint{
-              *prepared->executor_checkpoint, prepared->created_at_utc});
+          snapshot.context.legacy_checkpoints.push_back(
+              LegacyRecordedCheckpoint{*prepared->executor_checkpoint,
+                                       prepared->created_at_utc});
         }
       } else if (const auto* checkpoint =
-                     std::get_if<RecordedCheckpoint>(&decoded->payload)) {
-        snapshot.context.checkpoints.push_back(*checkpoint);
+                     std::get_if<LegacyRecordedCheckpoint>(&decoded->payload)) {
+        snapshot.context.legacy_checkpoints.push_back(*checkpoint);
       } else if (const auto* order =
-                     std::get_if<OrderUpdate>(&decoded->payload)) {
-        snapshot.context.exchange_orders.push_back(*order);
+                     std::get_if<LegacyOrderUpdate>(&decoded->payload)) {
+        snapshot.context.legacy_exchange_orders.push_back(*order);
         if (order->client_order_id) {
           terminal_by_client[order->client_order_id->value] =
               Terminal(order->exchange_status);
         }
       } else if (const auto* trade =
-                     std::get_if<TradeUpdate>(&decoded->payload)) {
-        snapshot.context.exchange_trades.push_back(*trade);
+                     std::get_if<LegacyTradeUpdate>(&decoded->payload)) {
+        snapshot.context.legacy_exchange_trades.push_back(*trade);
+      } else if (const auto* order = std::get_if<Order>(&decoded->payload)) {
+        snapshot.context.recovered_orders.push_back(*order);
+      } else if (const auto* update =
+                     std::get_if<OrderUpdate>(&decoded->payload)) {
+        snapshot.context.exchange_updates.push_back(*update);
+        terminal_by_client[update->client_order_id.value] =
+            Terminal(update->status);
       }
     }
   }
@@ -654,7 +663,7 @@ absl::StatusOr<PreviousRun> LoadPreviousRun(const std::string& path,
   const bool incomplete = !snapshot.manifest.history_complete ||
                           !snapshot.gaps.empty() ||
                           snapshot.may_have_unwritten_records;
-  for (const auto& prepared : snapshot.context.recovered_prepared_orders) {
+  for (const auto& prepared : snapshot.context.recovered_legacy_orders) {
     const auto terminal =
         terminal_by_client.find(prepared.client_order_id.value);
     if (incomplete || terminal == terminal_by_client.end() ||
@@ -662,10 +671,16 @@ absl::StatusOr<PreviousRun> LoadPreviousRun(const std::string& path,
       snapshot.context.unresolved_ids.push_back(prepared.client_order_id);
     }
   }
+  for (const auto& order : snapshot.context.recovered_orders) {
+    const auto terminal = terminal_by_client.find(order.client_order_id.value);
+    if (incomplete || terminal == terminal_by_client.end() || !terminal->second)
+      snapshot.context.unresolved_ids.push_back(order.client_order_id);
+  }
   snapshot.context.confidence = incomplete ? PreviousRunCompleteness::Unresolved
                                            : PreviousRunCompleteness::Partial;
   snapshot.needs_order_query =
-      incomplete || !snapshot.context.recovered_prepared_orders.empty();
+      incomplete || !snapshot.context.recovered_orders.empty() ||
+      !snapshot.context.recovered_legacy_orders.empty();
   return snapshot;
 }
 

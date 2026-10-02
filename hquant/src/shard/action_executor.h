@@ -8,6 +8,7 @@
 #include "base/market.h"
 #include "base/order.h"
 #include "base/types.h"
+#include "order/order_tracker.h"
 #include "order/risk.h"
 #include "order_history/order_history.h"
 #include "strategy/strategy.h"
@@ -16,6 +17,7 @@ namespace hquant {
 
 struct ActionContext {
   StrategyId strategy_id;
+  AccountId account;
   ActionBatchId action_batch_id;
   MarketSpec market;
   TradingRule rule;
@@ -31,18 +33,19 @@ struct ActionResult {
   ErrorCode reason = ErrorCode::kOk;
   std::string message;
   std::optional<ClientOrderId> client_order_id;
-  std::optional<PreparedOrder> prepared;
+  std::optional<Order> order;
   std::optional<HoldId> hold_id;
 };
 
 // Executes one shard's strategy actions synchronously on the owning thread.
 class ActionExecutor {
  public:
-  ActionExecutor(RiskGate& risk, OrderGateway& gateway,
+  ActionExecutor(RiskGate& risk, OrderGateway& gateway, OrderTracker& tracker,
                  OrderHistoryWriter& recorder, RunId run, ShardId shard,
                  uint64_t& shard_sequence)
       : risk_(risk),
         gateway_(gateway),
+        tracker_(tracker),
         recorder_(recorder),
         run_(run),
         shard_(shard),
@@ -59,6 +62,7 @@ class ActionExecutor {
 
   RiskGate& risk_;
   OrderGateway& gateway_;
+  OrderTracker& tracker_;
   OrderHistoryWriter& recorder_;
   RunId run_;
   ShardId shard_;

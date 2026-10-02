@@ -186,7 +186,7 @@ SqliteOrderHistoryWriter::~SqliteOrderHistoryWriter() {
 
 bool SqliteOrderHistoryWriter::TryPush(OrderHistoryRecord record) {
   if (!record.shard.IsValid() || record.run_id != options_.run_id ||
-      record.shard_sequence == 0 || record.schema_version != 2)
+      record.shard_sequence == 0 || record.schema_version != 3)
     return false;
   Queue& queue = *queues_[record.shard.value];
   const uint64_t previous =

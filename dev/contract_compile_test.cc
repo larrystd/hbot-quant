@@ -23,14 +23,12 @@ int main() {
   if (hquant::Decimal::Parse("NaN").ok()) return 3;
   hquant::MarketId market{hquant::ExchangeId("binance"),
                           hquant::InstrumentKind::Spot, "BTCUSDT"};
-  hquant::OrderRequest request;
-  request.market = market;
-  request.limit_price = *price;
+  hquant::SubmitOrder request;
+  request.price = *price;
   hquant::ActionBatch batch;
-  batch.ordered.emplace_back(
-      hquant::SubmitOrder{hquant::StrategyId{}, request});
+  batch.ordered.emplace_back(request);
   hquant::OrderHistoryRecord record;
-  record.payload = hquant::PreparedOrder{};
+  record.payload = hquant::Order{};
   hquant::ControlRequest server_request;
   server_request.payload = hquant::StatusRequest{};
   hquant::ShardReport report;

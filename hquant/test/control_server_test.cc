@@ -84,7 +84,7 @@ TEST(ControlServerHistoryTest, DisplaysNegativeReasonNumbers) {
   constexpr auto reason = ErrorCode::kOrderHistoryQueueFull;
   OrderHistoryPage page;
   OrderHistoryRecord prepared_record;
-  PreparedOrder prepared;
+  LegacyPreparedOrder prepared;
   prepared.client_order_id = ClientOrderId{"P1"};
   prepared.request.quantity = *Decimal::Parse("0.01");
   prepared_record.payload = prepared;

@@ -1,5 +1,6 @@
 #include <unistd.h>
 
+#include <algorithm>
 #include <chrono>
 #include <filesystem>
 #include <memory>
@@ -129,10 +130,8 @@ std::string ReplayOnce() {
   if (!opening.ok() || !opening->empty())
     throw std::runtime_error("refresh interval ignored");
   auto open = sim_exchange.OpenOrders();
-  if (open.size() != 2 || !open[0].request.limit_price ||
-      !open[1].request.limit_price ||
-      *open[0].request.limit_price->Compare(D("99.9")) != 0 ||
-      *open[1].request.limit_price->Compare(D("100.1")) != 0) {
+  if (open.size() != 2 || *open[0].price.Compare(D("99.9")) != 0 ||
+      *open[1].price.Compare(D("100.1")) != 0) {
     throw std::runtime_error("initial quote price failed");
   }
   const auto first_buy = open[0].client_order_id;
@@ -148,8 +147,11 @@ std::string ReplayOnce() {
           "refresh action rejected: " + std::string(Info(action.reason).name) +
           ": " + action.message);
   }
-  if (sim_exchange.OpenOrders().size() != 2 || !shard.Order(first_buy) ||
-      shard.Order(first_buy)->display_state != OrderDisplayState::Canceled) {
+  const auto refreshed = sim_exchange.OpenOrders();
+  if (refreshed.size() != 2 || !shard.FindOrder(first_buy) ||
+      std::any_of(refreshed.begin(), refreshed.end(), [&](const Order& order) {
+        return order.client_order_id == first_buy;
+      })) {
     throw std::runtime_error("cancel and requote failed");
   }
 
@@ -182,12 +184,13 @@ std::string ReplayOnce() {
     throw std::runtime_error("history page failed");
   size_t prepared_orders = 0, trades = 0, decisions = 0;
   for (const auto& row : page->rows) {
-    if (std::holds_alternative<PreparedOrder>(row.payload)) ++prepared_orders;
+    if (std::holds_alternative<Order>(row.payload)) ++prepared_orders;
     if (std::holds_alternative<ActionRecord>(row.payload)) ++decisions;
-    if (const auto* trade = std::get_if<TradeUpdate>(&row.payload)) {
+    if (const auto* update = std::get_if<OrderUpdate>(&row.payload);
+        update && update->trade) {
       ++trades;
-      if (trade->fees.size() != 1 ||
-          *trade->fees[0].signed_amount.Compare(D("0.00001")) != 0) {
+      if (update->trade->fees.size() != 1 ||
+          *update->trade->fees[0].signed_amount.Compare(D("0.00001")) != 0) {
         throw std::runtime_error("historical fee wrong");
       }
     }

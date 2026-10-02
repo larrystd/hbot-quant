@@ -14,14 +14,6 @@
 
 namespace hquant {
 
-struct SubmitOrder {
-  StrategyId strategy_id;
-  OrderRequest request;
-};
-struct CancelOrder {
-  StrategyId strategy_id;
-  ClientOrderId client_order_id;
-};
 using StrategyAction = std::variant<SubmitOrder, CancelOrder>;
 struct ActionBatch {
   std::vector<StrategyAction> ordered;
@@ -45,7 +37,7 @@ struct StrategyInput {
   const TradingRule& trading_rule;
   std::optional<Decimal> last_trade_price;
   bool ready = false;
-  std::span<const OrderSnapshot> orders;
+  std::span<const Order* const> orders;
   std::span<const Balance> balances;
   InputTime input;
   const Clock& clock;

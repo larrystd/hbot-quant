@@ -46,19 +46,19 @@ MarketId Market() {
 
 OrderHistoryRecord PreparedRecord(uint64_t sequence,
                                   std::string client = "B1") {
-  PreparedOrder prepared;
+  LegacyPreparedOrder prepared;
   prepared.client_order_id = ClientOrderId{std::move(client)};
   prepared.strategy_id = MakeStrategyId();
   prepared.request.account = AccountId{"A1"};
   prepared.request.market = Market();
   prepared.request.side = Side::Buy;
-  prepared.request.type = OrderType::Limit;
+  prepared.request.type = uint8_t{0};
   prepared.request.quantity = D("0.01");
   prepared.request.limit_price = D("100");
   prepared.created_at_utc = At(1000 + sequence);
   prepared.config_revision = 7;
   prepared.executor_checkpoint =
-      StrategyCheckpoint{1, MakeStrategyId(), 7, "prepared state"};
+      LegacyStrategyCheckpoint{1, MakeStrategyId(), 7, "prepared state"};
   OrderHistoryRecord record;
   record.run_id = RunId{21};
   record.shard = ShardId{0};
@@ -76,7 +76,7 @@ TEST(RecoveryTest, CleanRunLoadsTypedContextAndOpenClientIds) {
   ASSERT_TRUE(recorder.ok()) << recorder.status();
   ASSERT_TRUE((*recorder)->TryPush(PreparedRecord(1, "B1")));
   OrderHistoryRecord filled = PreparedRecord(2);
-  OrderUpdate update;
+  LegacyOrderUpdate update;
   update.account = AccountId{"A1"};
   update.market = Market();
   update.client_order_id = ClientOrderId{"B1"};
@@ -85,8 +85,9 @@ TEST(RecoveryTest, CleanRunLoadsTypedContextAndOpenClientIds) {
   ASSERT_TRUE((*recorder)->TryPush(std::move(filled)));
   ASSERT_TRUE((*recorder)->TryPush(PreparedRecord(3, "B2")));
   OrderHistoryRecord checkpoint = PreparedRecord(4);
-  checkpoint.payload = RecordedCheckpoint{
-      StrategyCheckpoint{1, MakeStrategyId(), 8, "latest state"}, At(1004)};
+  checkpoint.payload = LegacyRecordedCheckpoint{
+      LegacyStrategyCheckpoint{1, MakeStrategyId(), 8, "latest state"},
+      At(1004)};
   ASSERT_TRUE((*recorder)->TryPush(std::move(checkpoint)));
   ASSERT_TRUE((*recorder)->Stop(At(2000)).ok());
   recorder->reset();
@@ -98,9 +99,9 @@ TEST(RecoveryTest, CleanRunLoadsTypedContextAndOpenClientIds) {
   EXPECT_EQ(recovered->manifest.last_committed_seq_by_shard.at(0), 4);
   EXPECT_FALSE(recovered->may_have_unwritten_records);
   EXPECT_TRUE(recovered->gaps.empty());
-  EXPECT_EQ(recovered->context.recovered_prepared_orders.size(), 2);
-  EXPECT_EQ(recovered->context.exchange_orders.size(), 1);
-  EXPECT_EQ(recovered->context.checkpoints.size(), 3);
+  EXPECT_EQ(recovered->context.recovered_legacy_orders.size(), 2);
+  EXPECT_EQ(recovered->context.legacy_exchange_orders.size(), 1);
+  EXPECT_EQ(recovered->context.legacy_checkpoints.size(), 3);
   ASSERT_EQ(recovered->context.unresolved_ids.size(), 1);
   EXPECT_EQ(recovered->context.unresolved_ids[0].value, "B2");
   EXPECT_EQ(recovered->context.confidence, PreviousRunCompleteness::Partial);

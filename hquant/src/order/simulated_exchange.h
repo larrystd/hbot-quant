@@ -24,12 +24,6 @@ struct SimulatedExchangeConfig {
   std::function<ClientOrderId(Side)> make_client_id;
 };
 
-struct RestingOrder {
-  ClientOrderId client_order_id;
-  StrategyId strategy_id;
-  OrderRequest request;
-};
-
 // Deterministic local spot exchange. The caller owns the shard and supplies a
 // clock; public trades are only matching triggers, never account fills by
 // themselves. All matches fill the entire resting order at its own limit.
@@ -37,17 +31,18 @@ class SimpleSimulatedExchange final : public SimulatedExchange {
  public:
   SimpleSimulatedExchange(SimulatedExchangeConfig config, const Clock& clock);
 
-  absl::StatusOr<PreparedOrder> PrepareSubmit(ApprovedOrder approved) override;
+  absl::StatusOr<Order> PrepareSubmit(const SubmitOrder& request,
+                                      const StrategyId& strategy_id,
+                                      MonoTime expires_at_mono) override;
   absl::Status StartPrepared(const ClientOrderId& client_order_id) override;
   absl::Status AbortPrepared(const ClientOrderId& client_order_id) override;
-  absl::Status StartCancel(const StrategyId& strategy_id,
-                           const ClientOrderId& client_order_id) override;
+  absl::Status StartCancel(const ClientOrderId& client_order_id) override;
 
   absl::Status OnBookBbo(const Decimal& bid, const Decimal& ask) override;
   absl::Status OnPublicTrade(Side aggressor, const Decimal& price,
                              const Decimal& public_amount) override;
 
-  std::vector<RestingOrder> OpenOrders() const { return orders_; }
+  std::vector<Order> OpenOrders() const { return orders_; }
   Decimal BalanceOf(const AssetId& asset) const override;
   Decimal AvailableBalance(const AssetId& asset) const override;
   Decimal FeesPaid(const AssetId& asset) const;
@@ -55,15 +50,17 @@ class SimpleSimulatedExchange final : public SimulatedExchange {
 
  private:
   absl::Status Fill(size_t index);
-  absl::Status ValidateAndQuantize(ApprovedOrder* approved) const;
-  void EmitOrder(const RestingOrder& order, ExchangeOrderStatus status);
+  absl::Status ValidateAndQuantize(SubmitOrder* request,
+                                   const StrategyId& strategy_id) const;
+  void EmitOrder(const Order& order, ExchangeOrderStatus status,
+                 std::optional<Trade> trade = std::nullopt);
   void EmitBalance(const AssetId& asset);
   EventTime Now() const;
 
   SimulatedExchangeConfig config_;
   const Clock& clock_;
-  std::vector<RestingOrder> orders_;
-  std::map<std::string, ApprovedOrder> prepared_;
+  std::vector<Order> orders_;
+  std::map<std::string, Order> prepared_;
   std::set<std::string> used_ids_;
   std::map<std::string, Decimal> balances_;
   std::map<std::string, Decimal> fees_paid_;

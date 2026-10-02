@@ -104,16 +104,17 @@ class BinanceOrderGateway final : public OrderGateway {
                       const Clock& clock, BinanceGatewayConfig config,
                       EventHandler on_event);
 
-  absl::StatusOr<PreparedOrder> PrepareSubmit(ApprovedOrder approved) override;
+  absl::StatusOr<Order> PrepareSubmit(const SubmitOrder& request,
+                                      const StrategyId& strategy_id,
+                                      MonoTime expires_at_mono) override;
   absl::Status StartPrepared(const ClientOrderId& client_order_id) override;
   absl::Status AbortPrepared(const ClientOrderId& client_order_id) override;
-  absl::Status StartCancel(const StrategyId& strategy_id,
-                           const ClientOrderId& client_order_id) override;
+  absl::Status StartCancel(const ClientOrderId& client_order_id) override;
 
   // Recovery loads historical IDs before order creation; a repeated run ID is
   // refused even if its next local sequence has not yet collided.
   absl::Status ObserveHistoricalClientId(const ClientOrderId& client_order_id);
-  absl::Status RestoreOrder(PreparedOrder prepared);
+  absl::Status RestoreOrder(Order order);
   size_t PendingSubmitCount() const { return pending_submits_; }
   size_t PendingCancelCount() const { return pending_cancels_; }
 
@@ -128,7 +129,7 @@ class BinanceOrderGateway final : public OrderGateway {
     Terminal
   };
   struct KnownOrder {
-    PreparedOrder prepared;
+    Order order;
     MonoTime expires_at_mono{};
     State state = State::Prepared;
   };
@@ -139,7 +140,9 @@ class BinanceOrderGateway final : public OrderGateway {
     MonoTime expires_at_mono{};
   };
 
-  absl::Status ValidateAndQuantize(ApprovedOrder* approved) const;
+  absl::Status ValidateAndQuantize(SubmitOrder* request,
+                                   const StrategyId& strategy_id,
+                                   MonoTime expires_at_mono) const;
   absl::StatusOr<HttpRequest> MakeSubmitRequest(const KnownOrder& order) const;
   absl::StatusOr<HttpRequest> MakeCancelRequest(const KnownOrder& order) const;
   absl::StatusOr<OrderUpdate> ParseSuccess(const KnownOrder& order,

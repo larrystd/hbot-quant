@@ -43,20 +43,21 @@ TEST(MultiShardTest, CapitalRateAndAccountReportsStayWithinTheirShard) {
   RiskGate risk1({ShardId{1}, D("0"), std::chrono::seconds(300)});
   ASSERT_TRUE(risk0.SetInitialBudget(lease0).ok());
   ASSERT_TRUE(risk1.SetInitialBudget(lease1).ok());
-  OrderRequest request;
-  request.account = account;
-  request.market = market;
+  SubmitOrder request;
   request.side = Side::Buy;
   request.quantity = D("1");
-  request.limit_price = D("30");
-  auto first = risk0.TryHold(owner0, request, spec, rule, now, true, true);
-  auto second = risk1.TryHold(owner1, request, spec, rule, now, true, true);
+  request.price = D("30");
+  auto first =
+      risk0.TryHold(account, owner0, request, spec, rule, now, true, true);
+  auto second =
+      risk1.TryHold(account, owner1, request, spec, rule, now, true, true);
   ASSERT_TRUE(first.ok()) << first.status();
   ASSERT_TRUE(second.ok()) << second.status();
   ASSERT_TRUE(risk0.MarkSubmissionUnknown(first->hold_id).ok());
   EXPECT_EQ(*risk0.Available(account, quote)->Compare(D("30")), 0);
   EXPECT_FALSE(
-      risk1.TryHold(owner1, request, spec, rule, now, true, true).ok());
+      risk1.TryHold(account, owner1, request, spec, rule, now, true, true)
+          .ok());
   EXPECT_EQ(*risk1.Available(account, quote)->Compare(D("10")), 0);
 
   RateLimitKey rate_key{"shared", "127.0.0.1", "ORDERS/10s"};
@@ -100,7 +101,7 @@ TEST(MultiShardTest, CapitalRateAndAccountReportsStayWithinTheirShard) {
   update.account = account;
   update.market = market;
   update.client_order_id = ClientOrderId("C2");
-  update.exchange_status = ExchangeOrderStatus::Open;
+  update.status = ExchangeOrderStatus::Open;
   auto routed = (*router)->Route(update);
   EXPECT_EQ(routed.disposition, RouteDisposition::Forwarded);
   ASSERT_TRUE(routed.wake_shard);

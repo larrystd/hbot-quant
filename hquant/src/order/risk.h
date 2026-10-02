@@ -84,15 +84,16 @@ class RiskGate {
   // Reconciliation may extend the expiry and version, never the allocation.
   absl::Status RenewAfterOrderQuery(RiskBudget budget, UtcTime now,
                                     bool account_fresh);
-  absl::StatusOr<FundsHold> TryHold(const StrategyId& strategy_id,
-                                    const OrderRequest& request,
+  absl::StatusOr<FundsHold> TryHold(const AccountId& account,
+                                    const StrategyId& strategy_id,
+                                    const SubmitOrder& request,
                                     const MarketSpec& market,
                                     const TradingRule& rule, UtcTime now,
                                     bool market_live, bool account_fresh);
   // Hot-path hold: rejection returns only a code. On success, writes
   // the hold to out. The optional detail is a static diagnostic.
-  ErrorCode TryHoldCode(const StrategyId& strategy_id,
-                        const OrderRequest& request, const MarketSpec& market,
+  ErrorCode TryHoldCode(const AccountId& account, const StrategyId& strategy_id,
+                        const SubmitOrder& request, const MarketSpec& market,
                         const TradingRule& rule, UtcTime now, bool market_live,
                         bool account_fresh, FundsHold* out,
                         std::string_view* detail = nullptr);

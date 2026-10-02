@@ -18,22 +18,6 @@ TriggerPolicy SimplePmm::Triggers() const {
   return policy;
 }
 
-bool SimplePmm::Active(const OrderSnapshot& order) const {
-  if (order.strategy_id != config_.strategy_id ||
-      order.request.account != config_.account ||
-      order.request.market != config_.market.market)
-    return false;
-  switch (order.display_state) {
-    case OrderDisplayState::PendingCreate:
-    case OrderDisplayState::Open:
-    case OrderDisplayState::PartiallyTraded:
-    case OrderDisplayState::PendingCancel:
-      return true;
-    default:
-      return false;
-  }
-}
-
 Decimal SimplePmm::Available(const StrategyInput& context,
                              const AssetId& asset) const {
   for (const auto& balance : context.balances) {
@@ -75,11 +59,8 @@ ActionBatch SimplePmm::Decide(const StrategyInput& context, Trigger /*why*/) {
   if (now < 0 || (next_refresh_at_us_ && now < *next_refresh_at_us_))
     return actions;
 
-  for (const auto& order : context.orders) {
-    if (Active(order))
-      actions.ordered.emplace_back(
-          CancelOrder{config_.strategy_id, order.client_order_id});
-  }
+  for (const Order* order : context.orders)
+    actions.ordered.emplace_back(CancelOrder{order->client_order_id});
 
   const auto reference = ReferencePrice(context);
   if (!reference || !reference->IsStrictlyPositive()) return actions;
@@ -115,21 +96,10 @@ ActionBatch SimplePmm::Decide(const StrategyInput& context, Trigger /*why*/) {
   if (*buy_budget < 0) buy_amount = D("0");
   if (*sell_budget < 0) sell_amount = D("0");
 
-  auto request = [&](Side side, const Decimal& amount, const Decimal& price) {
-    OrderRequest order;
-    order.account = config_.account;
-    order.market = config_.market.market;
-    order.side = side;
-    order.type = OrderType::Limit;
-    order.quantity = amount;
-    order.limit_price = price;
-    order.time_in_force = TimeInForce::Gtc;
-    return order;
-  };
-  actions.ordered.emplace_back(SubmitOrder{
-      config_.strategy_id, request(Side::Buy, buy_amount, *buy_price)});
-  actions.ordered.emplace_back(SubmitOrder{
-      config_.strategy_id, request(Side::Sell, sell_amount, *sell_price)});
+  actions.ordered.emplace_back(
+      SubmitOrder{Side::Buy, buy_amount, *buy_price, TimeInForce::Gtc});
+  actions.ordered.emplace_back(
+      SubmitOrder{Side::Sell, sell_amount, *sell_price, TimeInForce::Gtc});
 
   const int64_t period = config_.refresh_interval.count();
   if (period > 0 && now <= std::numeric_limits<int64_t>::max() - period) {

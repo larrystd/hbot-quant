@@ -29,8 +29,10 @@ class ImmediateFillExchange final : public SimulatedExchange {
  public:
   ImmediateFillExchange(SimulatedExchangeConfig config, const Clock& clock)
       : inner_(std::move(config), clock) {}
-  absl::StatusOr<PreparedOrder> PrepareSubmit(ApprovedOrder order) override {
-    return inner_.PrepareSubmit(std::move(order));
+  absl::StatusOr<Order> PrepareSubmit(const SubmitOrder& request,
+                                      const StrategyId& strategy_id,
+                                      MonoTime expires_at_mono) override {
+    return inner_.PrepareSubmit(request, strategy_id, expires_at_mono);
   }
   absl::Status StartPrepared(const ClientOrderId& id) override {
     auto status = inner_.StartPrepared(id);
@@ -40,9 +42,8 @@ class ImmediateFillExchange final : public SimulatedExchange {
   absl::Status AbortPrepared(const ClientOrderId& id) override {
     return inner_.AbortPrepared(id);
   }
-  absl::Status StartCancel(const StrategyId& strategy_id,
-                           const ClientOrderId& id) override {
-    return inner_.StartCancel(strategy_id, id);
+  absl::Status StartCancel(const ClientOrderId& id) override {
+    return inner_.StartCancel(id);
   }
   absl::Status OnBookBbo(const Decimal& bid, const Decimal& ask) override {
     return inner_.OnBookBbo(bid, ask);
@@ -84,15 +85,12 @@ class CountingStrategy final : public Strategy {
     ActionBatch actions;
     if (submit_once && input.ready) {
       submit_once = false;
-      OrderRequest order;
-      order.account = account;
-      order.market = market;
+      SubmitOrder order;
       order.side = Side::Sell;
-      order.type = OrderType::Limit;
       order.quantity = D("0.01");
-      order.limit_price = D("100.1");
+      order.price = D("100.1");
       order.time_in_force = TimeInForce::Gtc;
-      actions.ordered.emplace_back(SubmitOrder{id, order});
+      actions.ordered.emplace_back(order);
     }
     deciding = false;
     return actions;
@@ -280,8 +278,9 @@ TEST(ShardTriggerTest, ImmediateFillQueuesOneFollowupWithoutRecursion) {
   EXPECT_FALSE(strategy.recursed);
   EXPECT_TRUE(std::any_of(writer.rows.begin(), writer.rows.end(),
                           [](const OrderHistoryRecord& row) {
-                            return std::holds_alternative<TradeUpdate>(
-                                row.payload);
+                            const auto* update =
+                                std::get_if<OrderUpdate>(&row.payload);
+                            return update && update->trade.has_value();
                           }));
 }
 

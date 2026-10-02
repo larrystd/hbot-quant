@@ -101,20 +101,18 @@ TEST(RecoveryIntegrationTest, UnknownWriteAndCrashUseOriginalIdWithoutResend) {
   const StrategyId strategy_id{17, StrategyName("simple_pmm")};
   TradingRule rule{market,    D("0.01"), D("0.001"), D("0.001"),
                    D("0.01"), {},        1,          clock.UtcNow()};
-  OrderRequest request;
-  request.account = account;
-  request.market = market;
+  SubmitOrder request;
   request.side = Side::Buy;
-  request.type = OrderType::LimitMaker;
+  request.time_in_force = TimeInForce::PostOnly;
   request.quantity = D("0.01");
-  request.limit_price = D("100");
+  request.price = D("100");
   RiskGate original_risk({ShardId{0}, D("0"), std::chrono::seconds(300)});
   ASSERT_TRUE(
       original_risk
           .SetInitialBudget({account, AssetId("USDT"), ShardId{0}, 1, D("100"),
                              clock.UtcNow() + std::chrono::hours(1)})
           .ok());
-  auto hold = original_risk.TryHold(strategy_id, request, spec, rule,
+  auto hold = original_risk.TryHold(account, strategy_id, request, spec, rule,
                                     clock.UtcNow(), true, true);
   ASSERT_TRUE(hold.ok()) << hold.status();
   boost::asio::io_context io;
@@ -132,9 +130,8 @@ TEST(RecoveryIntegrationTest, UnknownWriteAndCrashUseOriginalIdWithoutResend) {
       io, transport, clock, config, [&](binance_spot::GatewayEvent event) {
         events.push_back(std::move(event));
       });
-  ApprovedOrder approved{strategy_id, request, hold->hold_id, ActionBatchId{1},
-                         clock.MonoNow() + std::chrono::seconds(1)};
-  auto prepared = gateway.PrepareSubmit(std::move(approved));
+  auto prepared = gateway.PrepareSubmit(
+      request, strategy_id, clock.MonoNow() + std::chrono::seconds(1));
   ASSERT_TRUE(prepared.ok()) << prepared.status();
   ASSERT_TRUE(
       original_risk.AttachClientId(hold->hold_id, prepared->client_order_id)
@@ -152,14 +149,15 @@ TEST(RecoveryIntegrationTest, UnknownWriteAndCrashUseOriginalIdWithoutResend) {
   ASSERT_TRUE((*recorder)->TryPush(std::move(record)));
   ASSERT_TRUE((*recorder)->Flush().ok());
   OrderTracker original_tracker;
-  ASSERT_TRUE(original_tracker.Register(*prepared).ok());
+  ASSERT_TRUE(original_tracker.Add(*prepared).ok());
   ASSERT_TRUE(gateway.StartPrepared(prepared->client_order_id).ok());
   io.run();
   ASSERT_EQ(transport.calls, 1);
   ASSERT_EQ(events.size(), 1);
   EXPECT_EQ(events[0].kind, binance_spot::GatewayEventKind::SubmissionUnknown);
-  ASSERT_TRUE(
-      original_tracker.MarkSubmissionUnknown(prepared->client_order_id).ok());
+  ASSERT_TRUE(original_tracker
+                  .OnSendResult(prepared->client_order_id, SendResult::Unknown)
+                  .ok());
   ASSERT_TRUE(original_risk.MarkSubmissionUnknown(hold->hold_id).ok());
   EXPECT_EQ(
       *original_risk.Available(account, AssetId("USDT"))->Compare(D("99")), 0);
@@ -171,14 +169,13 @@ TEST(RecoveryIntegrationTest, UnknownWriteAndCrashUseOriginalIdWithoutResend) {
   ASSERT_TRUE(recovered.ok()) << recovered.status();
   EXPECT_TRUE(recovered->may_have_unwritten_records);
   EXPECT_TRUE(recovered->needs_order_query);
-  ASSERT_EQ(recovered->context.recovered_prepared_orders.size(), 1);
-  EXPECT_EQ(recovered->context.recovered_prepared_orders[0].client_order_id,
+  ASSERT_EQ(recovered->context.recovered_orders.size(), 1);
+  EXPECT_EQ(recovered->context.recovered_orders[0].client_order_id,
             prepared->client_order_id);
   binance_spot::StartupQueryInput restart;
   restart.account = account;
   restart.assigned_markets = {market};
-  restart.persisted_prepared_orders =
-      recovered->context.recovered_prepared_orders;
+  restart.persisted_orders = recovered->context.recovered_orders;
   restart.history_complete = recovered->manifest.history_complete;
   restart.previous_run_clean = !recovered->may_have_unwritten_records;
   restart.executor_checkpoints_complete = false;
@@ -195,8 +192,8 @@ TEST(RecoveryIntegrationTest, UnknownWriteAndCrashUseOriginalIdWithoutResend) {
           .SetInitialBudget({account, AssetId("USDT"), ShardId{0}, 1, D("100"),
                              clock.UtcNow() + std::chrono::hours(1)})
           .ok());
-  auto restored_hold = restored_risk.TryHold(strategy_id, request, spec, rule,
-                                             clock.UtcNow(), true, true);
+  auto restored_hold = restored_risk.TryHold(
+      account, strategy_id, request, spec, rule, clock.UtcNow(), true, true);
   ASSERT_TRUE(restored_hold.ok());
   ASSERT_TRUE(
       restored_risk
@@ -204,9 +201,10 @@ TEST(RecoveryIntegrationTest, UnknownWriteAndCrashUseOriginalIdWithoutResend) {
           .ok());
   ASSERT_TRUE(restored_risk.MarkSubmissionUnknown(restored_hold->hold_id).ok());
   OrderTracker tracker;
+  ASSERT_TRUE(tracker.Add(recovered->context.recovered_orders[0]).ok());
   ASSERT_TRUE(
-      tracker.Register(recovered->context.recovered_prepared_orders[0]).ok());
-  ASSERT_TRUE(tracker.MarkSubmissionUnknown(prepared->client_order_id).ok());
+      tracker.OnSendResult(prepared->client_order_id, SendResult::Unknown)
+          .ok());
   FakeSignedRest missing;
   missing.responses.push_back(
       {404, R"({"code":-2013,"msg":"Order does not exist."})"});
@@ -235,17 +233,18 @@ TEST(RecoveryIntegrationTest, UnknownWriteAndCrashUseOriginalIdWithoutResend) {
       std::chrono::steady_clock::now() + std::chrono::seconds(2)));
   ASSERT_TRUE(queried_order.ok()) << queried_order.status();
   ASSERT_TRUE(queried_order->complete) << queried_order->unresolved_status;
-  ASSERT_TRUE(queried_order->order);
-  ASSERT_EQ(queried_order->trades.size(), 1);
+  ASSERT_EQ(queried_order->updates.size(), 1);
+  ASSERT_TRUE(queried_order->updates[0].trade);
   ASSERT_EQ(rest.targets.size(), 2);
   EXPECT_EQ(rest.targets[0], "/api/v3/order?symbol=BTCUSDT&origClientOrderId=" +
                                  prepared->client_order_id.value);
-  ASSERT_TRUE(tracker.ApplyTradeUpdate(queried_order->trades[0]).ok());
-  ASSERT_TRUE(tracker.ApplyTradeUpdate(queried_order->trades[0]).ok());
-  auto final = tracker.ApplyQueriedOrder(*queried_order->order);
+  auto final = tracker.Apply(queried_order->updates[0], ReportSource::Query);
   ASSERT_TRUE(final.ok()) << final.status();
-  EXPECT_EQ(final->snapshot.display_state, OrderDisplayState::Traded);
-  EXPECT_EQ(*final->snapshot.traded_quantity.Compare(D("0.01")), 0);
+  EXPECT_EQ(*final, UpdateResult::Finished);
+  EXPECT_EQ(*tracker.Apply(queried_order->updates[0], ReportSource::Query),
+            UpdateResult::Ignored);
+  EXPECT_TRUE(tracker.HasTrade(ExchangeTradeId("7")));
+  EXPECT_TRUE(tracker.ActiveOrders().empty());
   ASSERT_TRUE(
       restored_risk
           .ApplyTrade(restored_hold->hold_id, AssetId("USDT"), D("1"), D("0"))

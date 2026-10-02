@@ -486,19 +486,21 @@ std::string OrderHistoryJson(const OrderHistoryPage& page) {
     if (index) json += ",";
     std::string kind;
     std::string details;
-    if (const auto* prepared = std::get_if<PreparedOrder>(&row.payload)) {
+    if (const auto* prepared = std::get_if<LegacyPreparedOrder>(&row.payload)) {
       kind = "prepared_order";
       details =
           ",\"client_id\":" + EscapeJson(prepared->client_order_id.value) +
           ",\"amount\":" + EscapeJson(prepared->request.quantity.ToString());
-    } else if (const auto* update = std::get_if<OrderUpdate>(&row.payload)) {
+    } else if (const auto* update =
+                   std::get_if<LegacyOrderUpdate>(&row.payload)) {
       kind = "order";
       if (update->client_order_id)
         details =
             ",\"client_id\":" + EscapeJson(update->client_order_id->value);
       details +=
           ",\"status\":" + EscapeJson(OrderStatusName(update->exchange_status));
-    } else if (const auto* trade = std::get_if<TradeUpdate>(&row.payload)) {
+    } else if (const auto* trade =
+                   std::get_if<LegacyTradeUpdate>(&row.payload)) {
       kind = "trade";
       details = ",\"trade_id\":" + EscapeJson(trade->exchange_trade_id.value) +
                 ",\"amount\":" + EscapeJson(trade->quantity.ToString()) +
@@ -511,6 +513,28 @@ std::string OrderHistoryJson(const OrderHistoryPage& page) {
                    EscapeJson(trade->fees[fee].signed_amount.ToString()) + "}";
       }
       details += "]";
+    } else if (const auto* order = std::get_if<Order>(&row.payload)) {
+      kind = "prepared_order";
+      details = ",\"client_id\":" + EscapeJson(order->client_order_id.value) +
+                ",\"amount\":" + EscapeJson(order->quantity.ToString());
+    } else if (const auto* update = std::get_if<OrderUpdate>(&row.payload)) {
+      kind = update->trade ? "trade" : "order";
+      details = ",\"client_id\":" + EscapeJson(update->client_order_id.value) +
+                ",\"status\":" + EscapeJson(OrderStatusName(update->status));
+      if (update->trade) {
+        const auto& trade = *update->trade;
+        details +=
+            ",\"trade_id\":" + EscapeJson(trade.exchange_trade_id.value) +
+            ",\"amount\":" + EscapeJson(trade.quantity.ToString()) +
+            ",\"price\":" + EscapeJson(trade.price.ToString()) + ",\"fees\":[";
+        for (size_t fee = 0; fee < trade.fees.size(); ++fee) {
+          if (fee) details += ",";
+          details += "{\"asset\":" + EscapeJson(trade.fees[fee].asset.value) +
+                     ",\"amount\":" +
+                     EscapeJson(trade.fees[fee].signed_amount.ToString()) + "}";
+        }
+        details += "]";
+      }
     } else if (const auto* decision = std::get_if<ActionRecord>(&row.payload)) {
       kind = "decision";
       details = std::string(",\"accepted\":") +
@@ -518,7 +542,7 @@ std::string OrderHistoryJson(const OrderHistoryPage& page) {
                 ",\"reason\":" + std::to_string(ErrorNumber(decision->reason)) +
                 ",\"reason_name\":" + EscapeJson(Info(decision->reason).name) +
                 ",\"message\":" + EscapeJson(decision->message);
-    } else if (std::holds_alternative<RecordedCheckpoint>(row.payload))
+    } else if (std::holds_alternative<LegacyRecordedCheckpoint>(row.payload))
       kind = "checkpoint";
     else {
       kind = "gap";

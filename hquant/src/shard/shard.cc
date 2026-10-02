@@ -31,8 +31,8 @@ Shard::Shard(Config config, const Clock& clock, Strategy& strategy,
       recorder_(recorder),
       book_(config_.market.market, config_.scale.tick_lot_version, 8192, 1024,
             config_.stale_after_us),
-      action_executor_(risk_, exchange_, recorder_, config_.run, config_.shard,
-                       shard_sequence_) {
+      action_executor_(risk_, exchange_, tracker_, recorder_, config_.run,
+                       config_.shard, shard_sequence_) {
   origin_mono_ = clock_.MonoNow();
 }
 
@@ -51,8 +51,8 @@ Shard::Shard(Config config, const Clock& clock,
       recorder_(recorder),
       book_(config_.market.market, config_.scale.tick_lot_version, 8192, 1024,
             config_.stale_after_us),
-      action_executor_(risk_, exchange_, recorder_, config_.run, config_.shard,
-                       shard_sequence_) {
+      action_executor_(risk_, exchange_, tracker_, recorder_, config_.run,
+                       config_.shard, shard_sequence_) {
   origin_mono_ = clock_.MonoNow();
 }
 
@@ -220,15 +220,6 @@ absl::Status Shard::OnPublicTrade(const PublicTrade& trade) {
                                : std::nullopt);
 }
 
-std::vector<OrderSnapshot> Shard::OrderViews() const {
-  std::vector<OrderSnapshot> result;
-  for (const auto& id : order_ids_) {
-    auto snapshot = tracker_.Snapshot(id);
-    if (snapshot) result.push_back(std::move(*snapshot));
-  }
-  return result;
-}
-
 std::vector<Balance> Shard::BalanceViews() const {
   std::vector<Balance> result;
   for (const AssetId& asset :
@@ -277,7 +268,7 @@ absl::StatusOr<std::vector<ActionResult>> Shard::RunStrategy(
     last_strategy_at_ = now;
     in_strategy_ = true;
     auto execute = [&]() -> absl::StatusOr<std::vector<ActionResult>> {
-      auto orders = OrderViews();
+      auto orders = tracker_.ActiveOrders();
       auto balances = BalanceViews();
       StrategyInput strategy_input{book_.View(),
                                    config_.scale,
@@ -290,20 +281,20 @@ absl::StatusOr<std::vector<ActionResult>> Shard::RunStrategy(
                                    clock_};
       ++strategy_invocations_;
       auto batch = strategy_.Decide(strategy_input, why);
-      ActionContext action_context{
-          config_.strategy_id,  ActionBatchId{next_action_batch_id_++},
-          config_.market,       config_.rule,
-          clock_.UtcNow(),      clock_.MonoNow(),
-          strategy_input.ready, true};
+      ActionContext action_context{config_.strategy_id,
+                                   config_.account,
+                                   ActionBatchId{next_action_batch_id_++},
+                                   config_.market,
+                                   config_.rule,
+                                   clock_.UtcNow(),
+                                   clock_.MonoNow(),
+                                   strategy_input.ready,
+                                   true};
       auto results = action_executor_.Execute(batch, action_context);
       for (const auto& result : results) {
-        if (!result.prepared) continue;
-        auto registered = tracker_.Register(*result.prepared);
-        if (!registered.ok()) return registered.status();
-        order_ids_.push_back(result.prepared->client_order_id);
+        if (!result.order) continue;
         if (result.hold_id)
-          holds_.emplace(result.prepared->client_order_id.value,
-                         *result.hold_id);
+          holds_.emplace(result.order->client_order_id.value, *result.hold_id);
       }
       auto status = DrainSimulatedExchangeEvents();
       if (!status.ok()) return status;
@@ -350,44 +341,42 @@ void Shard::AddGap(uint64_t sequence) {
 }
 
 absl::Status Shard::ProcessAccountEvent(const AccountEvent& event) {
-  if (const auto* trade = std::get_if<TradeUpdate>(&event)) {
-    if (!trade->client_order_id)
-      return Error(ErrorCode::kShardReportOrderUnknown,
-                   "Simulated trade without client ID");
-    auto updated = tracker_.ApplyTradeUpdate(*trade);
-    if (!updated.ok()) return updated.status();
-    auto it = holds_.find(trade->client_order_id->value);
-    if (it != holds_.end()) {
-      const bool buy = updated->snapshot.request.side == Side::Buy;
-      auto status = risk_.ApplyTrade(
-          it->second,
-          buy ? config_.market.quote_asset : config_.market.base_asset,
-          buy ? trade->value : trade->quantity, Decimal());
-      if (!status.ok()) return status;
-    }
-    auto status = Record(*trade, updated->snapshot.strategy_id);
-    if (status.ok() && strategy_.Triggers().on_fill)
-      pending_trigger_ = Trigger::Traded;
-    return status;
-  }
   if (const auto* update = std::get_if<OrderUpdate>(&event)) {
-    if (!update->client_order_id)
+    if (update->client_order_id.value.empty())
       return Error(ErrorCode::kShardReportOrderUnknown,
                    "Simulated order without client ID");
-    auto updated = tracker_.ApplyOrderUpdate(*update);
+    const hquant::Order* order = tracker_.Find(update->client_order_id);
+    if (!order)
+      return Error(ErrorCode::kShardReportOrderUnknown,
+                   "Simulated order not tracked");
+    const bool new_trade =
+        update->trade && !tracker_.HasTrade(update->trade->exchange_trade_id);
+    auto updated = tracker_.Apply(*update, ReportSource::Push);
     if (!updated.ok()) return updated.status();
-    if (update->exchange_status == ExchangeOrderStatus::Traded ||
-        update->exchange_status == ExchangeOrderStatus::Canceled ||
-        update->exchange_status == ExchangeOrderStatus::Rejected ||
-        update->exchange_status == ExchangeOrderStatus::Expired) {
-      auto it = holds_.find(update->client_order_id->value);
+    if (*updated == UpdateResult::Ignored) return absl::OkStatus();
+    if (new_trade) {
+      auto it = holds_.find(update->client_order_id.value);
+      if (it != holds_.end()) {
+        const bool buy = order->side == Side::Buy;
+        auto status = risk_.ApplyTrade(
+            it->second,
+            buy ? config_.market.quote_asset : config_.market.base_asset,
+            buy ? update->trade->value : update->trade->quantity, Decimal());
+        if (!status.ok()) return status;
+      }
+      if (strategy_.Triggers().on_fill) pending_trigger_ = Trigger::Traded;
+    }
+    if (*updated == UpdateResult::Finished) {
+      auto it = holds_.find(update->client_order_id.value);
       if (it != holds_.end()) {
         auto status = risk_.Release(it->second);
         if (!status.ok()) return status;
         holds_.erase(it);
       }
     }
-    auto status = Record(*update, updated->snapshot.strategy_id);
+    OrderUpdate recorded = *update;
+    if (!new_trade) recorded.trade.reset();
+    auto status = Record(std::move(recorded), order->strategy_id);
     if (status.ok() && strategy_.Triggers().on_order_update &&
         !pending_trigger_)
       pending_trigger_ = Trigger::OrderUpdated;

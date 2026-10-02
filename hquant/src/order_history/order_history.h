@@ -22,8 +22,55 @@ struct OrderHistoryGap {
   ErrorCode reason = ErrorCode::kInternal;
 };
 
-struct RecordedCheckpoint {
-  StrategyCheckpoint state;
+// v1/v2 payloads remain readable. They are never produced by the v3 writer.
+struct LegacyOrderRequest {
+  AccountId account;
+  MarketId market;
+  Side side = Side::Buy;
+  uint8_t type = 0;
+  Decimal quantity;
+  std::optional<Decimal> limit_price;
+  std::optional<TimeInForce> time_in_force;
+};
+struct LegacyStrategyCheckpoint {
+  uint32_t schema_version = 0;
+  StrategyId strategy_id;
+  uint64_t config_revision = 0;
+  std::string payload;
+};
+struct LegacyPreparedOrder {
+  ClientOrderId client_order_id;
+  StrategyId strategy_id;
+  LegacyOrderRequest request;
+  uint64_t config_revision = 0;
+  UtcTime created_at_utc{};
+  std::optional<LegacyStrategyCheckpoint> executor_checkpoint;
+};
+struct LegacyOrderUpdate {
+  AccountId account;
+  MarketId market;
+  std::optional<ClientOrderId> client_order_id;
+  std::optional<ExchangeOrderId> exchange_order_id;
+  ExchangeOrderStatus exchange_status = ExchangeOrderStatus::Open;
+  std::optional<Decimal> traded_quantity;
+  std::optional<Decimal> traded_value;
+  EventTime time;
+};
+struct LegacyTradeUpdate {
+  AccountId account;
+  MarketId market;
+  std::optional<ClientOrderId> client_order_id;
+  std::optional<ExchangeOrderId> exchange_order_id;
+  ExchangeTradeId exchange_trade_id;
+  Decimal price;
+  Decimal quantity;
+  Decimal value;
+  std::vector<TradeFee> fees;
+  std::optional<bool> maker;
+  EventTime time;
+};
+struct LegacyRecordedCheckpoint {
+  LegacyStrategyCheckpoint state;
   UtcTime recorded_at{};
 };
 enum class ActionKind { Submit, Cancel };
@@ -38,11 +85,12 @@ struct ActionRecord {
   std::optional<ClientOrderId> client_order_id;
 };
 using OrderHistoryRecordPayload =
-    std::variant<PreparedOrder, OrderUpdate, TradeUpdate, RecordedCheckpoint,
-                 OrderHistoryGap, ActionRecord>;
+    std::variant<LegacyPreparedOrder, LegacyOrderUpdate, LegacyTradeUpdate,
+                 LegacyRecordedCheckpoint, OrderHistoryGap, ActionRecord, Order,
+                 OrderUpdate>;
 
 struct OrderHistoryRecord {
-  uint32_t schema_version = 2;
+  uint32_t schema_version = 3;
   RunId run_id;
   ShardId shard;
   uint64_t shard_sequence = 0;
@@ -91,10 +139,12 @@ struct OrderHistoryPage {
 enum class PreviousRunCompleteness { Verified, Partial, Unresolved };
 struct PreviousRunRecords {
   RunId run_id;
-  std::vector<PreparedOrder> recovered_prepared_orders;
-  std::vector<RecordedCheckpoint> checkpoints;
-  std::vector<OrderUpdate> exchange_orders;
-  std::vector<TradeUpdate> exchange_trades;
+  std::vector<Order> recovered_orders;
+  std::vector<LegacyPreparedOrder> recovered_legacy_orders;
+  std::vector<LegacyRecordedCheckpoint> legacy_checkpoints;
+  std::vector<OrderUpdate> exchange_updates;
+  std::vector<LegacyOrderUpdate> legacy_exchange_orders;
+  std::vector<LegacyTradeUpdate> legacy_exchange_trades;
   std::vector<Balance> balances;
   std::vector<ClientOrderId> unresolved_ids;
   PreviousRunCompleteness confidence = PreviousRunCompleteness::Unresolved;

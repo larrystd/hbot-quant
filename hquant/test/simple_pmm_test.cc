@@ -123,16 +123,17 @@ TEST(SimplePmmTest, ReplaysEveryPythonFixtureStep) {
       std::optional<Decimal> last;
       std::string_view last_text;
       if (!event["last_price"].get(last_text)) last = D(last_text);
-      std::vector<OrderSnapshot> orders;
+      std::vector<Order> orders;
       for (auto raw : simdjson::dom::array(event["active_orders"])) {
-        OrderSnapshot order;
+        Order order;
         order.client_order_id = ClientOrderId(S(raw, "client_order_id"));
         order.strategy_id = config.strategy_id;
-        order.request.account = config.account;
-        order.request.market = config.market.market;
-        order.display_state = OrderDisplayState::Open;
+        order.account = config.account;
+        order.market = config.market.market;
         orders.push_back(std::move(order));
       }
+      std::vector<const Order*> active;
+      for (const auto& order : orders) active.push_back(&order);
       std::vector<Balance> balances;
       for (auto [asset, raw] :
            simdjson::dom::object(event["available_balances"])) {
@@ -145,7 +146,7 @@ TEST(SimplePmmTest, ReplaysEveryPythonFixtureStep) {
       }
       bool ready = event["ready"];
       StrategyInput context{book,   scale,    rule,       last, ready,
-                            orders, balances, step.stamp, clock};
+                            active, balances, step.stamp, clock};
       ActionBatch actual = strategy.Decide(context, Trigger::Timer);
       auto expected_actions = simdjson::dom::array(expected["actions"]);
       ASSERT_EQ(actual.ordered.size(), expected_actions.size());
@@ -156,18 +157,15 @@ TEST(SimplePmmTest, ReplaysEveryPythonFixtureStep) {
           ASSERT_TRUE(
               std::holds_alternative<CancelOrder>(actual.ordered[index]));
           const auto& action = std::get<CancelOrder>(actual.ordered[index]);
-          EXPECT_EQ(action.strategy_id, config.strategy_id);
           EXPECT_EQ(action.client_order_id.value, S(wanted, "client_order_id"));
         } else {
           ASSERT_TRUE(
               std::holds_alternative<SubmitOrder>(actual.ordered[index]));
           const auto& action = std::get<SubmitOrder>(actual.ordered[index]);
-          EXPECT_EQ(action.strategy_id, config.strategy_id);
-          EXPECT_EQ(action.request.side,
+          EXPECT_EQ(action.side,
                     S(wanted, "side") == "Buy" ? Side::Buy : Side::Sell);
-          ASSERT_TRUE(action.request.limit_price.has_value());
-          CompareDecimal(*action.request.limit_price, S(wanted, "price"));
-          CompareDecimal(action.request.quantity, S(wanted, "amount"));
+          CompareDecimal(action.price, S(wanted, "price"));
+          CompareDecimal(action.quantity, S(wanted, "amount"));
         }
         ++index;
       }

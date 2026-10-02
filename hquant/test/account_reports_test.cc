@@ -95,66 +95,60 @@ std::string TradeJson(int trade_id, const char* amount = "1",
          "\"time\":1001,\"isMaker\":true}";
 }
 
-TEST(AccountStreamParserTest, EmitsTradeBeforeStatusAndTrackerDeduplicates) {
+TEST(AccountStreamParserTest, EmitsUnifiedUpdateAndTrackerDeduplicates) {
   AccountPushParser stream(AccountId("A1"), ExchangeId("binance"));
   OrderTracker tracker;
-  PreparedOrder prepared;
+  Order prepared;
   prepared.client_order_id = ClientOrderId("C1");
   prepared.strategy_id = StrategyId{1, StrategyName("simple_pmm")};
-  prepared.request.account = AccountId("A1");
-  prepared.request.market = Market();
-  prepared.request.quantity = D("1");
-  prepared.request.limit_price = D("100");
-  prepared.created_at_utc = Received().receive_utc;
-  ASSERT_TRUE(tracker.Register(prepared).ok());
+  prepared.account = AccountId("A1");
+  prepared.market = Market();
+  prepared.quantity = D("1");
+  prepared.price = D("100");
+  ASSERT_TRUE(tracker.Add(prepared).ok());
 
   auto first = stream.Parse(Report("TRADE", "PARTIALLY_FILLED", "0.4", "0.4",
                                    "40", "40", 7, "C1", "", "0.01", "\"BNB\""),
                             Received());
   ASSERT_TRUE(first.ok()) << first.status();
-  ASSERT_EQ(first->events.size(), 2);
-  ASSERT_TRUE(std::holds_alternative<TradeUpdate>(first->events[0]));
-  ASSERT_TRUE(std::holds_alternative<OrderUpdate>(first->events[1]));
-  const auto& trade = std::get<TradeUpdate>(first->events[0]);
-  EXPECT_EQ(trade.exchange_trade_id.value, "7");
-  EXPECT_EQ(trade.fees[0].asset.value, "BNB");
-  ASSERT_TRUE(trade.time.exchange_utc.has_value());
-  EXPECT_EQ(trade.time.exchange_utc->time_since_epoch().count(), 1001000);
-  auto fill_result = tracker.ApplyTradeUpdate(trade);
+  ASSERT_EQ(first->events.size(), 1);
+  const auto& update = std::get<OrderUpdate>(first->events[0]);
+  ASSERT_TRUE(update.trade);
+  EXPECT_EQ(update.trade->exchange_trade_id.value, "7");
+  EXPECT_EQ(update.trade->fees[0].asset.value, "BNB");
+  ASSERT_TRUE(update.time.exchange_utc.has_value());
+  EXPECT_EQ(update.time.exchange_utc->time_since_epoch().count(), 1001000);
+  auto fill_result = tracker.Apply(update, ReportSource::Push);
   ASSERT_TRUE(fill_result.ok()) << fill_result.status();
-  EXPECT_EQ(fill_result->events.size(), 1);
-  ASSERT_TRUE(
-      tracker.ApplyOrderUpdate(std::get<OrderUpdate>(first->events[1])).ok());
-  auto duplicate = tracker.ApplyTradeUpdate(trade);
+  EXPECT_EQ(*fill_result, UpdateResult::Updated);
+  auto duplicate = tracker.Apply(update, ReportSource::Push);
   ASSERT_TRUE(duplicate.ok());
-  EXPECT_TRUE(duplicate->events.empty());
-  EXPECT_TRUE(
-      Equal(tracker.Snapshot(ClientOrderId("C1"))->traded_quantity, "0.4"));
+  EXPECT_EQ(*duplicate, UpdateResult::Ignored);
 
   auto stale =
       stream.Parse(Report("NEW", "NEW", "0", "0", "0", "0"), Received());
   ASSERT_TRUE(stale.ok());
-  ASSERT_TRUE(
-      tracker.ApplyOrderUpdate(std::get<OrderUpdate>(stale->events[0])).ok());
-  EXPECT_EQ(tracker.Snapshot(ClientOrderId("C1"))->display_state,
-            OrderDisplayState::PartiallyTraded);
+  EXPECT_EQ(*tracker.Apply(std::get<OrderUpdate>(stale->events[0]),
+                           ReportSource::Push),
+            UpdateResult::Ignored);
 
-  OrderUpdate filled = std::get<OrderUpdate>(first->events[1]);
-  filled.exchange_status = ExchangeOrderStatus::Traded;
-  filled.traded_quantity = D("1");
-  filled.traded_value = D("100");
-  auto awaiting = tracker.ApplyOrderUpdate(filled);
+  OrderUpdate filled = update;
+  filled.trade.reset();
+  filled.status = ExchangeOrderStatus::Traded;
+  filled.executed_quantity = D("1");
+  auto awaiting = tracker.Apply(filled, ReportSource::Push);
   ASSERT_TRUE(awaiting.ok());
-  EXPECT_EQ(awaiting->snapshot.display_state,
-            OrderDisplayState::AwaitingTrades);
+  EXPECT_EQ(*awaiting, UpdateResult::Updated);
+  EXPECT_TRUE(tracker.ActiveOrders().empty());
+  EXPECT_EQ(tracker.OrdersToQuery().size(), 1);
   auto second = stream.Parse(
       Report("TRADE", "FILLED", "0.6", "1", "60", "100", 8), Received());
   ASSERT_TRUE(second.ok());
-  auto completed =
-      tracker.ApplyTradeUpdate(std::get<TradeUpdate>(second->events[0]));
+  auto completed = tracker.Apply(std::get<OrderUpdate>(second->events[0]),
+                                 ReportSource::Push);
   ASSERT_TRUE(completed.ok()) << completed.status();
-  EXPECT_EQ(completed->events.size(), 2);
-  EXPECT_EQ(completed->snapshot.display_state, OrderDisplayState::Traded);
+  EXPECT_EQ(*completed, UpdateResult::Finished);
+  EXPECT_TRUE(tracker.OrdersToQuery().empty());
 }
 
 TEST(AccountStreamParserTest, CancelUsesOriginalIdAndGapsRequestResync) {
@@ -163,7 +157,7 @@ TEST(AccountStreamParserTest, CancelUsesOriginalIdAndGapsRequestResync) {
                                       "0", -1, "cancel-request", "C1"),
                                Received());
   ASSERT_TRUE(canceled.ok());
-  EXPECT_EQ(std::get<OrderUpdate>(canceled->events[0]).client_order_id->value,
+  EXPECT_EQ(std::get<OrderUpdate>(canceled->events[0]).client_order_id.value,
             "C1");
   EXPECT_FALSE(stream
                    .Parse(Report("CANCELED", "CANCELED", "0", "0", "0", "0", -1,
@@ -225,8 +219,9 @@ TEST(ReconciliationTest, QueriesOriginalIdThenTradesAndComparesTotals) {
   ASSERT_TRUE(result.ok()) << result.status();
   EXPECT_TRUE(result->complete) << result->unresolved_status;
   EXPECT_TRUE(result->unresolved_status.ok());
-  ASSERT_EQ(result->trades.size(), 1);
-  EXPECT_EQ(result->trades[0].client_order_id->value, "C1");
+  ASSERT_EQ(result->updates.size(), 1);
+  EXPECT_EQ(result->updates[0].client_order_id.value, "C1");
+  ASSERT_TRUE(result->updates[0].trade);
   EXPECT_EQ(rest.targets.size(), 2);
   EXPECT_EQ(rest.targets[0],
             "/api/v3/order?symbol=BTCUSDT&origClientOrderId=C1");
@@ -243,7 +238,7 @@ TEST(ReconciliationTest, MissingOrMismatchedOrderNeverProvesNoWrite) {
       Target(), Received(), std::chrono::steady_clock::now()));
   ASSERT_TRUE(absent.ok());
   EXPECT_FALSE(absent->complete);
-  EXPECT_FALSE(absent->order.has_value());
+  EXPECT_TRUE(absent->updates.empty());
   EXPECT_EQ(CodeOf(absent->unresolved_status), ErrorCode::kOrderQueryFailed);
   EXPECT_EQ(missing.targets.size(), 1);
 
@@ -254,7 +249,7 @@ TEST(ReconciliationTest, MissingOrMismatchedOrderNeverProvesNoWrite) {
       Target(), Received(), std::chrono::steady_clock::now()));
   ASSERT_TRUE(wrong.ok());
   EXPECT_FALSE(wrong->complete);
-  EXPECT_FALSE(wrong->order.has_value());
+  EXPECT_TRUE(wrong->updates.empty());
   EXPECT_EQ(CodeOf(wrong->unresolved_status),
             ErrorCode::kOrderQueryIdentityMismatch);
   EXPECT_EQ(mismatch.targets.size(), 1);
@@ -267,8 +262,7 @@ TEST(ReconciliationTest, MissingOrMismatchedOrderNeverProvesNoWrite) {
       Target(), Received(), std::chrono::steady_clock::now()));
   ASSERT_TRUE(gap.ok());
   EXPECT_FALSE(gap->complete);
-  EXPECT_FALSE(gap->order.has_value());
-  EXPECT_EQ(gap->trades.size(), 1);
+  EXPECT_EQ(gap->updates.size(), 1);
   EXPECT_EQ(CodeOf(gap->unresolved_status),
             ErrorCode::kOrderQueryIdentityMismatch);
 }
@@ -284,7 +278,7 @@ TEST(ReconciliationTest, PagesTradesAndBoundsIncompletePages) {
                                            std::chrono::steady_clock::now()));
   ASSERT_TRUE(result.ok());
   EXPECT_TRUE(result->complete) << result->unresolved_status;
-  EXPECT_EQ(result->trades.size(), 2);
+  EXPECT_EQ(result->updates.size(), 2);
   ASSERT_EQ(rest.targets.size(), 4);
   EXPECT_EQ(rest.targets[2],
             "/api/v3/myTrades?symbol=BTCUSDT&orderId=123&limit=1&fromId=8");
@@ -312,9 +306,8 @@ TEST(ReconciliationTest, PagesTradesAndBoundsIncompletePages) {
       Target(), Received(), std::chrono::steady_clock::now()));
   ASSERT_TRUE(partial.ok());
   EXPECT_FALSE(partial->complete);
-  EXPECT_FALSE(partial->order.has_value());
-  ASSERT_EQ(partial->trades.size(), 1);
-  EXPECT_EQ(partial->trades[0].exchange_trade_id.value, "7");
+  ASSERT_EQ(partial->updates.size(), 1);
+  EXPECT_EQ(partial->updates[0].trade->exchange_trade_id.value, "7");
 }
 
 TEST(ReconciliationTest, RestartPlanAndOpenOrderDiscovery) {
@@ -324,15 +317,16 @@ TEST(ReconciliationTest, RestartPlanAndOpenOrderDiscovery) {
   input.history_complete = false;
   input.previous_run_clean = false;
   input.executor_checkpoints_complete = false;
-  PreparedOrder prepared;
+  Order prepared;
   prepared.client_order_id = ClientOrderId("C1");
-  prepared.request.account = input.account;
-  prepared.request.market = Market();
-  input.persisted_prepared_orders.push_back(prepared);
-  OrderSnapshot snapshot;
+  prepared.account = input.account;
+  prepared.market = Market();
+  input.persisted_orders.push_back(prepared);
+  Order snapshot;
   snapshot.client_order_id = ClientOrderId("C1");
-  snapshot.request = prepared.request;
-  input.live_snapshots.push_back(snapshot);
+  snapshot.account = prepared.account;
+  snapshot.market = prepared.market;
+  input.live_orders.push_back(snapshot);
   auto plan = PlanStartupQueries(input);
   ASSERT_TRUE(plan.ok()) << plan.status();
   EXPECT_EQ(plan->known_orders.size(), 1);

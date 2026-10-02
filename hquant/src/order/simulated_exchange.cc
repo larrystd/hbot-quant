@@ -36,9 +36,8 @@ Decimal SimpleSimulatedExchange::BalanceOf(const AssetId& asset) const {
 Decimal SimpleSimulatedExchange::AvailableBalance(const AssetId& asset) const {
   Decimal result = BalanceOf(asset);
   for (const auto& order : orders_) {
-    if (order.request.side == Side::Buy &&
-        asset == config_.market.quote_asset) {
-      auto hold = order.request.quantity.Multiply(*order.request.limit_price);
+    if (order.side == Side::Buy && asset == config_.market.quote_asset) {
+      auto hold = order.quantity.Multiply(order.price);
       if (hold.ok() && !config_.buy_fee_from_returns) {
         auto fee = hold->Multiply(config_.maker_fee_rate);
         if (fee.ok()) hold = hold->Add(*fee);
@@ -47,9 +46,8 @@ Decimal SimpleSimulatedExchange::AvailableBalance(const AssetId& asset) const {
         auto remaining = result.Subtract(*hold);
         if (remaining.ok()) result = *remaining;
       }
-    } else if (order.request.side == Side::Sell &&
-               asset == config_.market.base_asset) {
-      auto remaining = result.Subtract(order.request.quantity);
+    } else if (order.side == Side::Sell && asset == config_.market.base_asset) {
+      auto remaining = result.Subtract(order.quantity);
       if (remaining.ok()) result = *remaining;
     }
   }
@@ -67,19 +65,18 @@ std::vector<AccountEvent> SimpleSimulatedExchange::DrainEvents() {
   return result;
 }
 
-void SimpleSimulatedExchange::EmitOrder(const RestingOrder& order,
-                                        ExchangeOrderStatus status) {
+void SimpleSimulatedExchange::EmitOrder(const Order& order,
+                                        ExchangeOrderStatus status,
+                                        std::optional<Trade> trade) {
   OrderUpdate update;
   update.account = config_.account;
   update.market = config_.market.market;
   update.client_order_id = order.client_order_id;
-  update.exchange_status = status;
+  update.status = status;
   update.time = Now();
-  if (status == ExchangeOrderStatus::Traded) {
-    update.traded_quantity = order.request.quantity;
-    auto quote = order.request.quantity.Multiply(*order.request.limit_price);
-    if (quote.ok()) update.traded_value = *quote;
-  }
+  if (status == ExchangeOrderStatus::Traded)
+    update.executed_quantity = order.quantity;
+  update.trade = std::move(trade);
   events_.emplace_back(std::move(update));
 }
 
@@ -94,26 +91,17 @@ void SimpleSimulatedExchange::EmitBalance(const AssetId& asset) {
 }
 
 absl::Status SimpleSimulatedExchange::ValidateAndQuantize(
-    ApprovedOrder* approved) const {
-  auto& request = approved->request;
-  if (!approved->strategy_id.IsValid())
+    SubmitOrder* request, const StrategyId& strategy_id) const {
+  if (!strategy_id.IsValid())
     return Error(ErrorCode::kOrderStrategyIdInvalid, "invalid strategy ID");
-  if (request.account != config_.account)
-    return Error(ErrorCode::kOrderAccountInvalid,
-                 "order account is not the simulated account");
-  if (request.market != config_.market.market)
-    return Error(ErrorCode::kOrderMarketInvalid,
-                 "order market is not the simulated market");
-  if (request.type != OrderType::Limit && request.type != OrderType::LimitMaker)
-    return Error(ErrorCode::kOrderTypeUnsupported, "only limit orders");
-  if (!request.limit_price || !request.quantity.IsStrictlyPositive() ||
-      !request.limit_price->IsStrictlyPositive())
+  if (!request->quantity.IsStrictlyPositive() ||
+      !request->price.IsStrictlyPositive())
     return Error(ErrorCode::kOrderPriceOrAmountInvalid,
                  "limit price and amount must be positive");
-  auto amount = request.quantity.Quantize(config_.trading_rule.base_increment,
-                                          RoundingMode::Down);
-  auto price = request.limit_price->Quantize(
-      config_.trading_rule.price_increment, RoundingMode::Down);
+  auto amount = request->quantity.Quantize(config_.trading_rule.base_increment,
+                                           RoundingMode::Down);
+  auto price = request->price.Quantize(config_.trading_rule.price_increment,
+                                       RoundingMode::Down);
   if (!amount.ok())
     return Error(ErrorCode::kDecimalArithmeticFailed,
                  "Simulated quantity cannot be quantized to trading rule");
@@ -141,30 +129,35 @@ absl::Status SimpleSimulatedExchange::ValidateAndQuantize(
     return Error(ErrorCode::kOrderAboveMaxAmount,
                  "Simulated order above max amount");
   }
-  request.quantity = *amount;
-  request.limit_price = *price;
+  request->quantity = *amount;
+  request->price = *price;
   return absl::OkStatus();
 }
 
-absl::StatusOr<PreparedOrder> SimpleSimulatedExchange::PrepareSubmit(
-    ApprovedOrder approved) {
-  auto status = ValidateAndQuantize(&approved);
+absl::StatusOr<Order> SimpleSimulatedExchange::PrepareSubmit(
+    const SubmitOrder& request, const StrategyId& strategy_id,
+    MonoTime /*expires_at_mono*/) {
+  SubmitOrder normalized = request;
+  auto status = ValidateAndQuantize(&normalized, strategy_id);
   if (!status.ok()) return status;
   ClientOrderId id =
       config_.make_client_id
-          ? config_.make_client_id(approved.request.side)
+          ? config_.make_client_id(normalized.side)
           : ClientOrderId("P" + std::to_string(next_client_id_++));
   if (id.value.empty() || used_ids_.contains(id.value)) {
     return Error(ErrorCode::kOrderDuplicate, "duplicate Simulated client ID");
   }
-  PreparedOrder prepared;
-  prepared.client_order_id = id;
-  prepared.strategy_id = approved.strategy_id;
-  prepared.request = approved.request;
-  prepared.created_at_utc = clock_.UtcNow();
+  Order order{id,
+              strategy_id,
+              config_.account,
+              config_.market.market,
+              normalized.side,
+              normalized.quantity,
+              normalized.price,
+              normalized.time_in_force};
   used_ids_.insert(id.value);
-  prepared_.emplace(id.value, std::move(approved));
-  return prepared;
+  prepared_.emplace(id.value, order);
+  return order;
 }
 
 absl::Status SimpleSimulatedExchange::StartPrepared(
@@ -172,20 +165,18 @@ absl::Status SimpleSimulatedExchange::StartPrepared(
   auto it = prepared_.find(client_order_id.value);
   if (it == prepared_.end())
     return Error(ErrorCode::kOrderNotFound, "Simulated prepared order absent");
-  ApprovedOrder approved = std::move(it->second);
+  Order order = std::move(it->second);
   prepared_.erase(it);
-  RestingOrder order{client_order_id, approved.strategy_id, approved.request};
-  const AssetId& collateral = order.request.side == Side::Buy
+  const AssetId& collateral = order.side == Side::Buy
                                   ? config_.market.quote_asset
                                   : config_.market.base_asset;
-  auto required =
-      order.request.side == Side::Buy
-          ? order.request.quantity.Multiply(*order.request.limit_price)
-          : absl::StatusOr<Decimal>(order.request.quantity);
+  auto required = order.side == Side::Buy
+                      ? order.quantity.Multiply(order.price)
+                      : absl::StatusOr<Decimal>(order.quantity);
   if (!required.ok())
     return Error(ErrorCode::kDecimalArithmeticFailed,
                  "Simulated order collateral cannot be calculated");
-  if (order.request.side == Side::Buy && !config_.buy_fee_from_returns) {
+  if (order.side == Side::Buy && !config_.buy_fee_from_returns) {
     auto fee = required->Multiply(config_.maker_fee_rate);
     if (!fee.ok())
       return Error(ErrorCode::kDecimalArithmeticFailed,
@@ -215,31 +206,30 @@ absl::Status SimpleSimulatedExchange::AbortPrepared(
 }
 
 absl::Status SimpleSimulatedExchange::StartCancel(
-    const StrategyId& strategy_id, const ClientOrderId& client_order_id) {
-  auto it = std::find_if(orders_.begin(), orders_.end(),
-                         [&](const RestingOrder& order) {
-                           return order.client_order_id == client_order_id &&
-                                  order.strategy_id == strategy_id;
-                         });
+    const ClientOrderId& client_order_id) {
+  auto it =
+      std::find_if(orders_.begin(), orders_.end(), [&](const Order& order) {
+        return order.client_order_id == client_order_id;
+      });
   if (it == orders_.end())
     return Error(ErrorCode::kOrderNotFound, "Simulated open order absent");
-  RestingOrder order = *it;
+  Order order = *it;
   orders_.erase(it);
   EmitOrder(order, ExchangeOrderStatus::Canceled);
-  EmitBalance(order.request.side == Side::Buy ? config_.market.quote_asset
-                                              : config_.market.base_asset);
+  EmitBalance(order.side == Side::Buy ? config_.market.quote_asset
+                                      : config_.market.base_asset);
   return absl::OkStatus();
 }
 
 absl::Status SimpleSimulatedExchange::Fill(size_t index) {
-  RestingOrder order = orders_.at(index);
-  const Decimal& price = *order.request.limit_price;
-  const Decimal& amount = order.request.quantity;
+  Order order = orders_.at(index);
+  const Decimal& price = order.price;
+  const Decimal& amount = order.quantity;
   auto quote = price.Multiply(amount);
   if (!quote.ok())
     return Error(ErrorCode::kDecimalArithmeticFailed,
                  "Simulated fill quote calculation failed");
-  const bool buy = order.request.side == Side::Buy;
+  const bool buy = order.side == Side::Buy;
   AssetId fee_asset = buy && config_.buy_fee_from_returns
                           ? config_.market.base_asset
                           : config_.market.quote_asset;
@@ -281,10 +271,7 @@ absl::Status SimpleSimulatedExchange::Fill(size_t index) {
   balances_[config_.market.quote_asset.value] = *next_quote;
   fees_paid_[fee_asset.value] = *fees_total;
 
-  TradeUpdate trade;
-  trade.account = config_.account;
-  trade.market = config_.market.market;
-  trade.client_order_id = order.client_order_id;
+  Trade trade;
   trade.exchange_trade_id =
       ExchangeTradeId("T" + std::to_string(next_trade_id_++));
   trade.price = price;
@@ -292,9 +279,7 @@ absl::Status SimpleSimulatedExchange::Fill(size_t index) {
   trade.value = *quote;
   trade.fees.push_back(TradeFee{fee_asset, *fee});
   trade.maker = true;
-  trade.time = Now();
-  events_.emplace_back(std::move(trade));
-  EmitOrder(order, ExchangeOrderStatus::Traded);
+  EmitOrder(order, ExchangeOrderStatus::Traded, std::move(trade));
   EmitBalance(config_.market.base_asset);
   EmitBalance(config_.market.quote_asset);
   return absl::OkStatus();
@@ -308,14 +293,12 @@ absl::Status SimpleSimulatedExchange::OnBookBbo(const Decimal& bid,
   }
   for (size_t i = 0; i < orders_.size();) {
     const auto& order = orders_[i];
-    const auto match = order.request.side == Side::Buy
-                           ? order.request.limit_price->Compare(ask)
-                           : order.request.limit_price->Compare(bid);
+    const auto match = order.side == Side::Buy ? order.price.Compare(ask)
+                                               : order.price.Compare(bid);
     if (!match.ok())
       return Error(ErrorCode::kSimulatedMarketDataInvalid,
                    "Simulated BBO price comparison failed");
-    const bool touched =
-        order.request.side == Side::Buy ? *match >= 0 : *match <= 0;
+    const bool touched = order.side == Side::Buy ? *match >= 0 : *match <= 0;
     if (touched) {
       auto status = Fill(i);
       if (!status.ok()) return status;
@@ -333,16 +316,16 @@ absl::Status SimpleSimulatedExchange::OnPublicTrade(
   }
   for (size_t i = 0; i < orders_.size();) {
     const auto& order = orders_[i];
-    if (order.request.side == aggressor) {
+    if (order.side == aggressor) {
       ++i;
       continue;
     }
-    auto comparison = order.request.limit_price->Compare(price);
+    auto comparison = order.price.Compare(price);
     if (!comparison.ok())
       return Error(ErrorCode::kSimulatedMarketDataInvalid,
                    "Simulated public trade price comparison failed");
     const bool crossed =
-        order.request.side == Side::Buy ? *comparison > 0 : *comparison < 0;
+        order.side == Side::Buy ? *comparison > 0 : *comparison < 0;
     if (crossed) {
       auto status = Fill(i);
       if (!status.ok()) return status;

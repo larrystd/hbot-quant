@@ -80,7 +80,7 @@ class OrderStrategyIndex {
   std::map<ExchangeKey, uint64_t> exchanges_;
 };
 
-using AccountReport = std::variant<OrderUpdate, TradeUpdate>;
+using AccountReport = OrderUpdate;
 
 struct RoutedAccountReport {
   StrategyId strategy_id;

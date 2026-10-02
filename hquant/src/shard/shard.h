@@ -145,8 +145,8 @@ class Shard {
   absl::StatusOr<std::vector<ActionResult>> OnTimer(InputTime stamp);
 
   const OrderBookView& Book() const { return book_.View(); }
-  std::optional<OrderSnapshot> Order(const ClientOrderId& id) const {
-    return tracker_.Snapshot(id);
+  const hquant::Order* FindOrder(const ClientOrderId& id) const {
+    return tracker_.Find(id);
   }
   const std::vector<OrderHistoryGap>& local_gaps() const { return local_gaps_; }
   uint64_t shard_sequence() const { return shard_sequence_; }
@@ -163,7 +163,6 @@ class Shard {
   absl::Status Record(OrderHistoryRecordPayload payload,
                       const StrategyId& strategy_id);
   void AddGap(uint64_t sequence);
-  std::vector<OrderSnapshot> OrderViews() const;
   std::vector<Balance> BalanceViews() const;
   absl::StatusOr<Decimal> Price(PriceTicks ticks) const;
   absl::StatusOr<Decimal> Amount(QuantityLots lots) const;
@@ -183,7 +182,6 @@ class Shard {
   uint64_t shard_sequence_ = 0;
   uint64_t next_action_batch_id_ = 1;
   ActionExecutor action_executor_;
-  std::vector<ClientOrderId> order_ids_;
   std::map<std::string, HoldId> holds_;
   std::vector<OrderHistoryGap> local_gaps_;
   std::optional<Decimal> last_trade_price_;

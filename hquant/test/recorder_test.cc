@@ -51,19 +51,19 @@ StrategyId MakeStrategyId() {
 
 OrderHistoryRecord PreparedRecord(uint64_t sequence, RunId run = RunId{11},
                                   ShardId shard = ShardId{0}) {
-  PreparedOrder prepared;
+  LegacyPreparedOrder prepared;
   prepared.client_order_id = ClientOrderId{"B1"};
   prepared.strategy_id = MakeStrategyId();
   prepared.request.account = AccountId{"A1"};
   prepared.request.market = Market();
   prepared.request.side = Side::Buy;
-  prepared.request.type = OrderType::Limit;
+  prepared.request.type = uint8_t{0};
   prepared.request.quantity = D("0.01");
   prepared.request.limit_price = D("99.9");
   prepared.created_at_utc = At(1000);
   prepared.config_revision = 7;
   prepared.executor_checkpoint =
-      StrategyCheckpoint{1, MakeStrategyId(), 7, "checkpoint"};
+      LegacyStrategyCheckpoint{1, MakeStrategyId(), 7, "checkpoint"};
   OrderHistoryRecord record;
   record.run_id = run;
   record.shard = shard;
@@ -76,7 +76,7 @@ OrderHistoryRecord PreparedRecord(uint64_t sequence, RunId run = RunId{11},
 
 OrderHistoryRecord Update(uint64_t sequence) {
   OrderHistoryRecord record = PreparedRecord(sequence);
-  OrderUpdate update;
+  LegacyOrderUpdate update;
   update.account = AccountId{"A1"};
   update.market = Market();
   update.client_order_id = ClientOrderId{"B1"};
@@ -91,7 +91,7 @@ OrderHistoryRecord Update(uint64_t sequence) {
 
 OrderHistoryRecord Trade(uint64_t sequence) {
   OrderHistoryRecord record = PreparedRecord(sequence);
-  TradeUpdate trade;
+  LegacyTradeUpdate trade;
   trade.account = AccountId{"A1"};
   trade.market = Market();
   trade.client_order_id = ClientOrderId{"B1"};
@@ -124,8 +124,8 @@ TEST(StorageTest, PersistsTypedRecordsAndPagesThroughReadOnlyConnection) {
   EXPECT_TRUE((*recorder)->TryPush(Update(2)));
   EXPECT_TRUE((*recorder)->TryPush(Trade(3)));
   OrderHistoryRecord checkpoint = PreparedRecord(4);
-  checkpoint.payload = RecordedCheckpoint{
-      StrategyCheckpoint{1, MakeStrategyId(), 7, "state"}, At(1004)};
+  checkpoint.payload = LegacyRecordedCheckpoint{
+      LegacyStrategyCheckpoint{1, MakeStrategyId(), 7, "state"}, At(1004)};
   EXPECT_TRUE((*recorder)->TryPush(std::move(checkpoint)));
   ASSERT_TRUE((*recorder)->Flush().ok());
   auto reader = SqliteOrderHistoryReader::Open({db.path(), 4, 2});
@@ -138,8 +138,10 @@ TEST(StorageTest, PersistsTypedRecordsAndPagesThroughReadOnlyConnection) {
   ASSERT_TRUE(first);
   ASSERT_TRUE(first->status.ok()) << first->status;
   ASSERT_EQ(first->rows.size(), 2);
-  EXPECT_TRUE(std::holds_alternative<PreparedOrder>(first->rows[0].payload));
-  EXPECT_TRUE(std::holds_alternative<OrderUpdate>(first->rows[1].payload));
+  EXPECT_TRUE(
+      std::holds_alternative<LegacyPreparedOrder>(first->rows[0].payload));
+  EXPECT_TRUE(
+      std::holds_alternative<LegacyOrderUpdate>(first->rows[1].payload));
   ASSERT_TRUE(first->next_cursor);
   query.request_id = 2;
   query.cursor = first->next_cursor;
@@ -148,13 +150,13 @@ TEST(StorageTest, PersistsTypedRecordsAndPagesThroughReadOnlyConnection) {
   ASSERT_TRUE(second);
   ASSERT_TRUE(second->status.ok()) << second->status;
   ASSERT_EQ(second->rows.size(), 2);
-  const auto& trade = std::get<TradeUpdate>(second->rows[0].payload);
+  const auto& trade = std::get<LegacyTradeUpdate>(second->rows[0].payload);
   EXPECT_EQ(trade.exchange_trade_id.value, "T1");
   EXPECT_EQ(trade.value.ToString(), "0.3996");
   ASSERT_EQ(trade.fees.size(), 1);
   EXPECT_EQ(trade.fees[0].signed_amount.ToString(), "0.0004");
-  EXPECT_TRUE(
-      std::holds_alternative<RecordedCheckpoint>(second->rows[1].payload));
+  EXPECT_TRUE(std::holds_alternative<LegacyRecordedCheckpoint>(
+      second->rows[1].payload));
   EXPECT_FALSE(second->next_cursor);
 
   OrderHistoryQuery filtered;

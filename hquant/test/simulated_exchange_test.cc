@@ -60,22 +60,23 @@ struct NormalizedEvent {
 std::vector<NormalizedEvent> Normalize(std::vector<AccountEvent> events) {
   std::vector<NormalizedEvent> result;
   for (const auto& raw : events) {
-    if (const auto* trade = std::get_if<TradeUpdate>(&raw)) {
-      NormalizedEvent event;
-      event.kind = "OrderTraded";
-      event.client_order_id = trade->client_order_id->value;
-      event.trade_id = trade->exchange_trade_id.value;
-      event.price = trade->price;
-      event.amount = trade->quantity;
-      if (!trade->fees.empty()) {
-        event.fee_asset = trade->fees.front().asset.value;
-        event.fee = trade->fees.front().signed_amount;
+    if (const auto* update = std::get_if<OrderUpdate>(&raw)) {
+      if (update->trade) {
+        NormalizedEvent event;
+        event.kind = "OrderTraded";
+        event.client_order_id = update->client_order_id.value;
+        event.trade_id = update->trade->exchange_trade_id.value;
+        event.price = update->trade->price;
+        event.amount = update->trade->quantity;
+        if (!update->trade->fees.empty()) {
+          event.fee_asset = update->trade->fees.front().asset.value;
+          event.fee = update->trade->fees.front().signed_amount;
+        }
+        result.push_back(std::move(event));
       }
-      result.push_back(std::move(event));
-    } else if (const auto* update = std::get_if<OrderUpdate>(&raw)) {
       NormalizedEvent event;
-      event.client_order_id = update->client_order_id->value;
-      switch (update->exchange_status) {
+      event.client_order_id = update->client_order_id.value;
+      switch (update->status) {
         case ExchangeOrderStatus::Open:
           event.kind = "OrderOpened";
           break;
@@ -162,18 +163,13 @@ TEST(SimulatedExchangeTest, ReplaysAllSimulatedExchangeCasesStepByStep) {
           output_parser.parse(step.output_json).value();
       const auto kind = S(event, "kind");
       if (kind == "submit") {
-        OrderRequest request;
-        request.account = config.account;
-        request.market = config.market.market;
+        SubmitOrder request;
         request.side = ParseSide(event);
-        request.type = OrderType::Limit;
         request.quantity = D(S(event, "amount"));
-        request.limit_price = D(S(event, "price"));
+        request.price = D(S(event, "price"));
         request.time_in_force = TimeInForce::Gtc;
-        ApprovedOrder approved{strategy_id, request, HoldId{1},
-                               ActionBatchId{1},
-                               clock.MonoNow() + std::chrono::seconds(1)};
-        auto prepared = sim_exchange.PrepareSubmit(std::move(approved));
+        auto prepared = sim_exchange.PrepareSubmit(
+            request, strategy_id, clock.MonoNow() + std::chrono::seconds(1));
         ASSERT_TRUE(prepared.ok()) << prepared.status();
         EXPECT_EQ(prepared->client_order_id.value, S(event, "client_order_id"));
         auto started = sim_exchange.StartPrepared(prepared->client_order_id);
@@ -182,10 +178,9 @@ TEST(SimulatedExchangeTest, ReplaysAllSimulatedExchangeCasesStepByStep) {
         } else
           EXPECT_TRUE(started.ok()) << started;
       } else if (kind == "cancel") {
-        EXPECT_TRUE(sim_exchange
-                        .StartCancel(strategy_id,
-                                     ClientOrderId(S(event, "client_order_id")))
-                        .ok());
+        EXPECT_TRUE(
+            sim_exchange.StartCancel(ClientOrderId(S(event, "client_order_id")))
+                .ok());
       } else if (kind == "book_bbo") {
         EXPECT_TRUE(
             sim_exchange.OnBookBbo(D(S(event, "bid")), D(S(event, "ask")))
@@ -227,10 +222,9 @@ TEST(SimulatedExchangeTest, ReplaysAllSimulatedExchangeCasesStepByStep) {
       for (auto wanted : expected_orders) {
         const auto& actual = actual_orders[i++];
         EXPECT_EQ(actual.client_order_id.value, S(wanted, "client_order_id"));
-        EXPECT_EQ(actual.request.side, ParseSide(wanted));
-        ASSERT_TRUE(actual.request.limit_price);
-        ExpectDecimal(*actual.request.limit_price, S(wanted, "price"));
-        ExpectDecimal(actual.request.quantity, S(wanted, "amount"));
+        EXPECT_EQ(actual.side, ParseSide(wanted));
+        ExpectDecimal(actual.price, S(wanted, "price"));
+        ExpectDecimal(actual.quantity, S(wanted, "amount"));
       }
       for (auto [asset, raw] : simdjson::dom::object(expected["balances"])) {
         std::string_view balance = raw;
@@ -275,15 +269,11 @@ TEST(SimulatedExchangeTest, AbortedPreparationNeverCreatesAnOrder) {
   config.make_client_id = [](Side) { return ClientOrderId("B1"); };
   SimpleSimulatedExchange sim_exchange(std::move(config), clock);
   StrategyId strategy_id{1, StrategyName("simple_pmm")};
-  OrderRequest request;
-  request.account = AccountId("simulated");
-  request.market =
-      MarketId{ExchangeId("simulated"), InstrumentKind::Spot, "BTC-USDT"};
+  SubmitOrder request;
   request.side = Side::Buy;
   request.quantity = D("0.01");
-  request.limit_price = D("100");
-  auto prepared = sim_exchange.PrepareSubmit(
-      ApprovedOrder{strategy_id, request, {}, {}, {}});
+  request.price = D("100");
+  auto prepared = sim_exchange.PrepareSubmit(request, strategy_id, {});
   ASSERT_TRUE(prepared.ok()) << prepared.status();
   EXPECT_TRUE(sim_exchange.DrainEvents().empty());
   EXPECT_TRUE(sim_exchange.OpenOrders().empty());

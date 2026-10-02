@@ -171,8 +171,9 @@ absl::Status RiskGate::RenewAfterOrderQuery(RiskBudget budget, UtcTime now,
   return absl::OkStatus();
 }
 
-absl::StatusOr<FundsHold> RiskGate::TryHold(const StrategyId& strategy_id,
-                                            const OrderRequest& request,
+absl::StatusOr<FundsHold> RiskGate::TryHold(const AccountId& account,
+                                            const StrategyId& strategy_id,
+                                            const SubmitOrder& request,
                                             const MarketSpec& market,
                                             const TradingRule& rule,
                                             UtcTime now, bool market_live,
@@ -180,14 +181,15 @@ absl::StatusOr<FundsHold> RiskGate::TryHold(const StrategyId& strategy_id,
   FundsHold hold;
   std::string_view detail;
   const ErrorCode code =
-      TryHoldCode(strategy_id, request, market, rule, now, market_live,
+      TryHoldCode(account, strategy_id, request, market, rule, now, market_live,
                   account_fresh, &hold, &detail);
   if (code != ErrorCode::kOk) return Error(code, detail);
   return hold;
 }
 
-ErrorCode RiskGate::TryHoldCode(const StrategyId& strategy_id,
-                                const OrderRequest& request,
+ErrorCode RiskGate::TryHoldCode(const AccountId& account,
+                                const StrategyId& strategy_id,
+                                const SubmitOrder& request,
                                 const MarketSpec& market,
                                 const TradingRule& rule, UtcTime now,
                                 bool market_live, bool account_fresh,
@@ -209,13 +211,11 @@ ErrorCode RiskGate::TryHoldCode(const StrategyId& strategy_id,
     return reject(ErrorCode::kRiskAccountStale, "account facts are stale");
   if (!strategy_id.IsValid())
     return reject(ErrorCode::kOrderStrategyIdInvalid, "invalid strategy ID");
-  if (request.account.value.empty())
+  if (account.value.empty())
     return reject(ErrorCode::kOrderAccountInvalid, "empty order account");
-  if (request.market != market.market || request.market != rule.market)
+  if (market.market != rule.market)
     return reject(ErrorCode::kOrderMarketInvalid,
                   "order market does not match market spec or trading rule");
-  if (request.type != OrderType::Limit && request.type != OrderType::LimitMaker)
-    return reject(ErrorCode::kOrderTypeUnsupported, "only limit orders");
   if (rule.revision == 0 || now < rule.observed_at ||
       now - rule.observed_at > settings_.max_rule_age ||
       !rule.price_increment.IsStrictlyPositive() ||
@@ -223,13 +223,12 @@ ErrorCode RiskGate::TryHoldCode(const StrategyId& strategy_id,
     return reject(ErrorCode::kRiskTradingRuleStale,
                   "trading rule stale or invalid");
   }
-  if (!request.limit_price || !request.limit_price->IsStrictlyPositive() ||
+  if (!request.price.IsStrictlyPositive() ||
       !request.quantity.IsStrictlyPositive()) {
     return reject(ErrorCode::kOrderPriceOrAmountInvalid,
                   "limit price and amount must be positive");
   }
-  auto price =
-      request.limit_price->Quantize(rule.price_increment, RoundingMode::Down);
+  auto price = request.price.Quantize(rule.price_increment, RoundingMode::Down);
   auto amount =
       request.quantity.Quantize(rule.base_increment, RoundingMode::Down);
   if (!price.ok())
@@ -238,7 +237,7 @@ ErrorCode RiskGate::TryHoldCode(const StrategyId& strategy_id,
   if (!amount.ok())
     return reject(ErrorCode::kDecimalArithmeticFailed,
                   "amount quantization failed");
-  auto price_cmp = price->Compare(*request.limit_price);
+  auto price_cmp = price->Compare(request.price);
   auto amount_cmp = amount->Compare(request.quantity);
   if (!price_cmp.ok() || !amount_cmp.ok() || *price_cmp != 0 ||
       *amount_cmp != 0) {
@@ -259,7 +258,7 @@ ErrorCode RiskGate::TryHoldCode(const StrategyId& strategy_id,
     if (*max_amount > 0)
       return reject(ErrorCode::kOrderAboveMaxAmount, "above maximum amount");
   }
-  auto order_value = request.quantity.Multiply(*request.limit_price);
+  auto order_value = request.quantity.Multiply(request.price);
   if (!order_value.ok())
     return reject(ErrorCode::kDecimalArithmeticFailed,
                   "order value calculation failed");
@@ -273,7 +272,7 @@ ErrorCode RiskGate::TryHoldCode(const StrategyId& strategy_id,
 
   const AssetId& spent_asset =
       request.side == Side::Buy ? market.quote_asset : market.base_asset;
-  auto it = budgets_.find(Key(request.account, spent_asset));
+  auto it = budgets_.find(Key(account, spent_asset));
   if (it == budgets_.end())
     return reject(ErrorCode::kRiskBudgetMissing, "missing asset budget");
   BudgetState& budget = it->second;
@@ -281,9 +280,8 @@ ErrorCode RiskGate::TryHoldCode(const StrategyId& strategy_id,
     return reject(ErrorCode::kRiskBudgetExpired, "asset budget expired");
   }
   absl::StatusOr<Decimal> principal =
-      request.side == Side::Buy
-          ? request.quantity.Multiply(*request.limit_price)
-          : absl::StatusOr<Decimal>(request.quantity);
+      request.side == Side::Buy ? request.quantity.Multiply(request.price)
+                                : absl::StatusOr<Decimal>(request.quantity);
   if (!principal.ok())
     return reject(ErrorCode::kDecimalArithmeticFailed,
                   "principal calculation failed");
@@ -320,7 +318,7 @@ ErrorCode RiskGate::TryHoldCode(const StrategyId& strategy_id,
   const HoldId id{next_hold_id_++};
   FundsHold hold;
   hold.hold_id = id;
-  hold.account = request.account;
+  hold.account = account;
   hold.strategy_id = strategy_id;
   hold.budget_version = budget.budget.budget_version;
   hold.per_asset_worst_case.emplace(spent_asset, *needed);

@@ -157,11 +157,11 @@ class PrintingRecorder final : public OrderHistoryWriter {
     std::visit(
         [](const auto& payload) {
           using T = std::decay_t<decltype(payload)>;
-          if constexpr (std::is_same_v<T, PreparedOrder>) {
-            std::cout << "[待发订单] " << payload.client_order_id.value << "："
-                      << SideName(payload.request.side) << " "
-                      << Plain(payload.request.quantity) << " @ "
-                      << Plain(*payload.request.limit_price);
+          if constexpr (std::is_same_v<T, Order>) {
+            std::cout << "[订单] " << payload.client_order_id.value << "："
+                      << SideName(payload.side) << " "
+                      << Plain(payload.quantity) << " @ "
+                      << Plain(payload.price);
           } else if constexpr (std::is_same_v<T, ActionRecord>) {
             std::cout << "[决策] "
                       << (payload.action_kind == ActionKind::Submit ? "下单"
@@ -175,15 +175,14 @@ class PrintingRecorder final : public OrderHistoryWriter {
             }
             if (payload.client_order_id) std::cout << " " << payload.client_order_id->value;
           } else if constexpr (std::is_same_v<T, OrderUpdate>) {
-            std::cout << "[回报] " << payload.client_order_id->value << " -> "
-                      << StatusName(payload.exchange_status);
-          } else if constexpr (std::is_same_v<T, TradeUpdate>) {
-            std::cout << "[成交] " << payload.client_order_id->value << " 成交 "
-                      << Plain(payload.quantity) << " @ "
-                      << Plain(payload.price);
-            for (const auto& fee : payload.fees) {
-              std::cout << "，手续费 " << Plain(fee.signed_amount) << " "
-                        << fee.asset.value;
+            std::cout << "[回报] " << payload.client_order_id.value << " -> "
+                      << StatusName(payload.status);
+            if (payload.trade) {
+              std::cout << "，成交 " << Plain(payload.trade->quantity) << " @ "
+                        << Plain(payload.trade->price);
+              for (const auto& fee : payload.trade->fees)
+                std::cout << "，手续费 " << Plain(fee.signed_amount) << " "
+                          << fee.asset.value;
             }
           } else {
             std::cout << "[其他]";
@@ -244,9 +243,9 @@ void PrintState(const Shard& shard, const SimpleSimulatedExchange& sim_exchange,
   if (orders.empty()) std::cout << " 无";
   for (const auto& order : orders) {
     std::cout << " [" << order.client_order_id.value << " "
-              << SideName(order.request.side) << " "
-              << Plain(order.request.quantity) << " @ "
-              << Plain(*order.request.limit_price) << "]";
+              << SideName(order.side) << " "
+              << Plain(order.quantity) << " @ "
+              << Plain(order.price) << "]";
   }
   std::cout << "\n  余额:";
   for (const AssetId& asset :

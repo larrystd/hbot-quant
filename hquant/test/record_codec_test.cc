@@ -17,11 +17,11 @@ OrderHistoryRecord Record(OrderHistoryRecordPayload payload) {
   return record;
 }
 
-TEST(RecordCodecTest, VersionTwoPreservesFullWidthReasonCodesAndMessages) {
+TEST(RecordCodecTest, VersionThreePreservesFullWidthReasonCodesAndMessages) {
   auto gap = Record(OrderHistoryGap{RunId{42}, ShardId{0}, 2, 3,
                                     ErrorCode::kOrderHistoryQueueFull});
   const std::string gap_blob = storage_internal::EncodeRecord(gap);
-  ASSERT_EQ(static_cast<unsigned char>(gap_blob[0]), 2);
+  ASSERT_EQ(static_cast<unsigned char>(gap_blob[0]), 3);
   auto decoded_gap = storage_internal::DecodeRecord(gap_blob);
   ASSERT_TRUE(decoded_gap.ok()) << decoded_gap.status();
   EXPECT_EQ(std::get<OrderHistoryGap>(decoded_gap->payload).reason,
@@ -44,6 +44,60 @@ TEST(RecordCodecTest, VersionTwoPreservesFullWidthReasonCodesAndMessages) {
   const auto& value = std::get<ActionRecord>(decoded_decision->payload);
   EXPECT_EQ(value.reason, ErrorCode::kRiskBudgetExhausted);
   EXPECT_EQ(value.message, "insufficient quote");
+}
+
+TEST(RecordCodecTest, ReadsVersionTwoAndRoundTripsUnifiedModel) {
+  Order order{ClientOrderId("B1"),
+              StrategyId{1, StrategyName("simple_pmm")},
+              AccountId("A1"),
+              MarketId{ExchangeId("binance"), InstrumentKind::Spot, "BTCUSDT"},
+              Side::Buy,
+              *Decimal::Parse("1"),
+              *Decimal::Parse("100"),
+              TimeInForce::PostOnly};
+  auto decoded_order = storage_internal::DecodeRecord(
+      storage_internal::EncodeRecord(Record(order)));
+  ASSERT_TRUE(decoded_order.ok()) << decoded_order.status();
+  EXPECT_EQ(std::get<Order>(decoded_order->payload).time_in_force,
+            TimeInForce::PostOnly);
+
+  OrderUpdate update;
+  update.account = order.account;
+  update.market = order.market;
+  update.client_order_id = order.client_order_id;
+  update.status = ExchangeOrderStatus::Traded;
+  update.executed_quantity = order.quantity;
+  Trade trade;
+  trade.exchange_trade_id = ExchangeTradeId("T1");
+  trade.price = order.price;
+  trade.quantity = order.quantity;
+  trade.value = *Decimal::Parse("100");
+  trade.fees.push_back({AssetId("USDT"), *Decimal::Parse("0.1")});
+  update.trade = trade;
+  auto decoded_update = storage_internal::DecodeRecord(
+      storage_internal::EncodeRecord(Record(update)));
+  ASSERT_TRUE(decoded_update.ok()) << decoded_update.status();
+  const auto& actual = std::get<OrderUpdate>(decoded_update->payload);
+  ASSERT_TRUE(actual.trade);
+  EXPECT_EQ(actual.trade->exchange_trade_id.value, "T1");
+  EXPECT_EQ(actual.trade->fees.size(), 1);
+
+  LegacyPreparedOrder legacy;
+  legacy.client_order_id = order.client_order_id;
+  legacy.strategy_id = order.strategy_id;
+  legacy.request.account = order.account;
+  legacy.request.market = order.market;
+  legacy.request.quantity = order.quantity;
+  legacy.request.limit_price = order.price;
+  std::string v2 = storage_internal::EncodeRecord(Record(legacy));
+  v2[0] = 2;
+  v2[1] = 2;
+  auto decoded_v2 = storage_internal::DecodeRecord(v2);
+  ASSERT_TRUE(decoded_v2.ok()) << decoded_v2.status();
+  EXPECT_EQ(decoded_v2->schema_version, 2);
+  EXPECT_EQ(
+      std::get<LegacyPreparedOrder>(decoded_v2->payload).client_order_id.value,
+      "B1");
 }
 
 TEST(RecordCodecTest, ReadsLegacyGapAndPreservesArbitraryDecisionText) {

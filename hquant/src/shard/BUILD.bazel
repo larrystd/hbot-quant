@@ -24,6 +24,7 @@ hquant_cc_library(
         "//hquant/src/base:types",
         "//hquant/src/base:market",
         "//hquant/src/base:order",
+        "//hquant/src/order:order_tracker",
         "//hquant/src/order:risk",
         "//hquant/src/order_history:order_history",
         "//hquant/src/strategy:strategy",

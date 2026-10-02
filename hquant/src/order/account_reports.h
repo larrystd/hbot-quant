@@ -16,8 +16,8 @@
 namespace hquant::binance_spot {
 
 struct AccountPushBatch {
-  // For executionReport TRADE, the fill precedes its status update. The
-  // OrderTracker handles duplicate trade IDs and either arrival order.
+  // Each executionReport contributes one order update, including its trade
+  // when the report describes a fill.
   std::vector<AccountEvent> events;
   bool stream_terminated = false;
   bool account_resync_required = false;
@@ -51,8 +51,8 @@ struct OrderToQuery {
 struct StartupQueryInput {
   AccountId account;
   std::vector<MarketId> assigned_markets;
-  std::vector<PreparedOrder> persisted_prepared_orders;
-  std::vector<OrderSnapshot> live_snapshots;
+  std::vector<Order> persisted_orders;
+  std::vector<Order> live_orders;
   bool history_complete = true;
   bool previous_run_clean = true;
   bool executor_checkpoints_complete = true;
@@ -84,11 +84,10 @@ struct OrderQueryResult {
   OrderToQuery target;
   // Present only when complete. Incomplete queries can still return verified
   // partial trades, but cannot confirm an uncertain submission.
-  std::optional<OrderUpdate> order;
-  std::vector<TradeUpdate> trades;
+  std::vector<OrderUpdate> updates;
   bool complete = false;
   // Incomplete/404/429/transport failures preserve SubmissionUnknown and its
-  // funds hold. A caller applies trade details before the order status.
+  // funds hold. A caller may apply verified partial trades while unresolved.
   absl::Status unresolved_status;
 };
 

@@ -204,8 +204,8 @@ BinanceOrderGateway::BinanceOrderGateway(boost::asio::io_context& io,
       on_event_(std::move(on_event)) {}
 
 absl::Status BinanceOrderGateway::ValidateAndQuantize(
-    ApprovedOrder* approved) const {
-  auto& request = approved->request;
+    SubmitOrder* request, const StrategyId& strategy_id,
+    MonoTime expires_at_mono) const {
   if (!config_.run.IsValid() || !config_.shard.IsValid() ||
       config_.api_key.empty() || config_.secret_key.empty() ||
       config_.recv_window_ms == 0 || config_.recv_window_ms > 60'000 ||
@@ -215,29 +215,19 @@ absl::Status BinanceOrderGateway::ValidateAndQuantize(
     return Error(ErrorCode::kGatewayConfigInvalid,
                  "invalid Binance gateway config");
   }
-  if (!approved->strategy_id.IsValid())
+  if (!strategy_id.IsValid())
     return Error(ErrorCode::kOrderStrategyIdInvalid, "invalid strategy ID");
-  if (request.account != config_.account)
-    return Error(ErrorCode::kOrderAccountInvalid,
-                 "order account is not the gateway account");
-  if (request.market != config_.market)
-    return Error(ErrorCode::kOrderMarketInvalid,
-                 "order market is not the gateway market");
-  if (!request.limit_price || !request.limit_price->IsStrictlyPositive() ||
-      !request.quantity.IsStrictlyPositive())
+  if (!request->price.IsStrictlyPositive() ||
+      !request->quantity.IsStrictlyPositive())
     return Error(ErrorCode::kOrderPriceOrAmountInvalid,
                  "limit price and amount must be positive");
-  if (clock_.MonoNow() >= approved->expires_at_mono)
+  if (clock_.MonoNow() >= expires_at_mono)
     return Error(ErrorCode::kOrderExpiredBeforeSend,
                  "approved Binance order expired before preparation");
-  if (request.type == OrderType::LimitMaker && request.time_in_force) {
-    return Error(ErrorCode::kOrderTypeUnsupported,
-                 "LIMIT_MAKER cannot specify timeInForce");
-  }
-  auto amount = request.quantity.Quantize(config_.trading_rule.base_increment,
-                                          RoundingMode::Down);
-  auto price = request.limit_price->Quantize(
-      config_.trading_rule.price_increment, RoundingMode::Down);
+  auto amount = request->quantity.Quantize(config_.trading_rule.base_increment,
+                                           RoundingMode::Down);
+  auto price = request->price.Quantize(config_.trading_rule.price_increment,
+                                       RoundingMode::Down);
   if (!amount.ok())
     return Error(ErrorCode::kDecimalArithmeticFailed,
                  "Binance quantity cannot be quantized to trading rule");
@@ -263,13 +253,14 @@ absl::Status BinanceOrderGateway::ValidateAndQuantize(
       !AtLeast(*config_.trading_rule.max_base_amount, *amount))
     return Error(ErrorCode::kOrderAboveMaxAmount,
                  "Binance quantity above maximum amount");
-  request.quantity = *amount;
-  request.limit_price = *price;
+  request->quantity = *amount;
+  request->price = *price;
   return absl::OkStatus();
 }
 
-absl::StatusOr<PreparedOrder> BinanceOrderGateway::PrepareSubmit(
-    ApprovedOrder approved) {
+absl::StatusOr<Order> BinanceOrderGateway::PrepareSubmit(
+    const SubmitOrder& request, const StrategyId& strategy_id,
+    MonoTime expires_at_mono) {
   if (run_collision_) {
     return Error(ErrorCode::kOrderRecoveryInvalid,
                  "run ID collides with recovered order");
@@ -277,48 +268,52 @@ absl::StatusOr<PreparedOrder> BinanceOrderGateway::PrepareSubmit(
   if (pending_submits_ >= config_.max_pending_submits) {
     return Error(ErrorCode::kOrderSendQueueFull, "Binance submit slots full");
   }
-  auto status = ValidateAndQuantize(&approved);
+  SubmitOrder normalized = request;
+  auto status = ValidateAndQuantize(&normalized, strategy_id, expires_at_mono);
   if (!status.ok()) return status;
   if (next_sequence_ > ((uint32_t{1} << 29) - 1)) {
     return Error(ErrorCode::kSequenceExhausted,
                  "Binance client ID sequence exhausted");
   }
-  auto id = EncodeClientOrderId(approved.strategy_id, config_.run,
-                                config_.shard, next_sequence_);
+  auto id = EncodeClientOrderId(strategy_id, config_.run, config_.shard,
+                                next_sequence_);
   if (!id.ok()) return id.status();
   if (historical_ids_.contains(id->value) ||
       known_orders_.contains(id->value)) {
     return Error(ErrorCode::kOrderDuplicate, "Binance client ID collision");
   }
-  PreparedOrder prepared;
-  prepared.client_order_id = *id;
-  prepared.strategy_id = approved.strategy_id;
-  prepared.request = approved.request;
-  prepared.created_at_utc = clock_.UtcNow();
-  known_orders_.emplace(
-      id->value,
-      KnownOrder{prepared, approved.expires_at_mono, State::Prepared});
+  Order order{*id,
+              strategy_id,
+              config_.account,
+              config_.market,
+              normalized.side,
+              normalized.quantity,
+              normalized.price,
+              normalized.time_in_force};
+  known_orders_.emplace(id->value,
+                        KnownOrder{order, expires_at_mono, State::Prepared});
   ++next_sequence_;
   ++pending_submits_;
-  return prepared;
+  return order;
 }
 
 absl::StatusOr<HttpRequest> BinanceOrderGateway::MakeSubmitRequest(
     const KnownOrder& order) const {
-  const auto& request = order.prepared.request;
+  const auto& request = order.order;
   QueryParameters params{
       {"symbol", request.market.native_symbol},
       {"side", request.side == Side::Buy ? "BUY" : "SELL"},
-      {"type", request.type == OrderType::Limit ? "LIMIT" : "LIMIT_MAKER"}};
-  if (request.type == OrderType::Limit) {
-    const auto tif = request.time_in_force.value_or(TimeInForce::Gtc);
+      {"type", request.time_in_force == TimeInForce::PostOnly ? "LIMIT_MAKER"
+                                                              : "LIMIT"}};
+  if (request.time_in_force != TimeInForce::PostOnly) {
+    const auto tif = request.time_in_force;
     params.emplace_back("timeInForce", tif == TimeInForce::Gtc   ? "GTC"
                                        : tif == TimeInForce::Ioc ? "IOC"
                                                                  : "FOK");
   }
   params.emplace_back("quantity", request.quantity.ToString());
-  params.emplace_back("price", request.limit_price->ToString());
-  params.emplace_back("newClientOrderId", order.prepared.client_order_id.value);
+  params.emplace_back("price", request.price.ToString());
+  params.emplace_back("newClientOrderId", order.order.client_order_id.value);
   params.emplace_back("newOrderRespType", "RESULT");
   params.emplace_back("recvWindow", std::to_string(config_.recv_window_ms));
   params.emplace_back("timestamp", Milliseconds(clock_.UtcNow()));
@@ -338,8 +333,8 @@ absl::StatusOr<HttpRequest> BinanceOrderGateway::MakeSubmitRequest(
 absl::StatusOr<HttpRequest> BinanceOrderGateway::MakeCancelRequest(
     const KnownOrder& order) const {
   QueryParameters params{
-      {"symbol", order.prepared.request.market.native_symbol},
-      {"origClientOrderId", order.prepared.client_order_id.value},
+      {"symbol", order.order.market.native_symbol},
+      {"origClientOrderId", order.order.client_order_id.value},
       {"recvWindow", std::to_string(config_.recv_window_ms)},
       {"timestamp", Milliseconds(clock_.UtcNow())}};
   auto query = SignedQuery(params, config_.secret_key);
@@ -391,10 +386,9 @@ absl::Status BinanceOrderGateway::AbortPrepared(
 }
 
 absl::Status BinanceOrderGateway::StartCancel(
-    const StrategyId& strategy_id, const ClientOrderId& client_order_id) {
+    const ClientOrderId& client_order_id) {
   auto found = known_orders_.find(client_order_id.value);
   if (found == known_orders_.end() ||
-      found->second.prepared.strategy_id != strategy_id ||
       (found->second.state != State::Submitted &&
        found->second.state != State::Unknown)) {
     return Error(ErrorCode::kOrderNotCancelable,
@@ -439,19 +433,17 @@ absl::Status BinanceOrderGateway::ObserveHistoricalClientId(
   return absl::OkStatus();
 }
 
-absl::Status BinanceOrderGateway::RestoreOrder(PreparedOrder prepared) {
-  if (prepared.client_order_id.value.empty() ||
-      prepared.strategy_id.IsValid() == false ||
-      prepared.request.account != config_.account ||
-      prepared.request.market != config_.market ||
-      known_orders_.contains(prepared.client_order_id.value)) {
+absl::Status BinanceOrderGateway::RestoreOrder(Order order) {
+  if (order.client_order_id.value.empty() || !order.strategy_id.IsValid() ||
+      order.account != config_.account || order.market != config_.market ||
+      known_orders_.contains(order.client_order_id.value)) {
     return Error(ErrorCode::kOrderRecoveryInvalid,
                  "invalid recovered Binance order");
   }
-  auto status = ObserveHistoricalClientId(prepared.client_order_id);
+  auto status = ObserveHistoricalClientId(order.client_order_id);
   if (!status.ok()) return status;
-  known_orders_.emplace(prepared.client_order_id.value,
-                        KnownOrder{std::move(prepared), {}, State::Submitted});
+  known_orders_.emplace(order.client_order_id.value,
+                        KnownOrder{std::move(order), {}, State::Submitted});
   return absl::OkStatus();
 }
 
@@ -468,26 +460,26 @@ absl::StatusOr<OrderUpdate> BinanceOrderGateway::ParseSuccess(
   std::string_view symbol;
   if (doc["clientOrderId"].get(client) || doc["status"].get(status_text) ||
       doc["symbol"].get(symbol) ||
-      client != order.prepared.client_order_id.value ||
-      symbol != order.prepared.request.market.native_symbol) {
+      client != order.order.client_order_id.value ||
+      symbol != order.order.market.native_symbol) {
     return Error(ErrorCode::kExchangeOrderIdConflict,
                  "Binance response identity/status mismatch");
   }
   auto status = ParseStatus(status_text);
   if (!status.ok()) return status.status();
   OrderUpdate update;
-  update.account = order.prepared.request.account;
-  update.market = order.prepared.request.market;
-  update.client_order_id = order.prepared.client_order_id;
-  update.exchange_status = *status;
+  update.account = order.order.account;
+  update.market = order.order.market;
+  update.client_order_id = order.order.client_order_id;
+  update.status = *status;
   update.time = EventTime{{}, clock_.UtcNow(), clock_.MonoNow()};
   auto order_id = doc["orderId"];
   uint64_t numeric_id;
   std::string_view string_id;
   if (!order_id.get(numeric_id)) {
-    update.exchange_order_id = ExchangeOrderId(std::to_string(numeric_id));
+    (void)numeric_id;
   } else if (!order_id.get(string_id) && !string_id.empty()) {
-    update.exchange_order_id = ExchangeOrderId(std::string(string_id));
+    (void)string_id;
   } else {
     return Error(ErrorCode::kOrderReportInvalid,
                  "Binance response missing order ID");
@@ -577,10 +569,10 @@ boost::asio::awaitable<void> BinanceOrderGateway::ProcessQueue() {
       std::optional<OrderUpdate> rejected;
       if (!work.cancel) {
         OrderUpdate update;
-        update.account = found->second.prepared.request.account;
-        update.market = found->second.prepared.request.market;
+        update.account = found->second.order.account;
+        update.market = found->second.order.market;
         update.client_order_id = work.client_order_id;
-        update.exchange_status = ExchangeOrderStatus::Rejected;
+        update.status = ExchangeOrderStatus::Rejected;
         update.time = EventTime{{}, clock_.UtcNow(), clock_.MonoNow()};
         rejected = std::move(update);
       }
@@ -605,17 +597,16 @@ boost::asio::awaitable<void> BinanceOrderGateway::ProcessQueue() {
             ErrorCode::kOrderSubmissionUnknown});
       continue;
     }
-    if (work.cancel &&
-        update->exchange_status != ExchangeOrderStatus::Canceled) {
+    if (work.cancel && update->status != ExchangeOrderStatus::Canceled) {
       Emit({GatewayEventKind::CancelUnknown, work.client_order_id, std::nullopt,
             "Binance cancel response is not canceled; reconcile original ID",
             ErrorCode::kOrderSubmissionUnknown});
       continue;
     }
-    if (work.cancel || update->exchange_status == ExchangeOrderStatus::Traded ||
-        update->exchange_status == ExchangeOrderStatus::Canceled ||
-        update->exchange_status == ExchangeOrderStatus::Expired ||
-        update->exchange_status == ExchangeOrderStatus::Rejected) {
+    if (work.cancel || update->status == ExchangeOrderStatus::Traded ||
+        update->status == ExchangeOrderStatus::Canceled ||
+        update->status == ExchangeOrderStatus::Expired ||
+        update->status == ExchangeOrderStatus::Rejected) {
       found->second.state = State::Terminal;
     } else {
       found->second.state = State::Submitted;

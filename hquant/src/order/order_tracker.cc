@@ -1,454 +1,265 @@
 #include "order/order_tracker.h"
 
-#include <algorithm>
-#include <string>
-#include <tuple>
 #include <utility>
-#include <vector>
 
 #include "base/error.h"
 
 namespace hquant {
 namespace {
 
-int Rank(OrderLifecycle lifecycle) {
-  switch (lifecycle) {
-    case OrderLifecycle::PendingCreate:
-      return 0;
-    case OrderLifecycle::Open:
-      return 1;
-    case OrderLifecycle::PartiallyTraded:
-      return 2;
-    case OrderLifecycle::Traded:
-    case OrderLifecycle::Canceled:
-    case OrderLifecycle::Failed:
-    case OrderLifecycle::Expired:
-      return 3;
-  }
-  return 0;
-}
-
-OrderLifecycle Lifecycle(ExchangeOrderStatus status) {
+int Rank(ExchangeOrderStatus status) {
   switch (status) {
     case ExchangeOrderStatus::Open:
-      return OrderLifecycle::Open;
+      return 1;
     case ExchangeOrderStatus::PartiallyTraded:
-      return OrderLifecycle::PartiallyTraded;
-    case ExchangeOrderStatus::Traded:
-      return OrderLifecycle::Traded;
-    case ExchangeOrderStatus::Canceled:
-      return OrderLifecycle::Canceled;
-    case ExchangeOrderStatus::Rejected:
-      return OrderLifecycle::Failed;
-    case ExchangeOrderStatus::Expired:
-      return OrderLifecycle::Expired;
+      return 2;
+    default:
+      return 3;
   }
-  return OrderLifecycle::Failed;
 }
+
+bool Terminal(ExchangeOrderStatus status) { return Rank(status) == 3; }
 
 }  // namespace
 
-OrderTracker::ExchangeKey OrderTracker::ExchangeIndexKey(
-    const AccountId& account, const MarketId& market,
-    const ExchangeOrderId& exchange_order_id) {
-  return {account.value, market.exchange.value,
-          static_cast<int>(market.instrument_kind), market.native_symbol,
-          exchange_order_id.value};
+bool OrderTracker::Finished(Status status) {
+  return status == Status::Traded || status == Status::Canceled ||
+         status == Status::Failed || status == Status::Expired;
 }
 
-OrderTracker::TradeKey OrderTracker::TradeIndexKey(
-    const AccountId& account, const MarketId& market,
-    const ExchangeTradeId& trade_id) {
-  return {account.value, market.exchange.value,
-          static_cast<int>(market.instrument_kind), market.native_symbol,
-          trade_id.value};
+bool OrderTracker::Active(Status status) {
+  return status != Status::AwaitingTrades && !Finished(status);
 }
 
-bool OrderTracker::Terminal(OrderLifecycle lifecycle) {
-  return Rank(lifecycle) == 3;
-}
-
-OrderDisplayState OrderTracker::Display(const TrackedOrder& order) const {
-  if (order.lifecycle == OrderLifecycle::Traded &&
-      order.completion_pending_fills)
-    return OrderDisplayState::AwaitingTrades;
-  switch (order.lifecycle) {
-    case OrderLifecycle::Traded:
-      return OrderDisplayState::Traded;
-    case OrderLifecycle::Canceled:
-      return OrderDisplayState::Canceled;
-    case OrderLifecycle::Failed:
-      return OrderDisplayState::Failed;
-    case OrderLifecycle::Expired:
-      return OrderDisplayState::Expired;
+OrderTracker::Status OrderTracker::TerminalStatus(ExchangeOrderStatus status) {
+  switch (status) {
+    case ExchangeOrderStatus::Traded:
+      return Status::Traded;
+    case ExchangeOrderStatus::Canceled:
+      return Status::Canceled;
+    case ExchangeOrderStatus::Rejected:
+      return Status::Failed;
+    case ExchangeOrderStatus::Expired:
+      return Status::Expired;
     default:
-      break;
-  }
-  if (order.confirmation != ConfirmationState::Confirmed)
-    return OrderDisplayState::SubmissionUnknown;
-  if (order.cancel_pending) return OrderDisplayState::PendingCancel;
-  switch (order.lifecycle) {
-    case OrderLifecycle::PendingCreate:
-      return OrderDisplayState::PendingCreate;
-    case OrderLifecycle::Open:
-      return OrderDisplayState::Open;
-    case OrderLifecycle::PartiallyTraded:
-      return OrderDisplayState::PartiallyTraded;
-    default:
-      return OrderDisplayState::Failed;
+      return Status::NeedsQuery;
   }
 }
 
-OrderSnapshot OrderTracker::MakeSnapshot(const TrackedOrder& order) const {
-  OrderSnapshot snapshot;
-  snapshot.client_order_id = order.prepared.client_order_id;
-  snapshot.exchange_order_id = order.exchange_order_id;
-  snapshot.strategy_id = order.prepared.strategy_id;
-  snapshot.request = order.prepared.request;
-  snapshot.display_state = Display(order);
-  snapshot.traded_quantity = order.traded_quantity;
-  snapshot.traded_value = order.traded_value;
-  snapshot.last_update_time = order.last_update_time;
-  for (const auto& [asset, amount] : order.fees_by_asset)
-    snapshot.fees.push_back(TradeFee{AssetId{asset}, amount});
-  return snapshot;
-}
-
-TrackerResult OrderTracker::MakeResult(
-    const TrackedOrder& order, bool changed,
-    std::vector<TrackedOrderEvent> events) const {
-  TrackerResult result;
-  result.snapshot = MakeSnapshot(order);
-  result.events = std::move(events);
-  result.changed = changed;
-  result.cancel_pending = order.cancel_pending;
-  result.confirmation = order.confirmation;
-  result.needs_order_query = order.completion_pending_fills ||
-                             order.confirmation != ConfirmationState::Confirmed;
-  return result;
-}
-
-absl::StatusOr<TrackerResult> OrderTracker::Register(PreparedOrder prepared) {
-  if (prepared.client_order_id.value.empty())
+absl::Status OrderTracker::Add(const Order& order) {
+  if (order.client_order_id.value.empty())
     return Error(ErrorCode::kClientOrderIdInvalid, "empty client order ID");
-  if (!prepared.strategy_id.IsValid())
+  if (!order.strategy_id.IsValid())
     return Error(ErrorCode::kOrderStrategyIdInvalid, "invalid strategy ID");
-  if (prepared.request.account.value.empty())
+  if (order.account.value.empty())
     return Error(ErrorCode::kOrderAccountInvalid, "empty order account");
-  if (prepared.request.market.exchange.value.empty() ||
-      prepared.request.market.native_symbol.empty())
+  if (order.market.exchange.value.empty() || order.market.native_symbol.empty())
     return Error(ErrorCode::kOrderMarketInvalid, "empty order market");
-  if (!prepared.request.quantity.IsStrictlyPositive() ||
-      !prepared.request.limit_price ||
-      !prepared.request.limit_price->IsStrictlyPositive())
+  if (!order.quantity.IsStrictlyPositive() || !order.price.IsStrictlyPositive())
     return Error(ErrorCode::kOrderPriceOrAmountInvalid,
                  "limit price and amount must be positive");
-  if (orders_.contains(prepared.client_order_id.value))
+  if (!orders_.emplace(order.client_order_id.value, Entry{order}).second)
     return Error(ErrorCode::kOrderDuplicate, "client order ID already tracked");
-  TrackedOrder order;
-  order.last_update_time.receive_utc = prepared.created_at_utc;
-  order.prepared = std::move(prepared);
-  auto [it, inserted] =
-      orders_.emplace(order.prepared.client_order_id.value, std::move(order));
-  (void)inserted;
-  return MakeResult(it->second, true);
-}
-
-absl::StatusOr<OrderTracker::TrackedOrder*> OrderTracker::Find(
-    const AccountId& account, const MarketId& market,
-    const std::optional<ClientOrderId>& client_order_id,
-    const std::optional<ExchangeOrderId>& exchange_order_id) {
-  if ((!client_order_id || client_order_id->value.empty()) &&
-      (!exchange_order_id || exchange_order_id->value.empty()))
-    return Error(ErrorCode::kOrderReportInvalid, "report has no order ID");
-  TrackedOrder* by_client = nullptr;
-  TrackedOrder* by_exchange = nullptr;
-  if (client_order_id) {
-    auto found = orders_.find(client_order_id->value);
-    if (found != orders_.end()) by_client = &found->second;
-  }
-  if (exchange_order_id) {
-    auto found = exchange_index_.find(
-        ExchangeIndexKey(account, market, *exchange_order_id));
-    if (found != exchange_index_.end()) {
-      auto order = orders_.find(found->second);
-      if (order != orders_.end()) by_exchange = &order->second;
-    }
-  }
-  if (by_client && by_exchange && by_client != by_exchange) {
-    by_client->confirmation = ConfirmationState::NeedsQuery;
-    by_exchange->confirmation = ConfirmationState::NeedsQuery;
-    return Error(ErrorCode::kExchangeOrderIdConflict,
-                 "client and exchange IDs identify different orders");
-  }
-  if (client_order_id && !by_client && by_exchange) {
-    by_exchange->confirmation = ConfirmationState::NeedsQuery;
-    return Error(ErrorCode::kExchangeOrderIdConflict,
-                 "unknown client ID conflicts with exchange ID");
-  }
-  TrackedOrder* order = by_client ? by_client : by_exchange;
-  if (!order)
-    return Error(ErrorCode::kReportOrderUnknown,
-                 "order report has no tracked strategy_id");
-  if (order->prepared.request.account != account ||
-      order->prepared.request.market != market) {
-    order->confirmation = ConfirmationState::NeedsQuery;
-    return Error(ErrorCode::kReportAccountMarketMismatch,
-                 "account or market mismatch");
-  }
-  if (order->exchange_order_id && exchange_order_id &&
-      *order->exchange_order_id != *exchange_order_id) {
-    order->confirmation = ConfirmationState::NeedsQuery;
-    return Error(ErrorCode::kExchangeOrderIdConflict,
-                 "exchange ID changed for tracked client ID");
-  }
-  return order;
-}
-
-absl::Status OrderTracker::BindExchangeId(
-    TrackedOrder& order,
-    const std::optional<ExchangeOrderId>& exchange_order_id) {
-  if (!exchange_order_id) return absl::OkStatus();
-  if (order.exchange_order_id) {
-    if (*order.exchange_order_id != *exchange_order_id) {
-      order.confirmation = ConfirmationState::NeedsQuery;
-      return Error(ErrorCode::kExchangeOrderIdConflict, "exchange ID changed");
-    }
-    return absl::OkStatus();
-  }
-  const auto key =
-      ExchangeIndexKey(order.prepared.request.account,
-                       order.prepared.request.market, *exchange_order_id);
-  if (auto found = exchange_index_.find(key);
-      found != exchange_index_.end() &&
-      found->second != order.prepared.client_order_id.value) {
-    order.confirmation = ConfirmationState::NeedsQuery;
-    return Error(ErrorCode::kExchangeOrderIdConflict,
-                 "exchange ID already owned by another order");
-  }
-  order.exchange_order_id = *exchange_order_id;
-  exchange_index_[key] = order.prepared.client_order_id.value;
   return absl::OkStatus();
 }
 
-absl::StatusOr<TrackerResult> OrderTracker::RequestCancel(
-    const ClientOrderId& client_order_id) {
-  auto found = orders_.find(client_order_id.value);
+absl::StatusOr<UpdateResult> OrderTracker::OnSendResult(const ClientOrderId& id,
+                                                        SendResult result) {
+  auto found = orders_.find(id.value);
   if (found == orders_.end())
     return Error(ErrorCode::kOrderNotFound, "order not tracked");
-  auto& order = found->second;
-  if (Terminal(order.lifecycle))
-    return Error(ErrorCode::kOrderNotCancelable, "order already terminal");
-  const bool changed = !order.cancel_pending;
-  order.cancel_pending = true;
-  return MakeResult(order, changed);
-}
-
-absl::StatusOr<TrackerResult> OrderTracker::FailBeforeWrite(
-    const ClientOrderId& client_order_id, std::string reason) {
-  auto found = orders_.find(client_order_id.value);
-  if (found == orders_.end())
-    return Error(ErrorCode::kOrderNotFound, "order not tracked");
-  auto& order = found->second;
-  auto compared = order.traded_quantity.Compare(Decimal{});
-  if (!compared.ok())
-    return Error(ErrorCode::kDecimalArithmeticFailed,
-                 "tracked cumulative amount cannot be compared");
-  if (order.lifecycle != OrderLifecycle::PendingCreate ||
-      order.confirmation != ConfirmationState::Confirmed ||
-      order.exchange_order_id || order.created_emitted || *compared != 0)
+  Entry& entry = found->second;
+  if (result == SendResult::Unknown) {
+    if (entry.status == Status::SubmissionUnknown) return UpdateResult::Ignored;
+    if (entry.status != Status::PendingCreate)
+      return Error(ErrorCode::kOrderStatusConflict,
+                   "submission already confirmed or terminal");
+    entry.status = Status::SubmissionUnknown;
+    return UpdateResult::Updated;
+  }
+  if (entry.status != Status::PendingCreate || entry.exchange_status ||
+      entry.executed_quantity.IsStrictlyPositive())
     return Error(ErrorCode::kOrderNotCancelable,
                  "cannot prove no exchange write or fill");
-  if (reason.empty()) reason = "LocalFailure";
-  order.lifecycle = OrderLifecycle::Failed;
-  order.terminal_emitted = true;
-  std::vector<TrackedOrderEvent> events;
-  events.emplace_back(OrderFailed{MakeSnapshot(order), std::move(reason)});
-  return MakeResult(order, true, std::move(events));
+  entry.status = Status::Failed;
+  return UpdateResult::Finished;
 }
 
-absl::StatusOr<TrackerResult> OrderTracker::MarkSubmissionUnknown(
-    const ClientOrderId& client_order_id) {
-  auto found = orders_.find(client_order_id.value);
+absl::StatusOr<UpdateResult> OrderTracker::OnCancelRequested(
+    const ClientOrderId& id) {
+  auto found = orders_.find(id.value);
   if (found == orders_.end())
     return Error(ErrorCode::kOrderNotFound, "order not tracked");
-  auto& order = found->second;
-  if (order.lifecycle != OrderLifecycle::PendingCreate)
-    return Error(ErrorCode::kOrderStatusConflict,
-                 "submission already confirmed or terminal");
-  const bool changed =
-      order.confirmation != ConfirmationState::SubmissionUnknown;
-  order.confirmation = ConfirmationState::SubmissionUnknown;
-  return MakeResult(order, changed);
+  if (Finished(found->second.status) ||
+      found->second.status == Status::AwaitingTrades ||
+      found->second.status == Status::NeedsQuery)
+    return Error(ErrorCode::kOrderNotCancelable, "order already terminal");
+  if (found->second.status == Status::PendingCancel)
+    return UpdateResult::Ignored;
+  found->second.status = Status::PendingCancel;
+  return UpdateResult::Updated;
 }
 
-absl::StatusOr<TrackerResult> OrderTracker::ApplyOrderUpdate(
-    const OrderUpdate& update) {
-  return Update(update, false);
-}
+absl::StatusOr<UpdateResult> OrderTracker::Apply(const OrderUpdate& update,
+                                                 ReportSource source) {
+  auto found = orders_.find(update.client_order_id.value);
+  if (found == orders_.end())
+    return Error(ErrorCode::kReportOrderUnknown, "order not tracked");
+  Entry& entry = found->second;
+  if (entry.order.account != update.account ||
+      entry.order.market != update.market) {
+    entry.status = Status::NeedsQuery;
+    return Error(ErrorCode::kReportAccountMarketMismatch,
+                 "account or market mismatch");
+  }
+  if (source == ReportSource::Push && entry.exchange_status &&
+      Rank(update.status) < Rank(*entry.exchange_status) && !update.trade)
+    return UpdateResult::Ignored;
+  if (update.executed_quantity && !update.executed_quantity->IsNonnegative())
+    return Error(ErrorCode::kOrderReportInvalid,
+                 "negative cumulative execution");
 
-absl::StatusOr<TrackerResult> OrderTracker::ApplyQueriedOrder(
-    const OrderUpdate& update) {
-  return Update(update, true);
-}
+  const bool terminal_conflict =
+      source == ReportSource::Push && entry.exchange_status &&
+      Terminal(*entry.exchange_status) && Terminal(update.status) &&
+      *entry.exchange_status != update.status;
 
-absl::StatusOr<TrackerResult> OrderTracker::Update(const OrderUpdate& update,
-                                                   bool queried_order) {
-  auto found = Find(update.account, update.market, update.client_order_id,
-                    update.exchange_order_id);
-  if (!found.ok()) return found.status();
-  TrackedOrder& order = **found;
-  const auto previous_exchange = order.exchange_order_id;
-  auto bind = BindExchangeId(order, update.exchange_order_id);
-  if (!bind.ok()) return bind;
-  bool changed = previous_exchange != order.exchange_order_id;
-  const OrderLifecycle next = Lifecycle(update.exchange_status);
-  if (Terminal(order.lifecycle) && next != order.lifecycle) {
-    order.confirmation = ConfirmationState::NeedsQuery;
-    return Error(ErrorCode::kOrderStatusConflict,
-                 "conflicting terminal order status");
-  }
-  if (Rank(next) < Rank(order.lifecycle)) {
-    return MakeResult(order, changed);  // stale HTTP/status result
-  }
-  std::vector<TrackedOrderEvent> events;
-  bool created_now = false;
-  if (order.lifecycle == OrderLifecycle::PendingCreate &&
-      next != OrderLifecycle::Canceled && next != OrderLifecycle::Failed &&
-      next != OrderLifecycle::Expired && !order.created_emitted) {
-    order.created_emitted = true;
-    created_now = true;
-    changed = true;
-  }
-  if (order.lifecycle != next) {
-    order.lifecycle = next;
-    changed = true;
-  }
-  if (order.confirmation == ConfirmationState::SubmissionUnknown ||
-      (queried_order && order.confirmation == ConfirmationState::NeedsQuery)) {
-    order.confirmation = ConfirmationState::Confirmed;
-    changed = true;
-  }
-  if (update.traded_quantity || update.traded_value) {
-    changed = true;
-  }
-  if (Terminal(order.lifecycle) && order.cancel_pending) {
-    order.cancel_pending = false;
-    changed = true;
-  }
-  if (order.lifecycle == OrderLifecycle::Traded) {
-    auto comparison =
-        order.traded_quantity.Compare(order.prepared.request.quantity);
-    if (!comparison.ok())
-      return Error(ErrorCode::kDecimalArithmeticFailed,
-                   "reported cumulative amount cannot be compared");
-    const bool awaiting = *comparison < 0;
-    if (order.completion_pending_fills != awaiting) changed = true;
-    order.completion_pending_fills = awaiting;
-  }
-  if (changed) order.last_update_time = update.time;
-  if (created_now) events.emplace_back(OrderOpened{MakeSnapshot(order)});
-  if (next == OrderLifecycle::Traded && !order.completion_pending_fills &&
-      !order.terminal_emitted) {
-    order.terminal_emitted = true;
-    events.emplace_back(OrderFullyTraded{MakeSnapshot(order)});
-  } else if (next == OrderLifecycle::Canceled && !order.terminal_emitted) {
-    order.terminal_emitted = true;
-    events.emplace_back(OrderCanceled{MakeSnapshot(order)});
-  } else if ((next == OrderLifecycle::Failed ||
-              next == OrderLifecycle::Expired) &&
-             !order.terminal_emitted) {
-    order.terminal_emitted = true;
-    events.emplace_back(
-        OrderFailed{MakeSnapshot(order),
-                    next == OrderLifecycle::Expired ? "Expired" : "Rejected"});
-  }
-  return MakeResult(order, changed, std::move(events));
-}
-
-absl::StatusOr<TrackerResult> OrderTracker::ApplyTradeUpdate(
-    const TradeUpdate& trade) {
-  auto found = Find(trade.account, trade.market, trade.client_order_id,
-                    trade.exchange_order_id);
-  if (!found.ok()) return found.status();
-  TrackedOrder& order = **found;
-  const auto previous_exchange = order.exchange_order_id;
-  auto bind = BindExchangeId(order, trade.exchange_order_id);
-  if (!bind.ok()) return bind;
-  const bool bound = previous_exchange != order.exchange_order_id;
-  if (trade.exchange_trade_id.value.empty() ||
-      !trade.quantity.IsStrictlyPositive() ||
-      !trade.price.IsStrictlyPositive() || !trade.value.IsNonnegative())
-    return Error(ErrorCode::kOrderReportInvalid, "invalid trade update");
-  const auto key =
-      TradeIndexKey(trade.account, trade.market, trade.exchange_trade_id);
-  if (auto seen = seen_trades_.find(key); seen != seen_trades_.end()) {
-    if (seen->second != order.prepared.client_order_id.value) {
-      order.confirmation = ConfirmationState::NeedsQuery;
+  bool changed = false;
+  if (update.trade) {
+    const Trade& trade = *update.trade;
+    if (trade.exchange_trade_id.value.empty() ||
+        !trade.quantity.IsStrictlyPositive() ||
+        !trade.price.IsStrictlyPositive() || !trade.value.IsNonnegative())
+      return Error(ErrorCode::kOrderReportInvalid, "invalid trade update");
+    const auto seen = seen_trades_.find(trade.exchange_trade_id.value);
+    if (seen != seen_trades_.end() &&
+        seen->second != update.client_order_id.value) {
+      entry.status = Status::NeedsQuery;
       return Error(ErrorCode::kTradeIdOnOtherOrder,
                    "trade ID assigned to another order");
     }
-    return MakeResult(order, bound);
+    if (seen == seen_trades_.end()) {
+      auto total = entry.executed_quantity.Add(trade.quantity);
+      if (!total.ok())
+        return Error(ErrorCode::kOrderReportInvalid,
+                     "trade cumulative base cannot be calculated");
+      auto overfill = total->Compare(entry.order.quantity);
+      if (!overfill.ok())
+        return Error(ErrorCode::kOrderReportInvalid,
+                     "trade fill amount cannot be compared");
+      if (*overfill > 0) {
+        entry.status = Status::NeedsQuery;
+        return Error(ErrorCode::kTradeExceedsOrderAmount,
+                     "trade exceeds requested base amount");
+      }
+      for (const auto& fee : trade.fees)
+        if (fee.asset.value.empty())
+          return Error(ErrorCode::kOrderReportInvalid, "fee asset missing");
+      entry.executed_quantity = *total;
+      seen_trades_.emplace(trade.exchange_trade_id.value,
+                           update.client_order_id.value);
+      changed = true;
+    }
   }
-  auto base = order.traded_quantity.Add(trade.quantity);
-  auto quote = order.traded_value.Add(trade.value);
-  if (!base.ok())
-    return Error(ErrorCode::kOrderReportInvalid,
-                 "trade cumulative base cannot be calculated");
-  if (!quote.ok())
-    return Error(ErrorCode::kOrderReportInvalid,
-                 "trade cumulative quote cannot be calculated");
-  auto overfill = base->Compare(order.prepared.request.quantity);
-  if (!overfill.ok())
-    return Error(ErrorCode::kOrderReportInvalid,
-                 "trade fill amount cannot be compared");
-  if (*overfill > 0) {
-    order.confirmation = ConfirmationState::NeedsQuery;
-    return Error(ErrorCode::kTradeExceedsOrderAmount,
-                 "trade exceeds requested base amount");
+  if (terminal_conflict) {
+    const bool already_needs_query = entry.status == Status::NeedsQuery;
+    entry.status = Status::NeedsQuery;
+    if (changed) return UpdateResult::Updated;
+    if (already_needs_query) return UpdateResult::Ignored;
+    return Error(ErrorCode::kOrderStatusConflict,
+                 "conflicting terminal order status");
   }
-  auto fees = order.fees_by_asset;
-  for (const auto& fee : trade.fees) {
-    if (fee.asset.value.empty())
-      return Error(ErrorCode::kOrderReportInvalid, "fee asset missing");
-    auto sum = fees[fee.asset.value].Add(fee.signed_amount);
-    if (!sum.ok())
-      return Error(ErrorCode::kOrderReportInvalid,
-                   "trade fee total cannot be calculated");
-    fees[fee.asset.value] = *sum;
+  if (update.executed_quantity) {
+    if (entry.reported_quantity && source == ReportSource::Push &&
+        entry.reported_quantity->Compare(*update.executed_quantity).value() >
+            0) {
+      // An older cumulative push cannot undo a verified newer report.
+    } else if (!entry.reported_quantity ||
+               entry.reported_quantity->Compare(*update.executed_quantity)
+                       .value() != 0) {
+      entry.reported_quantity = update.executed_quantity;
+      changed = true;
+    }
   }
-  order.traded_quantity = *base;
-  order.traded_value = *quote;
-  order.fees_by_asset = std::move(fees);
-  order.last_update_time = trade.time;
-  seen_trades_[key] = order.prepared.client_order_id.value;
-  std::vector<TrackedOrderEvent> events;
-  events.emplace_back(OrderTraded{MakeSnapshot(order), trade});
-  if (order.lifecycle == OrderLifecycle::Traded &&
-      order.completion_pending_fills && *overfill == 0 &&
-      !order.terminal_emitted) {
-    order.completion_pending_fills = false;
-    order.terminal_emitted = true;
-    events.emplace_back(OrderFullyTraded{MakeSnapshot(order)});
+  if (source == ReportSource::Query || !entry.exchange_status ||
+      Rank(update.status) >= Rank(*entry.exchange_status)) {
+    if (!entry.exchange_status || *entry.exchange_status != update.status) {
+      entry.exchange_status = update.status;
+      changed = true;
+    }
   }
-  return MakeResult(order, true, std::move(events));
+  if (!entry.exchange_status)
+    return changed ? UpdateResult::Updated : UpdateResult::Ignored;
+  const auto status = *entry.exchange_status;
+  if (status == ExchangeOrderStatus::Traded && entry.reported_quantity &&
+      entry.reported_quantity->Compare(entry.order.quantity).value() != 0) {
+    entry.status = Status::NeedsQuery;
+    if (changed) return UpdateResult::Updated;
+    return Error(ErrorCode::kOrderStatusConflict,
+                 "fully traded status has wrong cumulative quantity");
+  }
+  if (entry.reported_quantity &&
+      entry.executed_quantity.Compare(*entry.reported_quantity).value() > 0) {
+    entry.status = Status::NeedsQuery;
+    if (changed) return UpdateResult::Updated;
+    return Error(ErrorCode::kOrderStatusConflict,
+                 "fill total exceeds reported cumulative quantity");
+  }
+  const Status before = entry.status;
+  if (before == Status::NeedsQuery && source == ReportSource::Push)
+    return changed ? UpdateResult::Updated : UpdateResult::Ignored;
+  if (Terminal(status)) {
+    const Decimal& expected =
+        entry.reported_quantity
+            ? *entry.reported_quantity
+            : (status == ExchangeOrderStatus::Traded ? entry.order.quantity
+                                                     : entry.executed_quantity);
+    auto comparison = entry.executed_quantity.Compare(expected);
+    if (!comparison.ok())
+      return Error(ErrorCode::kDecimalArithmeticFailed,
+                   "cannot compare execution totals");
+    entry.status =
+        *comparison < 0 ? Status::AwaitingTrades : TerminalStatus(status);
+  } else if (entry.status != Status::NeedsQuery ||
+             source == ReportSource::Query) {
+    if (entry.status == Status::PendingCancel && source == ReportSource::Push) {
+      // A normal order push does not resolve a pending cancel request.
+    } else {
+      entry.status = status == ExchangeOrderStatus::PartiallyTraded
+                         ? Status::PartiallyTraded
+                         : Status::Open;
+    }
+  }
+  if (entry.status != before) changed = true;
+  if (!Finished(before) && Finished(entry.status))
+    return UpdateResult::Finished;
+  return changed ? UpdateResult::Updated : UpdateResult::Ignored;
 }
 
-std::optional<OrderSnapshot> OrderTracker::Snapshot(
-    const ClientOrderId& client_order_id) const {
-  auto found = orders_.find(client_order_id.value);
-  if (found == orders_.end()) return std::nullopt;
-  return MakeSnapshot(found->second);
+const Order* OrderTracker::Find(const ClientOrderId& id) const {
+  auto found = orders_.find(id.value);
+  return found == orders_.end() ? nullptr : &found->second.order;
 }
 
-std::vector<ClientOrderId> OrderTracker::OrdersNeedingQuery() const {
-  std::vector<ClientOrderId> ids;
-  for (const auto& [client_order_id, order] : orders_) {
-    if (order.completion_pending_fills ||
-        order.confirmation != ConfirmationState::Confirmed)
-      ids.emplace_back(client_order_id);
-  }
-  return ids;
+bool OrderTracker::HasTrade(const ExchangeTradeId& id) const {
+  return seen_trades_.contains(id.value);
+}
+
+std::vector<const Order*> OrderTracker::ActiveOrders() const {
+  std::vector<const Order*> result;
+  for (const auto& [_, entry] : orders_)
+    if (Active(entry.status)) result.push_back(&entry.order);
+  return result;
+}
+
+std::vector<ClientOrderId> OrderTracker::OrdersToQuery() const {
+  std::vector<ClientOrderId> result;
+  for (const auto& [id, entry] : orders_)
+    if (entry.status == Status::SubmissionUnknown ||
+        entry.status == Status::NeedsQuery ||
+        entry.status == Status::AwaitingTrades)
+      result.emplace_back(id);
+  return result;
 }
 
 }  // namespace hquant

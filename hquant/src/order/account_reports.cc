@@ -118,7 +118,6 @@ absl::StatusOr<AccountPushBatch> ExecutionReport(simdjson::dom::element data,
   auto raw_status = field::Text(data, "X");
   auto order_id = field::Integer(data, "i");
   auto traded_quantity = field::Amount(data, "z");
-  auto traded_value = field::Amount(data, "Z");
   auto time = ReportTime(data, received);
   if (!symbol.ok()) return symbol.status();
   if (!client.ok()) return client.status();
@@ -126,7 +125,6 @@ absl::StatusOr<AccountPushBatch> ExecutionReport(simdjson::dom::element data,
   if (!raw_status.ok()) return raw_status.status();
   if (!order_id.ok()) return order_id.status();
   if (!traded_quantity.ok()) return traded_quantity.status();
-  if (!traded_value.ok()) return traded_value.status();
   if (!time.ok()) return time.status();
   if (symbol->empty() || (*order_id < 0 && *order_id != -1)) {
     return field::Invalid("invalid executionReport order identity");
@@ -147,9 +145,13 @@ absl::StatusOr<AccountPushBatch> ExecutionReport(simdjson::dom::element data,
 
   const MarketId market{exchange, InstrumentKind::Spot, std::string(*symbol)};
   const ClientOrderId client_order_id{std::string(original)};
-  std::optional<ExchangeOrderId> exchange_order_id;
-  if (*order_id > 0)
-    exchange_order_id = ExchangeOrderId(std::to_string(*order_id));
+  OrderUpdate order;
+  order.account = account;
+  order.market = market;
+  order.client_order_id = client_order_id;
+  order.status = *mapped_status;
+  order.executed_quantity = *traded_quantity;
+  order.time = *time;
   AccountPushBatch batch;
   if (*execution == "TRADE") {
     auto trade_id = field::Integer(data, "t");
@@ -164,20 +166,15 @@ absl::StatusOr<AccountPushBatch> ExecutionReport(simdjson::dom::element data,
     if (!quote.ok()) return quote.status();
     if (!maker.ok()) return maker.status();
     if (!commission.ok()) return commission.status();
-    if (*trade_id < 0 || !exchange_order_id) {
+    if (*trade_id < 0 || *order_id <= 0) {
       return field::Invalid("trade without exchange order and trade IDs");
     }
-    TradeUpdate trade;
-    trade.account = account;
-    trade.market = market;
-    trade.client_order_id = client_order_id;
-    trade.exchange_order_id = exchange_order_id;
+    Trade trade;
     trade.exchange_trade_id = ExchangeTradeId(std::to_string(*trade_id));
     trade.price = *price;
     trade.quantity = *base;
     trade.value = *quote;
     trade.maker = *maker;
-    trade.time = *time;
     if (commission->IsStrictlyPositive()) {
       auto fee_asset = field::Text(data, "N");
       if (!fee_asset.ok() || fee_asset->empty()) {
@@ -186,18 +183,8 @@ absl::StatusOr<AccountPushBatch> ExecutionReport(simdjson::dom::element data,
       trade.fees.push_back(
           TradeFee{AssetId(std::string(*fee_asset)), *commission});
     }
-    batch.events.emplace_back(std::move(trade));
+    order.trade = std::move(trade);
   }
-
-  OrderUpdate order;
-  order.account = account;
-  order.market = market;
-  order.client_order_id = client_order_id;
-  order.exchange_order_id = exchange_order_id;
-  order.exchange_status = *mapped_status;
-  order.traded_quantity = *traded_quantity;
-  order.traded_value = *traded_value;
-  order.time = *time;
   batch.events.emplace_back(std::move(order));
   return batch;
 }
@@ -317,7 +304,13 @@ absl::StatusOr<ExchangeOrderStatus> ParseStatus(std::string_view raw) {
   return field::Invalid("unsupported REST order status");
 }
 
-absl::StatusOr<OrderUpdate> ParseOrder(std::string_view json,
+struct ParsedOrder {
+  OrderUpdate update;
+  ExchangeOrderId exchange_id;
+  std::optional<Decimal> quote_total;
+};
+
+absl::StatusOr<ParsedOrder> ParseOrder(std::string_view json,
                                        const OrderToQuery& target,
                                        EventTime received) {
   simdjson::dom::parser parser;
@@ -347,22 +340,23 @@ absl::StatusOr<OrderUpdate> ParseOrder(std::string_view json,
   auto utc = field::Millis(*updated);
   if (!utc.ok()) return utc.status();
   received.exchange_utc = *utc;
-  OrderUpdate order;
+  ParsedOrder parsed;
+  OrderUpdate& order = parsed.update;
   order.account = target.account;
   order.market = target.market;
   order.client_order_id = target.client_order_id;
-  order.exchange_order_id = ExchangeOrderId(std::to_string(*id));
-  order.exchange_status = *mapped;
-  order.traded_quantity = *filled;
+  parsed.exchange_id = ExchangeOrderId(std::to_string(*id));
+  order.status = *mapped;
+  order.executed_quantity = *filled;
   // Binance documents negative historical quote totals as unavailable.
   auto quote = Decimal::Parse(*quote_text);
   if (!quote.ok()) return quote.status();
-  if (quote->IsNonnegative()) order.traded_value = *quote;
+  if (quote->IsNonnegative()) parsed.quote_total = *quote;
   order.time = received;
-  return order;
+  return parsed;
 }
 
-using IdTrade = std::pair<int64_t, TradeUpdate>;
+using IdTrade = std::pair<int64_t, OrderUpdate>;
 
 absl::StatusOr<std::vector<IdTrade>> ParseTrades(
     std::string_view json, const OrderToQuery& target,
@@ -401,18 +395,12 @@ absl::StatusOr<std::vector<IdTrade>> ParseTrades(
     }
     auto utc = field::Millis(*time);
     if (!utc.ok()) return utc.status();
-    TradeUpdate trade;
-    trade.account = target.account;
-    trade.market = target.market;
-    trade.client_order_id = target.client_order_id;
-    trade.exchange_order_id = exchange_order_id;
+    Trade trade;
     trade.exchange_trade_id = ExchangeTradeId(std::to_string(*trade_id));
     trade.price = *price;
     trade.quantity = *base;
     trade.value = *quote;
     trade.maker = *maker;
-    trade.time = received;
-    trade.time.exchange_utc = *utc;
     if (commission->IsStrictlyPositive()) {
       auto fee_asset = field::Text(item, "commissionAsset");
       if (!fee_asset.ok() || fee_asset->empty()) {
@@ -421,7 +409,14 @@ absl::StatusOr<std::vector<IdTrade>> ParseTrades(
       trade.fees.push_back(
           TradeFee{AssetId(std::string(*fee_asset)), *commission});
     }
-    trades.emplace_back(*trade_id, std::move(trade));
+    OrderUpdate update;
+    update.account = target.account;
+    update.market = target.market;
+    update.client_order_id = target.client_order_id;
+    update.time = received;
+    update.time.exchange_utc = *utc;
+    update.trade = std::move(trade);
+    trades.emplace_back(*trade_id, std::move(update));
   }
   return trades;
 }
@@ -489,14 +484,14 @@ absl::StatusOr<StartupQueryPlan> PlanStartupQueries(
     }
     return absl::OkStatus();
   };
-  for (const auto& prepared : input.persisted_prepared_orders) {
-    auto status = insert(prepared.request.account, prepared.request.market,
-                         prepared.client_order_id);
+  for (const auto& prepared : input.persisted_orders) {
+    auto status =
+        insert(prepared.account, prepared.market, prepared.client_order_id);
     if (!status.ok()) return status;
   }
-  for (const auto& snapshot : input.live_snapshots) {
-    auto status = insert(snapshot.request.account, snapshot.request.market,
-                         snapshot.client_order_id);
+  for (const auto& snapshot : input.live_orders) {
+    auto status =
+        insert(snapshot.account, snapshot.market, snapshot.client_order_id);
     if (!status.ok()) return status;
   }
   StartupQueryPlan plan;
@@ -550,8 +545,8 @@ OrderQueryClient::QueryOrder(OrderToQuery target, EventTime received,
     batch.unresolved_status = order.status();
     co_return batch;
   }
-  const auto& exchange_order_id = *order->exchange_order_id;
-  std::map<int64_t, TradeUpdate> by_trade_id;
+  const auto& exchange_order_id = order->exchange_id;
+  std::map<int64_t, OrderUpdate> by_trade_id;
   std::optional<int64_t> from_id;
   bool exhausted = false;
   for (size_t page = 0; page < limits_.max_trade_pages; ++page) {
@@ -594,8 +589,8 @@ OrderQueryClient::QueryOrder(OrderToQuery target, EventTime received,
     }
     // Preserve verified partial fills if a later page fails. Incomplete never
     // permits releasing the unknown order's remaining funds hold.
-    batch.trades.clear();
-    for (const auto& [_, trade] : by_trade_id) batch.trades.push_back(trade);
+    batch.updates.clear();
+    for (const auto& [_, update] : by_trade_id) batch.updates.push_back(update);
     if (trades->size() < limits_.trades_per_page) {
       exhausted = true;
       break;
@@ -615,9 +610,9 @@ OrderQueryClient::QueryOrder(OrderToQuery target, EventTime received,
   }
   Decimal base_total;
   Decimal quote_total;
-  for (const auto& trade : batch.trades) {
-    auto base = base_total.Add(trade.quantity);
-    auto quote = quote_total.Add(trade.value);
+  for (const auto& update : batch.updates) {
+    auto base = base_total.Add(update.trade->quantity);
+    auto quote = quote_total.Add(update.trade->value);
     if (!base.ok() || !quote.ok()) {
       batch.unresolved_status =
           Error(ErrorCode::kOrderQueryResponseInvalid, "trade total overflow");
@@ -626,14 +621,14 @@ OrderQueryClient::QueryOrder(OrderToQuery target, EventTime received,
     base_total = *base;
     quote_total = *quote;
   }
-  auto same_base = base_total.Compare(*order->traded_quantity);
+  auto same_base = base_total.Compare(*order->update.executed_quantity);
   if (!same_base.ok() || *same_base != 0) {
     batch.unresolved_status = Error(ErrorCode::kOrderQueryIdentityMismatch,
                                     "order and trade base totals disagree");
     co_return batch;
   }
-  if (order->traded_value) {
-    auto same_quote = quote_total.Compare(*order->traded_value);
+  if (order->quote_total) {
+    auto same_quote = quote_total.Compare(*order->quote_total);
     if (!same_quote.ok() || *same_quote != 0) {
       batch.unresolved_status = Error(ErrorCode::kOrderQueryIdentityMismatch,
                                       "order and trade quote totals disagree");
@@ -642,7 +637,11 @@ OrderQueryClient::QueryOrder(OrderToQuery target, EventTime received,
   }
   // Publishing a status while fills are incomplete could clear Tracker's
   // SubmissionUnknown flag. Only a complete comparison releases that gate.
-  batch.order = *order;
+  if (batch.updates.empty()) batch.updates.push_back(order->update);
+  for (auto& update : batch.updates) {
+    update.status = order->update.status;
+    update.executed_quantity = order->update.executed_quantity;
+  }
   batch.complete = true;
   co_return batch;
 }
