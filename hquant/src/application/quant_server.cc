@@ -6,8 +6,8 @@
 #include <mutex>
 #include <optional>
 #include <set>
-#include <thread>
 #include <string>
+#include <thread>
 #include <utility>
 #include <variant>
 
@@ -19,10 +19,10 @@
 #include "boost/asio/this_coro.hpp"
 #include "boost/asio/use_awaitable.hpp"
 #include "market/replay_feed.h"
-#include "order_history/order_history_reader.h"
-#include "order_history/order_history_writer.h"
 #include "order/risk.h"
 #include "order/simulated_exchange.h"
+#include "order_history/order_history_reader.h"
+#include "order_history/order_history_writer.h"
 #include "shard/shard.h"
 #include "strategy/simple_pmm.h"
 
@@ -119,8 +119,8 @@ absl::Status QuantServer::CreateComponents() {
           std::chrono::system_clock::now().time_since_epoch())
           .count())};
   auto opened = SqliteOrderHistoryWriter::Open({storage_path, run, started,
-                                               config.storage.writer_queue,
-                                               config.storage.writer_batch});
+                                                config.storage.writer_queue,
+                                                config.storage.writer_batch});
   if (!opened.ok()) return opened.status();
   writer = std::move(*opened);
   for (const auto& assignment : config.assignments) {
@@ -152,28 +152,32 @@ absl::Status QuantServer::CreateComponents() {
                                    std::to_string(next_id++));
             }},
         *clock);
-    auto risk = std::make_unique<RiskGate>(RiskGate::Settings{
-        assignment.shard, config.risk.fee_buffer_rate,
-        std::chrono::duration_cast<std::chrono::seconds>(
-            *config.risk.max_rule_age)});
+    auto risk = std::make_unique<RiskGate>(
+        RiskGate::Settings{assignment.shard, config.risk.fee_buffer_rate,
+                           std::chrono::duration_cast<std::chrono::seconds>(
+                               *config.risk.max_rule_age)});
     for (const auto& budget : config.risk_budgets) {
       if (budget.shard != assignment.shard) continue;
-      auto status = risk->SetInitialBudget(
-          {budget.account, budget.asset, budget.shard, 1, budget.hard_limit,
-           started + *budget.valid_for});
+      auto status = risk->SetInitialBudget({budget.account, budget.asset,
+                                            budget.shard, 1, budget.hard_limit,
+                                            started + *budget.valid_for});
       if (!status.ok()) return status;
     }
-    Shard::Config shard_config{run, assignment.shard,
-                               strategy_config.strategy_id, account.account,
-                               market.spec, market.tick_lot_size, rule};
+    Shard::Config shard_config{run,
+                               assignment.shard,
+                               strategy_config.strategy_id,
+                               account.account,
+                               market.spec,
+                               market.tick_lot_size,
+                               rule};
     shard_config.stale_after_us = market.stale_after->count();
-    shards.push_back(std::make_unique<Shard>(
-        shard_config, *clock, std::move(*strategy), std::move(exchange),
-        std::move(risk), *writer));
+    shards.push_back(
+        std::make_unique<Shard>(shard_config, *clock, std::move(*strategy),
+                                std::move(exchange), std::move(risk), *writer));
   }
-  auto read = SqliteOrderHistoryReader::Open(
-      {storage_path, config.storage.reader_queue,
-       config.storage.reader_page_limit});
+  auto read =
+      SqliteOrderHistoryReader::Open({storage_path, config.storage.reader_queue,
+                                      config.storage.reader_page_limit});
   if (!read.ok()) return read.status();
   reader = std::move(*read);
   return absl::OkStatus();
@@ -202,11 +206,11 @@ absl::Status QuantServer::RunReplay() {
           if (input.market &&
               *input.market != shard->market().market.native_symbol)
             continue;
-          const auto market = std::find_if(
-              config.market_specs.begin(), config.market_specs.end(),
-              [&](const auto& item) {
-                return item.spec.market == shard->market().market;
-              });
+          const auto market =
+              std::find_if(config.market_specs.begin(),
+                           config.market_specs.end(), [&](const auto& item) {
+                             return item.spec.market == shard->market().market;
+                           });
           return ApplyReplayInput(input, *market, *replay_clock, *shard);
         }
         return Error(ErrorCode::kReplayFileInvalid,
@@ -251,8 +255,7 @@ absl::StatusOr<std::unique_ptr<QuantServer>> QuantServer::Create(
         !shard_ids.insert(assignment.shard.value).second)
       return Error(ErrorCode::kConfigAssignmentInvalid,
                    "invalid or duplicate shard ID");
-    if (assignment.markets.size() != 1 ||
-        assignment.strategy_ids.size() != 1 ||
+    if (assignment.markets.size() != 1 || assignment.strategy_ids.size() != 1 ||
         assignment.accounts.size() != 1)
       return Error(ErrorCode::kLaunchMultipleNotSupported,
                    "each shard needs one market, strategy and account");
@@ -320,7 +323,8 @@ absl::StatusOr<std::unique_ptr<QuantServer>> QuantServer::Create(
                    "risk budget does not belong to its shard");
     auto status = allocator.GrantInitial(
         {budget.account, budget.asset, budget.shard, 1, budget.hard_limit,
-         budget_now + *budget.valid_for}, budget_now);
+         budget_now + *budget.valid_for},
+        budget_now);
     if (!status.ok())
       return Error(ErrorCode::kConfigBudgetInvalid, status.message());
   }
@@ -338,7 +342,9 @@ absl::StatusOr<std::unique_ptr<QuantServer>> QuantServer::Create(
       return Error(ErrorCode::kConfigBudgetInvalid,
                    "rate budget does not belong to its shard");
     rate_grants.push_back(
-        {{budget.account.value, budget.ip, budget.endpoint}, budget.shard, 1,
+        {{budget.account.value, budget.ip, budget.endpoint},
+         budget.shard,
+         1,
          {budget.limit, budget.cancel_reserve, budget.window, 0}});
   }
   auto rate_status = ValidateRateBudgets(config.rate_capacities, rate_grants);
@@ -347,8 +353,7 @@ absl::StatusOr<std::unique_ptr<QuantServer>> QuantServer::Create(
   std::error_code error;
   std::filesystem::create_directories(state_dir, error);
   if (error)
-    return ErrorFromSystem(ErrorCode::kStateDirUnavailable, error,
-                           state_dir);
+    return ErrorFromSystem(ErrorCode::kStateDirUnavailable, error, state_dir);
   const auto path =
       std::filesystem::path(config.storage_path).is_absolute()
           ? std::filesystem::path(config.storage_path)
@@ -412,8 +417,8 @@ absl::Status QuantServer::Start() {
     }
     co_return response;
   };
-  auto opened = ControlServer::Start(state_dir + "/control.sock",
-                                     handler, [this](int) { RequestStop(); });
+  auto opened = ControlServer::Start(state_dir + "/control.sock", handler,
+                                     [this](int) { RequestStop(); });
   if (!opened.ok()) {
     RequestStop();
     for (auto& shard : shards) shard->Join();
@@ -455,8 +460,8 @@ boost::asio::awaitable<absl::StatusOr<std::string>> QuantServer::StatusAsync() {
     std::vector<std::string> entries(shards.size());
     if (!live) {
       for (size_t index = 0; index < shards.size(); ++index)
-        entries[index] = ShardStatusJson(
-            *shards[index], shards[index]->OwnedExchange(), false);
+        entries[index] = ShardStatusJson(*shards[index],
+                                         shards[index]->OwnedExchange(), false);
       co_return AggregateStatusJson(entries, *writer);
     }
     auto executor = co_await boost::asio::this_coro::executor;
@@ -467,18 +472,15 @@ boost::asio::awaitable<absl::StatusOr<std::string>> QuantServer::StatusAsync() {
     ready->expires_after(std::chrono::seconds(2));
     for (size_t index = 0; index < shards.size(); ++index) {
       Shard* shard = shards[index].get();
-      boost::asio::post(*shard->LiveIo(),
-                        [shard, index, executor, results, remaining, ready] {
-                          auto json = ShardStatusJson(
-                              *shard, shard->OwnedExchange(), true);
-                          boost::asio::post(
-                              executor,
-                              [index, results, remaining, ready,
-                               json = std::move(json)]() mutable {
-                                (*results)[index] = std::move(json);
-                                if (--*remaining == 0) ready->cancel();
-                              });
-                        });
+      boost::asio::post(*shard->LiveIo(), [shard, index, executor, results,
+                                           remaining, ready] {
+        auto json = ShardStatusJson(*shard, shard->OwnedExchange(), true);
+        boost::asio::post(executor, [index, results, remaining, ready,
+                                     json = std::move(json)]() mutable {
+          (*results)[index] = std::move(json);
+          if (--*remaining == 0) ready->cancel();
+        });
+      });
     }
     boost::system::error_code ec;
     co_await ready->async_wait(
@@ -506,13 +508,11 @@ boost::asio::awaitable<absl::StatusOr<std::string>> QuantServer::StatusAsync() {
   auto result = std::make_shared<std::optional<absl::StatusOr<std::string>>>();
   ready->expires_after(std::chrono::seconds(2));
   boost::asio::post(*shards.front()->LiveIo(), [this, ready, result, executor] {
-    auto json =
-        StatusJson(*shards.front(), shards.front()->OwnedExchange(),
-                   config.market_specs.front().spec, *writer);
+    auto json = StatusJson(*shards.front(), shards.front()->OwnedExchange(),
+                           config.market_specs.front().spec, *writer);
     json.pop_back();
     json +=
-        ",\"applied_diffs\":" +
-        std::to_string(shards.front()->AppliedDiffs()) +
+        ",\"applied_diffs\":" + std::to_string(shards.front()->AppliedDiffs()) +
         ",\"resyncs\":" + std::to_string(shards.front()->Resyncs()) +
         ",\"strategy_invocations\":" +
         std::to_string(shards.front()->strategy_invocations()) + "}";
@@ -521,10 +521,8 @@ boost::asio::awaitable<absl::StatusOr<std::string>> QuantServer::StatusAsync() {
       const ErrorCode code = CodeOf(shards.front()->stream_error());
       json += ",\"market_stream_error\":{\"code\":" +
               std::to_string(ErrorNumber(code)) +
-              ",\"name\":" + EscapeJson(Info(code).name) +
-              ",\"message\":" +
-              EscapeJson(shards.front()->stream_error().message()) +
-              "}}";
+              ",\"name\":" + EscapeJson(Info(code).name) + ",\"message\":" +
+              EscapeJson(shards.front()->stream_error().message()) + "}}";
     }
     boost::asio::post(executor,
                       [ready, result, json = std::move(json)]() mutable {
@@ -539,17 +537,18 @@ boost::asio::awaitable<absl::StatusOr<std::string>> QuantServer::StatusAsync() {
   co_return Error(ErrorCode::kControlTimeout, "status query timed out");
 }
 
-boost::asio::awaitable<absl::StatusOr<OrderHistoryPage>> QuantServer::OrderHistoryAsync(
-    OrderHistoryQuery query) {
+boost::asio::awaitable<absl::StatusOr<OrderHistoryPage>>
+QuantServer::OrderHistoryAsync(OrderHistoryQuery query) {
   auto executor = co_await boost::asio::this_coro::executor;
   auto ready = std::make_shared<boost::asio::steady_timer>(executor);
   auto result = std::make_shared<std::optional<OrderHistoryPage>>();
   ready->expires_after(std::chrono::seconds(2));
-  auto accepted = reader->TrySubmitAsync(
-      std::move(query), executor, [ready, result](OrderHistoryPage page) mutable {
-        *result = std::move(page);
-        ready->cancel();
-      });
+  auto accepted =
+      reader->TrySubmitAsync(std::move(query), executor,
+                             [ready, result](OrderHistoryPage page) mutable {
+                               *result = std::move(page);
+                               ready->cancel();
+                             });
   if (!accepted.ok()) co_return accepted;
   boost::system::error_code ec;
   co_await ready->async_wait(

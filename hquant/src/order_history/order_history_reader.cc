@@ -15,8 +15,8 @@
 #include "absl/status/status.h"
 #include "base/error.h"
 #include "boost/asio/post.hpp"
-#include "sqlite3.h"
 #include "order_history/record_codec.h"
+#include "sqlite3.h"
 
 namespace hquant {
 namespace {
@@ -78,7 +78,8 @@ absl::StatusOr<uint64_t> ParseUnsigned(std::string_view value) {
       std::from_chars(value.data(), value.data() + value.size(), parsed);
   if (error != std::errc{} || end != value.data() + value.size() ||
       parsed > static_cast<uint64_t>(std::numeric_limits<sqlite3_int64>::max()))
-    return Error(ErrorCode::kOrderHistoryCursorInvalid, "invalid history cursor");
+    return Error(ErrorCode::kOrderHistoryCursorInvalid,
+                 "invalid history cursor");
   return parsed;
 }
 int Progress(void* context) {
@@ -99,13 +100,13 @@ class ProgressGuard {
 }  // namespace
 
 SqliteOrderHistoryReader::SqliteOrderHistoryReader(Options options, sqlite3* db,
-                                         int storage_version)
+                                                   int storage_version)
     : options_(std::move(options)),
       db_(db),
       storage_version_(storage_version) {}
 
-absl::StatusOr<std::unique_ptr<SqliteOrderHistoryReader>> SqliteOrderHistoryReader::Open(
-    Options options) {
+absl::StatusOr<std::unique_ptr<SqliteOrderHistoryReader>>
+SqliteOrderHistoryReader::Open(Options options) {
   if (options.path.empty() || options.queue_capacity == 0 ||
       options.max_page_size == 0 || options.max_page_size > 500)
     return Error(ErrorCode::kOrderHistoryConfigInvalid,
@@ -148,13 +149,15 @@ absl::Status SqliteOrderHistoryReader::TrySubmit(OrderHistoryQuery query) {
     return Error(ErrorCode::kOrderHistoryConfigInvalid,
                  "history page size outside configured bound");
   if (query.cursor && !ParseUnsigned(*query.cursor).ok())
-    return Error(ErrorCode::kOrderHistoryCursorInvalid, "invalid history cursor");
+    return Error(ErrorCode::kOrderHistoryCursorInvalid,
+                 "invalid history cursor");
   std::lock_guard lock(mutex_);
   if (stopping_)
     return Error(ErrorCode::kOrderHistoryReaderStopping,
                  "history reader is stopping");
   if (outstanding_ == options_.queue_capacity)
-    return Error(ErrorCode::kOrderHistoryReaderQueueFull, "history query queue is full");
+    return Error(ErrorCode::kOrderHistoryReaderQueueFull,
+                 "history query queue is full");
   pending_.push_back({std::move(query), {}, {}});
   ++outstanding_;
   cv_.notify_one();
@@ -169,13 +172,15 @@ absl::Status SqliteOrderHistoryReader::TrySubmitAsync(
     return Error(ErrorCode::kOrderHistoryConfigInvalid,
                  "history page size outside configured bound");
   if (query.cursor && !ParseUnsigned(*query.cursor).ok())
-    return Error(ErrorCode::kOrderHistoryCursorInvalid, "invalid history cursor");
+    return Error(ErrorCode::kOrderHistoryCursorInvalid,
+                 "invalid history cursor");
   std::lock_guard lock(mutex_);
   if (stopping_)
     return Error(ErrorCode::kOrderHistoryReaderStopping,
                  "history reader is stopping");
   if (outstanding_ == options_.queue_capacity)
-    return Error(ErrorCode::kOrderHistoryReaderQueueFull, "history query queue is full");
+    return Error(ErrorCode::kOrderHistoryReaderQueueFull,
+                 "history query queue is full");
   pending_.push_back(
       {std::move(query), std::move(executor), std::move(completion)});
   ++outstanding_;
@@ -208,10 +213,11 @@ void SqliteOrderHistoryReader::Run() {
         std::lock_guard lock(mutex_);
         --outstanding_;
       }
-      boost::asio::post(
-          pending.executor,
-          [completion = std::move(pending.completion),
-           page = std::move(result)]() mutable { completion(std::move(page)); });
+      boost::asio::post(pending.executor,
+                        [completion = std::move(pending.completion),
+                         page = std::move(result)]() mutable {
+                          completion(std::move(page));
+                        });
       continue;
     }
     {
@@ -221,7 +227,8 @@ void SqliteOrderHistoryReader::Run() {
   }
 }
 
-OrderHistoryPage SqliteOrderHistoryReader::Query(const OrderHistoryQuery& query) {
+OrderHistoryPage SqliteOrderHistoryReader::Query(
+    const OrderHistoryQuery& query) {
   OrderHistoryPage page;
   page.request_id = query.request_id;
   const auto now = std::chrono::time_point_cast<std::chrono::microseconds>(
@@ -336,7 +343,8 @@ OrderHistoryPage SqliteOrderHistoryReader::Query(const OrderHistoryQuery& query)
     if (rc != SQLITE_ROW) {
       page.status =
           rc == SQLITE_INTERRUPT
-              ? Error(ErrorCode::kOrderHistoryQueryTimeout, "gap query interrupted")
+              ? Error(ErrorCode::kOrderHistoryQueryTimeout,
+                      "gap query interrupted")
               : Error(ErrorCode::kOrderHistoryQueryFailed, sqlite3_errmsg(db_));
       page.rows.clear();
       return page;
@@ -443,7 +451,7 @@ void AddUncovered(PreviousRun* snapshot, uint8_t shard, uint64_t first,
 }  // namespace
 
 absl::StatusOr<PreviousRun> LoadPreviousRun(const std::string& path,
-                                                      RunId run_id) {
+                                            RunId run_id) {
   if (path.empty() || !run_id.IsValid()) {
     return Error(ErrorCode::kOrderHistoryConfigInvalid,
                  "invalid recovery path or run ID");
@@ -452,8 +460,8 @@ absl::StatusOr<PreviousRun> LoadPreviousRun(const std::string& path,
   if (sqlite3_open_v2(path.c_str(), &raw,
                       SQLITE_OPEN_READONLY | SQLITE_OPEN_NOMUTEX,
                       nullptr) != SQLITE_OK) {
-    const auto error =
-        SqlError(raw, "open recovery database", ErrorCode::kOrderHistoryOpenFailed);
+    const auto error = SqlError(raw, "open recovery database",
+                                ErrorCode::kOrderHistoryOpenFailed);
     if (raw) sqlite3_close(raw);
     return error;
   }
@@ -647,14 +655,15 @@ absl::StatusOr<PreviousRun> LoadPreviousRun(const std::string& path,
                           !snapshot.gaps.empty() ||
                           snapshot.may_have_unwritten_records;
   for (const auto& prepared : snapshot.context.recovered_prepared_orders) {
-    const auto terminal = terminal_by_client.find(prepared.client_order_id.value);
+    const auto terminal =
+        terminal_by_client.find(prepared.client_order_id.value);
     if (incomplete || terminal == terminal_by_client.end() ||
         !terminal->second) {
       snapshot.context.unresolved_ids.push_back(prepared.client_order_id);
     }
   }
-  snapshot.context.confidence =
-      incomplete ? PreviousRunCompleteness::Unresolved : PreviousRunCompleteness::Partial;
+  snapshot.context.confidence = incomplete ? PreviousRunCompleteness::Unresolved
+                                           : PreviousRunCompleteness::Partial;
   snapshot.needs_order_query =
       incomplete || !snapshot.context.recovered_prepared_orders.empty();
   return snapshot;

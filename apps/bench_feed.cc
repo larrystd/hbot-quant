@@ -293,8 +293,7 @@ absl::StatusOr<FeedBenchOptions> ParseFeedBenchArguments(
       if (symbols.empty() || symbols.back() == ',' ||
           options.symbols.size() > 8)
         return Error(ErrorCode::kCliUsageInvalid, "invalid --symbols");
-    }
-    else if (index == 4)
+    } else if (index == 4)
       options.price_per_tick = value;
     else if (index == 5)
       options.amount_per_lot = value;
@@ -315,8 +314,7 @@ absl::StatusOr<FeedBenchOptions> ParseFeedBenchArguments(
     }
   }
   if (seen[3] && seen[12])
-    return Error(ErrorCode::kCliUsageInvalid,
-                 "choose --symbol or --symbols");
+    return Error(ErrorCode::kCliUsageInvalid, "choose --symbol or --symbols");
   if (options.address.empty() || !options.port || options.symbol.empty() ||
       options.symbol.find('"') != std::string::npos)
     return Error(ErrorCode::kCliUsageInvalid, "invalid feed options");
@@ -405,13 +403,12 @@ absl::StatusOr<std::string> RunFeedBench(const FeedBenchOptions& options) {
         const auto end = target.find('@', start);
         if (end == std::string::npos) co_return std::nullopt;
         auto symbol = target.substr(start, end - start);
-        if (target != std::string(prefix) + symbol + "@depth/" + symbol +
-                          "@trade")
+        if (target !=
+            std::string(prefix) + symbol + "@depth/" + symbol + "@trade")
           co_return std::nullopt;
-        std::transform(symbol.begin(), symbol.end(), symbol.begin(),
-                       [](unsigned char c) {
-                         return static_cast<char>(std::toupper(c));
-                       });
+        std::transform(
+            symbol.begin(), symbol.end(), symbol.begin(),
+            [](unsigned char c) { return static_cast<char>(std::toupper(c)); });
         auto feed = feeds.find(symbol);
         if (feed == feeds.end()) co_return std::nullopt;
         co_return co_await feed->second->Next(session, ordinal,
@@ -451,18 +448,15 @@ absl::StatusOr<std::string> RunFeedBench(const FeedBenchOptions& options) {
     out << "{\"depth_sent\":" << depth_sent
         << ",\"trades_sent\":" << trades_sent
         << ",\"ws_connections\":" << ws_connections
-        << ",\"disconnects\":" << disconnects
-        << ",\"snapshots\":" << snapshots
+        << ",\"disconnects\":" << disconnects << ",\"snapshots\":" << snapshots
         << ",\"http_429\":" << http_429;
     if (!status.empty()) out << ",\"server_status\":" << status;
     out << '}';
   } else {
-    out << "feed depth_sent=" << depth_sent
-        << " trades_sent=" << trades_sent
+    out << "feed depth_sent=" << depth_sent << " trades_sent=" << trades_sent
         << " ws_connections=" << ws_connections
-        << " disconnects=" << disconnects
-        << " snapshots=" << snapshots << " http_429=" << http_429
-        << '\n';
+        << " disconnects=" << disconnects << " snapshots=" << snapshots
+        << " http_429=" << http_429 << '\n';
     if (!status.empty()) out << "server_status=" << status << '\n';
   }
   return out.str();

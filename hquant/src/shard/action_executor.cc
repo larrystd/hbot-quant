@@ -29,8 +29,7 @@ void UnwindPrepared(RiskGate& risk, OrderGateway& gateway, HoldId hold,
 ErrorCode NormalizeOrder(const OrderRequest& raw, const TradingRule& rule,
                          std::optional<OrderRequest>* normalized) {
   if (!raw.limit_price) return ErrorCode::kOrderPriceOrAmountInvalid;
-  auto amount =
-      raw.quantity.Quantize(rule.base_increment, RoundingMode::Down);
+  auto amount = raw.quantity.Quantize(rule.base_increment, RoundingMode::Down);
   auto price =
       raw.limit_price->Quantize(rule.price_increment, RoundingMode::Down);
   if (!amount.ok() || !price.ok()) return ErrorCode::kDecimalArithmeticFailed;
@@ -69,7 +68,7 @@ void ActionExecutor::Gap(uint64_t sequence) {
     return;
   }
   local_gaps_.push_back(OrderHistoryGap{run_, shard_, sequence, sequence,
-                                   ErrorCode::kOrderHistoryQueueFull});
+                                        ErrorCode::kOrderHistoryQueueFull});
 }
 
 std::vector<ActionResult> ActionExecutor::Execute(
@@ -125,7 +124,8 @@ std::vector<ActionResult> ActionExecutor::Execute(
                      prepared->strategy_id != order.strategy_id ||
                      prepared->request.account != normalized->account ||
                      prepared->request.market != normalized->market) {
-            UnwindPrepared(risk_, gateway_, hold.hold_id, prepared->client_order_id);
+            UnwindPrepared(risk_, gateway_, hold.hold_id,
+                           prepared->client_order_id);
             result.reason = ErrorCode::kInternal;
             result.message = "gateway returned mismatched prepared order";
           } else {
@@ -140,7 +140,8 @@ std::vector<ActionResult> ActionExecutor::Execute(
               result.client_order_id = prepared->client_order_id;
               result.prepared = *prepared;
               Record(*prepared, order.strategy_id, context.now_utc);
-              const auto started = gateway_.StartPrepared(prepared->client_order_id);
+              const auto started =
+                  gateway_.StartPrepared(prepared->client_order_id);
               result.accepted = started.ok();
               result.reason = started.ok() ? ErrorCode::kOk : CodeOf(started);
               result.message = started.ok() ? "locally submitted"

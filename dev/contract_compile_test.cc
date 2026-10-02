@@ -6,8 +6,8 @@
 #include "base/order.h"
 #include "base/types.h"
 #include "market/order_book.h"
-#include "shard/shard.h"
 #include "order_history/order_history.h"
+#include "shard/shard.h"
 #include "strategy/strategy.h"
 
 int main() {

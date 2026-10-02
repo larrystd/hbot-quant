@@ -33,12 +33,11 @@ TEST(BenchFeedTest, ParsesEndpointAndFaultOptions) {
       "--listen", "127.0.0.1:18080", "--http-429-rate", "2"};
   EXPECT_FALSE(hquant::ParseFeedBenchArguments(bad_probability).ok());
 
-  const std::array<std::string_view, 4> symbols{
-      "--listen", "127.0.0.1:18080", "--symbols", "BTCUSDT,ETHUSDT"};
+  const std::array<std::string_view, 4> symbols{"--listen", "127.0.0.1:18080",
+                                                "--symbols", "BTCUSDT,ETHUSDT"};
   auto multi = hquant::ParseFeedBenchArguments(symbols);
   ASSERT_TRUE(multi.ok()) << multi.status();
-  EXPECT_EQ(multi->symbols,
-            (std::vector<std::string>{"BTCUSDT", "ETHUSDT"}));
+  EXPECT_EQ(multi->symbols, (std::vector<std::string>{"BTCUSDT", "ETHUSDT"}));
   const std::array<std::string_view, 4> duplicate{
       "--listen", "127.0.0.1:18080", "--symbols", "BTCUSDT,BTCUSDT"};
   EXPECT_FALSE(hquant::ParseFeedBenchArguments(duplicate).ok());

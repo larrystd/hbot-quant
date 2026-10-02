@@ -108,17 +108,25 @@ class TriggerFixture : public ::testing::Test {
   MarketSpec spec{market, AssetId("BTC"), AssetId("USDT")};
   StrategyId id{1, StrategyName("counter")};
   TickLotSize scale{D("0.01"), D("0.001"), 1};
-  TradingRule rule{market, D("0.01"), D("0.001"), D("0.001"),
-                   D("0.01"), {}, 1, origin};
+  TradingRule rule{market,    D("0.01"), D("0.001"), D("0.001"),
+                   D("0.01"), {},        1,          origin};
   CountingStrategy strategy;
-  SimpleSimulatedExchange exchange{
-      {account, spec, rule, {{"BTC", D("1")}, {"USDT", D("100")}},
-       D("0.001"), true, {}},
-      clock};
+  SimpleSimulatedExchange exchange{{account,
+                                    spec,
+                                    rule,
+                                    {{"BTC", D("1")}, {"USDT", D("100")}},
+                                    D("0.001"),
+                                    true,
+                                    {}},
+                                   clock};
   RiskGate risk{{ShardId{0}, D("0"), std::chrono::seconds(300)}};
   MemoryWriter writer;
   Shard shard{{RunId{1}, ShardId{0}, id, account, spec, scale, rule},
-              clock, strategy, exchange, risk, writer};
+              clock,
+              strategy,
+              exchange,
+              risk,
+              writer};
   int64_t current_bid = 9999;
 
   void SetUp() override {
@@ -126,29 +134,35 @@ class TriggerFixture : public ::testing::Test {
     strategy.market = market;
     strategy.account = account;
     strategy.id = id;
-    ASSERT_TRUE(risk.SetInitialBudget({account, AssetId("BTC"), ShardId{0},
-                                       1, D("1"), origin + std::chrono::hours(1)})
+    ASSERT_TRUE(risk.SetInitialBudget({account, AssetId("BTC"), ShardId{0}, 1,
+                                       D("1"), origin + std::chrono::hours(1)})
                     .ok());
-    ASSERT_TRUE(risk.SetInitialBudget({account, AssetId("USDT"), ShardId{0},
-                                       1, D("100"), origin + std::chrono::hours(1)})
-                    .ok());
+    ASSERT_TRUE(
+        risk.SetInitialBudget({account, AssetId("USDT"), ShardId{0}, 1,
+                               D("100"), origin + std::chrono::hours(1)})
+            .ok());
     ASSERT_TRUE(clock.Advance({0, 1}).ok());
     shard.Subscribe(1);
-    BookSnapshot snapshot{market, 1, 1, 10,
-                          {{{9999}, {100}}}, {{{10001}, {100}}},
+    BookSnapshot snapshot{market,
+                          1,
+                          1,
+                          10,
+                          {{{9999}, {100}}},
+                          {{{10001}, {100}}},
                           {{}, clock.UtcNow(), clock.MonoNow()}};
     ASSERT_TRUE(shard.OnSnapshot(snapshot).ok());
-    BookDiff bridge{market, 1, 1, 11, 11, {}, {},
-                    {{}, clock.UtcNow(), clock.MonoNow()}};
+    BookDiff bridge{market, 1,  1,  11,
+                    11,     {}, {}, {{}, clock.UtcNow(), clock.MonoNow()}};
     ASSERT_TRUE(shard.OnDiff(bridge).ok());
     ASSERT_EQ(shard.Book().State(), BookSyncState::Live);
   }
 
   void ChangeBid(int64_t at_us, uint64_t sequence, int64_t new_bid) {
     ASSERT_TRUE(clock.Advance({at_us, sequence}).ok());
-    BookDiff diff{market, 1, 1, sequence, sequence,
-                  {{{current_bid}, {0}}, {{new_bid}, {100}}}, {},
-                  {{}, clock.UtcNow(), clock.MonoNow()}};
+    BookDiff diff{market,   1,
+                  1,        sequence,
+                  sequence, {{{current_bid}, {0}}, {{new_bid}, {100}}},
+                  {},       {{}, clock.UtcNow(), clock.MonoNow()}};
     ASSERT_TRUE(shard.OnDiff(diff).ok());
     current_bid = new_bid;
   }
@@ -157,8 +171,8 @@ class TriggerFixture : public ::testing::Test {
 TEST_F(TriggerFixture, BboChangesAndPublicTradesTriggerDeterministically) {
   ASSERT_EQ(strategy.calls, std::vector<Trigger>{Trigger::BookChanged});
   ASSERT_TRUE(clock.Advance({1, 1}).ok());
-  BookDiff unchanged{market, 1, 1, 12, 12, {}, {},
-                     {{}, clock.UtcNow(), clock.MonoNow()}};
+  BookDiff unchanged{market, 1,  1,  12,
+                     12,     {}, {}, {{}, clock.UtcNow(), clock.MonoNow()}};
   ASSERT_TRUE(shard.OnDiff(unchanged).ok());
   EXPECT_EQ(strategy.calls.size(), 1);
   ChangeBid(2, 13, 9998);
@@ -166,8 +180,8 @@ TEST_F(TriggerFixture, BboChangesAndPublicTradesTriggerDeterministically) {
   EXPECT_EQ(strategy.calls.back(), Trigger::BookChanged);
   strategy.policy.on_public_trade = true;
   ASSERT_TRUE(clock.Advance({3, 1}).ok());
-  PublicTrade trade{market, {}, {10100}, {10}, Side::Buy,
-                    {{}, clock.UtcNow(), clock.MonoNow()}};
+  PublicTrade trade{market, {},        {10100},
+                    {10},   Side::Buy, {{}, clock.UtcNow(), clock.MonoNow()}};
   ASSERT_TRUE(shard.OnPublicTrade(trade).ok());
   ASSERT_EQ(strategy.calls.size(), 3);
   EXPECT_EQ(strategy.calls.back(), Trigger::PublicTraded);
@@ -177,8 +191,8 @@ TEST_F(TriggerFixture, CoalescesAndLimitsStrategyCallsUsingReplayClock) {
   strategy.policy.coalesce_window = std::chrono::microseconds(10);
   strategy.policy.min_action_interval = std::chrono::microseconds(5);
   ASSERT_TRUE(clock.Advance({1, 1}).ok());
-  BookDiff unchanged{market, 1, 1, 12, 12, {}, {},
-                     {{}, clock.UtcNow(), clock.MonoNow()}};
+  BookDiff unchanged{market, 1,  1,  12,
+                     12,     {}, {}, {{}, clock.UtcNow(), clock.MonoNow()}};
   ASSERT_TRUE(shard.OnDiff(unchanged).ok());
   ChangeBid(2, 13, 9998);
   EXPECT_EQ(strategy.calls.size(), 1);
@@ -201,8 +215,8 @@ TEST_F(TriggerFixture, OwnOrderAndFillTriggersDoNotReenterDecide) {
   EXPECT_FALSE(strategy.recursed);
   ASSERT_EQ(exchange.OpenOrders().size(), 1);
   ASSERT_TRUE(clock.Advance({2, 1}).ok());
-  PublicTrade trade{market, {}, {10100}, {10}, Side::Buy,
-                    {{}, clock.UtcNow(), clock.MonoNow()}};
+  PublicTrade trade{market, {},        {10100},
+                    {10},   Side::Buy, {{}, clock.UtcNow(), clock.MonoNow()}};
   ASSERT_TRUE(shard.OnPublicTrade(trade).ok());
   ASSERT_EQ(strategy.calls.size(), 4);
   EXPECT_EQ(strategy.calls.back(), Trigger::Traded);
@@ -219,8 +233,8 @@ TEST(ShardTriggerTest, ImmediateFillQueuesOneFollowupWithoutRecursion) {
   const MarketSpec spec{market, AssetId("BTC"), AssetId("USDT")};
   const StrategyId id{1, StrategyName("counter")};
   const TickLotSize scale{D("0.01"), D("0.001"), 1};
-  const TradingRule rule{market, D("0.01"), D("0.001"), D("0.001"),
-                         D("0.01"), {}, 1, origin};
+  const TradingRule rule{market,    D("0.01"), D("0.001"), D("0.001"),
+                         D("0.01"), {},        1,          origin};
   CountingStrategy strategy;
   strategy.policy.book_mode = BookTriggerMode::BboChanged;
   strategy.policy.on_fill = true;
@@ -229,28 +243,36 @@ TEST(ShardTriggerTest, ImmediateFillQueuesOneFollowupWithoutRecursion) {
   strategy.market = market;
   strategy.account = account;
   strategy.id = id;
-  ImmediateFillExchange exchange(
-      {account, spec, rule, {{"BTC", D("1")}, {"USDT", D("100")}},
-       D("0.001"), true, {}},
-      clock);
+  ImmediateFillExchange exchange({account,
+                                  spec,
+                                  rule,
+                                  {{"BTC", D("1")}, {"USDT", D("100")}},
+                                  D("0.001"),
+                                  true,
+                                  {}},
+                                 clock);
   RiskGate risk({ShardId{0}, D("0"), std::chrono::seconds(300)});
-  ASSERT_TRUE(risk.SetInitialBudget({account, AssetId("BTC"), ShardId{0},
-                                     1, D("1"), origin + std::chrono::hours(1)})
+  ASSERT_TRUE(risk.SetInitialBudget({account, AssetId("BTC"), ShardId{0}, 1,
+                                     D("1"), origin + std::chrono::hours(1)})
                   .ok());
-  ASSERT_TRUE(risk.SetInitialBudget({account, AssetId("USDT"), ShardId{0},
-                                     1, D("100"), origin + std::chrono::hours(1)})
+  ASSERT_TRUE(risk.SetInitialBudget({account, AssetId("USDT"), ShardId{0}, 1,
+                                     D("100"), origin + std::chrono::hours(1)})
                   .ok());
   MemoryWriter writer;
-  Shard shard({RunId{1}, ShardId{0}, id, account, spec, scale, rule},
-              clock, strategy, exchange, risk, writer);
+  Shard shard({RunId{1}, ShardId{0}, id, account, spec, scale, rule}, clock,
+              strategy, exchange, risk, writer);
   ASSERT_TRUE(clock.Advance({0, 1}).ok());
   shard.Subscribe(1);
-  BookSnapshot snapshot{market, 1, 1, 10, {{{9999}, {100}}},
+  BookSnapshot snapshot{market,
+                        1,
+                        1,
+                        10,
+                        {{{9999}, {100}}},
                         {{{10001}, {100}}},
                         {{}, clock.UtcNow(), clock.MonoNow()}};
   ASSERT_TRUE(shard.OnSnapshot(snapshot).ok());
-  BookDiff bridge{market, 1, 1, 11, 11, {}, {},
-                  {{}, clock.UtcNow(), clock.MonoNow()}};
+  BookDiff bridge{market, 1,  1,  11,
+                  11,     {}, {}, {{}, clock.UtcNow(), clock.MonoNow()}};
   ASSERT_TRUE(shard.OnDiff(bridge).ok());
   ASSERT_EQ(strategy.calls.size(), 2);
   EXPECT_EQ(strategy.calls[0], Trigger::BookChanged);
@@ -258,7 +280,8 @@ TEST(ShardTriggerTest, ImmediateFillQueuesOneFollowupWithoutRecursion) {
   EXPECT_FALSE(strategy.recursed);
   EXPECT_TRUE(std::any_of(writer.rows.begin(), writer.rows.end(),
                           [](const OrderHistoryRecord& row) {
-                            return std::holds_alternative<TradeUpdate>(row.payload);
+                            return std::holds_alternative<TradeUpdate>(
+                                row.payload);
                           }));
 }
 
@@ -270,8 +293,8 @@ class ReplayHarness final : public TriggerFixture {
     ChangeBid(1, 12, 9998);
     strategy.policy.on_public_trade = true;
     if (!clock.Advance({2, 1}).ok()) return {};
-    PublicTrade trade{market, {}, {10100}, {10}, Side::Buy,
-                      {{}, clock.UtcNow(), clock.MonoNow()}};
+    PublicTrade trade{market, {},        {10100},
+                      {10},   Side::Buy, {{}, clock.UtcNow(), clock.MonoNow()}};
     if (!shard.OnPublicTrade(trade).ok()) return {};
     return strategy.calls;
   }

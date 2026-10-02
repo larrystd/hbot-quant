@@ -163,7 +163,8 @@ TEST(AccountStreamParserTest, CancelUsesOriginalIdAndGapsRequestResync) {
                                       "0", -1, "cancel-request", "C1"),
                                Received());
   ASSERT_TRUE(canceled.ok());
-  EXPECT_EQ(std::get<OrderUpdate>(canceled->events[0]).client_order_id->value, "C1");
+  EXPECT_EQ(std::get<OrderUpdate>(canceled->events[0]).client_order_id->value,
+            "C1");
   EXPECT_FALSE(stream
                    .Parse(Report("CANCELED", "CANCELED", "0", "0", "0", "0", -1,
                                  "cancel-request", ""),
@@ -205,8 +206,8 @@ TEST(ReconciliationTest, InvalidRestDecimalRequiresReconciliation) {
   FakeRest rest;
   rest.responses.push_back({200, OrderJson("C1", "FILLED", "bad")});
   OrderQueryClient client(rest);
-  auto result = RunAsync(
-      client.QueryOrder(Target(), Received(), std::chrono::steady_clock::now()));
+  auto result = RunAsync(client.QueryOrder(Target(), Received(),
+                                           std::chrono::steady_clock::now()));
   ASSERT_TRUE(result.ok());
   EXPECT_FALSE(result->complete);
   EXPECT_EQ(CodeOf(result->unresolved_status),
@@ -218,9 +219,9 @@ TEST(ReconciliationTest, QueriesOriginalIdThenTradesAndComparesTotals) {
   rest.responses.push_back({200, OrderJson()});
   rest.responses.push_back({200, "[" + TradeJson(7) + "]"});
   OrderQueryClient client(rest);
-  auto result = RunAsync(
-      client.QueryOrder(Target(), Received(),
-                   std::chrono::steady_clock::now() + std::chrono::seconds(2)));
+  auto result = RunAsync(client.QueryOrder(
+      Target(), Received(),
+      std::chrono::steady_clock::now() + std::chrono::seconds(2)));
   ASSERT_TRUE(result.ok()) << result.status();
   EXPECT_TRUE(result->complete) << result->unresolved_status;
   EXPECT_TRUE(result->unresolved_status.ok());
@@ -243,8 +244,7 @@ TEST(ReconciliationTest, MissingOrMismatchedOrderNeverProvesNoWrite) {
   ASSERT_TRUE(absent.ok());
   EXPECT_FALSE(absent->complete);
   EXPECT_FALSE(absent->order.has_value());
-  EXPECT_EQ(CodeOf(absent->unresolved_status),
-            ErrorCode::kOrderQueryFailed);
+  EXPECT_EQ(CodeOf(absent->unresolved_status), ErrorCode::kOrderQueryFailed);
   EXPECT_EQ(missing.targets.size(), 1);
 
   FakeRest mismatch;
@@ -280,8 +280,8 @@ TEST(ReconciliationTest, PagesTradesAndBoundsIncompletePages) {
   rest.responses.push_back({200, "[" + TradeJson(8, "0.6", "60") + "]"});
   rest.responses.push_back({200, "[]"});
   OrderQueryClient client(rest, {4, 1, 10000});
-  auto result = RunAsync(
-      client.QueryOrder(Target(), Received(), std::chrono::steady_clock::now()));
+  auto result = RunAsync(client.QueryOrder(Target(), Received(),
+                                           std::chrono::steady_clock::now()));
   ASSERT_TRUE(result.ok());
   EXPECT_TRUE(result->complete) << result->unresolved_status;
   EXPECT_EQ(result->trades.size(), 2);
@@ -308,8 +308,8 @@ TEST(ReconciliationTest, PagesTradesAndBoundsIncompletePages) {
       {200, "[" + TradeJson(7, "0.4", "40") + "]"});
   later_failure.responses.push_back({429, R"({"code":-1003})"});
   OrderQueryClient later_client(later_failure, {4, 1, 10000});
-  auto partial = RunAsync(later_client.QueryOrder(Target(), Received(),
-                                             std::chrono::steady_clock::now()));
+  auto partial = RunAsync(later_client.QueryOrder(
+      Target(), Received(), std::chrono::steady_clock::now()));
   ASSERT_TRUE(partial.ok());
   EXPECT_FALSE(partial->complete);
   EXPECT_FALSE(partial->order.has_value());

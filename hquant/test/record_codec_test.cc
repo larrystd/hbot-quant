@@ -18,8 +18,8 @@ OrderHistoryRecord Record(OrderHistoryRecordPayload payload) {
 }
 
 TEST(RecordCodecTest, VersionTwoPreservesFullWidthReasonCodesAndMessages) {
-  auto gap = Record(
-      OrderHistoryGap{RunId{42}, ShardId{0}, 2, 3, ErrorCode::kOrderHistoryQueueFull});
+  auto gap = Record(OrderHistoryGap{RunId{42}, ShardId{0}, 2, 3,
+                                    ErrorCode::kOrderHistoryQueueFull});
   const std::string gap_blob = storage_internal::EncodeRecord(gap);
   ASSERT_EQ(static_cast<unsigned char>(gap_blob[0]), 2);
   auto decoded_gap = storage_internal::DecodeRecord(gap_blob);
@@ -31,7 +31,8 @@ TEST(RecordCodecTest, VersionTwoPreservesFullWidthReasonCodesAndMessages) {
   invalid_gap[invalid_gap.size() - 7] = 0;
   auto rejected_gap = storage_internal::DecodeRecord(invalid_gap);
   ASSERT_FALSE(rejected_gap.ok());
-  EXPECT_EQ(CodeOf(rejected_gap.status()), ErrorCode::kOrderHistoryRecordCorrupted);
+  EXPECT_EQ(CodeOf(rejected_gap.status()),
+            ErrorCode::kOrderHistoryRecordCorrupted);
 
   auto decision = Record(
       ActionRecord{ActionBatchId{7}, StrategyId{1, StrategyName{"test"}}, 0,
@@ -46,8 +47,8 @@ TEST(RecordCodecTest, VersionTwoPreservesFullWidthReasonCodesAndMessages) {
 }
 
 TEST(RecordCodecTest, ReadsLegacyGapAndPreservesArbitraryDecisionText) {
-  auto gap = Record(
-      OrderHistoryGap{RunId{42}, ShardId{0}, 2, 3, ErrorCode::kOrderHistoryQueueFull});
+  auto gap = Record(OrderHistoryGap{RunId{42}, ShardId{0}, 2, 3,
+                                    ErrorCode::kOrderHistoryQueueFull});
   std::string old_gap = storage_internal::EncodeRecord(gap);
   old_gap[0] = 1;  // Codec version.
   old_gap[1] = 1;  // Envelope schema version (little endian uint64).

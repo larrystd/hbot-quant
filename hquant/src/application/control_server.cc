@@ -10,10 +10,10 @@
 #include "base/market.h"
 #include "base/order.h"
 #include "order/simulated_exchange.h"
-#include "shard/shard.h"
-#include "simdjson.h"
 #include "order_history/order_history_reader.h"
 #include "order_history/order_history_writer.h"
+#include "shard/shard.h"
+#include "simdjson.h"
 
 namespace hquant {
 namespace {
@@ -105,7 +105,8 @@ std::string_view LegacyErrorName(ErrorCode code) {
 
 }  // namespace
 
-absl::StatusOr<std::string> EncodeControlRequest(const ControlRequest& request) {
+absl::StatusOr<std::string> EncodeControlRequest(
+    const ControlRequest& request) {
   if (request.schema_version != 1 && request.schema_version != 2)
     return Error(ErrorCode::kControlMessageInvalid,
                  "unsupported server version");
@@ -150,7 +151,8 @@ absl::StatusOr<ControlRequest> DecodeControlRequest(std::string_view json) {
     std::string_view cursor;
     if ((*root)["limit"].get(limit) || limit == 0 || limit > 500 ||
         (*root)["cursor"].get(cursor)) {
-      return Error(ErrorCode::kControlMessageInvalid, "invalid history request");
+      return Error(ErrorCode::kControlMessageInvalid,
+                   "invalid history request");
     }
     request.payload =
         OrderHistoryRequest{static_cast<uint32_t>(limit), std::string(cursor)};
@@ -260,8 +262,8 @@ absl::StatusOr<ControlResponse> DecodeControlResponse(std::string_view json) {
 
 }  // namespace hquant
 
-#include <utility>
 #include <csignal>
+#include <utility>
 
 #include "boost/asio/co_spawn.hpp"
 #include "boost/asio/post.hpp"
@@ -292,11 +294,11 @@ absl::StatusOr<std::unique_ptr<ControlServer>> ControlServer::Start(
   auto server = std::unique_ptr<ControlServer>(
       new ControlServer(std::move(socket_path), std::move(handler)));
   if (on_signal) {
-    server->signals_ = std::make_unique<boost::asio::signal_set>(
-        server->io_, SIGINT, SIGTERM);
+    server->signals_ =
+        std::make_unique<boost::asio::signal_set>(server->io_, SIGINT, SIGTERM);
     server->signals_->async_wait(
-        [callback = std::move(on_signal)](
-            const boost::system::error_code& ec, int signal) {
+        [callback = std::move(on_signal)](const boost::system::error_code& ec,
+                                          int signal) {
           if (!ec) callback(signal);
         });
   }
@@ -305,14 +307,14 @@ absl::StatusOr<std::unique_ptr<ControlServer>> ControlServer::Start(
   options.max_frame = 64 * 1024;
   options.read_timeout = std::chrono::seconds(2);
   options.write_timeout = std::chrono::seconds(2);
-  options.busy_reply = ErrorFrame(ErrorCode::kControlBusy,
-                                  "server request limit reached");
+  options.busy_reply =
+      ErrorFrame(ErrorCode::kControlBusy, "server request limit reached");
   options.invalid_reply = ErrorFrame(ErrorCode::kControlMessageInvalid,
                                      "server frame exceeds 64 KiB");
   auto line = LineServer::Start(
       server->io_, LineEndpoint::Unix(server->socket_path_),
-      [self = server.get()](std::string frame)
-          -> boost::asio::awaitable<std::string> {
+      [self = server.get()](
+          std::string frame) -> boost::asio::awaitable<std::string> {
         co_return co_await self->HandleFrame(std::move(frame));
       },
       std::move(options));
@@ -433,14 +435,14 @@ std::string ShardStatusJson(const Shard& shard,
       ",\"market\":" + EscapeJson(market.market.native_symbol) +
       ",\"book\":" + EscapeJson(BookStateName(shard.Book().State())) +
       ",\"strategy\":\"simple_pmm\",\"open_orders\":" +
-      std::to_string(sim_exchange.OpenOrders().size()) +
-      ",\"balances\":{" + EscapeJson(market.base_asset.value) + ":" +
-      EscapeJson(sim_exchange.BalanceOf(market.base_asset).ToString()) +
-      "," + EscapeJson(market.quote_asset.value) + ":" +
+      std::to_string(sim_exchange.OpenOrders().size()) + ",\"balances\":{" +
+      EscapeJson(market.base_asset.value) + ":" +
+      EscapeJson(sim_exchange.BalanceOf(market.base_asset).ToString()) + "," +
+      EscapeJson(market.quote_asset.value) + ":" +
       EscapeJson(sim_exchange.BalanceOf(market.quote_asset).ToString()) +
       "},\"fees_paid\":{" + EscapeJson(market.base_asset.value) + ":" +
-      EscapeJson(sim_exchange.FeesPaid(market.base_asset).ToString()) +
-      "," + EscapeJson(market.quote_asset.value) + ":" +
+      EscapeJson(sim_exchange.FeesPaid(market.base_asset).ToString()) + "," +
+      EscapeJson(market.quote_asset.value) + ":" +
       EscapeJson(sim_exchange.FeesPaid(market.quote_asset).ToString()) +
       "},\"strategy_invocations\":" +
       std::to_string(shard.strategy_invocations());
@@ -492,7 +494,8 @@ std::string OrderHistoryJson(const OrderHistoryPage& page) {
     } else if (const auto* update = std::get_if<OrderUpdate>(&row.payload)) {
       kind = "order";
       if (update->client_order_id)
-        details = ",\"client_id\":" + EscapeJson(update->client_order_id->value);
+        details =
+            ",\"client_id\":" + EscapeJson(update->client_order_id->value);
       details +=
           ",\"status\":" + EscapeJson(OrderStatusName(update->exchange_status));
     } else if (const auto* trade = std::get_if<TradeUpdate>(&row.payload)) {

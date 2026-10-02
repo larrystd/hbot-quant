@@ -68,8 +68,8 @@ absl::Status RiskBudgetAllocator::GrantInitial(RiskBudget budget, UtcTime now) {
 }
 
 absl::Status RiskBudgetAllocator::RenewAfterOrderQuery(RiskBudget budget,
-                                                           UtcTime now,
-                                                           bool account_fresh) {
+                                                       UtcTime now,
+                                                       bool account_fresh) {
   if (!account_fresh) {
     return Error(ErrorCode::kRiskAccountStale,
                  "account facts stale for budget renewal");
@@ -139,7 +139,7 @@ absl::Status RiskGate::SetInitialBudget(RiskBudget budget) {
 }
 
 absl::Status RiskGate::RenewAfterOrderQuery(RiskBudget budget, UtcTime now,
-                                                bool account_fresh) {
+                                            bool account_fresh) {
   if (emergency_stop_)
     return Error(ErrorCode::kRiskEmergencyStopped, "emergency stop");
   if (!account_fresh) {
@@ -331,7 +331,8 @@ ErrorCode RiskGate::TryHoldCode(const StrategyId& strategy_id,
   return ErrorCode::kOk;
 }
 
-absl::Status RiskGate::AttachClientId(HoldId hold, ClientOrderId client_order_id) {
+absl::Status RiskGate::AttachClientId(HoldId hold,
+                                      ClientOrderId client_order_id) {
   auto it = holds_.find(hold.value);
   if (it == holds_.end())
     return Error(ErrorCode::kFundsHoldNotFound, "unknown hold");

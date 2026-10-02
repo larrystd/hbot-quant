@@ -114,9 +114,9 @@ class Shard {
   };
 
   Shard(Config config, const Clock& clock, Strategy& strategy,
-        SimulatedExchange& exchange, RiskGate& risk, OrderHistoryWriter& recorder);
-  Shard(Config config, const Clock& clock,
-        std::unique_ptr<Strategy> strategy,
+        SimulatedExchange& exchange, RiskGate& risk,
+        OrderHistoryWriter& recorder);
+  Shard(Config config, const Clock& clock, std::unique_ptr<Strategy> strategy,
         std::unique_ptr<SimpleSimulatedExchange> exchange,
         std::unique_ptr<RiskGate> risk, OrderHistoryWriter& recorder);
   ~Shard();

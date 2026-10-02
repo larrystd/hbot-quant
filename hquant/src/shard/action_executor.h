@@ -38,8 +38,9 @@ struct ActionResult {
 // Executes one shard's strategy actions synchronously on the owning thread.
 class ActionExecutor {
  public:
-  ActionExecutor(RiskGate& risk, OrderGateway& gateway, OrderHistoryWriter& recorder,
-                 RunId run, ShardId shard, uint64_t& shard_sequence)
+  ActionExecutor(RiskGate& risk, OrderGateway& gateway,
+                 OrderHistoryWriter& recorder, RunId run, ShardId shard,
+                 uint64_t& shard_sequence)
       : risk_(risk),
         gateway_(gateway),
         recorder_(recorder),

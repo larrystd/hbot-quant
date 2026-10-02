@@ -87,8 +87,7 @@ absl::Status ReadReplayFile(const std::string& path, const ReplaySink& sink,
         uint64_t shard = 0;
         if (!input["shard"].error()) {
           if (input["shard"].get(shard) || shard >= 8)
-            return Error(ErrorCode::kReplayFileInvalid,
-                         "invalid timer shard");
+            return Error(ErrorCode::kReplayFileInvalid, "invalid timer shard");
           event.shard = ShardId{static_cast<uint8_t>(shard)};
         }
       } else {

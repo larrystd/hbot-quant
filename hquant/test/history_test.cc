@@ -1,5 +1,3 @@
-#include "order_history/order_history_reader.h"
-
 #include <unistd.h>
 
 #include <chrono>
@@ -11,8 +9,9 @@
 #include "base/error.h"
 #include "base/types.h"
 #include "gtest/gtest.h"
-#include "sqlite3.h"
+#include "order_history/order_history_reader.h"
 #include "order_history/order_history_writer.h"
+#include "sqlite3.h"
 
 namespace hquant {
 namespace {
@@ -45,7 +44,8 @@ MarketId Market() {
   return MarketId{ExchangeId{"binance"}, InstrumentKind::Spot, "BTCUSDT"};
 }
 
-OrderHistoryRecord PreparedRecord(uint64_t sequence, std::string client = "B1") {
+OrderHistoryRecord PreparedRecord(uint64_t sequence,
+                                  std::string client = "B1") {
   PreparedOrder prepared;
   prepared.client_order_id = ClientOrderId{std::move(client)};
   prepared.strategy_id = MakeStrategyId();

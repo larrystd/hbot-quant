@@ -22,9 +22,7 @@ namespace {
 namespace asio = boost::asio;
 using Clock = std::chrono::steady_clock;
 
-asio::awaitable<std::string> Echo(std::string line) {
-  co_return line;
-}
+asio::awaitable<std::string> Echo(std::string line) { co_return line; }
 
 asio::awaitable<std::string> Slow(std::string line) {
   asio::steady_timer timer(co_await asio::this_coro::executor);
@@ -39,10 +37,9 @@ struct ClientResult {
   std::optional<absl::StatusOr<std::string>> receive;
 };
 
-asio::awaitable<void> Request(LineClient& client, std::string line,
-                               ClientResult& result,
-                               std::chrono::milliseconds timeout =
-                                   std::chrono::seconds(2)) {
+asio::awaitable<void> Request(
+    LineClient& client, std::string line, ClientResult& result,
+    std::chrono::milliseconds timeout = std::chrono::seconds(2)) {
   result.connect = co_await client.Connect(Clock::now() + timeout);
   if (!result.connect.ok()) co_return;
   result.send = co_await client.Send(std::move(line), Clock::now() + timeout);
@@ -58,16 +55,15 @@ asio::awaitable<void> IdleReceive(
     reply = co_await client.Receive(Clock::now() + std::chrono::seconds(1));
 }
 
-asio::awaitable<void> ExpiredWrite(LineClient& client,
-                                    absl::Status& result) {
-  auto connected = co_await client.Connect(Clock::now() +
-                                           std::chrono::seconds(1));
+asio::awaitable<void> ExpiredWrite(LineClient& client, absl::Status& result) {
+  auto connected =
+      co_await client.Connect(Clock::now() + std::chrono::seconds(1));
   if (!connected.ok()) {
     result = connected;
     co_return;
   }
-  result = co_await client.Send("late", Clock::now() -
-                                           std::chrono::milliseconds(1));
+  result =
+      co_await client.Send("late", Clock::now() - std::chrono::milliseconds(1));
 }
 
 class RunningServer {
@@ -76,7 +72,8 @@ class RunningServer {
                 LineServer::Options options = {}) {
     auto opened = LineServer::Start(io, std::move(endpoint), std::move(handler),
                                     std::move(options));
-    if (!opened.ok()) throw std::runtime_error(std::string(opened.status().message()));
+    if (!opened.ok())
+      throw std::runtime_error(std::string(opened.status().message()));
     server = std::move(*opened);
     thread = std::thread([this] { io.run(); });
   }
@@ -146,7 +143,8 @@ TEST(LineStreamTest, FrameLimitAndReadTimeout) {
     LineClient idle(idle_io, LineEndpoint::Unix(path));
     absl::Status connected;
     std::optional<absl::StatusOr<std::string>> reply;
-    asio::co_spawn(idle_io, IdleReceive(idle, connected, reply), asio::detached);
+    asio::co_spawn(idle_io, IdleReceive(idle, connected, reply),
+                   asio::detached);
     idle_io.run();
     EXPECT_TRUE(connected.ok());
     ASSERT_TRUE(reply);
@@ -160,15 +158,15 @@ TEST(LineStreamTest, ClientDeadlineAndPeerDisconnect) {
   asio::io_context io;
   LineClient client(io, LineEndpoint::Tcp("127.0.0.1", server.port()));
   ClientResult result;
-  asio::co_spawn(io, Request(client, "slow", result,
-                              std::chrono::milliseconds(50)), asio::detached);
+  asio::co_spawn(io,
+                 Request(client, "slow", result, std::chrono::milliseconds(50)),
+                 asio::detached);
   io.run();
   ASSERT_TRUE(result.receive);
   EXPECT_EQ(CodeOf(result.receive->status()), ErrorCode::kNetTimeout);
 
   asio::io_context write_io;
-  LineClient writer(write_io,
-                    LineEndpoint::Tcp("127.0.0.1", server.port()));
+  LineClient writer(write_io, LineEndpoint::Tcp("127.0.0.1", server.port()));
   absl::Status write_status;
   asio::co_spawn(write_io, ExpiredWrite(writer, write_status), asio::detached);
   write_io.run();

@@ -31,7 +31,7 @@ class AccountPushParser {
       : account_(std::move(account)), exchange_(std::move(exchange)) {}
 
   absl::StatusOr<AccountPushBatch> Parse(std::string_view json,
-                                           EventTime received) const;
+                                         EventTime received) const;
 
  private:
   AccountId account_;
@@ -113,13 +113,12 @@ class OrderQueryClient {
   // original ID.
   boost::asio::awaitable<absl::StatusOr<std::vector<OrderToQuery>>>
   ListOpenOrders(AccountId account, MarketId market,
-                     std::chrono::steady_clock::time_point deadline);
+                 std::chrono::steady_clock::time_point deadline);
   // Scan a bounded 24-hour window for orders missing from local history after
   // a crash. A full 1000-row page is deliberately reported as incomplete.
   boost::asio::awaitable<absl::StatusOr<std::vector<OrderToQuery>>>
   ListRecentOrders(AccountId account, MarketId market, UtcTime start,
-                       UtcTime end,
-                       std::chrono::steady_clock::time_point deadline);
+                   UtcTime end, std::chrono::steady_clock::time_point deadline);
 
  private:
   SignedRestClient& rest_;

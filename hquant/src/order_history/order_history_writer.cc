@@ -10,8 +10,8 @@
 #include <vector>
 
 #include "base/error.h"
-#include "sqlite3.h"
 #include "order_history/record_codec.h"
+#include "sqlite3.h"
 
 namespace hquant {
 namespace {
@@ -83,20 +83,21 @@ SqliteOrderHistoryWriter::SqliteOrderHistoryWriter(Options options, sqlite3* db)
   manifest_.started_at_utc = options_.started_at_utc;
 }
 
-absl::StatusOr<std::unique_ptr<SqliteOrderHistoryWriter>> SqliteOrderHistoryWriter::Open(
-    Options options) {
+absl::StatusOr<std::unique_ptr<SqliteOrderHistoryWriter>>
+SqliteOrderHistoryWriter::Open(Options options) {
   if (options.path.empty() || !options.run_id.IsValid() ||
       options.queue_capacity_per_shard == 0 || options.batch_size == 0 ||
       options.queue_capacity_per_shard > 1'000'000 ||
       options.batch_size > 10'000)
-    return Error(ErrorCode::kOrderHistoryConfigInvalid, "invalid recorder options");
+    return Error(ErrorCode::kOrderHistoryConfigInvalid,
+                 "invalid recorder options");
   sqlite3* db = nullptr;
   if (sqlite3_open_v2(
           options.path.c_str(), &db,
           SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE | SQLITE_OPEN_NOMUTEX,
           nullptr) != SQLITE_OK) {
-    absl::Status error =
-        SqlError(db, "open recorder database", ErrorCode::kOrderHistoryOpenFailed);
+    absl::Status error = SqlError(db, "open recorder database",
+                                  ErrorCode::kOrderHistoryOpenFailed);
     sqlite3_close(db);
     return error;
   }
@@ -433,15 +434,16 @@ void SqliteOrderHistoryWriter::Run() {
           const uint64_t last_dropped =
               queues_[shard]->last_dropped_seq.load(std::memory_order_acquire);
           AddGap(OrderHistoryGap{options_.run_id, ShardId{shard},
-                            last_observed_seq_[shard] + 1,
-                            record.shard_sequence - 1,
-                            last_dropped >= record.shard_sequence - 1
-                                ? ErrorCode::kOrderHistoryQueueFull
-                                : ErrorCode::kInternal});
+                                 last_observed_seq_[shard] + 1,
+                                 record.shard_sequence - 1,
+                                 last_dropped >= record.shard_sequence - 1
+                                     ? ErrorCode::kOrderHistoryQueueFull
+                                     : ErrorCode::kInternal});
         }
         last_observed_seq_[shard] =
             std::max(last_observed_seq_[shard], record.shard_sequence);
-        if (const auto* reported_gap = std::get_if<OrderHistoryGap>(&record.payload))
+        if (const auto* reported_gap =
+                std::get_if<OrderHistoryGap>(&record.payload))
           AddGap(*reported_gap);
         batch.push_back(std::move(record));
       }
@@ -456,8 +458,8 @@ void SqliteOrderHistoryWriter::Run() {
           queue.last_dropped_seq.load(std::memory_order_acquire);
       if (dropped > last_observed_seq_[shard]) {
         AddGap(OrderHistoryGap{options_.run_id, ShardId{shard},
-                          last_observed_seq_[shard] + 1, dropped,
-                          ErrorCode::kOrderHistoryQueueFull});
+                               last_observed_seq_[shard] + 1, dropped,
+                               ErrorCode::kOrderHistoryQueueFull});
         last_observed_seq_[shard] = dropped;
       }
       queue.last_accounted_dropped_seq.store(dropped,
@@ -477,8 +479,8 @@ void SqliteOrderHistoryWriter::Run() {
         }
         for (const auto& record : batch) {
           AddGap(OrderHistoryGap{options_.run_id, record.shard,
-                            record.shard_sequence, record.shard_sequence,
-                            ErrorCode::kOrderHistoryWriteFailed});
+                                 record.shard_sequence, record.shard_sequence,
+                                 ErrorCode::kOrderHistoryWriteFailed});
         }
       }
       pending_records_.fetch_sub(batch.size(), std::memory_order_release);

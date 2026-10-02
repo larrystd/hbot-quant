@@ -94,8 +94,8 @@ absl::StatusOr<ControlRequest> MakeControlRequest(const CliOptions& options,
     if (options.order_history_limit == 0 || options.order_history_limit > 500) {
       return Error(ErrorCode::kCliUsageInvalid, "history limit out of range");
     }
-    request.payload =
-        OrderHistoryRequest{options.order_history_limit, options.order_history_cursor};
+    request.payload = OrderHistoryRequest{options.order_history_limit,
+                                          options.order_history_cursor};
   } else
     request.payload = StopRequest{};
   return request;

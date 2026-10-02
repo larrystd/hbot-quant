@@ -38,15 +38,16 @@ int main() {
 
   const std::array<std::string_view, 7> history_args{
       "order-history", "--state-dir", "/tmp/hquant", "--limit",
-      "100",     "--cursor",    "next"};
+      "100",           "--cursor",    "next"};
   auto history = hquant::ParseCliArguments(history_args);
   Require(history.ok() && history->order_history_limit == 100 &&
               history->order_history_cursor == "next",
           "parse history");
   auto request = hquant::MakeControlRequest(*history, 17);
-  Require(request.ok() && request->request_id == 17 &&
-              std::holds_alternative<hquant::OrderHistoryRequest>(request->payload),
-          "history request");
+  Require(
+      request.ok() && request->request_id == 17 &&
+          std::holds_alternative<hquant::OrderHistoryRequest>(request->payload),
+      "history request");
   const auto& payload = std::get<hquant::OrderHistoryRequest>(request->payload);
   Require(payload.limit == 100 && payload.cursor == "next",
           "history pagination");
@@ -70,7 +71,8 @@ int main() {
               hquant::CodeOf(command_error.status()) ==
                   hquant::ErrorCode::kCliEngineError &&
               std::string(command_error.status().message())
-                      .find("ORDER_HISTORY_READER_QUEUE_FULL (-17007)") != std::string::npos,
+                      .find("ORDER_HISTORY_READER_QUEUE_FULL (-17007)") !=
+                  std::string::npos,
           "engine error name and number");
 
   const std::array<std::string_view, 3> stop_args{"stop", "--state-dir",

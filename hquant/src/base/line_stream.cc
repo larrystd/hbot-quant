@@ -30,8 +30,8 @@ absl::Status IoStatus(const boost::system::error_code& ec, bool expired) {
 
 template <typename Socket>
 asio::awaitable<absl::StatusOr<std::string>> ReadFrame(Socket& socket,
-                                                        size_t max_frame,
-                                                        Deadline deadline) {
+                                                       size_t max_frame,
+                                                       Deadline deadline) {
   if (std::chrono::steady_clock::now() >= deadline)
     co_return Error(ErrorCode::kNetTimeout, "line read deadline elapsed");
   asio::streambuf buffer(max_frame + 1);
@@ -61,7 +61,7 @@ asio::awaitable<absl::StatusOr<std::string>> ReadFrame(Socket& socket,
 
 template <typename Socket>
 asio::awaitable<absl::Status> WriteFrame(Socket& socket, std::string line,
-                                        Deadline deadline) {
+                                         Deadline deadline) {
   if (std::chrono::steady_clock::now() >= deadline)
     co_return Error(ErrorCode::kNetTimeout, "line write deadline elapsed");
   line.push_back('\n');
@@ -76,8 +76,8 @@ asio::awaitable<absl::Status> WriteFrame(Socket& socket, std::string line,
     }
   });
   boost::system::error_code ec;
-  co_await asio::async_write(
-      socket, asio::buffer(line), asio::redirect_error(asio::use_awaitable, ec));
+  co_await asio::async_write(socket, asio::buffer(line),
+                             asio::redirect_error(asio::use_awaitable, ec));
   timer.cancel();
   if (ec) co_return IoStatus(ec, *expired);
   co_return absl::OkStatus();
@@ -100,8 +100,8 @@ asio::awaitable<absl::Status> ConnectSocket(Socket& socket,
     }
   });
   boost::system::error_code ec;
-  co_await socket.async_connect(
-      endpoint, asio::redirect_error(asio::use_awaitable, ec));
+  co_await socket.async_connect(endpoint,
+                                asio::redirect_error(asio::use_awaitable, ec));
   timer.cancel();
   if (ec) co_return IoStatus(ec, *expired);
   co_return absl::OkStatus();
@@ -201,28 +201,31 @@ struct LineServer::State : std::enable_shared_from_this<LineServer::State> {
 
   State(asio::io_context& io_arg, LineEndpoint endpoint_arg,
         Handler handler_arg, Options options_arg)
-      : io(io_arg), endpoint(std::move(endpoint_arg)),
-        handler(std::move(handler_arg)), options(std::move(options_arg)) {}
+      : io(io_arg),
+        endpoint(std::move(endpoint_arg)),
+        handler(std::move(handler_arg)),
+        options(std::move(options_arg)) {}
 
   template <typename Socket>
   asio::awaitable<void> Reply(std::shared_ptr<Socket> socket,
-                               std::string line) {
+                              std::string line) {
     if (!line.empty())
-      (void)co_await WriteFrame(*socket, std::move(line),
-                                std::chrono::steady_clock::now() +
-                                    options.write_timeout);
+      (void)co_await WriteFrame(
+          *socket, std::move(line),
+          std::chrono::steady_clock::now() + options.write_timeout);
     CloseSocket(*socket);
   }
 
   template <typename Socket>
   asio::awaitable<void> Session(std::shared_ptr<Socket> socket) {
-    auto frame = co_await ReadFrame(*socket, options.max_frame,
-                                    std::chrono::steady_clock::now() +
-                                        options.read_timeout);
+    auto frame = co_await ReadFrame(
+        *socket, options.max_frame,
+        std::chrono::steady_clock::now() + options.read_timeout);
     if (!frame.ok()) {
       if (CodeOf(frame.status()) == ErrorCode::kNetTargetInvalid)
         co_await Reply(socket, options.invalid_reply);
-      else CloseSocket(*socket);
+      else
+        CloseSocket(*socket);
       co_return;
     }
     try {
@@ -242,14 +245,14 @@ struct LineServer::State : std::enable_shared_from_this<LineServer::State> {
     const uint64_t id = next_id++;
     sessions.emplace(id, [socket] { CloseSocket(*socket); });
     auto self = shared_from_this();
-    asio::co_spawn(io, Session(socket),
-                   [self, id](std::exception_ptr) { self->sessions.erase(id); });
+    asio::co_spawn(io, Session(socket), [self, id](std::exception_ptr) {
+      self->sessions.erase(id);
+    });
   }
 
   asio::awaitable<void> AcceptUnix() {
     while (!stopping) {
-      auto socket =
-          std::make_shared<asio::local::stream_protocol::socket>(io);
+      auto socket = std::make_shared<asio::local::stream_protocol::socket>(io);
       boost::system::error_code ec;
       co_await unix_acceptor->async_accept(
           *socket, asio::redirect_error(asio::use_awaitable, ec));
@@ -291,9 +294,8 @@ absl::StatusOr<std::unique_ptr<LineServer>> LineServer::Start(
       options.read_timeout <= std::chrono::steady_clock::duration::zero() ||
       options.write_timeout <= std::chrono::steady_clock::duration::zero())
     return Error(ErrorCode::kNetTargetInvalid, "invalid line server options");
-  auto state =
-      std::make_shared<State>(io, std::move(endpoint), std::move(handler),
-                              std::move(options));
+  auto state = std::make_shared<State>(io, std::move(endpoint),
+                                       std::move(handler), std::move(options));
   boost::system::error_code ec;
   if (state->endpoint.kind == LineEndpoint::Kind::Unix) {
     const auto& path = state->endpoint.address;
@@ -311,9 +313,11 @@ absl::StatusOr<std::unique_ptr<LineServer>> LineServer::Start(
         std::make_unique<asio::local::stream_protocol::acceptor>(io);
     state->unix_acceptor->open(asio::local::stream_protocol(), ec);
     if (!ec)
-      state->unix_acceptor->bind(
-          asio::local::stream_protocol::endpoint(path), ec);
-    if (!ec) state->unix_acceptor->listen(asio::socket_base::max_listen_connections, ec);
+      state->unix_acceptor->bind(asio::local::stream_protocol::endpoint(path),
+                                 ec);
+    if (!ec)
+      state->unix_acceptor->listen(asio::socket_base::max_listen_connections,
+                                   ec);
     if (ec) return Error(ErrorCode::kControlSocketFailed, ec.message());
     asio::co_spawn(io, state->AcceptUnix(), asio::detached);
   } else {
@@ -321,11 +325,15 @@ absl::StatusOr<std::unique_ptr<LineServer>> LineServer::Start(
     if (ec) return Error(ErrorCode::kNetTargetInvalid, "invalid TCP address");
     state->tcp_acceptor = std::make_unique<asio::ip::tcp::acceptor>(io);
     state->tcp_acceptor->open(asio::ip::tcp::v4(), ec);
-    if (!ec) state->tcp_acceptor->set_option(asio::socket_base::reuse_address(true), ec);
+    if (!ec)
+      state->tcp_acceptor->set_option(asio::socket_base::reuse_address(true),
+                                      ec);
     if (!ec)
       state->tcp_acceptor->bind(
           asio::ip::tcp::endpoint(address, state->endpoint.port), ec);
-    if (!ec) state->tcp_acceptor->listen(asio::socket_base::max_listen_connections, ec);
+    if (!ec)
+      state->tcp_acceptor->listen(asio::socket_base::max_listen_connections,
+                                  ec);
     if (ec) return Error(ErrorCode::kNetUnavailable, ec.message());
     state->bound_port = state->tcp_acceptor->local_endpoint().port();
     asio::co_spawn(io, state->AcceptTcp(), asio::detached);

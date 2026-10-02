@@ -247,9 +247,10 @@ absl::Status CheckBudgetTotals(const AppConfig& config) {
   }
   const UtcTime now{std::chrono::microseconds(0)};
   for (const auto& budget : config.risk_budgets) {
-    auto status = allocator.GrantInitial(
-        {budget.account, budget.asset, budget.shard, 1, budget.hard_limit,
-         now + *budget.valid_for}, now);
+    auto status =
+        allocator.GrantInitial({budget.account, budget.asset, budget.shard, 1,
+                                budget.hard_limit, now + *budget.valid_for},
+                               now);
     if (!status.ok()) {
       return Error(ErrorCode::kConfigBudgetInvalid, status.message());
     }
@@ -502,8 +503,7 @@ absl::StatusOr<AppConfig> ParseConfig(std::string_view yaml_text) {
                      "invalid or duplicate strategy_id");
       }
       if (*strategy != "simple_pmm")
-        return Error(ErrorCode::kConfigFieldInvalid,
-                     "unsupported strategy");
+        return Error(ErrorCode::kConfigFieldInvalid, "unsupported strategy");
       if (!accounts_by_name.contains(*account))
         return Error(ErrorCode::kConfigReferenceInvalid,
                      "unknown strategy account");
@@ -761,12 +761,13 @@ absl::StatusOr<AppConfig> ParseConfig(std::string_view yaml_text) {
         if (!account.ok()) return account.status();
         if (!ip.ok()) return ip.status();
         if (!endpoint.ok()) return endpoint.status();
-        if (!limit.ok() || *limit == 0 || *limit > UINT32_MAX ||
-            !window.ok() || *window == 0 || *window > INT64_MAX)
+        if (!limit.ok() || *limit == 0 || *limit > UINT32_MAX || !window.ok() ||
+            *window == 0 || *window > INT64_MAX)
           return Error(ErrorCode::kConfigBudgetInvalid,
                        "invalid rate capacity");
         config.rate_capacities.push_back(
-            {{*account, *ip, *endpoint}, static_cast<uint32_t>(*limit),
+            {{*account, *ip, *endpoint},
+             static_cast<uint32_t>(*limit),
              std::chrono::microseconds(static_cast<int64_t>(*window))});
       }
     }
@@ -774,11 +775,13 @@ absl::StatusOr<AppConfig> ParseConfig(std::string_view yaml_text) {
     std::map<RateLimitKey, RateCapacity> inferred_capacities;
     for (const auto& budget : config.rate_budgets) {
       RateLimitKey key{budget.account.value, budget.ip, budget.endpoint};
-      rate_grants.push_back({key, budget.shard, 1,
-                             {budget.limit, budget.cancel_reserve,
-                              budget.window, 0}});
-      auto [entry, inserted] = inferred_capacities.emplace(
-          key, RateCapacity{key, 0, budget.window});
+      rate_grants.push_back(
+          {key,
+           budget.shard,
+           1,
+           {budget.limit, budget.cancel_reserve, budget.window, 0}});
+      auto [entry, inserted] =
+          inferred_capacities.emplace(key, RateCapacity{key, 0, budget.window});
       if (!inserted && entry->second.window != budget.window)
         return Error(ErrorCode::kConfigBudgetInvalid,
                      "rate budget window mismatch");
@@ -795,19 +798,18 @@ absl::StatusOr<AppConfig> ParseConfig(std::string_view yaml_text) {
       for (const auto& [_, capacity] : inferred_capacities)
         config.rate_capacities.push_back(capacity);
     }
-    auto rate_status =
-        ValidateRateBudgets(config.rate_capacities, rate_grants);
+    auto rate_status = ValidateRateBudgets(config.rate_capacities, rate_grants);
     if (!rate_status.ok())
       return Error(ErrorCode::kConfigBudgetInvalid, rate_status.message());
     const bool live =
         config.market_data_source == MarketDataSource::BinancePublic;
     if (!config.risk.max_rule_age)
-      config.risk.max_rule_age = live ? std::chrono::hours(24)
-                                      : std::chrono::seconds(300);
+      config.risk.max_rule_age =
+          live ? std::chrono::hours(24) : std::chrono::seconds(300);
     for (auto& market : config.market_specs) {
       if (!market.stale_after)
-        market.stale_after = live ? std::chrono::seconds(5)
-                                  : std::chrono::seconds(60);
+        market.stale_after =
+            live ? std::chrono::seconds(5) : std::chrono::seconds(60);
     }
     return config;
   } catch (const YAML::Exception&) {

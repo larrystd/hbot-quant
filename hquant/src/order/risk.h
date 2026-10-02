@@ -49,7 +49,7 @@ class RiskBudgetAllocator {
                                     const AssetId& asset, const Decimal& limit);
   absl::Status GrantInitial(RiskBudget budget, UtcTime now);
   absl::Status RenewAfterOrderQuery(RiskBudget budget, UtcTime now,
-                                        bool account_fresh);
+                                    bool account_fresh);
   absl::StatusOr<RiskBudget> FindBudget(const AccountId& account,
                                         const AssetId& asset,
                                         ShardId shard) const;
@@ -83,7 +83,7 @@ class RiskGate {
   absl::Status SetInitialBudget(RiskBudget budget);
   // Reconciliation may extend the expiry and version, never the allocation.
   absl::Status RenewAfterOrderQuery(RiskBudget budget, UtcTime now,
-                                        bool account_fresh);
+                                    bool account_fresh);
   absl::StatusOr<FundsHold> TryHold(const StrategyId& strategy_id,
                                     const OrderRequest& request,
                                     const MarketSpec& market,

@@ -189,16 +189,16 @@ int main() {
   auto public_market = hquant::ParseConfig(
       Replace(kValid, "replay_fixture: examples/replay_market.json",
               "market_data_source: binance_public"));
-  Require(public_market.ok() &&
-              public_market->market_data_source ==
-                  hquant::MarketDataSource::BinancePublic &&
-              !public_market->replay_fixture &&
-              public_market->risk.max_rule_age == std::chrono::hours(24) &&
-              public_market->market_specs[0].stale_after ==
-                  std::chrono::seconds(5) &&
-              public_market->risk_budgets[0].valid_for ==
-                  std::chrono::hours(24),
-          "explicit public source");
+  Require(
+      public_market.ok() &&
+          public_market->market_data_source ==
+              hquant::MarketDataSource::BinancePublic &&
+          !public_market->replay_fixture &&
+          public_market->risk.max_rule_age == std::chrono::hours(24) &&
+          public_market->market_specs[0].stale_after ==
+              std::chrono::seconds(5) &&
+          public_market->risk_budgets[0].valid_for == std::chrono::hours(24),
+      "explicit public source");
   auto conflicting_sources = hquant::ParseConfig(
       Replace(kValid, "replay_fixture: examples/replay_market.json",
               "market_data_source: binance_public\nreplay_fixture: "

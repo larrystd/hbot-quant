@@ -123,9 +123,8 @@ TrackerResult OrderTracker::MakeResult(
   result.changed = changed;
   result.cancel_pending = order.cancel_pending;
   result.confirmation = order.confirmation;
-  result.needs_order_query =
-      order.completion_pending_fills ||
-      order.confirmation != ConfirmationState::Confirmed;
+  result.needs_order_query = order.completion_pending_fills ||
+                             order.confirmation != ConfirmationState::Confirmed;
   return result;
 }
 
@@ -169,8 +168,8 @@ absl::StatusOr<OrderTracker::TrackedOrder*> OrderTracker::Find(
     if (found != orders_.end()) by_client = &found->second;
   }
   if (exchange_order_id) {
-    auto found =
-        exchange_index_.find(ExchangeIndexKey(account, market, *exchange_order_id));
+    auto found = exchange_index_.find(
+        ExchangeIndexKey(account, market, *exchange_order_id));
     if (found != exchange_index_.end()) {
       auto order = orders_.find(found->second);
       if (order != orders_.end()) by_exchange = &order->second;
@@ -207,7 +206,8 @@ absl::StatusOr<OrderTracker::TrackedOrder*> OrderTracker::Find(
 }
 
 absl::Status OrderTracker::BindExchangeId(
-    TrackedOrder& order, const std::optional<ExchangeOrderId>& exchange_order_id) {
+    TrackedOrder& order,
+    const std::optional<ExchangeOrderId>& exchange_order_id) {
   if (!exchange_order_id) return absl::OkStatus();
   if (order.exchange_order_id) {
     if (*order.exchange_order_id != *exchange_order_id) {
@@ -325,8 +325,7 @@ absl::StatusOr<TrackerResult> OrderTracker::Update(const OrderUpdate& update,
     changed = true;
   }
   if (order.confirmation == ConfirmationState::SubmissionUnknown ||
-      (queried_order &&
-       order.confirmation == ConfirmationState::NeedsQuery)) {
+      (queried_order && order.confirmation == ConfirmationState::NeedsQuery)) {
     order.confirmation = ConfirmationState::Confirmed;
     changed = true;
   }

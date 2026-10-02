@@ -69,9 +69,7 @@ uint64_t Shard::AppliedDiffs() const {
   return stream_ ? stream_->AppliedDiffs() : 0;
 }
 
-uint64_t Shard::Resyncs() const {
-  return stream_ ? stream_->Resyncs() : 0;
-}
+uint64_t Shard::Resyncs() const { return stream_ ? stream_->Resyncs() : 0; }
 
 boost::asio::awaitable<void> Shard::TimerLoop() {
   boost::asio::steady_timer timer(*io_);
@@ -98,8 +96,9 @@ void Shard::StartFeed(FeedEndpoint rest, FeedEndpoint websocket) {
   http_ = std::make_unique<HttpClient>(*io_, rest.host,
                                        std::to_string(rest.port), rest_tls);
   std::string symbol = config_.market.market.native_symbol;
-  std::transform(symbol.begin(), symbol.end(), symbol.begin(),
-                 [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+  std::transform(
+      symbol.begin(), symbol.end(), symbol.begin(),
+      [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
   websocket_ = std::make_unique<WebSocketClient>(
       *io_, websocket.host, std::to_string(websocket.port),
       "/stream?streams=" + symbol + "@depth/" + symbol + "@trade", ws_tls);
@@ -107,8 +106,8 @@ void Shard::StartFeed(FeedEndpoint rest, FeedEndpoint websocket) {
   stream_config.symbol = config_.market.market.native_symbol;
   stream_ = std::make_unique<binance_spot::MarketDataStream>(
       stream_config,
-      binance_spot::DepthParser(config_.market.market, config_.scale),
-      *http_, *websocket_, MutableBookSync(), clock_,
+      binance_spot::DepthParser(config_.market.market, config_.scale), *http_,
+      *websocket_, MutableBookSync(), clock_,
       binance_spot::StreamCallbacks{
           [this](const BookApplyResult& result) {
             if (result.state == BookSyncState::Live)
@@ -303,7 +302,8 @@ absl::StatusOr<std::vector<ActionResult>> Shard::RunStrategy(
         if (!registered.ok()) return registered.status();
         order_ids_.push_back(result.prepared->client_order_id);
         if (result.hold_id)
-          holds_.emplace(result.prepared->client_order_id.value, *result.hold_id);
+          holds_.emplace(result.prepared->client_order_id.value,
+                         *result.hold_id);
       }
       auto status = DrainSimulatedExchangeEvents();
       if (!status.ok()) return status;
@@ -344,7 +344,8 @@ void Shard::AddGap(uint64_t sequence) {
     local_gaps_.back().last_seq = sequence;
   } else {
     local_gaps_.push_back(OrderHistoryGap{config_.run, config_.shard, sequence,
-                                     sequence, ErrorCode::kOrderHistoryQueueFull});
+                                          sequence,
+                                          ErrorCode::kOrderHistoryQueueFull});
   }
 }
 

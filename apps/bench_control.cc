@@ -144,8 +144,8 @@ asio::awaitable<void> OneRequest(asio::io_context& io, const std::string& path,
   if (!response.ok()) {
     result.AddError(CodeOf(response.status()));
   } else if (response->request_id != request_id ||
-             (history &&
-              !std::holds_alternative<OrderHistoryResponse>(response->payload)) ||
+             (history && !std::holds_alternative<OrderHistoryResponse>(
+                             response->payload)) ||
              (!history &&
               !std::holds_alternative<StatusResponse>(response->payload))) {
     if (const auto* error = std::get_if<ControlError>(&response->payload))
@@ -157,13 +157,11 @@ asio::awaitable<void> OneRequest(asio::io_context& io, const std::string& path,
   }
 }
 
-asio::awaitable<void> ClosedClient(asio::io_context& io,
-                                   const std::string& path,
-                                   const ControlBenchOptions& options,
-                                   ThreadStats& stats,
-                                   Clock::time_point measure_start,
-                                   Clock::time_point end, uint64_t client_order_id,
-                                   uint64_t& sequence) {
+asio::awaitable<void> ClosedClient(
+    asio::io_context& io, const std::string& path,
+    const ControlBenchOptions& options, ThreadStats& stats,
+    Clock::time_point measure_start, Clock::time_point end,
+    uint64_t client_order_id, uint64_t& sequence) {
   while (Clock::now() < end) {
     const bool history = (sequence++ % 100) >= options.status_percent;
     co_await OneRequest(io, path, stats, history, client_order_id,

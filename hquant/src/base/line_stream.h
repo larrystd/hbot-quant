@@ -54,10 +54,8 @@ class LineServer {
   struct Options {
     size_t max_sessions = 16;
     size_t max_frame = 64 * 1024;
-    std::chrono::steady_clock::duration read_timeout =
-        std::chrono::seconds(2);
-    std::chrono::steady_clock::duration write_timeout =
-        std::chrono::seconds(2);
+    std::chrono::steady_clock::duration read_timeout = std::chrono::seconds(2);
+    std::chrono::steady_clock::duration write_timeout = std::chrono::seconds(2);
     std::string busy_reply;
     std::string invalid_reply;
   };

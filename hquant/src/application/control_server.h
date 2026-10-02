@@ -47,7 +47,8 @@ struct ControlError {
   std::string message;
 };
 using ControlResponsePayload =
-    std::variant<StatusResponse, OrderHistoryResponse, StopResponse, ControlError>;
+    std::variant<StatusResponse, OrderHistoryResponse, StopResponse,
+                 ControlError>;
 
 struct ControlResponse {
   uint32_t schema_version = 2;
@@ -67,8 +68,8 @@ absl::StatusOr<ControlResponse> DecodeControlResponse(std::string_view json);
 // as coroutines on the management io_context.
 class ControlServer {
  public:
-  using Handler = std::function<boost::asio::awaitable<ControlResponse>(
-      ControlRequest)>;
+  using Handler =
+      std::function<boost::asio::awaitable<ControlResponse>(ControlRequest)>;
 
   static absl::StatusOr<std::unique_ptr<ControlServer>> Start(
       std::string socket_path, Handler handler,

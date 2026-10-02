@@ -33,9 +33,9 @@ class SqliteOrderHistoryReader final : public OrderHistoryReader {
   SqliteOrderHistoryReader& operator=(const SqliteOrderHistoryReader&) = delete;
 
   absl::Status TrySubmit(OrderHistoryQuery query) override;
-  absl::Status TrySubmitAsync(
-      OrderHistoryQuery query, boost::asio::any_io_executor executor,
-      std::function<void(OrderHistoryPage)> completion);
+  absl::Status TrySubmitAsync(OrderHistoryQuery query,
+                              boost::asio::any_io_executor executor,
+                              std::function<void(OrderHistoryPage)> completion);
   // nullopt means no response yet. Every accepted query eventually returns a
   // page with matching request_id and OK or non-OK status.
   std::optional<OrderHistoryPage> TryReceive() override;
@@ -76,6 +76,6 @@ struct PreviousRun {
 };
 
 absl::StatusOr<PreviousRun> LoadPreviousRun(const std::string& path,
-                                                      RunId run_id);
+                                            RunId run_id);
 
 }  // namespace hquant

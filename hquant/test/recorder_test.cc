@@ -1,5 +1,3 @@
-#include "order_history/order_history_writer.h"
-
 #include <unistd.h>
 
 #include <chrono>
@@ -13,8 +11,9 @@
 #include "base/error.h"
 #include "base/types.h"
 #include "gtest/gtest.h"
-#include "sqlite3.h"
 #include "order_history/order_history_reader.h"
+#include "order_history/order_history_writer.h"
+#include "sqlite3.h"
 
 namespace hquant {
 namespace {
@@ -51,7 +50,7 @@ StrategyId MakeStrategyId() {
 }
 
 OrderHistoryRecord PreparedRecord(uint64_t sequence, RunId run = RunId{11},
-                             ShardId shard = ShardId{0}) {
+                                  ShardId shard = ShardId{0}) {
   PreparedOrder prepared;
   prepared.client_order_id = ClientOrderId{"B1"};
   prepared.strategy_id = MakeStrategyId();
@@ -341,12 +340,14 @@ TEST(StorageTest, WriteFailureMarksGapAndHistoryQueryReportsErrors) {
   ASSERT_EQ(page->rows.size(), 1);
   EXPECT_EQ(page->rows[0].shard_sequence, 2);
   ASSERT_EQ(page->incomplete_ranges.size(), 1);
-  EXPECT_EQ(page->incomplete_ranges[0].reason, ErrorCode::kOrderHistoryWriteFailed);
+  EXPECT_EQ(page->incomplete_ranges[0].reason,
+            ErrorCode::kOrderHistoryWriteFailed);
 }
 
 TEST(StorageTest, ReadsAndMigratesLegacyGapReasons) {
   TemporaryDatabase db;
-  auto first = SqliteOrderHistoryWriter::Open({db.path(), RunId{11}, At(100), 1, 1});
+  auto first =
+      SqliteOrderHistoryWriter::Open({db.path(), RunId{11}, At(100), 1, 1});
   ASSERT_TRUE(first.ok()) << first.status();
   (*first)->PauseWorkerForTesting(true);
   ASSERT_TRUE((*first)->TryPush(PreparedRecord(1)));
@@ -376,7 +377,8 @@ TEST(StorageTest, ReadsAndMigratesLegacyGapReasons) {
     ASSERT_TRUE(page);
     ASSERT_TRUE(page->status.ok()) << page->status;
     ASSERT_EQ(page->incomplete_ranges.size(), 1);
-    EXPECT_EQ(page->incomplete_ranges[0].reason, ErrorCode::kOrderHistoryQueueFull);
+    EXPECT_EQ(page->incomplete_ranges[0].reason,
+              ErrorCode::kOrderHistoryQueueFull);
   }
 
   auto second =
@@ -390,8 +392,9 @@ TEST(StorageTest, ReadsAndMigratesLegacyGapReasons) {
                                &statement, nullptr),
             SQLITE_OK);
   ASSERT_EQ(sqlite3_step(statement), SQLITE_ROW);
-  EXPECT_EQ(sqlite3_column_int(statement, 0),
-            static_cast<int>(StoredErrorNumber(ErrorCode::kOrderHistoryQueueFull)));
+  EXPECT_EQ(
+      sqlite3_column_int(statement, 0),
+      static_cast<int>(StoredErrorNumber(ErrorCode::kOrderHistoryQueueFull)));
   sqlite3_finalize(statement);
   ASSERT_EQ(
       sqlite3_prepare_v2(raw, "SELECT MAX(version) FROM schema_migrations", -1,

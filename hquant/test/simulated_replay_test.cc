@@ -13,9 +13,9 @@
 #include "gtest/gtest.h"
 #include "order/risk.h"
 #include "order/simulated_exchange.h"
-#include "shard/shard.h"
 #include "order_history/order_history_reader.h"
 #include "order_history/order_history_writer.h"
+#include "shard/shard.h"
 #include "strategy/simple_pmm.h"
 
 namespace hquant {
@@ -88,8 +88,8 @@ std::string ReplayOnce() {
            .ok()) {
     throw std::runtime_error("risk budget setup failed");
   }
-  auto recorder =
-      SqliteOrderHistoryWriter::Open({database.path(), RunId{1}, origin, 64, 8});
+  auto recorder = SqliteOrderHistoryWriter::Open(
+      {database.path(), RunId{1}, origin, 64, 8});
   if (!recorder.ok())
     throw std::runtime_error(std::string(recorder.status().message()));
   Shard shard({RunId{1}, ShardId{0}, strategy_id, account, spec, scale, rule},

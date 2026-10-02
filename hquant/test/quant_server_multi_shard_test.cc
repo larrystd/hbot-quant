@@ -84,7 +84,8 @@ std::string GetStatus(const std::string& directory) {
   request.request_id = 1;
   request.payload = StatusRequest{};
   auto response = SendControlRequest(directory, request);
-  if (!response.ok()) throw std::runtime_error(std::string(response.status().message()));
+  if (!response.ok())
+    throw std::runtime_error(std::string(response.status().message()));
   const auto* status = std::get_if<StatusResponse>(&response->payload);
   if (!status) throw std::runtime_error("status request failed");
   return status->json;
@@ -100,13 +101,15 @@ struct RunResult {
 
 RunResult InspectRun(const std::string& path, std::string status) {
   sqlite3* db = nullptr;
-  if (sqlite3_open_v2(path.c_str(), &db, SQLITE_OPEN_READONLY, nullptr) != SQLITE_OK)
+  if (sqlite3_open_v2(path.c_str(), &db, SQLITE_OPEN_READONLY, nullptr) !=
+      SQLITE_OK)
     throw std::runtime_error("open history failed");
   RunResult result;
   result.status = std::move(status);
   sqlite3_stmt* query = nullptr;
-  const char* sql = "SELECT shard,shard_sequence,received_at_us,payload_kind,record_blob "
-                    "FROM history_records ORDER BY shard,shard_sequence";
+  const char* sql =
+      "SELECT shard,shard_sequence,received_at_us,payload_kind,record_blob "
+      "FROM history_records ORDER BY shard,shard_sequence";
   if (sqlite3_prepare_v2(db, sql, -1, &query, nullptr) != SQLITE_OK)
     throw std::runtime_error("prepare history failed");
   while (sqlite3_step(query) == SQLITE_ROW) {
@@ -116,24 +119,24 @@ RunResult InspectRun(const std::string& path, std::string status) {
                                     sqlite3_column_int(query, 3));
     const auto* blob = static_cast<const char*>(sqlite3_column_blob(query, 4));
     const int length = sqlite3_column_bytes(query, 4);
-    auto record = storage_internal::DecodeRecord(std::string_view(blob, length));
+    auto record =
+        storage_internal::DecodeRecord(std::string_view(blob, length));
     if (!record.ok()) throw std::runtime_error("decode history failed");
     if (const auto* order = std::get_if<PreparedOrder>(&record->payload)) {
       result.orders[shard].push_back(
           std::to_string(static_cast<int>(order->request.side)) + ":" +
           order->request.quantity.ToString() + ":" +
-          (order->request.limit_price
-               ? order->request.limit_price->ToString()
-               : std::string("market")));
+          (order->request.limit_price ? order->request.limit_price->ToString()
+                                      : std::string("market")));
     }
   }
   sqlite3_finalize(query);
-  if (sqlite3_prepare_v2(db,
-                         "SELECT clean_stopped_at_us IS NOT NULL FROM run_manifest",
-                         -1, &query, nullptr) != SQLITE_OK)
+  if (sqlite3_prepare_v2(
+          db, "SELECT clean_stopped_at_us IS NOT NULL FROM run_manifest", -1,
+          &query, nullptr) != SQLITE_OK)
     throw std::runtime_error("prepare manifest failed");
-  result.clean = sqlite3_step(query) == SQLITE_ROW &&
-                 sqlite3_column_int(query, 0) == 1;
+  result.clean =
+      sqlite3_step(query) == SQLITE_ROW && sqlite3_column_int(query, 0) == 1;
   sqlite3_finalize(query);
   sqlite3_close(db);
   return result;
@@ -142,7 +145,8 @@ RunResult InspectRun(const std::string& path, std::string status) {
 RunResult RunReplay(AppConfig config) {
   TemporaryDirectory directory;
   auto server = QuantServer::Create(config, directory.path());
-  if (!server.ok()) throw std::runtime_error(std::string(server.status().message()));
+  if (!server.ok())
+    throw std::runtime_error(std::string(server.status().message()));
   auto started = (*server)->Start();
   if (!started.ok()) throw std::runtime_error(std::string(started.message()));
   const auto status = GetStatus(directory.path());
@@ -170,7 +174,8 @@ uint16_t FreePort() {
 
 TEST(QuantServerMultiShardTest, ReplayMatchesIndependentShardsAndStopsCleanly) {
   const auto root = RunfilesRoot();
-  auto loaded = LoadConfig((root / "examples/simulated_replay_multi.yaml").string());
+  auto loaded =
+      LoadConfig((root / "examples/simulated_replay_multi.yaml").string());
   ASSERT_TRUE(loaded.ok()) << loaded.status();
   loaded->replay_fixture =
       (root / "examples/replay_market_multi.json").string();
@@ -195,13 +200,15 @@ TEST(QuantServerMultiShardTest, ReplayMatchesIndependentShardsAndStopsCleanly) {
     isolated.market_specs = {loaded->market_specs[index]};
     isolated.strategy_configs = {loaded->strategy_configs[index]};
     isolated.risk_budgets.erase(
-        std::remove_if(isolated.risk_budgets.begin(), isolated.risk_budgets.end(),
+        std::remove_if(isolated.risk_budgets.begin(),
+                       isolated.risk_budgets.end(),
                        [&](const auto& budget) {
                          return budget.shard != isolated.assignments[0].shard;
                        }),
         isolated.risk_budgets.end());
     isolated.rate_budgets.erase(
-        std::remove_if(isolated.rate_budgets.begin(), isolated.rate_budgets.end(),
+        std::remove_if(isolated.rate_budgets.begin(),
+                       isolated.rate_budgets.end(),
                        [&](const auto& budget) {
                          return budget.shard != isolated.assignments[0].shard;
                        }),
@@ -258,15 +265,16 @@ TEST(QuantServerMultiShardTest, RejectsInvalidAssignmentsAndBudgets) {
     ASSERT_FALSE(parsed.ok()) << from;
     EXPECT_EQ(CodeOf(parsed.status()), expected) << from;
   }
-  const auto capped = ParseConfig(ReplaceOnce(
-      yaml,
-      "rate_capacities:\n  - account: btc_account\n    ip: local\n"
-      "    endpoint: order\n    limit: 100",
-      "rate_capacities:\n  - account: btc_account\n    ip: local\n"
-      "    endpoint: order\n    limit: 50"));
+  const auto capped = ParseConfig(
+      ReplaceOnce(yaml,
+                  "rate_capacities:\n  - account: btc_account\n    ip: local\n"
+                  "    endpoint: order\n    limit: 100",
+                  "rate_capacities:\n  - account: btc_account\n    ip: local\n"
+                  "    endpoint: order\n    limit: 50"));
   ASSERT_FALSE(capped.ok());
   EXPECT_EQ(CodeOf(capped.status()), ErrorCode::kConfigBudgetInvalid);
-  const auto no_capacities = ParseConfig(yaml.substr(0, yaml.find("rate_capacities:")));
+  const auto no_capacities =
+      ParseConfig(yaml.substr(0, yaml.find("rate_capacities:")));
   ASSERT_FALSE(no_capacities.ok());
   EXPECT_EQ(CodeOf(no_capacities.status()), ErrorCode::kConfigBudgetInvalid);
   auto valid = ParseConfig(yaml);
@@ -302,7 +310,8 @@ TEST(QuantServerMultiShardTest, RejectsInvalidAssignmentsAndBudgets) {
   EXPECT_EQ(CodeOf(rate_overgrant.status()), ErrorCode::kConfigBudgetInvalid);
   direct = ParseConfig(yaml);
   ASSERT_TRUE(direct.ok());
-  direct->rate_budgets.front().account = direct->assignments[1].accounts.front();
+  direct->rate_budgets.front().account =
+      direct->assignments[1].accounts.front();
   auto wrong_rate_owner = QuantServer::Create(*direct, directory.path());
   ASSERT_FALSE(wrong_rate_owner.ok());
   EXPECT_EQ(CodeOf(wrong_rate_owner.status()), ErrorCode::kConfigBudgetInvalid);
@@ -317,7 +326,8 @@ TEST(QuantServerMultiShardTest, RejectsInvalidAssignmentsAndBudgets) {
 TEST(QuantServerMultiShardTest, LiveFeedReportsBothShardsAndStopsCleanly) {
   if (std::thread::hardware_concurrency() < 2) GTEST_SKIP();
   const auto root = RunfilesRoot();
-  auto config = LoadConfig((root / "examples/simulated_replay_multi.yaml").string());
+  auto config =
+      LoadConfig((root / "examples/simulated_replay_multi.yaml").string());
   ASSERT_TRUE(config.ok()) << config.status();
   const uint16_t port = FreePort();
   config->market_data_source = MarketDataSource::BinancePublic;
@@ -359,8 +369,10 @@ TEST(QuantServerMultiShardTest, LiveFeedReportsBothShardsAndStopsCleanly) {
       continue;
     }
     if (status.find("\"active_shards\":2") != std::string::npos &&
-        status.find("\"market\":\"BTCUSDT\",\"book\":\"Live\"") != std::string::npos &&
-        status.find("\"market\":\"ETHUSDT\",\"book\":\"Live\"") != std::string::npos &&
+        status.find("\"market\":\"BTCUSDT\",\"book\":\"Live\"") !=
+            std::string::npos &&
+        status.find("\"market\":\"ETHUSDT\",\"book\":\"Live\"") !=
+            std::string::npos &&
         status.find("\"strategy_invocations\":0") == std::string::npos) {
       both_live = true;
       break;
@@ -382,7 +394,8 @@ TEST(QuantServerMultiShardTest, LiveFeedReportsBothShardsAndStopsCleanly) {
 
 TEST(QuantServerMultiShardTest, V1ReplayIsRejectedForMultipleShards) {
   const auto root = RunfilesRoot();
-  auto config = LoadConfig((root / "examples/simulated_replay_multi.yaml").string());
+  auto config =
+      LoadConfig((root / "examples/simulated_replay_multi.yaml").string());
   ASSERT_TRUE(config.ok());
   config->replay_fixture = (root / "examples/replay_market.json").string();
   TemporaryDirectory directory;
@@ -395,7 +408,8 @@ TEST(QuantServerMultiShardTest, V1ReplayIsRejectedForMultipleShards) {
 
 TEST(QuantServerMultiShardTest, RejectsUnknownReplayRoutes) {
   const auto root = RunfilesRoot();
-  auto config = LoadConfig((root / "examples/simulated_replay_multi.yaml").string());
+  auto config =
+      LoadConfig((root / "examples/simulated_replay_multi.yaml").string());
   ASSERT_TRUE(config.ok());
   const auto fixture = ReadFile(root / "examples/replay_market_multi.json");
   for (const auto& [from, to] :

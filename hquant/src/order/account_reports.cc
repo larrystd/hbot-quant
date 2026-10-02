@@ -109,9 +109,9 @@ absl::StatusOr<EventTime> ReportTime(simdjson::dom::element data,
 }
 
 absl::StatusOr<AccountPushBatch> ExecutionReport(simdjson::dom::element data,
-                                                   const AccountId& account,
-                                                   const ExchangeId& exchange,
-                                                   EventTime received) {
+                                                 const AccountId& account,
+                                                 const ExchangeId& exchange,
+                                                 EventTime received) {
   auto symbol = field::Text(data, "s");
   auto client = field::Text(data, "c");
   auto execution = field::Text(data, "x");
@@ -148,7 +148,8 @@ absl::StatusOr<AccountPushBatch> ExecutionReport(simdjson::dom::element data,
   const MarketId market{exchange, InstrumentKind::Spot, std::string(*symbol)};
   const ClientOrderId client_order_id{std::string(original)};
   std::optional<ExchangeOrderId> exchange_order_id;
-  if (*order_id > 0) exchange_order_id = ExchangeOrderId(std::to_string(*order_id));
+  if (*order_id > 0)
+    exchange_order_id = ExchangeOrderId(std::to_string(*order_id));
   AccountPushBatch batch;
   if (*execution == "TRADE") {
     auto trade_id = field::Integer(data, "t");
@@ -202,8 +203,8 @@ absl::StatusOr<AccountPushBatch> ExecutionReport(simdjson::dom::element data,
 }
 
 absl::StatusOr<AccountPushBatch> AccountPosition(simdjson::dom::element data,
-                                                   const AccountId& account,
-                                                   EventTime received) {
+                                                 const AccountId& account,
+                                                 EventTime received) {
   auto time = ReportTime(data, received);
   if (!time.ok()) return time.status();
   simdjson::dom::array balances;
@@ -281,7 +282,8 @@ absl::StatusOr<T> RestResult(absl::StatusOr<T> result) {
       code == ErrorCode::kOrderQueryResponseTooLarge) {
     return result.status();
   }
-  return Error(ErrorCode::kOrderQueryResponseInvalid, result.status().message());
+  return Error(ErrorCode::kOrderQueryResponseInvalid,
+               result.status().message());
 }
 
 std::string Encode(std::string_view raw) {
@@ -511,7 +513,7 @@ absl::StatusOr<StartupQueryPlan> PlanStartupQueries(
 
 boost::asio::awaitable<absl::StatusOr<OrderQueryResult>>
 OrderQueryClient::QueryOrder(OrderToQuery target, EventTime received,
-                            std::chrono::steady_clock::time_point deadline) {
+                             std::chrono::steady_clock::time_point deadline) {
   if (target.account.value.empty() || !ValidMarket(target.market) ||
       target.client_order_id.value.empty() || limits_.max_trade_pages == 0 ||
       limits_.trades_per_page == 0 || limits_.trades_per_page > 1000 ||
@@ -526,8 +528,8 @@ OrderQueryClient::QueryOrder(OrderToQuery target, EventTime received,
       "&origClientOrderId=" + Encode(target.client_order_id.value);
   auto order_response = co_await rest_.GetSigned(order_path, deadline);
   if (!order_response.ok()) {
-    batch.unresolved_status = Error(ErrorCode::kOrderQueryFailed,
-                                    order_response.status().message());
+    batch.unresolved_status =
+        Error(ErrorCode::kOrderQueryFailed, order_response.status().message());
     co_return batch;
   }
   if (order_response->status != 200) {
@@ -574,8 +576,8 @@ OrderQueryClient::QueryOrder(OrderToQuery target, EventTime received,
                                       "trade response too large");
       co_return batch;
     }
-    auto trades =
-        RestResult(ParseTrades(response->body, target, exchange_order_id, received));
+    auto trades = RestResult(
+        ParseTrades(response->body, target, exchange_order_id, received));
     if (!trades.ok()) {
       batch.unresolved_status = trades.status();
       co_return batch;
@@ -658,11 +660,9 @@ OrderQueryClient::ListOpenOrders(
       "/api/v3/openOrders?symbol=" + Encode(market.native_symbol);
   auto response = co_await rest_.GetSigned(path, deadline);
   if (!response.ok())
-    co_return Error(ErrorCode::kOrderQueryFailed,
-                    response.status().message());
+    co_return Error(ErrorCode::kOrderQueryFailed, response.status().message());
   if (response->status != 200) {
-    co_return Error(ErrorCode::kOrderQueryFailed,
-                    "open orders query failed");
+    co_return Error(ErrorCode::kOrderQueryFailed, "open orders query failed");
   }
   if (response->body.size() > limits_.max_response_bytes) {
     co_return Error(ErrorCode::kOrderQueryResponseTooLarge,
@@ -697,11 +697,9 @@ OrderQueryClient::ListRecentOrders(
       "&endTime=" + std::to_string(end_ms) + "&limit=1000";
   auto response = co_await rest_.GetSigned(path, deadline);
   if (!response.ok())
-    co_return Error(ErrorCode::kOrderQueryFailed,
-                    response.status().message());
+    co_return Error(ErrorCode::kOrderQueryFailed, response.status().message());
   if (response->status != 200) {
-    co_return Error(ErrorCode::kOrderQueryFailed,
-                    "recent orders query failed");
+    co_return Error(ErrorCode::kOrderQueryFailed, "recent orders query failed");
   }
   if (response->body.size() > limits_.max_response_bytes) {
     co_return Error(ErrorCode::kOrderQueryResponseTooLarge,
