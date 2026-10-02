@@ -182,10 +182,10 @@ TEST(SimulatedExchangeTest, ReplaysAllSimulatedExchangeCasesStepByStep) {
         } else
           EXPECT_TRUE(started.ok()) << started;
       } else if (kind == "cancel") {
-        EXPECT_TRUE(
-            sim_exchange
-                .StartCancel(strategy_id, ClientOrderId(S(event, "client_order_id")))
-                .ok());
+        EXPECT_TRUE(sim_exchange
+                        .StartCancel(strategy_id,
+                                     ClientOrderId(S(event, "client_order_id")))
+                        .ok());
       } else if (kind == "book_bbo") {
         EXPECT_TRUE(
             sim_exchange.OnBookBbo(D(S(event, "bid")), D(S(event, "ask")))

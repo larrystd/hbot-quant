@@ -91,8 +91,9 @@ bool ValidateSetup(const std::string& family, simdjson::dom::element setup) {
   }
   if (family == "order_tracker") {
     std::string client_order_id, side;
-    return String(setup, "client_order_id", &client_order_id) && !client_order_id.empty() &&
-           String(setup, "side", &side) && OneOf(side, {"Buy", "Sell"}) &&
+    return String(setup, "client_order_id", &client_order_id) &&
+           !client_order_id.empty() && String(setup, "side", &side) &&
+           OneOf(side, {"Buy", "Sell"}) &&
            PositiveDecimalString(setup, "quantity") &&
            PositiveDecimalString(setup, "limit_price") &&
            DecimalMap(setup, "initial_reservation_by_asset");

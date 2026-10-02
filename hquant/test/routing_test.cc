@@ -26,7 +26,8 @@ OrderUpdate Update(std::string client, std::string exchange = "") {
   OrderUpdate update;
   update.account = AccountId("account-a");
   update.market = Market();
-  if (!client.empty()) update.client_order_id = ClientOrderId(std::move(client));
+  if (!client.empty())
+    update.client_order_id = ClientOrderId(std::move(client));
   if (!exchange.empty())
     update.exchange_order_id = ExchangeOrderId(std::move(exchange));
   return update;

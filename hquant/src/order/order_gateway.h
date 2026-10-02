@@ -37,9 +37,10 @@ struct DecodedClientOrderId {
 // within one run. Enable live trading only after the target exchange accepts
 // and echoes this form.
 absl::StatusOr<ClientOrderId> EncodeClientOrderId(const StrategyId& strategy_id,
-                                             RunId run, ShardId shard,
-                                             uint32_t shard_sequence);
-absl::StatusOr<DecodedClientOrderId> DecodeClientOrderId(const ClientOrderId& id);
+                                                  RunId run, ShardId shard,
+                                                  uint32_t shard_sequence);
+absl::StatusOr<DecodedClientOrderId> DecodeClientOrderId(
+    const ClientOrderId& id);
 
 }  // namespace hquant::binance_spot
 

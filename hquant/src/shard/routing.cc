@@ -81,7 +81,8 @@ absl::Status OrderStrategyIndex::RegisterClient(ClientOrderId client_order_id,
 
 absl::Status OrderStrategyIndex::RegisterExchange(
     AccountId account, MarketId market, ExchangeOrderId exchange_order_id,
-    const StrategyId& strategy_id, std::optional<ClientOrderId> client_order_id) {
+    const StrategyId& strategy_id,
+    std::optional<ClientOrderId> client_order_id) {
   if (exchange_order_id.value.empty() || account.value.empty() ||
       market.exchange.value.empty() || market.native_symbol.empty()) {
     return Error(ErrorCode::kRouteReportInvalid,
@@ -101,8 +102,8 @@ absl::Status OrderStrategyIndex::RegisterExchange(
                    "exchange/client strategy conflict");
     }
   }
-  auto [it, inserted] =
-      exchanges_.emplace(Key(account, market, exchange_order_id), strategy_id.value);
+  auto [it, inserted] = exchanges_.emplace(
+      Key(account, market, exchange_order_id), strategy_id.value);
   if (!inserted && it->second != strategy_id.value) {
     return Error(ErrorCode::kRouteStrategyConflict,
                  "exchange ID strategy conflict");
@@ -115,7 +116,8 @@ absl::StatusOr<OrderRoute> OrderStrategyIndex::Resolve(
     const std::optional<ClientOrderId>& client_order_id,
     const std::optional<ExchangeOrderId>& exchange_order_id) const {
   if (account.value.empty() || market.exchange.value.empty() ||
-      market.native_symbol.empty() || (client_order_id && client_order_id->value.empty()) ||
+      market.native_symbol.empty() ||
+      (client_order_id && client_order_id->value.empty()) ||
       (exchange_order_id && exchange_order_id->value.empty())) {
     return Error(ErrorCode::kRouteReportInvalid,
                  "invalid private report identity");
@@ -148,7 +150,8 @@ absl::StatusOr<OrderRoute> OrderStrategyIndex::Resolve(
     }
   }
   if (exchange_order_id) {
-    const auto found = exchanges_.find(Key(account, market, *exchange_order_id));
+    const auto found =
+        exchanges_.find(Key(account, market, *exchange_order_id));
     if (found != exchanges_.end()) {
       auto status = merge(found->second);
       if (!status.ok()) return status;
@@ -246,7 +249,8 @@ RouteResult AccountReportRouter::Route(AccountReport report) {
     return Quarantine(std::move(report), std::move(result));
   }
   result.source_sequence = next_source_sequence_++;
-  auto route = index_.Resolve(account, market, client_order_id, exchange_order_id);
+  auto route =
+      index_.Resolve(account, market, client_order_id, exchange_order_id);
   if (!route.ok()) {
     result.failure = CodeOf(route.status());
     return Quarantine(std::move(report), std::move(result));

@@ -179,8 +179,7 @@ void CheckOutput(const TrackerResult& result, const PreparedOrder& prepared,
             String(expected, "display_state"));
   ExpectDecimal(result.snapshot.traded_quantity,
                 String(expected, "traded_quantity"));
-  ExpectDecimal(result.snapshot.traded_value,
-                String(expected, "traded_value"));
+  ExpectDecimal(result.snapshot.traded_value, String(expected, "traded_value"));
   auto remaining =
       prepared.request.quantity.Subtract(result.snapshot.traded_quantity);
   ASSERT_TRUE(remaining.ok()) << remaining.status();
@@ -371,7 +370,8 @@ TEST(OrderTrackerTest,
   EXPECT_EQ(std::get<OrderFailed>(failed->events[0]).reason,
             "SendSlotUnavailable");
   EXPECT_EQ(
-      CodeOf(tracker.FailBeforeWrite(prepared.client_order_id, "again").status()),
+      CodeOf(
+          tracker.FailBeforeWrite(prepared.client_order_id, "again").status()),
       ErrorCode::kOrderNotCancelable);
 }
 

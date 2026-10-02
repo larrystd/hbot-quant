@@ -38,8 +38,7 @@ Decimal SimpleSimulatedExchange::AvailableBalance(const AssetId& asset) const {
   for (const auto& order : orders_) {
     if (order.request.side == Side::Buy &&
         asset == config_.market.quote_asset) {
-      auto hold =
-          order.request.quantity.Multiply(*order.request.limit_price);
+      auto hold = order.request.quantity.Multiply(*order.request.limit_price);
       if (hold.ok() && !config_.buy_fee_from_returns) {
         auto fee = hold->Multiply(config_.maker_fee_rate);
         if (fee.ok()) hold = hold->Add(*fee);
@@ -111,8 +110,8 @@ absl::Status SimpleSimulatedExchange::ValidateAndQuantize(
       !request.limit_price->IsStrictlyPositive())
     return Error(ErrorCode::kOrderPriceOrAmountInvalid,
                  "limit price and amount must be positive");
-  auto amount = request.quantity.Quantize(
-      config_.trading_rule.base_increment, RoundingMode::Down);
+  auto amount = request.quantity.Quantize(config_.trading_rule.base_increment,
+                                          RoundingMode::Down);
   auto price = request.limit_price->Quantize(
       config_.trading_rule.price_increment, RoundingMode::Down);
   if (!amount.ok())
@@ -217,10 +216,11 @@ absl::Status SimpleSimulatedExchange::AbortPrepared(
 
 absl::Status SimpleSimulatedExchange::StartCancel(
     const StrategyId& strategy_id, const ClientOrderId& client_order_id) {
-  auto it = std::find_if(
-      orders_.begin(), orders_.end(), [&](const RestingOrder& order) {
-        return order.client_order_id == client_order_id && order.strategy_id == strategy_id;
-      });
+  auto it = std::find_if(orders_.begin(), orders_.end(),
+                         [&](const RestingOrder& order) {
+                           return order.client_order_id == client_order_id &&
+                                  order.strategy_id == strategy_id;
+                         });
   if (it == orders_.end())
     return Error(ErrorCode::kOrderNotFound, "Simulated open order absent");
   RestingOrder order = *it;

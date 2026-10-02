@@ -50,8 +50,8 @@ absl::StatusOr<uint64_t> ParseBase32(std::string_view text, uint64_t max) {
 }  // namespace
 
 absl::StatusOr<ClientOrderId> EncodeClientOrderId(const StrategyId& strategy_id,
-                                             RunId run, ShardId shard,
-                                             uint32_t shard_sequence) {
+                                                  RunId run, ShardId shard,
+                                                  uint32_t shard_sequence) {
   if (!strategy_id.IsValid() || !run.IsValid() || !shard.IsValid() ||
       shard_sequence == 0 || shard_sequence > kMaxShardSequence) {
     return Error(ErrorCode::kClientOrderIdInvalid,
@@ -68,7 +68,8 @@ absl::StatusOr<ClientOrderId> EncodeClientOrderId(const StrategyId& strategy_id,
   return ClientOrderId(std::move(text));
 }
 
-absl::StatusOr<DecodedClientOrderId> DecodeClientOrderId(const ClientOrderId& id) {
+absl::StatusOr<DecodedClientOrderId> DecodeClientOrderId(
+    const ClientOrderId& id) {
   if (id.value.size() != 31 || id.value[0] != 'H') {
     return Error(ErrorCode::kClientOrderIdInvalid,
                  "unsupported client ID format");
@@ -81,9 +82,9 @@ absl::StatusOr<DecodedClientOrderId> DecodeClientOrderId(const ClientOrderId& id
   if (!strategy_id.ok()) return strategy_id.status();
   if (!run.ok()) return run.status();
   if (!suffix.ok()) return suffix.status();
-  DecodedClientOrderId result{*strategy_id, RunId{*run},
-                         ShardId{static_cast<uint8_t>(*suffix >> 29)},
-                         static_cast<uint32_t>(*suffix & kMaxShardSequence)};
+  DecodedClientOrderId result{
+      *strategy_id, RunId{*run}, ShardId{static_cast<uint8_t>(*suffix >> 29)},
+      static_cast<uint32_t>(*suffix & kMaxShardSequence)};
   if (result.strategy_id == 0 || !result.run.IsValid() ||
       result.shard_sequence == 0) {
     return Error(ErrorCode::kClientOrderIdInvalid,
@@ -233,8 +234,8 @@ absl::Status BinanceOrderGateway::ValidateAndQuantize(
     return Error(ErrorCode::kOrderTypeUnsupported,
                  "LIMIT_MAKER cannot specify timeInForce");
   }
-  auto amount = request.quantity.Quantize(
-      config_.trading_rule.base_increment, RoundingMode::Down);
+  auto amount = request.quantity.Quantize(config_.trading_rule.base_increment,
+                                          RoundingMode::Down);
   auto price = request.limit_price->Quantize(
       config_.trading_rule.price_increment, RoundingMode::Down);
   if (!amount.ok())
@@ -282,8 +283,8 @@ absl::StatusOr<PreparedOrder> BinanceOrderGateway::PrepareSubmit(
     return Error(ErrorCode::kSequenceExhausted,
                  "Binance client ID sequence exhausted");
   }
-  auto id = EncodeClientOrderId(approved.strategy_id, config_.run, config_.shard,
-                           next_sequence_);
+  auto id = EncodeClientOrderId(approved.strategy_id, config_.run,
+                                config_.shard, next_sequence_);
   if (!id.ok()) return id.status();
   if (historical_ids_.contains(id->value) ||
       known_orders_.contains(id->value)) {
@@ -389,8 +390,8 @@ absl::Status BinanceOrderGateway::AbortPrepared(
   return absl::OkStatus();
 }
 
-absl::Status BinanceOrderGateway::StartCancel(const StrategyId& strategy_id,
-                                              const ClientOrderId& client_order_id) {
+absl::Status BinanceOrderGateway::StartCancel(
+    const StrategyId& strategy_id, const ClientOrderId& client_order_id) {
   auto found = known_orders_.find(client_order_id.value);
   if (found == known_orders_.end() ||
       found->second.prepared.strategy_id != strategy_id ||
@@ -466,7 +467,8 @@ absl::StatusOr<OrderUpdate> BinanceOrderGateway::ParseSuccess(
   std::string_view status_text;
   std::string_view symbol;
   if (doc["clientOrderId"].get(client) || doc["status"].get(status_text) ||
-      doc["symbol"].get(symbol) || client != order.prepared.client_order_id.value ||
+      doc["symbol"].get(symbol) ||
+      client != order.prepared.client_order_id.value ||
       symbol != order.prepared.request.market.native_symbol) {
     return Error(ErrorCode::kExchangeOrderIdConflict,
                  "Binance response identity/status mismatch");
@@ -522,14 +524,14 @@ boost::asio::awaitable<void> BinanceOrderGateway::ProcessQueue() {
       if (work.cancel) {
         --pending_cancels_;
         pending_cancel_ids_.erase(work.client_order_id.value);
-        Emit({GatewayEventKind::CancelRejected, work.client_order_id, std::nullopt,
-              "cancel expired before write",
+        Emit({GatewayEventKind::CancelRejected, work.client_order_id,
+              std::nullopt, "cancel expired before write",
               ErrorCode::kOrderExpiredBeforeSend});
       } else {
         --pending_submits_;
         if (found != known_orders_.end()) found->second.state = State::Rejected;
-        Emit({GatewayEventKind::BeforeWriteFailed, work.client_order_id, std::nullopt,
-              "order expired before write",
+        Emit({GatewayEventKind::BeforeWriteFailed, work.client_order_id,
+              std::nullopt, "order expired before write",
               ErrorCode::kOrderExpiredBeforeSend});
       }
       continue;

@@ -125,7 +125,8 @@ ApprovedOrder Approved(const TestClock& clock) {
 
 TEST(ClientIdCodecTest, StableStrategyIdAndUniqueRunRoundTrip) {
   auto first = EncodeClientOrderId(MakeStrategyId(), RunId{42}, ShardId{3}, 1);
-  auto restarted = EncodeClientOrderId(MakeStrategyId(), RunId{43}, ShardId{7}, 1);
+  auto restarted =
+      EncodeClientOrderId(MakeStrategyId(), RunId{43}, ShardId{7}, 1);
   ASSERT_TRUE(first.ok() && restarted.ok());
   EXPECT_EQ(first->value.size(), 31);
   EXPECT_NE(first->value, restarted->value);
@@ -135,11 +136,14 @@ TEST(ClientIdCodecTest, StableStrategyIdAndUniqueRunRoundTrip) {
   EXPECT_EQ(decoded->run.value, 42);
   EXPECT_EQ(decoded->shard_hint.value, 3);
   EXPECT_EQ(decoded->shard_sequence, 1);
-  EXPECT_EQ(CodeOf(DecodeClientOrderId(ClientOrderId(first->value + "A")).status()),
-            ErrorCode::kClientOrderIdInvalid);
-  EXPECT_FALSE(EncodeClientOrderId(MakeStrategyId(), RunId{42}, ShardId{3}, 0).ok());
+  EXPECT_EQ(
+      CodeOf(DecodeClientOrderId(ClientOrderId(first->value + "A")).status()),
+      ErrorCode::kClientOrderIdInvalid);
   EXPECT_FALSE(
-      EncodeClientOrderId(MakeStrategyId(), RunId{42}, ShardId{3}, 1U << 29).ok());
+      EncodeClientOrderId(MakeStrategyId(), RunId{42}, ShardId{3}, 0).ok());
+  EXPECT_FALSE(
+      EncodeClientOrderId(MakeStrategyId(), RunId{42}, ShardId{3}, 1U << 29)
+          .ok());
 }
 
 TEST(SignerTest, OfficialHmacVectorAndPercentEncodedWireBytes) {
@@ -287,9 +291,11 @@ TEST(BinanceOrderGatewayTest, CancelUsesReservedRateSlotAndOriginalClientId) {
   EXPECT_EQ(CodeOf(gateway.StartPrepared(second->client_order_id)),
             ErrorCode::kRateBudgetExhausted);
   EXPECT_TRUE(gateway.AbortPrepared(second->client_order_id).ok());
-  EXPECT_TRUE(gateway.StartCancel(MakeStrategyId(), first->client_order_id).ok());
-  EXPECT_EQ(CodeOf(gateway.StartCancel(MakeStrategyId(), first->client_order_id)),
-            ErrorCode::kOrderCancelPending);
+  EXPECT_TRUE(
+      gateway.StartCancel(MakeStrategyId(), first->client_order_id).ok());
+  EXPECT_EQ(
+      CodeOf(gateway.StartCancel(MakeStrategyId(), first->client_order_id)),
+      ErrorCode::kOrderCancelPending);
   io.restart();
   io.run();
   ASSERT_EQ(events.size(), 2);
@@ -319,7 +325,8 @@ TEST(BinanceOrderGatewayTest, CancellationRunsAheadOfQueuedSubmissions) {
   ASSERT_TRUE(a.ok() && b.ok());
   ASSERT_TRUE(gateway.StartPrepared(a->client_order_id).ok());
   ASSERT_TRUE(gateway.StartPrepared(b->client_order_id).ok());
-  ASSERT_TRUE(gateway.StartCancel(MakeStrategyId(), original->client_order_id).ok());
+  ASSERT_TRUE(
+      gateway.StartCancel(MakeStrategyId(), original->client_order_id).ok());
   io.restart();
   io.run();
   ASSERT_EQ(transport.requests.size(), 4);

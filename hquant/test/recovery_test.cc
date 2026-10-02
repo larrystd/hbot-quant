@@ -137,7 +137,8 @@ TEST(RecoveryIntegrationTest, UnknownWriteAndCrashUseOriginalIdWithoutResend) {
   auto prepared = gateway.PrepareSubmit(std::move(approved));
   ASSERT_TRUE(prepared.ok()) << prepared.status();
   ASSERT_TRUE(
-      original_risk.AttachClientId(hold->hold_id, prepared->client_order_id).ok());
+      original_risk.AttachClientId(hold->hold_id, prepared->client_order_id)
+          .ok());
   auto recorder = SqliteOrderHistoryWriter::Open(
       {database.path(), RunId{42}, clock.UtcNow(), 8, 1});
   ASSERT_TRUE(recorder.ok()) << recorder.status();
@@ -157,7 +158,8 @@ TEST(RecoveryIntegrationTest, UnknownWriteAndCrashUseOriginalIdWithoutResend) {
   ASSERT_EQ(transport.calls, 1);
   ASSERT_EQ(events.size(), 1);
   EXPECT_EQ(events[0].kind, binance_spot::GatewayEventKind::SubmissionUnknown);
-  ASSERT_TRUE(original_tracker.MarkSubmissionUnknown(prepared->client_order_id).ok());
+  ASSERT_TRUE(
+      original_tracker.MarkSubmissionUnknown(prepared->client_order_id).ok());
   ASSERT_TRUE(original_risk.MarkSubmissionUnknown(hold->hold_id).ok());
   EXPECT_EQ(
       *original_risk.Available(account, AssetId("USDT"))->Compare(D("99")), 0);
@@ -197,7 +199,8 @@ TEST(RecoveryIntegrationTest, UnknownWriteAndCrashUseOriginalIdWithoutResend) {
                                              clock.UtcNow(), true, true);
   ASSERT_TRUE(restored_hold.ok());
   ASSERT_TRUE(
-      restored_risk.AttachClientId(restored_hold->hold_id, prepared->client_order_id)
+      restored_risk
+          .AttachClientId(restored_hold->hold_id, prepared->client_order_id)
           .ok());
   ASSERT_TRUE(restored_risk.MarkSubmissionUnknown(restored_hold->hold_id).ok());
   OrderTracker tracker;
