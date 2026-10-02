@@ -119,18 +119,18 @@ flowchart LR
 | 类型 / 位置 | 必有字段、状态或约束 |
 | --- | --- |
 | `TradingRule` / `base/market.h` | `{market, price_increment, base_increment, min_base_amount, min_order_value, max_base_amount?, revision, observed_at}`，金额是 `Decimal`，规则有效期由风险门检查。限价单价格和数量按下单规则量化。 |
-| `OrderRequest` / `base/order.h` | `{account, market, side, type, base_amount: Decimal, limit_price?: Decimal, time_in_force?}`；首版只接受现货 Limit/LimitMaker，`type` 与 price/TIF 的组合严格校验。显式 account 使后续 XEMM 两账户动作无歧义；衍生品杠杆/仓位另扩展。 |
-| `SubmitOrder`、`CancelOrder`、`ActionBatch` / `strategy/strategy.h` | `SubmitOrder={strategy_id, request}`，`CancelOrder={strategy_id, client_id}`；`ActionBatch={ordered vector<variant<SubmitOrder,CancelOrder>>}`。策略短同步回调返回批次；`ActionExecutor` **按 vector 顺序**验证/执行，并生成可观测拒绝事件。 |
+| `OrderRequest` / `base/order.h` | `{account, market, side, type, quantity: Decimal, limit_price?: Decimal, time_in_force?}`；首版只接受现货 Limit/LimitMaker，`type` 与 price/TIF 的组合严格校验。显式 account 使后续 XEMM 两账户动作无歧义；衍生品杠杆/仓位另扩展。 |
+| `SubmitOrder`、`CancelOrder`、`ActionBatch` / `strategy/strategy.h` | `SubmitOrder={strategy_id, request}`，`CancelOrder={strategy_id, client_order_id}`；`ActionBatch={ordered vector<variant<SubmitOrder,CancelOrder>>}`。策略短同步回调返回批次；`ActionExecutor` **按 vector 顺序**验证/执行，并生成可观测拒绝事件。 |
 | `TriggerPolicy` / `strategy/strategy.h` | `{book_mode: None/BboChanged/EveryAppliedBatch, on_public_trade, on_order_update, on_fill, timer_period?, coalesce_window?, min_action_interval}`；`simple_pmm` 首版靠 15 秒 Timer 刷新，盘口只更新可读状态。 |
 | `ApprovedOrder` / `base/order.h` | `{strategy_id, request, hold_id, action_batch_id, expires_at_mono}`，只表示风控通过且占额；不表示写 socket 或交易所接单。网关获取带期限发送槽、生成 ID 并注册 Tracker 后，才形成拥有值的 `PreparedOrder`。 |
-| `PreparedOrder` / `base/order.h` | `{client_id, strategy_id, request, config_revision, created_at_utc, optional executor_checkpoint}`；account 已在 request 中，checkpoint 含 `{schema_version, strategy_id, config_revision, payload}`。发起网络写前 `try_push` Recorder；队列/SQLite 失败不等提交、继续发送，并标记历史缺口。 |
-| `OrderUpdate` / `base/order.h` | `{account, market, client_id?, exchange_order_id?, exchange_status, cumulative_base?, cumulative_quote?, time}`；至少有一个订单 ID；双 ID 同时存在须指向同一订单。它只是输入事实，不直接等于 Tracker 内部状态。 |
-| `TradeUpdate` / `base/order.h` | `{account, market, client_id?, exchange_order_id?, exchange_trade_id, price, base_amount, quote_amount, fees: vector<TradeFee>, maker?, time}`；至少有一个订单 ID，trade ID 必有，价格/数量/费用全为 Decimal。成交去重键是 `{account, market, exchange_trade_id}`（若交易所范围更窄，adapter 扩展键）。 |
+| `PreparedOrder` / `base/order.h` | `{client_order_id, strategy_id, request, config_revision, created_at_utc, optional executor_checkpoint}`；account 已在 request 中，checkpoint 含 `{schema_version, strategy_id, config_revision, payload}`。发起网络写前 `try_push` Recorder；队列/SQLite 失败不等提交、继续发送，并标记历史缺口。 |
+| `OrderUpdate` / `base/order.h` | `{account, market, client_order_id?, exchange_order_id?, exchange_status, traded_quantity?, traded_value?, time}`；至少有一个订单 ID；双 ID 同时存在须指向同一订单。它只是输入事实，不直接等于 Tracker 内部状态。 |
+| `TradeUpdate` / `base/order.h` | `{account, market, client_order_id?, exchange_order_id?, exchange_trade_id, price, quantity, value, fees: vector<TradeFee>, maker?, time}`；至少有一个订单 ID，trade ID 必有，价格/数量/费用全为 Decimal。成交去重键是 `{account, market, exchange_trade_id}`（若交易所范围更窄，adapter 扩展键）。 |
 | `TradeFee`、`Balance` / `base/order.h` | `TradeFee={asset, signed_amount}`，正数为收费、负数为返佣；`Balance={account, asset, total, available, time}`。交易所 `available` 可能已扣本系统挂单，不直接再减一次本地预留。 |
 
 `StrategyInput` 在 `strategy/strategy.h` 中只借用当前分片的 `OrderBookView`、订单/余额只读快照、触发输入序号及注入时钟；不能保存、跨线程传递或在 `co_await` 后使用。每次回调由 `Shard` 分配 `ActionBatchId`，其 `ActionBatch` 与拒绝原因按确定顺序记录。`AccountEvent` 只包装私有 `OrderUpdate/TradeUpdate/BalanceUpdate`；`MarketEvent` 只包装公开 `BookSnapshot/BookDiff/PublicTrade`，两类事件不能通过一个未标来源的“成交”类型混用。
 
-`TrackedOrder` 放在 `order/order_tracker.h`，只允许 Tracker 修改；对策略/控制线程输出拥有值的 `OrderSnapshot={client_id, exchange_id?, strategy_id, request, display_state, cumulative_base, cumulative_quote, fees, last_update_time}` 定义于中立的 `base/order.h`，避免策略依赖 Tracker 实现。类型化事件 `OrderOpened/OrderTraded/OrderFullyTraded/OrderCanceled/OrderFailed` 定义于 `base/order.h`。内部状态拆成正交事实：
+`TrackedOrder` 放在 `order/order_tracker.h`，只允许 Tracker 修改；对策略/控制线程输出拥有值的 `OrderSnapshot={client_order_id, exchange_order_id?, strategy_id, request, display_state, traded_quantity, traded_value, fees, last_update_time}` 定义于中立的 `base/order.h`，避免策略依赖 Tracker 实现。类型化事件 `OrderOpened/OrderTraded/OrderFullyTraded/OrderCanceled/OrderFailed` 定义于 `base/order.h`。内部状态拆成正交事实：
 
 | 字段 | 含义 |
 | --- | --- |
@@ -138,7 +138,7 @@ flowchart LR
 | `cancel_pending` | 撤单请求在途；可与 `PartiallyTraded` 同时为真，不因发起撤单就释放额度。 |
 | `reconciliation` | `Confirmed/SubmissionUnknown/ResyncRequired`；网络写结果未知不抹掉已知成交，保留最坏敞口，用**同一个** client ID 补查，不换 ID 自动重发。 |
 | `completion_pending_fills` | 交易所报告 Filled 但成交明细未齐；对外显示 `AwaitingTrades`，由分片 timer/REST 补查，handler 不阻塞。 |
-| `cumulative_base/quote`、`seen_trade_ids` | 累计值和去重索引；先更新 Tracker 与 FundsHold，再发策略 `OnFill/OnOrderUpdate`。 |
+| `traded_quantity/quote`、`seen_trade_ids` | 累计值和去重索引；先更新 Tracker 与 FundsHold，再发策略 `OnFill/OnOrderUpdate`。 |
 
 `PendingCancel`、`SubmissionUnknown`、`AwaitingTrades` 是从以上字段派生的**展示/恢复状态**，不互相覆盖。`OrderOpened` 只在交易所/模拟盘 确认接单后产生；本地注册 `PendingCreate` 不是接单。`OrderFullyTraded` 要在所需成交明细与费用核实后产生；公开成交只能作为 模拟盘 撮合输入，绝不生成实盘账户 `OnFill`。HTTP 响应与私有流回报可乱序，先到成交也要以双 ID/原 client ID 关联，不凭收到时间猜身份。
 
@@ -157,9 +157,9 @@ flowchart LR
 | 类型 / 位置 | 必有字段和处理 |
 | --- | --- |
 | `RiskBudget` / `order/risk.h` | `{account, asset, shard, budget_version, hard_limit: Decimal, valid_until_utc}`；控制线程按账户/资产静态授予，所有活跃 shard 的上限合计不得超出保守账户额度。首版运行中不跨分片转移或提高 hard limit；账户事实重新核验后可续有效期，过期则拒新单。 |
-| `FundsHold` / `order/risk.h` | `{hold_id, client_id?, account, strategy_id, budget_version, per_asset_worst_case: absl::flat_hash_map<AssetId,Decimal>, state: HoldState}`；包括手续费缓冲；新单、挂单、`SubmissionUnknown` 持续占用，成交/取消/确认失败后按事实调整。 |
+| `FundsHold` / `order/risk.h` | `{hold_id, client_order_id?, account, strategy_id, budget_version, per_asset_worst_case: absl::flat_hash_map<AssetId,Decimal>, state: HoldState}`；包括手续费缓冲；新单、挂单、`SubmissionUnknown` 持续占用，成交/取消/确认失败后按事实调整。 |
 | `RateBudget`、`GlobalRateBreaker` / `base/rate_limit.h` | 按账户/IP/端点/窗口的静态本地额度与全局原子熔断；撤单保留配额。429/418 立即置位，不能从其他 shard 借尚未设计的原子池。 |
-| `OrderStrategyIndex` / `shard/routing.h` | `client_id → strategy_id/current_shard`、`{account, market, exchange_id} → strategy_id/current_shard`。分片号只由本次配置映射；从 client ID 解出 strategy_id 后与索引核对。未知/冲突报告进入隔离补查，转发队列满则暂停受影响账户新单。 |
+| `OrderStrategyIndex` / `shard/routing.h` | `client_order_id → strategy_id/current_shard`、`{account, market, exchange_order_id} → strategy_id/current_shard`。分片号只由本次配置映射；从 client ID 解出 strategy_id 后与索引核对。未知/冲突报告进入隔离补查，转发队列满则暂停受影响账户新单。 |
 | `HistoryRecord` / `storage/storage.h` | `{schema_version, run_id, shard, shard_sequence, strategy_id?, received_at_utc, exchange_at_utc?, payload: HistoryRecordPayload（含 PreparedOrder、OrderUpdate、TradeUpdate、RecordedCheckpoint、HistoryGap、ActionRecord）}`；每分片序号在 `try_push` 前分配，Recorder 保持分片内顺序，不宣称跨分片全序。 |
 | `RunManifest` / `storage/storage.h` | `{run_id, started_at_utc, clean_stopped_at_utc?, history_complete, last_committed_seq_by_shard}`；由 Recorder 独立维护，不假装它属于某个交易分片。优雅退出时所有此前接受的记录处理完并提交 manifest 后，才算 clean；有缺口时 `history_complete=false`，即使进程优雅退出也要对账。缺失结束标记同样需要对账。 |
 | `StorageHealth`、`HistoryGap` / `storage/storage.h` | `{dropped_count, last_committed_seq_by_shard, gap_ranges, last_error, queue_watermark}`；gap 是 `{run_id, shard, first_seq, last_seq, reason}`。队列满或写失败在内存累计并尝试随后写入；进程立刻崩溃时尾部 gap 也可能不在 SQLite。 |

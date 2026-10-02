@@ -70,18 +70,18 @@ and must not silently alter accepted levels.
 ## `order_tracker`
 
 `setup` fixes `account`, `market`, numeric `strategy_id` (a positive 48-bit
-integer), `client_id`, `side`,
-`base_amount`, `limit_price`, and optional `initial_reservation_by_asset`.
+integer), `client_order_id`, `side`,
+`quantity`, `limit_price`, and optional `initial_reservation_by_asset`.
 `event.kind` is `register`, `order_update`, `trade_update`,
 `cancel_requested`, `submission_unknown`, or `reconcile`. Order updates carry
 `exchange_status`, optional `exchange_order_id`, and optional cumulative
-decimal strings. Trade updates carry `trade_id`, `price`, `base_amount`,
-`quote_amount`, `fees_by_asset`, and at least one order ID. Inputs that only
+decimal strings. Trade updates carry `trade_id`, `price`, `quantity`,
+`value`, `fees_by_asset`, and at least one order ID. Inputs that only
 the C++ architecture supports are `intentional_divergence`. `output` has:
 
 ```json
 {"display_state":"PendingCreate","events":[],
- "cumulative_base":"0","cumulative_quote":"0","fees_by_asset":{},
+ "traded_quantity":"0","traded_value":"0","fees_by_asset":{},
  "remaining_base":"1"}
 ```
 
@@ -105,7 +105,7 @@ optional `last_price`, `active_orders` in their Python iteration order, and
 `available_balances` as decimal strings by asset. Other event kinds are not
 part of this first strategy fixture. `output` has `actions` (an ordered array)
 and `next_refresh_at_us` (integer or null). Each action is either
-`{"kind":"cancel","client_id":"B1"}` or
+`{"kind":"cancel","client_order_id":"B1"}` or
 `{"kind":"submit","side":"Buy","price":"99.9","amount":"0.01"}`.
 The strategy output is before connector/Paper quantization. If Python sends a
 zero-amount candidate because its budget checker adjusted that side to zero,
@@ -124,10 +124,10 @@ there is no wait for cancel confirmation.
 live connector's current fee schedule. `event.kind` is `submit`, `cancel`,
 `book_bbo`, `public_trade`, or `tick`:
 
-- `submit`: `client_id`, `side` (`Buy`/`Sell`), `price`, `amount` as decimal
+- `submit`: `client_order_id`, `side` (`Buy`/`Sell`), `price`, `amount` as decimal
   strings. The ID is a stable fixture symbol. Inputs are already quantized
   unless a case explicitly tests connector quantization.
-- `cancel`: `client_id`.
+- `cancel`: `client_order_id`.
 - `book_bbo`: `bid` and `ask` as decimal strings, then process crossed orders.
 - `public_trade`: `side`, `price`, `amount`; this is an external market trade,
   distinct from the Paper account fill. Python's limit-order matcher uses the
@@ -138,9 +138,9 @@ live connector's current fee schedule. `event.kind` is `submit`, `cancel`,
 Each `output` is the state **after** processing the input and flushing local
 Paper event callbacks. It has ordered `events` emitted by this input, each an
 object with `kind` (`OrderOpened`, `OrderTraded`, `OrderFullyTraded`,
-`OrderCanceled`, `OrderFailed`) and `client_id`; an `OrderTraded` additionally
+`OrderCanceled`, `OrderFailed`) and `client_order_id`; an `OrderTraded` additionally
 has `trade_id`, `price`, `amount`, and `fee_by_asset` (asset → decimal string).
-It also has `open_orders`, ordered by fixture ID, each with `client_id`,
+It also has `open_orders`, ordered by fixture ID, each with `client_order_id`,
 `side`, `price`, and `amount`; `balances` and `available_balances` as asset →
 decimal string maps; and cumulative `fees_by_asset`. The account fill event,
 balances, and fee map must agree. Normalize random Python order/trade IDs via
