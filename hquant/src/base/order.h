@@ -107,7 +107,7 @@ struct StrategyCheckpoint {
 // 可能的优化：config_revision 从未被赋值（永远是 0），executor_checkpoint
 // 从未被填写；要么删掉，要么等有了策略快照再接上。
 struct PreparedOrder {
-  ClientOrderId client_id;
+  ClientOrderId client_order_id;
   StrategyId strategy_id;
   OrderRequest request;
   uint64_t config_revision = 0;
@@ -116,14 +116,14 @@ struct PreparedOrder {
 };
 
 // 交易所（或模拟交易所）发来的"订单 X 的状态变成了 Y"。
-// client_id 和 exchange_order_id 至少有一个能确定是哪张订单。
+// client_order_id 和 exchange_order_id 至少有一个能确定是哪张订单。
 //   cumulative_base / cumulative_quote：到目前为止的累计成交量和成交额（如果
 //       交易所提供）。它们可能比逐笔的 TradeUpdate 先到；这时 OrderTracker
 //       显示 AwaitingTrades，直到成交明细到齐。
 struct OrderUpdate {
   AccountId account;
   MarketId market;
-  std::optional<ClientOrderId> client_id;
+  std::optional<ClientOrderId> client_order_id;
   std::optional<ExchangeOrderId> exchange_order_id;
   ExchangeOrderStatus exchange_status = ExchangeOrderStatus::Open;
   std::optional<Decimal> cumulative_base;
@@ -138,7 +138,7 @@ struct OrderUpdate {
 struct TradeUpdate {
   AccountId account;
   MarketId market;
-  std::optional<ClientOrderId> client_id;
+  std::optional<ClientOrderId> client_order_id;
   std::optional<ExchangeOrderId> exchange_order_id;
   ExchangeTradeId exchange_trade_id;
   Decimal price;
@@ -152,7 +152,7 @@ struct TradeUpdate {
 // 一张订单在某一时刻的只读副本，由 OrderTracker 生成。真正的订单
 // （order/order_tracker.h 里的 TrackedOrder）只有 OrderTracker 能修改；
 // 策略和 Shard 拿到的都是这种副本。
-//   exchange_id：交易所确认之前为空（模拟盘始终为空）。
+//   exchange_order_id：交易所确认之前为空（模拟盘始终为空）。
 //   request：原始的下单请求。
 //   display_state：使用者只需看这一个状态，见 OrderDisplayState。
 //   cumulative_base / cumulative_quote：到目前为止的累计成交量和成交额。
@@ -162,8 +162,8 @@ struct TradeUpdate {
 // 清理已结束的订单）可以避免。另外可以加一个 remaining_base 字段，免得使用者
 // 自己计算 request.base_amount - cumulative_base。
 struct OrderSnapshot {
-  ClientOrderId client_id;
-  std::optional<ExchangeOrderId> exchange_id;
+  ClientOrderId client_order_id;
+  std::optional<ExchangeOrderId> exchange_order_id;
   StrategyId strategy_id;
   OrderRequest request;
   OrderDisplayState display_state = OrderDisplayState::PendingCreate;
@@ -214,10 +214,10 @@ class OrderGateway {
   virtual ~OrderGateway() = default;
   virtual absl::StatusOr<PreparedOrder> PrepareSubmit(
       ApprovedOrder approved) = 0;
-  virtual absl::Status StartPrepared(const ClientOrderId& client_id) = 0;
-  virtual absl::Status AbortPrepared(const ClientOrderId& client_id) = 0;
+  virtual absl::Status StartPrepared(const ClientOrderId& client_order_id) = 0;
+  virtual absl::Status AbortPrepared(const ClientOrderId& client_order_id) = 0;
   virtual absl::Status StartCancel(const StrategyId& strategy_id,
-                                   const ClientOrderId& client_id) = 0;
+                                   const ClientOrderId& client_order_id) = 0;
 };
 
 // 本地模拟交易所的接口，回放模式和实时行情模拟盘都用它。运行时只依赖这个接口，

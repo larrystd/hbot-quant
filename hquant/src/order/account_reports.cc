@@ -146,9 +146,9 @@ absl::StatusOr<AccountPushBatch> ExecutionReport(simdjson::dom::element data,
   if (!mapped_status.ok()) return mapped_status.status();
 
   const MarketId market{exchange, InstrumentKind::Spot, std::string(*symbol)};
-  const ClientOrderId client_id{std::string(original)};
-  std::optional<ExchangeOrderId> exchange_id;
-  if (*order_id > 0) exchange_id = ExchangeOrderId(std::to_string(*order_id));
+  const ClientOrderId client_order_id{std::string(original)};
+  std::optional<ExchangeOrderId> exchange_order_id;
+  if (*order_id > 0) exchange_order_id = ExchangeOrderId(std::to_string(*order_id));
   AccountPushBatch batch;
   if (*execution == "TRADE") {
     auto trade_id = field::Integer(data, "t");
@@ -163,14 +163,14 @@ absl::StatusOr<AccountPushBatch> ExecutionReport(simdjson::dom::element data,
     if (!quote.ok()) return quote.status();
     if (!maker.ok()) return maker.status();
     if (!commission.ok()) return commission.status();
-    if (*trade_id < 0 || !exchange_id) {
+    if (*trade_id < 0 || !exchange_order_id) {
       return field::Invalid("trade without exchange order and trade IDs");
     }
     TradeUpdate trade;
     trade.account = account;
     trade.market = market;
-    trade.client_id = client_id;
-    trade.exchange_order_id = exchange_id;
+    trade.client_order_id = client_order_id;
+    trade.exchange_order_id = exchange_order_id;
     trade.exchange_trade_id = ExchangeTradeId(std::to_string(*trade_id));
     trade.price = *price;
     trade.base_amount = *base;
@@ -191,8 +191,8 @@ absl::StatusOr<AccountPushBatch> ExecutionReport(simdjson::dom::element data,
   OrderUpdate order;
   order.account = account;
   order.market = market;
-  order.client_id = client_id;
-  order.exchange_order_id = exchange_id;
+  order.client_order_id = client_order_id;
+  order.exchange_order_id = exchange_order_id;
   order.exchange_status = *mapped_status;
   order.cumulative_base = *cumulative_base;
   order.cumulative_quote = *cumulative_quote;
@@ -336,7 +336,7 @@ absl::StatusOr<OrderUpdate> ParseOrder(std::string_view json,
   if (!quote_text.ok()) return quote_text.status();
   if (!updated.ok()) return updated.status();
   if (*symbol != target.market.native_symbol ||
-      *client != target.original_client_id.value || *id <= 0) {
+      *client != target.client_order_id.value || *id <= 0) {
     return Error(ErrorCode::kOrderQueryIdentityMismatch,
                  "REST order identity mismatch");
   }
@@ -348,7 +348,7 @@ absl::StatusOr<OrderUpdate> ParseOrder(std::string_view json,
   OrderUpdate order;
   order.account = target.account;
   order.market = target.market;
-  order.client_id = target.original_client_id;
+  order.client_order_id = target.client_order_id;
   order.exchange_order_id = ExchangeOrderId(std::to_string(*id));
   order.exchange_status = *mapped;
   order.cumulative_base = *filled;
@@ -364,7 +364,7 @@ using IdTrade = std::pair<int64_t, TradeUpdate>;
 
 absl::StatusOr<std::vector<IdTrade>> ParseTrades(
     std::string_view json, const OrderToQuery& target,
-    const ExchangeOrderId& exchange_id, EventTime received) {
+    const ExchangeOrderId& exchange_order_id, EventTime received) {
   simdjson::dom::parser parser;
   simdjson::dom::element root;
   if (parser.parse(json).get(root))
@@ -393,7 +393,7 @@ absl::StatusOr<std::vector<IdTrade>> ParseTrades(
     if (!maker.ok()) return maker.status();
     if (!time.ok()) return time.status();
     if (*symbol != target.market.native_symbol || *trade_id < 0 ||
-        std::to_string(*order_id) != exchange_id.value) {
+        std::to_string(*order_id) != exchange_order_id.value) {
       return Error(ErrorCode::kOrderQueryIdentityMismatch,
                    "REST trade identity mismatch");
     }
@@ -402,8 +402,8 @@ absl::StatusOr<std::vector<IdTrade>> ParseTrades(
     TradeUpdate trade;
     trade.account = target.account;
     trade.market = target.market;
-    trade.client_id = target.original_client_id;
-    trade.exchange_order_id = exchange_id;
+    trade.client_order_id = target.client_order_id;
+    trade.exchange_order_id = exchange_order_id;
     trade.exchange_trade_id = ExchangeTradeId(std::to_string(*trade_id));
     trade.price = *price;
     trade.base_amount = *base;
@@ -471,16 +471,16 @@ absl::StatusOr<StartupQueryPlan> PlanStartupQueries(
   }
   std::map<std::string, OrderToQuery> by_client_id;
   auto insert = [&](const AccountId& account, const MarketId& market,
-                    const ClientOrderId& client_id) -> absl::Status {
+                    const ClientOrderId& client_order_id) -> absl::Status {
     if (account != input.account || !markets.contains(market.native_symbol) ||
         std::find(input.assigned_markets.begin(), input.assigned_markets.end(),
                   market) == input.assigned_markets.end() ||
-        !ValidMarket(market) || client_id.value.empty()) {
+        !ValidMarket(market) || client_order_id.value.empty()) {
       return Error(ErrorCode::kOrderQueryTargetInvalid,
                    "restart order outside account assignment");
     }
     auto [it, inserted] = by_client_id.emplace(
-        client_id.value, OrderToQuery{account, market, client_id});
+        client_order_id.value, OrderToQuery{account, market, client_order_id});
     if (!inserted && it->second.market != market) {
       return Error(ErrorCode::kOrderQueryIdentityMismatch,
                    "client ID assigned to two markets");
@@ -489,12 +489,12 @@ absl::StatusOr<StartupQueryPlan> PlanStartupQueries(
   };
   for (const auto& prepared : input.persisted_prepared_orders) {
     auto status = insert(prepared.request.account, prepared.request.market,
-                         prepared.client_id);
+                         prepared.client_order_id);
     if (!status.ok()) return status;
   }
   for (const auto& snapshot : input.live_snapshots) {
     auto status = insert(snapshot.request.account, snapshot.request.market,
-                         snapshot.client_id);
+                         snapshot.client_order_id);
     if (!status.ok()) return status;
   }
   StartupQueryPlan plan;
@@ -513,7 +513,7 @@ boost::asio::awaitable<absl::StatusOr<OrderQueryResult>>
 OrderQueryClient::QueryOrder(OrderToQuery target, EventTime received,
                             std::chrono::steady_clock::time_point deadline) {
   if (target.account.value.empty() || !ValidMarket(target.market) ||
-      target.original_client_id.value.empty() || limits_.max_trade_pages == 0 ||
+      target.client_order_id.value.empty() || limits_.max_trade_pages == 0 ||
       limits_.trades_per_page == 0 || limits_.trades_per_page > 1000 ||
       limits_.max_response_bytes == 0) {
     co_return Error(ErrorCode::kOrderQueryTargetInvalid,
@@ -523,7 +523,7 @@ OrderQueryClient::QueryOrder(OrderToQuery target, EventTime received,
   batch.target = target;
   const std::string order_path =
       "/api/v3/order?symbol=" + Encode(target.market.native_symbol) +
-      "&origClientOrderId=" + Encode(target.original_client_id.value);
+      "&origClientOrderId=" + Encode(target.client_order_id.value);
   auto order_response = co_await rest_.GetSigned(order_path, deadline);
   if (!order_response.ok()) {
     batch.unresolved_status = Error(ErrorCode::kOrderQueryFailed,
@@ -548,14 +548,14 @@ OrderQueryClient::QueryOrder(OrderToQuery target, EventTime received,
     batch.unresolved_status = order.status();
     co_return batch;
   }
-  const auto& exchange_id = *order->exchange_order_id;
+  const auto& exchange_order_id = *order->exchange_order_id;
   std::map<int64_t, TradeUpdate> by_trade_id;
   std::optional<int64_t> from_id;
   bool exhausted = false;
   for (size_t page = 0; page < limits_.max_trade_pages; ++page) {
     std::string path =
         "/api/v3/myTrades?symbol=" + Encode(target.market.native_symbol) +
-        "&orderId=" + Encode(exchange_id.value) +
+        "&orderId=" + Encode(exchange_order_id.value) +
         "&limit=" + std::to_string(limits_.trades_per_page);
     if (from_id) path += "&fromId=" + std::to_string(*from_id);
     auto response = co_await rest_.GetSigned(std::move(path), deadline);
@@ -575,7 +575,7 @@ OrderQueryClient::QueryOrder(OrderToQuery target, EventTime received,
       co_return batch;
     }
     auto trades =
-        RestResult(ParseTrades(response->body, target, exchange_id, received));
+        RestResult(ParseTrades(response->body, target, exchange_order_id, received));
     if (!trades.ok()) {
       batch.unresolved_status = trades.status();
       co_return batch;

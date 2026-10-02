@@ -50,10 +50,10 @@ OrderLifecycle Lifecycle(ExchangeOrderStatus status) {
 
 OrderTracker::ExchangeKey OrderTracker::ExchangeIndexKey(
     const AccountId& account, const MarketId& market,
-    const ExchangeOrderId& exchange_id) {
+    const ExchangeOrderId& exchange_order_id) {
   return {account.value, market.exchange.value,
           static_cast<int>(market.instrument_kind), market.native_symbol,
-          exchange_id.value};
+          exchange_order_id.value};
 }
 
 OrderTracker::TradeKey OrderTracker::TradeIndexKey(
@@ -101,8 +101,8 @@ OrderDisplayState OrderTracker::Display(const TrackedOrder& order) const {
 
 OrderSnapshot OrderTracker::MakeSnapshot(const TrackedOrder& order) const {
   OrderSnapshot snapshot;
-  snapshot.client_id = order.prepared.client_id;
-  snapshot.exchange_id = order.exchange_id;
+  snapshot.client_order_id = order.prepared.client_order_id;
+  snapshot.exchange_order_id = order.exchange_order_id;
   snapshot.strategy_id = order.prepared.strategy_id;
   snapshot.request = order.prepared.request;
   snapshot.display_state = Display(order);
@@ -130,7 +130,7 @@ TrackerResult OrderTracker::MakeResult(
 }
 
 absl::StatusOr<TrackerResult> OrderTracker::Register(PreparedOrder prepared) {
-  if (prepared.client_id.value.empty())
+  if (prepared.client_order_id.value.empty())
     return Error(ErrorCode::kClientOrderIdInvalid, "empty client order ID");
   if (!prepared.strategy_id.IsValid())
     return Error(ErrorCode::kOrderStrategyIdInvalid, "invalid strategy ID");
@@ -144,33 +144,33 @@ absl::StatusOr<TrackerResult> OrderTracker::Register(PreparedOrder prepared) {
       !prepared.request.limit_price->IsStrictlyPositive())
     return Error(ErrorCode::kOrderPriceOrAmountInvalid,
                  "limit price and amount must be positive");
-  if (orders_.contains(prepared.client_id.value))
+  if (orders_.contains(prepared.client_order_id.value))
     return Error(ErrorCode::kOrderDuplicate, "client order ID already tracked");
   TrackedOrder order;
   order.last_update_time.receive_utc = prepared.created_at_utc;
   order.prepared = std::move(prepared);
   auto [it, inserted] =
-      orders_.emplace(order.prepared.client_id.value, std::move(order));
+      orders_.emplace(order.prepared.client_order_id.value, std::move(order));
   (void)inserted;
   return MakeResult(it->second, true);
 }
 
 absl::StatusOr<OrderTracker::TrackedOrder*> OrderTracker::Find(
     const AccountId& account, const MarketId& market,
-    const std::optional<ClientOrderId>& client_id,
-    const std::optional<ExchangeOrderId>& exchange_id) {
-  if ((!client_id || client_id->value.empty()) &&
-      (!exchange_id || exchange_id->value.empty()))
+    const std::optional<ClientOrderId>& client_order_id,
+    const std::optional<ExchangeOrderId>& exchange_order_id) {
+  if ((!client_order_id || client_order_id->value.empty()) &&
+      (!exchange_order_id || exchange_order_id->value.empty()))
     return Error(ErrorCode::kOrderReportInvalid, "report has no order ID");
   TrackedOrder* by_client = nullptr;
   TrackedOrder* by_exchange = nullptr;
-  if (client_id) {
-    auto found = orders_.find(client_id->value);
+  if (client_order_id) {
+    auto found = orders_.find(client_order_id->value);
     if (found != orders_.end()) by_client = &found->second;
   }
-  if (exchange_id) {
+  if (exchange_order_id) {
     auto found =
-        exchange_index_.find(ExchangeIndexKey(account, market, *exchange_id));
+        exchange_index_.find(ExchangeIndexKey(account, market, *exchange_order_id));
     if (found != exchange_index_.end()) {
       auto order = orders_.find(found->second);
       if (order != orders_.end()) by_exchange = &order->second;
@@ -182,7 +182,7 @@ absl::StatusOr<OrderTracker::TrackedOrder*> OrderTracker::Find(
     return Error(ErrorCode::kExchangeOrderIdConflict,
                  "client and exchange IDs identify different orders");
   }
-  if (client_id && !by_client && by_exchange) {
+  if (client_order_id && !by_client && by_exchange) {
     by_exchange->confirmation = ConfirmationState::NeedsQuery;
     return Error(ErrorCode::kExchangeOrderIdConflict,
                  "unknown client ID conflicts with exchange ID");
@@ -197,8 +197,8 @@ absl::StatusOr<OrderTracker::TrackedOrder*> OrderTracker::Find(
     return Error(ErrorCode::kReportAccountMarketMismatch,
                  "account or market mismatch");
   }
-  if (order->exchange_id && exchange_id &&
-      *order->exchange_id != *exchange_id) {
+  if (order->exchange_order_id && exchange_order_id &&
+      *order->exchange_order_id != *exchange_order_id) {
     order->confirmation = ConfirmationState::NeedsQuery;
     return Error(ErrorCode::kExchangeOrderIdConflict,
                  "exchange ID changed for tracked client ID");
@@ -207,10 +207,10 @@ absl::StatusOr<OrderTracker::TrackedOrder*> OrderTracker::Find(
 }
 
 absl::Status OrderTracker::BindExchangeId(
-    TrackedOrder& order, const std::optional<ExchangeOrderId>& exchange_id) {
-  if (!exchange_id) return absl::OkStatus();
-  if (order.exchange_id) {
-    if (*order.exchange_id != *exchange_id) {
+    TrackedOrder& order, const std::optional<ExchangeOrderId>& exchange_order_id) {
+  if (!exchange_order_id) return absl::OkStatus();
+  if (order.exchange_order_id) {
+    if (*order.exchange_order_id != *exchange_order_id) {
       order.confirmation = ConfirmationState::NeedsQuery;
       return Error(ErrorCode::kExchangeOrderIdConflict, "exchange ID changed");
     }
@@ -218,22 +218,22 @@ absl::Status OrderTracker::BindExchangeId(
   }
   const auto key =
       ExchangeIndexKey(order.prepared.request.account,
-                       order.prepared.request.market, *exchange_id);
+                       order.prepared.request.market, *exchange_order_id);
   if (auto found = exchange_index_.find(key);
       found != exchange_index_.end() &&
-      found->second != order.prepared.client_id.value) {
+      found->second != order.prepared.client_order_id.value) {
     order.confirmation = ConfirmationState::NeedsQuery;
     return Error(ErrorCode::kExchangeOrderIdConflict,
                  "exchange ID already owned by another order");
   }
-  order.exchange_id = *exchange_id;
-  exchange_index_[key] = order.prepared.client_id.value;
+  order.exchange_order_id = *exchange_order_id;
+  exchange_index_[key] = order.prepared.client_order_id.value;
   return absl::OkStatus();
 }
 
 absl::StatusOr<TrackerResult> OrderTracker::RequestCancel(
-    const ClientOrderId& client_id) {
-  auto found = orders_.find(client_id.value);
+    const ClientOrderId& client_order_id) {
+  auto found = orders_.find(client_order_id.value);
   if (found == orders_.end())
     return Error(ErrorCode::kOrderNotFound, "order not tracked");
   auto& order = found->second;
@@ -245,8 +245,8 @@ absl::StatusOr<TrackerResult> OrderTracker::RequestCancel(
 }
 
 absl::StatusOr<TrackerResult> OrderTracker::FailBeforeWrite(
-    const ClientOrderId& client_id, std::string reason) {
-  auto found = orders_.find(client_id.value);
+    const ClientOrderId& client_order_id, std::string reason) {
+  auto found = orders_.find(client_order_id.value);
   if (found == orders_.end())
     return Error(ErrorCode::kOrderNotFound, "order not tracked");
   auto& order = found->second;
@@ -256,7 +256,7 @@ absl::StatusOr<TrackerResult> OrderTracker::FailBeforeWrite(
                  "tracked cumulative amount cannot be compared");
   if (order.lifecycle != OrderLifecycle::PendingCreate ||
       order.confirmation != ConfirmationState::Confirmed ||
-      order.exchange_id || order.created_emitted || *compared != 0)
+      order.exchange_order_id || order.created_emitted || *compared != 0)
     return Error(ErrorCode::kOrderNotCancelable,
                  "cannot prove no exchange write or fill");
   if (reason.empty()) reason = "LocalFailure";
@@ -268,8 +268,8 @@ absl::StatusOr<TrackerResult> OrderTracker::FailBeforeWrite(
 }
 
 absl::StatusOr<TrackerResult> OrderTracker::MarkSubmissionUnknown(
-    const ClientOrderId& client_id) {
-  auto found = orders_.find(client_id.value);
+    const ClientOrderId& client_order_id) {
+  auto found = orders_.find(client_order_id.value);
   if (found == orders_.end())
     return Error(ErrorCode::kOrderNotFound, "order not tracked");
   auto& order = found->second;
@@ -294,14 +294,14 @@ absl::StatusOr<TrackerResult> OrderTracker::ApplyQueriedOrder(
 
 absl::StatusOr<TrackerResult> OrderTracker::Update(const OrderUpdate& update,
                                                    bool queried_order) {
-  auto found = Find(update.account, update.market, update.client_id,
+  auto found = Find(update.account, update.market, update.client_order_id,
                     update.exchange_order_id);
   if (!found.ok()) return found.status();
   TrackedOrder& order = **found;
-  const auto previous_exchange = order.exchange_id;
+  const auto previous_exchange = order.exchange_order_id;
   auto bind = BindExchangeId(order, update.exchange_order_id);
   if (!bind.ok()) return bind;
-  bool changed = previous_exchange != order.exchange_id;
+  bool changed = previous_exchange != order.exchange_order_id;
   const OrderLifecycle next = Lifecycle(update.exchange_status);
   if (Terminal(order.lifecycle) && next != order.lifecycle) {
     order.confirmation = ConfirmationState::NeedsQuery;
@@ -374,14 +374,14 @@ absl::StatusOr<TrackerResult> OrderTracker::Update(const OrderUpdate& update,
 
 absl::StatusOr<TrackerResult> OrderTracker::ApplyTradeUpdate(
     const TradeUpdate& trade) {
-  auto found = Find(trade.account, trade.market, trade.client_id,
+  auto found = Find(trade.account, trade.market, trade.client_order_id,
                     trade.exchange_order_id);
   if (!found.ok()) return found.status();
   TrackedOrder& order = **found;
-  const auto previous_exchange = order.exchange_id;
+  const auto previous_exchange = order.exchange_order_id;
   auto bind = BindExchangeId(order, trade.exchange_order_id);
   if (!bind.ok()) return bind;
-  const bool bound = previous_exchange != order.exchange_id;
+  const bool bound = previous_exchange != order.exchange_order_id;
   if (trade.exchange_trade_id.value.empty() ||
       !trade.base_amount.IsStrictlyPositive() ||
       !trade.price.IsStrictlyPositive() || !trade.quote_amount.IsNonnegative())
@@ -389,7 +389,7 @@ absl::StatusOr<TrackerResult> OrderTracker::ApplyTradeUpdate(
   const auto key =
       TradeIndexKey(trade.account, trade.market, trade.exchange_trade_id);
   if (auto seen = seen_trades_.find(key); seen != seen_trades_.end()) {
-    if (seen->second != order.prepared.client_id.value) {
+    if (seen->second != order.prepared.client_order_id.value) {
       order.confirmation = ConfirmationState::NeedsQuery;
       return Error(ErrorCode::kTradeIdOnOtherOrder,
                    "trade ID assigned to another order");
@@ -427,7 +427,7 @@ absl::StatusOr<TrackerResult> OrderTracker::ApplyTradeUpdate(
   order.cumulative_quote = *quote;
   order.fees_by_asset = std::move(fees);
   order.last_update_time = trade.time;
-  seen_trades_[key] = order.prepared.client_id.value;
+  seen_trades_[key] = order.prepared.client_order_id.value;
   std::vector<TrackedOrderEvent> events;
   events.emplace_back(OrderTraded{MakeSnapshot(order), trade});
   if (order.lifecycle == OrderLifecycle::Traded &&
@@ -441,18 +441,18 @@ absl::StatusOr<TrackerResult> OrderTracker::ApplyTradeUpdate(
 }
 
 std::optional<OrderSnapshot> OrderTracker::Snapshot(
-    const ClientOrderId& client_id) const {
-  auto found = orders_.find(client_id.value);
+    const ClientOrderId& client_order_id) const {
+  auto found = orders_.find(client_order_id.value);
   if (found == orders_.end()) return std::nullopt;
   return MakeSnapshot(found->second);
 }
 
 std::vector<ClientOrderId> OrderTracker::OrdersNeedingQuery() const {
   std::vector<ClientOrderId> ids;
-  for (const auto& [client_id, order] : orders_) {
+  for (const auto& [client_order_id, order] : orders_) {
     if (order.completion_pending_fills ||
         order.confirmation != ConfirmationState::Confirmed)
-      ids.emplace_back(client_id);
+      ids.emplace_back(client_order_id);
   }
   return ids;
 }

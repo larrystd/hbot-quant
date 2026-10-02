@@ -78,7 +78,7 @@ ActionBatch SimplePmm::Decide(const StrategyInput& context, Trigger /*why*/) {
   for (const auto& order : context.orders) {
     if (Active(order))
       actions.ordered.emplace_back(
-          CancelOrder{config_.strategy_id, order.client_id});
+          CancelOrder{config_.strategy_id, order.client_order_id});
   }
 
   const auto reference = ReferencePrice(context);

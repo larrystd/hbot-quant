@@ -135,7 +135,7 @@ std::string ReplayOnce() {
       *open[1].request.limit_price->Compare(D("100.1")) != 0) {
     throw std::runtime_error("initial quote price failed");
   }
-  const auto first_buy = open[0].client_id;
+  const auto first_buy = open[0].client_order_id;
   if (!clock.Advance({15'000'001, 1}).ok())
     throw std::runtime_error("clock failed");
   auto refresh = shard.OnTimer({15'000'001, 1});

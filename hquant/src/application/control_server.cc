@@ -487,12 +487,12 @@ std::string OrderHistoryJson(const OrderHistoryPage& page) {
     if (const auto* prepared = std::get_if<PreparedOrder>(&row.payload)) {
       kind = "prepared_order";
       details =
-          ",\"client_id\":" + EscapeJson(prepared->client_id.value) +
+          ",\"client_id\":" + EscapeJson(prepared->client_order_id.value) +
           ",\"amount\":" + EscapeJson(prepared->request.base_amount.ToString());
     } else if (const auto* update = std::get_if<OrderUpdate>(&row.payload)) {
       kind = "order";
-      if (update->client_id)
-        details = ",\"client_id\":" + EscapeJson(update->client_id->value);
+      if (update->client_order_id)
+        details = ",\"client_id\":" + EscapeJson(update->client_order_id->value);
       details +=
           ",\"status\":" + EscapeJson(OrderStatusName(update->exchange_status));
     } else if (const auto* trade = std::get_if<TradeUpdate>(&row.payload)) {

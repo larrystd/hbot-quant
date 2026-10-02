@@ -26,7 +26,7 @@ OrderUpdate Update(std::string client, std::string exchange = "") {
   OrderUpdate update;
   update.account = AccountId("account-a");
   update.market = Market();
-  if (!client.empty()) update.client_id = ClientOrderId(std::move(client));
+  if (!client.empty()) update.client_order_id = ClientOrderId(std::move(client));
   if (!exchange.empty())
     update.exchange_order_id = ExchangeOrderId(std::move(exchange));
   return update;
@@ -36,7 +36,7 @@ TradeUpdate Trade(std::string client, std::string exchange = "") {
   TradeUpdate trade;
   trade.account = AccountId("account-a");
   trade.market = Market();
-  if (!client.empty()) trade.client_id = ClientOrderId(std::move(client));
+  if (!client.empty()) trade.client_order_id = ClientOrderId(std::move(client));
   if (!exchange.empty())
     trade.exchange_order_id = ExchangeOrderId(std::move(exchange));
   trade.exchange_trade_id = ExchangeTradeId("T1");

@@ -47,7 +47,7 @@ MarketId Market() {
 
 OrderHistoryRecord PreparedRecord(uint64_t sequence, std::string client = "B1") {
   PreparedOrder prepared;
-  prepared.client_id = ClientOrderId{std::move(client)};
+  prepared.client_order_id = ClientOrderId{std::move(client)};
   prepared.strategy_id = MakeStrategyId();
   prepared.request.account = AccountId{"A1"};
   prepared.request.market = Market();
@@ -79,7 +79,7 @@ TEST(RecoveryTest, CleanRunLoadsTypedContextAndOpenClientIds) {
   OrderUpdate update;
   update.account = AccountId{"A1"};
   update.market = Market();
-  update.client_id = ClientOrderId{"B1"};
+  update.client_order_id = ClientOrderId{"B1"};
   update.exchange_status = ExchangeOrderStatus::Traded;
   filled.payload = update;
   ASSERT_TRUE((*recorder)->TryPush(std::move(filled)));

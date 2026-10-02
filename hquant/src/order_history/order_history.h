@@ -35,7 +35,7 @@ struct ActionRecord {
   bool accepted = false;
   ErrorCode reason = ErrorCode::kOk;
   std::string message;
-  std::optional<ClientOrderId> client_id;
+  std::optional<ClientOrderId> client_order_id;
 };
 using OrderHistoryRecordPayload =
     std::variant<PreparedOrder, OrderUpdate, TradeUpdate, RecordedCheckpoint,

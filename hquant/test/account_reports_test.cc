@@ -99,7 +99,7 @@ TEST(AccountStreamParserTest, EmitsTradeBeforeStatusAndTrackerDeduplicates) {
   AccountPushParser stream(AccountId("A1"), ExchangeId("binance"));
   OrderTracker tracker;
   PreparedOrder prepared;
-  prepared.client_id = ClientOrderId("C1");
+  prepared.client_order_id = ClientOrderId("C1");
   prepared.strategy_id = StrategyId{1, StrategyName("simple_pmm")};
   prepared.request.account = AccountId("A1");
   prepared.request.market = Market();
@@ -163,7 +163,7 @@ TEST(AccountStreamParserTest, CancelUsesOriginalIdAndGapsRequestResync) {
                                       "0", -1, "cancel-request", "C1"),
                                Received());
   ASSERT_TRUE(canceled.ok());
-  EXPECT_EQ(std::get<OrderUpdate>(canceled->events[0]).client_id->value, "C1");
+  EXPECT_EQ(std::get<OrderUpdate>(canceled->events[0]).client_order_id->value, "C1");
   EXPECT_FALSE(stream
                    .Parse(Report("CANCELED", "CANCELED", "0", "0", "0", "0", -1,
                                  "cancel-request", ""),
@@ -225,7 +225,7 @@ TEST(ReconciliationTest, QueriesOriginalIdThenTradesAndComparesTotals) {
   EXPECT_TRUE(result->complete) << result->unresolved_status;
   EXPECT_TRUE(result->unresolved_status.ok());
   ASSERT_EQ(result->trades.size(), 1);
-  EXPECT_EQ(result->trades[0].client_id->value, "C1");
+  EXPECT_EQ(result->trades[0].client_order_id->value, "C1");
   EXPECT_EQ(rest.targets.size(), 2);
   EXPECT_EQ(rest.targets[0],
             "/api/v3/order?symbol=BTCUSDT&origClientOrderId=C1");
@@ -325,12 +325,12 @@ TEST(ReconciliationTest, RestartPlanAndOpenOrderDiscovery) {
   input.previous_run_clean = false;
   input.executor_checkpoints_complete = false;
   PreparedOrder prepared;
-  prepared.client_id = ClientOrderId("C1");
+  prepared.client_order_id = ClientOrderId("C1");
   prepared.request.account = input.account;
   prepared.request.market = Market();
   input.persisted_prepared_orders.push_back(prepared);
   OrderSnapshot snapshot;
-  snapshot.client_id = ClientOrderId("C1");
+  snapshot.client_order_id = ClientOrderId("C1");
   snapshot.request = prepared.request;
   input.live_snapshots.push_back(snapshot);
   auto plan = PlanStartupQueries(input);
@@ -348,7 +348,7 @@ TEST(ReconciliationTest, RestartPlanAndOpenOrderDiscovery) {
       input.account, Market(), std::chrono::steady_clock::now()));
   ASSERT_TRUE(discovered.ok()) << discovered.status();
   ASSERT_EQ(discovered->size(), 2);
-  EXPECT_EQ((*discovered)[1].original_client_id.value, "C2");
+  EXPECT_EQ((*discovered)[1].client_order_id.value, "C2");
   EXPECT_EQ(rest.targets[0], "/api/v3/openOrders?symbol=BTCUSDT");
 
   FakeRest recent_rest;
@@ -361,7 +361,7 @@ TEST(ReconciliationTest, RestartPlanAndOpenOrderDiscovery) {
       std::chrono::steady_clock::now()));
   ASSERT_TRUE(recent.ok()) << recent.status();
   ASSERT_EQ(recent->size(), 1);
-  EXPECT_EQ((*recent)[0].original_client_id.value, "C3");
+  EXPECT_EQ((*recent)[0].client_order_id.value, "C3");
   EXPECT_EQ(recent_rest.targets[0],
             "/api/v3/"
             "allOrders?symbol=BTCUSDT&startTime=1000&endTime=2000&limit=1000");

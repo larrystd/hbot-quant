@@ -99,7 +99,7 @@ TEST(MultiShardTest, CapitalRateAndAccountReportsStayWithinTheirShard) {
   OrderUpdate update;
   update.account = account;
   update.market = market;
-  update.client_id = ClientOrderId("C2");
+  update.client_order_id = ClientOrderId("C2");
   update.exchange_status = ExchangeOrderStatus::Open;
   auto routed = (*router)->Route(update);
   EXPECT_EQ(routed.disposition, RouteDisposition::Forwarded);
@@ -115,7 +115,7 @@ TEST(MultiShardTest, CapitalRateAndAccountReportsStayWithinTheirShard) {
   EXPECT_EQ(consumed->strategy_id.value, 2);
   (*router)->MarkOrderQueried(account);
   EXPECT_FALSE((*router)->IsAccountPaused(account));
-  update.client_id = ClientOrderId("BAD");
+  update.client_order_id = ClientOrderId("BAD");
   auto unknown = (*router)->Route(update);
   EXPECT_EQ(unknown.disposition, RouteDisposition::Quarantined);
   EXPECT_TRUE(unknown.pause_account);
@@ -147,7 +147,7 @@ TEST(MultiShardTest, EightShardRouterQueuesStaySeparate) {
     OrderUpdate update;
     update.account = account;
     update.market = market;
-    update.client_id = ClientOrderId("C" + std::to_string(shard + 1));
+    update.client_order_id = ClientOrderId("C" + std::to_string(shard + 1));
     const auto result = (*router)->Route(update);
     EXPECT_EQ(result.failure, ErrorCode::kOk);
     if (shard == 0) {

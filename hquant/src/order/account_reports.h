@@ -45,7 +45,7 @@ namespace hquant::binance_spot {
 struct OrderToQuery {
   AccountId account;
   MarketId market;
-  ClientOrderId original_client_id;
+  ClientOrderId client_order_id;
 };
 
 struct StartupQueryInput {

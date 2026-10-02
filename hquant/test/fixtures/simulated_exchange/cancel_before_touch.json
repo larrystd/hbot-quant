@@ -32,7 +32,7 @@
       "ordinal": 0,
       "event": {
         "kind": "submit",
-        "client_id": "B1",
+        "client_order_id": "B1",
         "side": "Buy",
         "price": "100",
         "amount": "0.01"
@@ -43,7 +43,7 @@
       "ordinal": 0,
       "event": {
         "kind": "cancel",
-        "client_id": "B1"
+        "client_order_id": "B1"
       }
     },
     {
@@ -64,12 +64,12 @@
         "events": [
           {
             "kind": "OrderOpened",
-            "client_id": "B1"
+            "client_order_id": "B1"
           }
         ],
         "open_orders": [
           {
-            "client_id": "B1",
+            "client_order_id": "B1",
             "side": "Buy",
             "price": "100",
             "amount": "0.01"
@@ -93,7 +93,7 @@
         "events": [
           {
             "kind": "OrderCanceled",
-            "client_id": "B1"
+            "client_order_id": "B1"
           }
         ],
         "open_orders": [],

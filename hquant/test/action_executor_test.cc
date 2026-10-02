@@ -32,7 +32,7 @@ struct FakeGateway final : hquant::OrderGateway {
   absl::StatusOr<hquant::PreparedOrder> PrepareSubmit(
       hquant::ApprovedOrder approved) override {
     trace->push_back("prepare");
-    prepared.client_id = hquant::ClientOrderId("B1");
+    prepared.client_order_id = hquant::ClientOrderId("B1");
     prepared.strategy_id = approved.strategy_id;
     prepared.request = approved.request;
     return prepared;
@@ -99,7 +99,7 @@ int main() {
       now,         hquant::MonoTime{},       true, true};
   auto results = action_executor.Execute(batch, context);
   if (results.size() != 2 || !results[0].accepted || !results[1].accepted ||
-      results[1].client_id != hquant::ClientOrderId("B1"))
+      results[1].client_order_id != hquant::ClientOrderId("B1"))
     return 2;
   const std::vector<std::string> expected{"cancel",   "decision", "prepare",
                                           "prepared", "start",    "decision"};

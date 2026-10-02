@@ -73,7 +73,7 @@ void SimpleSimulatedExchange::EmitOrder(const RestingOrder& order,
   OrderUpdate update;
   update.account = config_.account;
   update.market = config_.market.market;
-  update.client_id = order.client_id;
+  update.client_order_id = order.client_order_id;
   update.exchange_status = status;
   update.time = Now();
   if (status == ExchangeOrderStatus::Traded) {
@@ -159,7 +159,7 @@ absl::StatusOr<PreparedOrder> SimpleSimulatedExchange::PrepareSubmit(
     return Error(ErrorCode::kOrderDuplicate, "duplicate Simulated client ID");
   }
   PreparedOrder prepared;
-  prepared.client_id = id;
+  prepared.client_order_id = id;
   prepared.strategy_id = approved.strategy_id;
   prepared.request = approved.request;
   prepared.created_at_utc = clock_.UtcNow();
@@ -169,13 +169,13 @@ absl::StatusOr<PreparedOrder> SimpleSimulatedExchange::PrepareSubmit(
 }
 
 absl::Status SimpleSimulatedExchange::StartPrepared(
-    const ClientOrderId& client_id) {
-  auto it = prepared_.find(client_id.value);
+    const ClientOrderId& client_order_id) {
+  auto it = prepared_.find(client_order_id.value);
   if (it == prepared_.end())
     return Error(ErrorCode::kOrderNotFound, "Simulated prepared order absent");
   ApprovedOrder approved = std::move(it->second);
   prepared_.erase(it);
-  RestingOrder order{client_id, approved.strategy_id, approved.request};
+  RestingOrder order{client_order_id, approved.strategy_id, approved.request};
   const AssetId& collateral = order.request.side == Side::Buy
                                   ? config_.market.quote_asset
                                   : config_.market.base_asset;
@@ -208,18 +208,18 @@ absl::Status SimpleSimulatedExchange::StartPrepared(
 }
 
 absl::Status SimpleSimulatedExchange::AbortPrepared(
-    const ClientOrderId& client_id) {
-  if (prepared_.erase(client_id.value) == 0) {
+    const ClientOrderId& client_order_id) {
+  if (prepared_.erase(client_order_id.value) == 0) {
     return Error(ErrorCode::kOrderNotFound, "Simulated prepared order absent");
   }
   return absl::OkStatus();
 }
 
 absl::Status SimpleSimulatedExchange::StartCancel(
-    const StrategyId& strategy_id, const ClientOrderId& client_id) {
+    const StrategyId& strategy_id, const ClientOrderId& client_order_id) {
   auto it = std::find_if(
       orders_.begin(), orders_.end(), [&](const RestingOrder& order) {
-        return order.client_id == client_id && order.strategy_id == strategy_id;
+        return order.client_order_id == client_order_id && order.strategy_id == strategy_id;
       });
   if (it == orders_.end())
     return Error(ErrorCode::kOrderNotFound, "Simulated open order absent");
@@ -284,7 +284,7 @@ absl::Status SimpleSimulatedExchange::Fill(size_t index) {
   TradeUpdate trade;
   trade.account = config_.account;
   trade.market = config_.market.market;
-  trade.client_id = order.client_id;
+  trade.client_order_id = order.client_order_id;
   trade.exchange_trade_id =
       ExchangeTradeId("T" + std::to_string(next_trade_id_++));
   trade.price = price;

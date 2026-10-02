@@ -599,7 +599,7 @@ absl::StatusOr<PreviousRun> LoadPreviousRun(const std::string& path,
       last_seen[shard] = static_cast<uint64_t>(sequence);
       if (const auto* prepared =
               std::get_if<PreparedOrder>(&decoded->payload)) {
-        if (prepared->client_id.value.empty()) {
+        if (prepared->client_order_id.value.empty()) {
           return Error(ErrorCode::kRecoveryDataCorrupted,
                        "empty client ID in recovered prepared order");
         }
@@ -614,8 +614,8 @@ absl::StatusOr<PreviousRun> LoadPreviousRun(const std::string& path,
       } else if (const auto* order =
                      std::get_if<OrderUpdate>(&decoded->payload)) {
         snapshot.context.exchange_orders.push_back(*order);
-        if (order->client_id) {
-          terminal_by_client[order->client_id->value] =
+        if (order->client_order_id) {
+          terminal_by_client[order->client_order_id->value] =
               Terminal(order->exchange_status);
         }
       } else if (const auto* trade =
@@ -647,10 +647,10 @@ absl::StatusOr<PreviousRun> LoadPreviousRun(const std::string& path,
                           !snapshot.gaps.empty() ||
                           snapshot.may_have_unwritten_records;
   for (const auto& prepared : snapshot.context.recovered_prepared_orders) {
-    const auto terminal = terminal_by_client.find(prepared.client_id.value);
+    const auto terminal = terminal_by_client.find(prepared.client_order_id.value);
     if (incomplete || terminal == terminal_by_client.end() ||
         !terminal->second) {
-      snapshot.context.unresolved_ids.push_back(prepared.client_id);
+      snapshot.context.unresolved_ids.push_back(prepared.client_order_id);
     }
   }
   snapshot.context.confidence =

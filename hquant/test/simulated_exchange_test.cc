@@ -49,7 +49,7 @@ void ExpectDecimal(const Decimal& actual, std::string_view expected) {
 
 struct NormalizedEvent {
   std::string kind;
-  std::string client_id;
+  std::string client_order_id;
   std::string trade_id;
   Decimal price;
   Decimal amount;
@@ -63,7 +63,7 @@ std::vector<NormalizedEvent> Normalize(std::vector<AccountEvent> events) {
     if (const auto* trade = std::get_if<TradeUpdate>(&raw)) {
       NormalizedEvent event;
       event.kind = "OrderTraded";
-      event.client_id = trade->client_id->value;
+      event.client_order_id = trade->client_order_id->value;
       event.trade_id = trade->exchange_trade_id.value;
       event.price = trade->price;
       event.amount = trade->base_amount;
@@ -74,7 +74,7 @@ std::vector<NormalizedEvent> Normalize(std::vector<AccountEvent> events) {
       result.push_back(std::move(event));
     } else if (const auto* update = std::get_if<OrderUpdate>(&raw)) {
       NormalizedEvent event;
-      event.client_id = update->client_id->value;
+      event.client_order_id = update->client_order_id->value;
       switch (update->exchange_status) {
         case ExchangeOrderStatus::Open:
           event.kind = "OrderOpened";
@@ -118,7 +118,7 @@ TEST(SimulatedExchangeTest, ReplaysAllSimulatedExchangeCasesStepByStep) {
       simdjson::dom::parser parser;
       simdjson::dom::element event = parser.parse(step.event_json).value();
       if (S(event, "kind") == "submit")
-        submit_ids.push_back(S(event, "client_id"));
+        submit_ids.push_back(S(event, "client_order_id"));
     }
     size_t next_id = 0;
     simdjson::dom::parser setup_parser;
@@ -175,8 +175,8 @@ TEST(SimulatedExchangeTest, ReplaysAllSimulatedExchangeCasesStepByStep) {
                                clock.MonoNow() + std::chrono::seconds(1)};
         auto prepared = sim_exchange.PrepareSubmit(std::move(approved));
         ASSERT_TRUE(prepared.ok()) << prepared.status();
-        EXPECT_EQ(prepared->client_id.value, S(event, "client_id"));
-        auto started = sim_exchange.StartPrepared(prepared->client_id);
+        EXPECT_EQ(prepared->client_order_id.value, S(event, "client_order_id"));
+        auto started = sim_exchange.StartPrepared(prepared->client_order_id);
         if (fixture->expectation_kind == "intentional_divergence") {
           EXPECT_EQ(CodeOf(started), ErrorCode::kSimulatedBalanceInsufficient);
         } else
@@ -184,7 +184,7 @@ TEST(SimulatedExchangeTest, ReplaysAllSimulatedExchangeCasesStepByStep) {
       } else if (kind == "cancel") {
         EXPECT_TRUE(
             sim_exchange
-                .StartCancel(strategy_id, ClientOrderId(S(event, "client_id")))
+                .StartCancel(strategy_id, ClientOrderId(S(event, "client_order_id")))
                 .ok());
       } else if (kind == "book_bbo") {
         EXPECT_TRUE(
@@ -205,7 +205,7 @@ TEST(SimulatedExchangeTest, ReplaysAllSimulatedExchangeCasesStepByStep) {
       for (auto wanted : expected_events) {
         const auto& actual = actual_events[i++];
         EXPECT_EQ(actual.kind, S(wanted, "kind"));
-        EXPECT_EQ(actual.client_id, S(wanted, "client_id"));
+        EXPECT_EQ(actual.client_order_id, S(wanted, "client_order_id"));
         if (actual.kind == "OrderTraded") {
           EXPECT_EQ(actual.trade_id, S(wanted, "trade_id"));
           ExpectDecimal(actual.price, S(wanted, "price"));
@@ -226,7 +226,7 @@ TEST(SimulatedExchangeTest, ReplaysAllSimulatedExchangeCasesStepByStep) {
       i = 0;
       for (auto wanted : expected_orders) {
         const auto& actual = actual_orders[i++];
-        EXPECT_EQ(actual.client_id.value, S(wanted, "client_id"));
+        EXPECT_EQ(actual.client_order_id.value, S(wanted, "client_order_id"));
         EXPECT_EQ(actual.request.side, ParseSide(wanted));
         ASSERT_TRUE(actual.request.limit_price);
         ExpectDecimal(*actual.request.limit_price, S(wanted, "price"));
@@ -287,8 +287,8 @@ TEST(SimulatedExchangeTest, AbortedPreparationNeverCreatesAnOrder) {
   ASSERT_TRUE(prepared.ok()) << prepared.status();
   EXPECT_TRUE(sim_exchange.DrainEvents().empty());
   EXPECT_TRUE(sim_exchange.OpenOrders().empty());
-  EXPECT_TRUE(sim_exchange.AbortPrepared(prepared->client_id).ok());
-  EXPECT_EQ(CodeOf(sim_exchange.StartPrepared(prepared->client_id)),
+  EXPECT_TRUE(sim_exchange.AbortPrepared(prepared->client_order_id).ok());
+  EXPECT_EQ(CodeOf(sim_exchange.StartPrepared(prepared->client_order_id)),
             ErrorCode::kOrderNotFound);
   EXPECT_TRUE(sim_exchange.DrainEvents().empty());
   ExpectDecimal(sim_exchange.AvailableBalance(AssetId("USDT")), "100");

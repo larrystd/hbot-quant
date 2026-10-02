@@ -301,9 +301,9 @@ absl::StatusOr<std::vector<ActionResult>> Shard::RunStrategy(
         if (!result.prepared) continue;
         auto registered = tracker_.Register(*result.prepared);
         if (!registered.ok()) return registered.status();
-        order_ids_.push_back(result.prepared->client_id);
+        order_ids_.push_back(result.prepared->client_order_id);
         if (result.hold_id)
-          holds_.emplace(result.prepared->client_id.value, *result.hold_id);
+          holds_.emplace(result.prepared->client_order_id.value, *result.hold_id);
       }
       auto status = DrainSimulatedExchangeEvents();
       if (!status.ok()) return status;
@@ -350,12 +350,12 @@ void Shard::AddGap(uint64_t sequence) {
 
 absl::Status Shard::ProcessAccountEvent(const AccountEvent& event) {
   if (const auto* trade = std::get_if<TradeUpdate>(&event)) {
-    if (!trade->client_id)
+    if (!trade->client_order_id)
       return Error(ErrorCode::kShardReportOrderUnknown,
                    "Simulated trade without client ID");
     auto updated = tracker_.ApplyTradeUpdate(*trade);
     if (!updated.ok()) return updated.status();
-    auto it = holds_.find(trade->client_id->value);
+    auto it = holds_.find(trade->client_order_id->value);
     if (it != holds_.end()) {
       const bool buy = updated->snapshot.request.side == Side::Buy;
       auto status = risk_.ApplyTrade(
@@ -370,7 +370,7 @@ absl::Status Shard::ProcessAccountEvent(const AccountEvent& event) {
     return status;
   }
   if (const auto* update = std::get_if<OrderUpdate>(&event)) {
-    if (!update->client_id)
+    if (!update->client_order_id)
       return Error(ErrorCode::kShardReportOrderUnknown,
                    "Simulated order without client ID");
     auto updated = tracker_.ApplyOrderUpdate(*update);
@@ -379,7 +379,7 @@ absl::Status Shard::ProcessAccountEvent(const AccountEvent& event) {
         update->exchange_status == ExchangeOrderStatus::Canceled ||
         update->exchange_status == ExchangeOrderStatus::Rejected ||
         update->exchange_status == ExchangeOrderStatus::Expired) {
-      auto it = holds_.find(update->client_id->value);
+      auto it = holds_.find(update->client_order_id->value);
       if (it != holds_.end()) {
         auto status = risk_.Release(it->second);
         if (!status.ok()) return status;

@@ -14,9 +14,9 @@ namespace hquant {
 namespace {
 
 void UnwindPrepared(RiskGate& risk, OrderGateway& gateway, HoldId hold,
-                    const std::optional<ClientOrderId>& client_id) {
-  if (client_id) {
-    const auto aborted = gateway.AbortPrepared(*client_id);
+                    const std::optional<ClientOrderId>& client_order_id) {
+  if (client_order_id) {
+    const auto aborted = gateway.AbortPrepared(*client_order_id);
     // A gateway may consume the prepared slot before returning a local
     // failure. In that case there is no slot left to abort.
     if (!aborted.ok() && CodeOf(aborted) != ErrorCode::kOrderNotFound)
@@ -92,12 +92,12 @@ std::vector<ActionResult> ActionExecutor::Execute(
       result.message = "action strategy ID does not match the shard strategy";
     } else if (const auto* cancel = std::get_if<CancelOrder>(&action)) {
       const auto status =
-          gateway_.StartCancel(cancel->strategy_id, cancel->client_id);
+          gateway_.StartCancel(cancel->strategy_id, cancel->client_order_id);
       result.accepted = status.ok();
       result.reason = status.ok() ? ErrorCode::kOk : CodeOf(status);
       result.message =
           status.ok() ? "cancel requested" : std::string(status.message());
-      result.client_id = cancel->client_id;
+      result.client_order_id = cancel->client_order_id;
     } else {
       const auto& order = std::get<SubmitOrder>(action);
       std::optional<OrderRequest> normalized;
@@ -121,26 +121,26 @@ std::vector<ActionResult> ActionExecutor::Execute(
             UnwindPrepared(risk_, gateway_, hold.hold_id, std::nullopt);
             result.reason = CodeOf(prepared.status());
             result.message = std::string(prepared.status().message());
-          } else if (prepared->client_id.value.empty() ||
+          } else if (prepared->client_order_id.value.empty() ||
                      prepared->strategy_id != order.strategy_id ||
                      prepared->request.account != normalized->account ||
                      prepared->request.market != normalized->market) {
-            UnwindPrepared(risk_, gateway_, hold.hold_id, prepared->client_id);
+            UnwindPrepared(risk_, gateway_, hold.hold_id, prepared->client_order_id);
             result.reason = ErrorCode::kInternal;
             result.message = "gateway returned mismatched prepared order";
           } else {
             const auto attached =
-                risk_.AttachClientId(hold.hold_id, prepared->client_id);
+                risk_.AttachClientId(hold.hold_id, prepared->client_order_id);
             if (!attached.ok()) {
               UnwindPrepared(risk_, gateway_, hold.hold_id,
-                             prepared->client_id);
+                             prepared->client_order_id);
               result.reason = CodeOf(attached);
               result.message = std::string(attached.message());
             } else {
-              result.client_id = prepared->client_id;
+              result.client_order_id = prepared->client_order_id;
               result.prepared = *prepared;
               Record(*prepared, order.strategy_id, context.now_utc);
-              const auto started = gateway_.StartPrepared(prepared->client_id);
+              const auto started = gateway_.StartPrepared(prepared->client_order_id);
               result.accepted = started.ok();
               result.reason = started.ok() ? ErrorCode::kOk : CodeOf(started);
               result.message = started.ok() ? "locally submitted"
@@ -150,7 +150,7 @@ std::vector<ActionResult> ActionExecutor::Execute(
               }
               if (!started.ok()) {
                 UnwindPrepared(risk_, gateway_, hold.hold_id,
-                               prepared->client_id);
+                               prepared->client_order_id);
               }
             }
           }
@@ -166,7 +166,7 @@ std::vector<ActionResult> ActionExecutor::Execute(
     action_record.accepted = result.accepted;
     action_record.reason = result.reason;
     action_record.message = result.message;
-    action_record.client_id = result.client_id;
+    action_record.client_order_id = result.client_order_id;
     Record(std::move(action_record), action_strategy_id, context.now_utc);
     results.push_back(std::move(result));
   }

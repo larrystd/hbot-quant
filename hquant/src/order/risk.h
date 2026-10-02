@@ -32,7 +32,7 @@ enum class HoldState { Active, SubmissionUnknown, Released };
 
 struct FundsHold {
   HoldId hold_id;
-  std::optional<ClientOrderId> client_id;
+  std::optional<ClientOrderId> client_order_id;
   AccountId account;
   StrategyId strategy_id;
   uint64_t budget_version = 0;
@@ -96,7 +96,7 @@ class RiskGate {
                         const TradingRule& rule, UtcTime now, bool market_live,
                         bool account_fresh, FundsHold* out,
                         std::string_view* detail = nullptr);
-  absl::Status AttachClientId(HoldId hold, ClientOrderId client_id);
+  absl::Status AttachClientId(HoldId hold, ClientOrderId client_order_id);
   absl::Status MarkSubmissionUnknown(HoldId hold);
   // Move a verified spent amount from outstanding hold into realized usage.
   absl::Status ApplyTrade(HoldId hold, const AssetId& spent_asset,

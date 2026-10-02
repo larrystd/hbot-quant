@@ -30,7 +30,7 @@ struct ActionResult {
   bool accepted = false;
   ErrorCode reason = ErrorCode::kOk;
   std::string message;
-  std::optional<ClientOrderId> client_id;
+  std::optional<ClientOrderId> client_order_id;
   std::optional<PreparedOrder> prepared;
   std::optional<HoldId> hold_id;
 };

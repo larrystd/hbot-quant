@@ -97,7 +97,7 @@ ExchangeOrderStatus Status(const std::string& text) {
 
 PreparedOrder PreparedFromFixture(simdjson::dom::element setup) {
   PreparedOrder prepared;
-  prepared.client_id = ClientOrderId{String(setup, "client_id")};
+  prepared.client_order_id = ClientOrderId{String(setup, "client_order_id")};
   prepared.strategy_id =
       StrategyId{Unsigned(setup, "strategy_id"), StrategyName{"simple_pmm"}};
   prepared.request.account = AccountId{String(setup, "account")};
@@ -121,15 +121,15 @@ absl::StatusOr<TrackerResult> ReplayStep(OrderTracker& tracker,
   const std::string kind = String(event, "kind");
   if (kind == "register") return tracker.Register(prepared);
   if (kind == "cancel_requested")
-    return tracker.RequestCancel(prepared.client_id);
+    return tracker.RequestCancel(prepared.client_order_id);
   if (kind == "submission_unknown")
-    return tracker.MarkSubmissionUnknown(prepared.client_id);
+    return tracker.MarkSubmissionUnknown(prepared.client_order_id);
   if (kind == "order_update" || kind == "reconcile") {
     OrderUpdate update;
     update.account = prepared.request.account;
     update.market = prepared.request.market;
-    if (auto id = OptionalString(event, "client_id"))
-      update.client_id = ClientOrderId{*id};
+    if (auto id = OptionalString(event, "client_order_id"))
+      update.client_order_id = ClientOrderId{*id};
     if (auto id = OptionalString(event, "exchange_order_id"))
       update.exchange_order_id = ExchangeOrderId{*id};
     update.exchange_status = Status(String(event, "exchange_status"));
@@ -146,8 +146,8 @@ absl::StatusOr<TrackerResult> ReplayStep(OrderTracker& tracker,
     TradeUpdate trade;
     trade.account = prepared.request.account;
     trade.market = prepared.request.market;
-    if (auto id = OptionalString(event, "client_id"))
-      trade.client_id = ClientOrderId{*id};
+    if (auto id = OptionalString(event, "client_order_id"))
+      trade.client_order_id = ClientOrderId{*id};
     if (auto id = OptionalString(event, "exchange_order_id"))
       trade.exchange_order_id = ExchangeOrderId{*id};
     trade.exchange_trade_id = ExchangeTradeId{String(event, "trade_id")};
@@ -247,7 +247,7 @@ TEST(OrderTrackerTest,
      RejectsIdCollisionAndOverfillWithoutMutatingVerifiedFills) {
   OrderTracker tracker;
   PreparedOrder first;
-  first.client_id = ClientOrderId{"B1"};
+  first.client_order_id = ClientOrderId{"B1"};
   first.strategy_id = StrategyId{1, StrategyName{"s"}};
   first.request.account = AccountId{"A1"};
   first.request.market =
@@ -256,23 +256,23 @@ TEST(OrderTrackerTest,
   first.request.limit_price = D("100");
   ASSERT_TRUE(tracker.Register(first).ok());
   auto second = first;
-  second.client_id = ClientOrderId{"B2"};
+  second.client_order_id = ClientOrderId{"B2"};
   ASSERT_TRUE(tracker.Register(second).ok());
   OrderUpdate ack;
   ack.account = first.request.account;
   ack.market = first.request.market;
-  ack.client_id = first.client_id;
+  ack.client_order_id = first.client_order_id;
   ack.exchange_order_id = ExchangeOrderId{"E1"};
   ack.exchange_status = ExchangeOrderStatus::Open;
   ASSERT_TRUE(tracker.ApplyOrderUpdate(ack).ok());
-  ack.client_id = second.client_id;
+  ack.client_order_id = second.client_order_id;
   EXPECT_EQ(CodeOf(tracker.ApplyOrderUpdate(ack).status()),
             ErrorCode::kExchangeOrderIdConflict);
   EXPECT_EQ(tracker.OrdersNeedingQuery().size(), 2);
   TradeUpdate trade;
   trade.account = first.request.account;
   trade.market = first.request.market;
-  trade.client_id = first.client_id;
+  trade.client_order_id = first.client_order_id;
   trade.exchange_order_id = ExchangeOrderId{"E1"};
   trade.exchange_trade_id = ExchangeTradeId{"T1"};
   trade.price = D("100");
@@ -280,7 +280,7 @@ TEST(OrderTrackerTest,
   trade.quote_amount = D("110");
   EXPECT_EQ(CodeOf(tracker.ApplyTradeUpdate(trade).status()),
             ErrorCode::kTradeExceedsOrderAmount);
-  auto snapshot = tracker.Snapshot(first.client_id);
+  auto snapshot = tracker.Snapshot(first.client_order_id);
   ASSERT_TRUE(snapshot);
   ExpectDecimal(snapshot->cumulative_base, "0");
 }
@@ -288,7 +288,7 @@ TEST(OrderTrackerTest,
 TEST(OrderTrackerTest, ReconcilesUnknownSubmissionUsingOriginalClientId) {
   OrderTracker tracker;
   PreparedOrder prepared;
-  prepared.client_id = ClientOrderId{"B1"};
+  prepared.client_order_id = ClientOrderId{"B1"};
   prepared.strategy_id = StrategyId{1, StrategyName{"s"}};
   prepared.request.account = AccountId{"A1"};
   prepared.request.market =
@@ -296,7 +296,7 @@ TEST(OrderTrackerTest, ReconcilesUnknownSubmissionUsingOriginalClientId) {
   prepared.request.base_amount = D("1");
   prepared.request.limit_price = D("100");
   ASSERT_TRUE(tracker.Register(prepared).ok());
-  auto unknown = tracker.MarkSubmissionUnknown(prepared.client_id);
+  auto unknown = tracker.MarkSubmissionUnknown(prepared.client_order_id);
   ASSERT_TRUE(unknown.ok());
   EXPECT_EQ(unknown->snapshot.display_state,
             OrderDisplayState::SubmissionUnknown);
@@ -304,7 +304,7 @@ TEST(OrderTrackerTest, ReconcilesUnknownSubmissionUsingOriginalClientId) {
   OrderUpdate recovered;
   recovered.account = prepared.request.account;
   recovered.market = prepared.request.market;
-  recovered.client_id = prepared.client_id;
+  recovered.client_order_id = prepared.client_order_id;
   recovered.exchange_order_id = ExchangeOrderId{"E1"};
   recovered.exchange_status = ExchangeOrderStatus::Open;
   auto queried_order = tracker.ApplyQueriedOrder(recovered);
@@ -322,7 +322,7 @@ TEST(OrderTrackerTest, ReconcilesUnknownSubmissionUsingOriginalClientId) {
 TEST(OrderTrackerTest, RoutesExchangeOnlyReportAndDoesNotRegressOnStaleStatus) {
   OrderTracker tracker;
   PreparedOrder prepared;
-  prepared.client_id = ClientOrderId{"B1"};
+  prepared.client_order_id = ClientOrderId{"B1"};
   prepared.strategy_id = StrategyId{1, StrategyName{"s"}};
   prepared.request.account = AccountId{"A1"};
   prepared.request.market =
@@ -333,11 +333,11 @@ TEST(OrderTrackerTest, RoutesExchangeOnlyReportAndDoesNotRegressOnStaleStatus) {
   OrderUpdate update;
   update.account = prepared.request.account;
   update.market = prepared.request.market;
-  update.client_id = prepared.client_id;
+  update.client_order_id = prepared.client_order_id;
   update.exchange_order_id = ExchangeOrderId{"E1"};
   update.exchange_status = ExchangeOrderStatus::Open;
   ASSERT_TRUE(tracker.ApplyOrderUpdate(update).ok());
-  update.client_id.reset();
+  update.client_order_id.reset();
   update.exchange_status = ExchangeOrderStatus::PartiallyTraded;
   auto partial = tracker.ApplyOrderUpdate(update);
   ASSERT_TRUE(partial.ok());
@@ -354,7 +354,7 @@ TEST(OrderTrackerTest,
      ProvenPreWriteFailureEndsPendingOrderWithoutCreatedEvent) {
   OrderTracker tracker;
   PreparedOrder prepared;
-  prepared.client_id = ClientOrderId{"B1"};
+  prepared.client_order_id = ClientOrderId{"B1"};
   prepared.strategy_id = StrategyId{1, StrategyName{"s"}};
   prepared.request.account = AccountId{"A1"};
   prepared.request.market =
@@ -363,7 +363,7 @@ TEST(OrderTrackerTest,
   prepared.request.limit_price = D("100");
   ASSERT_TRUE(tracker.Register(prepared).ok());
   auto failed =
-      tracker.FailBeforeWrite(prepared.client_id, "SendSlotUnavailable");
+      tracker.FailBeforeWrite(prepared.client_order_id, "SendSlotUnavailable");
   ASSERT_TRUE(failed.ok()) << failed.status();
   EXPECT_EQ(failed->snapshot.display_state, OrderDisplayState::Failed);
   ASSERT_EQ(failed->events.size(), 1);
@@ -371,7 +371,7 @@ TEST(OrderTrackerTest,
   EXPECT_EQ(std::get<OrderFailed>(failed->events[0]).reason,
             "SendSlotUnavailable");
   EXPECT_EQ(
-      CodeOf(tracker.FailBeforeWrite(prepared.client_id, "again").status()),
+      CodeOf(tracker.FailBeforeWrite(prepared.client_order_id, "again").status()),
       ErrorCode::kOrderNotCancelable);
 }
 

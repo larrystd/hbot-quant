@@ -36,7 +36,7 @@
       "ordinal": 0,
       "event": {
         "kind": "submit",
-        "client_id": "B1",
+        "client_order_id": "B1",
         "side": "Buy",
         "price": "100",
         "amount": "0.01"
@@ -69,12 +69,12 @@
         "events": [
           {
             "kind": "OrderOpened",
-            "client_id": "B1"
+            "client_order_id": "B1"
           }
         ],
         "open_orders": [
           {
-            "client_id": "B1",
+            "client_order_id": "B1",
             "side": "Buy",
             "price": "100",
             "amount": "0.01"
@@ -98,7 +98,7 @@
         "events": [],
         "open_orders": [
           {
-            "client_id": "B1",
+            "client_order_id": "B1",
             "side": "Buy",
             "price": "100",
             "amount": "0.01"
@@ -122,7 +122,7 @@
         "events": [
           {
             "kind": "OrderTraded",
-            "client_id": "B1",
+            "client_order_id": "B1",
             "trade_id": "T1",
             "price": "100",
             "amount": "0.01",
@@ -132,7 +132,7 @@
           },
           {
             "kind": "OrderFullyTraded",
-            "client_id": "B1"
+            "client_order_id": "B1"
           }
         ],
         "open_orders": [],

@@ -59,11 +59,11 @@
         "mid_price": "100",
         "active_orders": [
           {
-            "client_id": "B1",
+            "client_order_id": "B1",
             "trading_pair": "ETH-USDT"
           },
           {
-            "client_id": "S1",
+            "client_order_id": "S1",
             "trading_pair": "ETH-USDT"
           }
         ],
@@ -111,11 +111,11 @@
         "actions": [
           {
             "kind": "cancel",
-            "client_id": "B1"
+            "client_order_id": "B1"
           },
           {
             "kind": "cancel",
-            "client_id": "S1"
+            "client_order_id": "S1"
           },
           {
             "kind": "submit",

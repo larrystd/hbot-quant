@@ -33,7 +33,7 @@
       "ordinal": 0,
       "event": {
         "kind": "submit",
-        "client_id": "S1",
+        "client_order_id": "S1",
         "side": "Sell",
         "price": "100",
         "amount": "0.01"
@@ -57,7 +57,7 @@
         "events": [
           {
             "kind": "OrderFailed",
-            "client_id": "S1"
+            "client_order_id": "S1"
           }
         ],
         "open_orders": [],

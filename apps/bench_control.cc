@@ -162,11 +162,11 @@ asio::awaitable<void> ClosedClient(asio::io_context& io,
                                    const ControlBenchOptions& options,
                                    ThreadStats& stats,
                                    Clock::time_point measure_start,
-                                   Clock::time_point end, uint64_t client_id,
+                                   Clock::time_point end, uint64_t client_order_id,
                                    uint64_t& sequence) {
   while (Clock::now() < end) {
     const bool history = (sequence++ % 100) >= options.status_percent;
-    co_await OneRequest(io, path, stats, history, client_id,
+    co_await OneRequest(io, path, stats, history, client_order_id,
                         Clock::now() >= measure_start, nullptr);
   }
 }

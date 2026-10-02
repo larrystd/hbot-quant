@@ -20,7 +20,7 @@ struct SubmitOrder {
 };
 struct CancelOrder {
   StrategyId strategy_id;
-  ClientOrderId client_id;
+  ClientOrderId client_order_id;
 };
 using StrategyAction = std::variant<SubmitOrder, CancelOrder>;
 struct ActionBatch {

@@ -18,10 +18,10 @@ OrderStrategyIndex::OrderStrategyIndex(DecodeStrategyId decode_strategy_id)
 
 OrderStrategyIndex::ExchangeKey OrderStrategyIndex::Key(
     const AccountId& account, const MarketId& market,
-    const ExchangeOrderId& exchange_id) {
+    const ExchangeOrderId& exchange_order_id) {
   return {account.value, market.exchange.value,
           static_cast<int>(market.instrument_kind), market.native_symbol,
-          exchange_id.value};
+          exchange_order_id.value};
 }
 
 absl::Status OrderStrategyIndex::SetStrategyRoute(StrategyId strategy_id,
@@ -46,11 +46,11 @@ absl::Status OrderStrategyIndex::SetStrategyRoute(StrategyId strategy_id,
   return absl::OkStatus();
 }
 
-absl::Status OrderStrategyIndex::RegisterClient(ClientOrderId client_id,
+absl::Status OrderStrategyIndex::RegisterClient(ClientOrderId client_order_id,
                                                 AccountId account,
                                                 MarketId market,
                                                 const StrategyId& strategy_id) {
-  if (client_id.value.empty() || account.value.empty() ||
+  if (client_order_id.value.empty() || account.value.empty() ||
       market.exchange.value.empty() || market.native_symbol.empty()) {
     return Error(ErrorCode::kRouteReportInvalid, "invalid client strategy key");
   }
@@ -62,14 +62,14 @@ absl::Status OrderStrategyIndex::RegisterClient(ClientOrderId client_id,
                  "client strategy_id has no matching route");
   }
   if (decode_strategy_id_) {
-    auto decoded = decode_strategy_id_(client_id);
+    auto decoded = decode_strategy_id_(client_order_id);
     if (decoded && *decoded != strategy_id.value) {
       return Error(ErrorCode::kRouteStrategyConflict,
                    "client ID strategy_id conflicts with registration");
     }
   }
   auto [it, inserted] = clients_.emplace(
-      client_id.value, ClientMapping{account, market, strategy_id.value});
+      client_order_id.value, ClientMapping{account, market, strategy_id.value});
   if (!inserted &&
       (it->second.account != account || it->second.market != market ||
        it->second.strategy_id != strategy_id.value)) {
@@ -80,9 +80,9 @@ absl::Status OrderStrategyIndex::RegisterClient(ClientOrderId client_id,
 }
 
 absl::Status OrderStrategyIndex::RegisterExchange(
-    AccountId account, MarketId market, ExchangeOrderId exchange_id,
-    const StrategyId& strategy_id, std::optional<ClientOrderId> client_id) {
-  if (exchange_id.value.empty() || account.value.empty() ||
+    AccountId account, MarketId market, ExchangeOrderId exchange_order_id,
+    const StrategyId& strategy_id, std::optional<ClientOrderId> client_order_id) {
+  if (exchange_order_id.value.empty() || account.value.empty() ||
       market.exchange.value.empty() || market.native_symbol.empty()) {
     return Error(ErrorCode::kRouteReportInvalid,
                  "invalid exchange strategy key");
@@ -94,15 +94,15 @@ absl::Status OrderStrategyIndex::RegisterExchange(
     return Error(ErrorCode::kRouteStrategyUnknown,
                  "exchange strategy_id has no matching route");
   }
-  if (client_id) {
-    auto resolved = Resolve(account, market, client_id, std::nullopt);
+  if (client_order_id) {
+    auto resolved = Resolve(account, market, client_order_id, std::nullopt);
     if (!resolved.ok() || resolved->strategy_id != strategy_id) {
       return Error(ErrorCode::kRouteStrategyConflict,
                    "exchange/client strategy conflict");
     }
   }
   auto [it, inserted] =
-      exchanges_.emplace(Key(account, market, exchange_id), strategy_id.value);
+      exchanges_.emplace(Key(account, market, exchange_order_id), strategy_id.value);
   if (!inserted && it->second != strategy_id.value) {
     return Error(ErrorCode::kRouteStrategyConflict,
                  "exchange ID strategy conflict");
@@ -112,11 +112,11 @@ absl::Status OrderStrategyIndex::RegisterExchange(
 
 absl::StatusOr<OrderRoute> OrderStrategyIndex::Resolve(
     const AccountId& account, const MarketId& market,
-    const std::optional<ClientOrderId>& client_id,
-    const std::optional<ExchangeOrderId>& exchange_id) const {
+    const std::optional<ClientOrderId>& client_order_id,
+    const std::optional<ExchangeOrderId>& exchange_order_id) const {
   if (account.value.empty() || market.exchange.value.empty() ||
-      market.native_symbol.empty() || (client_id && client_id->value.empty()) ||
-      (exchange_id && exchange_id->value.empty())) {
+      market.native_symbol.empty() || (client_order_id && client_order_id->value.empty()) ||
+      (exchange_order_id && exchange_order_id->value.empty())) {
     return Error(ErrorCode::kRouteReportInvalid,
                  "invalid private report identity");
   }
@@ -129,15 +129,15 @@ absl::StatusOr<OrderRoute> OrderStrategyIndex::Resolve(
     candidate = strategy_id;
     return absl::OkStatus();
   };
-  if (client_id && decode_strategy_id_) {
-    auto decoded = decode_strategy_id_(*client_id);
+  if (client_order_id && decode_strategy_id_) {
+    auto decoded = decode_strategy_id_(*client_order_id);
     if (decoded) {
       auto status = merge(*decoded);
       if (!status.ok()) return status;
     }
   }
-  if (client_id) {
-    const auto found = clients_.find(client_id->value);
+  if (client_order_id) {
+    const auto found = clients_.find(client_order_id->value);
     if (found != clients_.end()) {
       if (found->second.account != account || found->second.market != market) {
         return Error(ErrorCode::kRouteStrategyConflict,
@@ -147,8 +147,8 @@ absl::StatusOr<OrderRoute> OrderStrategyIndex::Resolve(
       if (!status.ok()) return status;
     }
   }
-  if (exchange_id) {
-    const auto found = exchanges_.find(Key(account, market, *exchange_id));
+  if (exchange_order_id) {
+    const auto found = exchanges_.find(Key(account, market, *exchange_order_id));
     if (found != exchanges_.end()) {
       auto status = merge(found->second);
       if (!status.ok()) return status;
@@ -228,12 +228,12 @@ RouteResult AccountReportRouter::Route(AccountReport report) {
   const MarketId& market = std::visit(
       [](const auto& value) -> const MarketId& { return value.market; },
       report);
-  const std::optional<ClientOrderId>& client_id = std::visit(
+  const std::optional<ClientOrderId>& client_order_id = std::visit(
       [](const auto& value) -> const std::optional<ClientOrderId>& {
-        return value.client_id;
+        return value.client_order_id;
       },
       report);
-  const std::optional<ExchangeOrderId>& exchange_id = std::visit(
+  const std::optional<ExchangeOrderId>& exchange_order_id = std::visit(
       [](const auto& value) -> const std::optional<ExchangeOrderId>& {
         return value.exchange_order_id;
       },
@@ -246,7 +246,7 @@ RouteResult AccountReportRouter::Route(AccountReport report) {
     return Quarantine(std::move(report), std::move(result));
   }
   result.source_sequence = next_source_sequence_++;
-  auto route = index_.Resolve(account, market, client_id, exchange_id);
+  auto route = index_.Resolve(account, market, client_order_id, exchange_order_id);
   if (!route.ok()) {
     result.failure = CodeOf(route.status());
     return Quarantine(std::move(report), std::move(result));

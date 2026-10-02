@@ -217,7 +217,7 @@ std::string EncodeRecord(const OrderHistoryRecord& record) {
       [&out](const auto& payload) {
         using T = std::decay_t<decltype(payload)>;
         if constexpr (std::is_same_v<T, PreparedOrder>) {
-          out.String(payload.client_id.value);
+          out.String(payload.client_order_id.value);
           out.StrategyIdField(payload.strategy_id);
           out.Request(payload.request);
           out.U64(payload.config_revision);
@@ -228,8 +228,8 @@ std::string EncodeRecord(const OrderHistoryRecord& record) {
         } else if constexpr (std::is_same_v<T, OrderUpdate>) {
           out.String(payload.account.value);
           out.Market(payload.market);
-          out.Byte(payload.client_id.has_value());
-          if (payload.client_id) out.String(payload.client_id->value);
+          out.Byte(payload.client_order_id.has_value());
+          if (payload.client_order_id) out.String(payload.client_order_id->value);
           out.Byte(payload.exchange_order_id.has_value());
           if (payload.exchange_order_id)
             out.String(payload.exchange_order_id->value);
@@ -244,8 +244,8 @@ std::string EncodeRecord(const OrderHistoryRecord& record) {
         } else if constexpr (std::is_same_v<T, TradeUpdate>) {
           out.String(payload.account.value);
           out.Market(payload.market);
-          out.Byte(payload.client_id.has_value());
-          if (payload.client_id) out.String(payload.client_id->value);
+          out.Byte(payload.client_order_id.has_value());
+          if (payload.client_order_id) out.String(payload.client_order_id->value);
           out.Byte(payload.exchange_order_id.has_value());
           if (payload.exchange_order_id)
             out.String(payload.exchange_order_id->value);
@@ -278,8 +278,8 @@ std::string EncodeRecord(const OrderHistoryRecord& record) {
           out.Byte(payload.accepted);
           out.U64(StoredErrorNumber(payload.reason));
           out.String(payload.message);
-          out.Byte(payload.client_id.has_value());
-          if (payload.client_id) out.String(payload.client_id->value);
+          out.Byte(payload.client_order_id.has_value());
+          if (payload.client_order_id) out.String(payload.client_order_id->value);
         }
       },
       record.payload);
@@ -318,7 +318,7 @@ absl::StatusOr<OrderHistoryRecord> DecodeRecord(std::string_view bytes) {
     return Error(ErrorCode::kOrderHistoryRecordCorrupted, "invalid payload kind");
   if (kind == 0) {
     PreparedOrder value;
-    if (!in.String(&value.client_id.value) ||
+    if (!in.String(&value.client_order_id.value) ||
         !in.StrategyIdField(&value.strategy_id) ||
         !in.Request(&value.request) || !in.U64(&value.config_revision) ||
         !in.I64(&timestamp) || !in.Byte(&present) || present > 1)
@@ -339,8 +339,8 @@ absl::StatusOr<OrderHistoryRecord> DecodeRecord(std::string_view bytes) {
         !in.Byte(&present) || present > 1)
       return Error(ErrorCode::kOrderHistoryRecordCorrupted, "invalid order update");
     if (present) {
-      value.client_id.emplace();
-      if (!in.String(&value.client_id->value))
+      value.client_order_id.emplace();
+      if (!in.String(&value.client_order_id->value))
         return Error(ErrorCode::kOrderHistoryRecordCorrupted, "invalid client ID");
     }
     if (!in.Byte(&present) || present > 1)
@@ -379,8 +379,8 @@ absl::StatusOr<OrderHistoryRecord> DecodeRecord(std::string_view bytes) {
         !in.Byte(&present) || present > 1)
       return Error(ErrorCode::kOrderHistoryRecordCorrupted, "invalid trade update");
     if (present) {
-      value.client_id.emplace();
-      if (!in.String(&value.client_id->value))
+      value.client_order_id.emplace();
+      if (!in.String(&value.client_order_id->value))
         return Error(ErrorCode::kOrderHistoryRecordCorrupted,
                      "invalid trade client ID");
     }
@@ -461,8 +461,8 @@ absl::StatusOr<OrderHistoryRecord> DecodeRecord(std::string_view bytes) {
             ? (value.accepted ? ErrorCode::kOk : ErrorCode::kInternal)
             : StoredCode(reason);
     if (present) {
-      value.client_id.emplace();
-      if (!in.String(&value.client_id->value))
+      value.client_order_id.emplace();
+      if (!in.String(&value.client_order_id->value))
         return Error(ErrorCode::kOrderHistoryRecordCorrupted,
                      "invalid decision client ID");
     }

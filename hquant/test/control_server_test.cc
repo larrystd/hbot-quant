@@ -85,7 +85,7 @@ TEST(ControlServerHistoryTest, DisplaysNegativeReasonNumbers) {
   OrderHistoryPage page;
   OrderHistoryRecord prepared_record;
   PreparedOrder prepared;
-  prepared.client_id = ClientOrderId{"P1"};
+  prepared.client_order_id = ClientOrderId{"P1"};
   prepared.request.base_amount = *Decimal::Parse("0.01");
   prepared_record.payload = prepared;
   page.rows.push_back(prepared_record);

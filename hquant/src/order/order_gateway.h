@@ -25,7 +25,7 @@
 
 namespace hquant::binance_spot {
 
-struct DecodedClientId {
+struct DecodedClientOrderId {
   uint64_t strategy_id = 0;
   RunId run;
   ShardId shard_hint;
@@ -36,10 +36,10 @@ struct DecodedClientId {
 // strategy_id key is stable; shard_hint is only a uniqueness/routing hint
 // within one run. Enable live trading only after the target exchange accepts
 // and echoes this form.
-absl::StatusOr<ClientOrderId> EncodeClientId(const StrategyId& strategy_id,
+absl::StatusOr<ClientOrderId> EncodeClientOrderId(const StrategyId& strategy_id,
                                              RunId run, ShardId shard,
                                              uint32_t shard_sequence);
-absl::StatusOr<DecodedClientId> DecodeClientId(const ClientOrderId& id);
+absl::StatusOr<DecodedClientOrderId> DecodeClientOrderId(const ClientOrderId& id);
 
 }  // namespace hquant::binance_spot
 
@@ -70,7 +70,7 @@ enum class GatewayEventKind {
 
 struct GatewayEvent {
   GatewayEventKind kind;
-  ClientOrderId client_id;
+  ClientOrderId client_order_id;
   std::optional<OrderUpdate> update;
   std::string detail;
   ErrorCode code = ErrorCode::kOk;
@@ -104,14 +104,14 @@ class BinanceOrderGateway final : public OrderGateway {
                       EventHandler on_event);
 
   absl::StatusOr<PreparedOrder> PrepareSubmit(ApprovedOrder approved) override;
-  absl::Status StartPrepared(const ClientOrderId& client_id) override;
-  absl::Status AbortPrepared(const ClientOrderId& client_id) override;
+  absl::Status StartPrepared(const ClientOrderId& client_order_id) override;
+  absl::Status AbortPrepared(const ClientOrderId& client_order_id) override;
   absl::Status StartCancel(const StrategyId& strategy_id,
-                           const ClientOrderId& client_id) override;
+                           const ClientOrderId& client_order_id) override;
 
   // Recovery loads historical IDs before order creation; a repeated run ID is
   // refused even if its next local sequence has not yet collided.
-  absl::Status ObserveHistoricalClientId(const ClientOrderId& client_id);
+  absl::Status ObserveHistoricalClientId(const ClientOrderId& client_order_id);
   absl::Status RestoreOrder(PreparedOrder prepared);
   size_t PendingSubmitCount() const { return pending_submits_; }
   size_t PendingCancelCount() const { return pending_cancels_; }
@@ -132,7 +132,7 @@ class BinanceOrderGateway final : public OrderGateway {
     State state = State::Prepared;
   };
   struct Work {
-    ClientOrderId client_id;
+    ClientOrderId client_order_id;
     HttpRequest request;
     bool cancel = false;
     MonoTime expires_at_mono{};

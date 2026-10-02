@@ -137,7 +137,7 @@ TEST(RecoveryIntegrationTest, UnknownWriteAndCrashUseOriginalIdWithoutResend) {
   auto prepared = gateway.PrepareSubmit(std::move(approved));
   ASSERT_TRUE(prepared.ok()) << prepared.status();
   ASSERT_TRUE(
-      original_risk.AttachClientId(hold->hold_id, prepared->client_id).ok());
+      original_risk.AttachClientId(hold->hold_id, prepared->client_order_id).ok());
   auto recorder = SqliteOrderHistoryWriter::Open(
       {database.path(), RunId{42}, clock.UtcNow(), 8, 1});
   ASSERT_TRUE(recorder.ok()) << recorder.status();
@@ -152,16 +152,16 @@ TEST(RecoveryIntegrationTest, UnknownWriteAndCrashUseOriginalIdWithoutResend) {
   ASSERT_TRUE((*recorder)->Flush().ok());
   OrderTracker original_tracker;
   ASSERT_TRUE(original_tracker.Register(*prepared).ok());
-  ASSERT_TRUE(gateway.StartPrepared(prepared->client_id).ok());
+  ASSERT_TRUE(gateway.StartPrepared(prepared->client_order_id).ok());
   io.run();
   ASSERT_EQ(transport.calls, 1);
   ASSERT_EQ(events.size(), 1);
   EXPECT_EQ(events[0].kind, binance_spot::GatewayEventKind::SubmissionUnknown);
-  ASSERT_TRUE(original_tracker.MarkSubmissionUnknown(prepared->client_id).ok());
+  ASSERT_TRUE(original_tracker.MarkSubmissionUnknown(prepared->client_order_id).ok());
   ASSERT_TRUE(original_risk.MarkSubmissionUnknown(hold->hold_id).ok());
   EXPECT_EQ(
       *original_risk.Available(account, AssetId("USDT"))->Compare(D("99")), 0);
-  EXPECT_FALSE(gateway.StartPrepared(prepared->client_id).ok());
+  EXPECT_FALSE(gateway.StartPrepared(prepared->client_order_id).ok());
   EXPECT_EQ(transport.calls, 1);
   recorder->reset();  // abrupt exit: no clean-stop marker
 
@@ -170,8 +170,8 @@ TEST(RecoveryIntegrationTest, UnknownWriteAndCrashUseOriginalIdWithoutResend) {
   EXPECT_TRUE(recovered->may_have_unwritten_records);
   EXPECT_TRUE(recovered->needs_order_query);
   ASSERT_EQ(recovered->context.recovered_prepared_orders.size(), 1);
-  EXPECT_EQ(recovered->context.recovered_prepared_orders[0].client_id,
-            prepared->client_id);
+  EXPECT_EQ(recovered->context.recovered_prepared_orders[0].client_order_id,
+            prepared->client_order_id);
   binance_spot::StartupQueryInput restart;
   restart.account = account;
   restart.assigned_markets = {market};
@@ -183,7 +183,7 @@ TEST(RecoveryIntegrationTest, UnknownWriteAndCrashUseOriginalIdWithoutResend) {
   auto plan = binance_spot::PlanStartupQueries(restart);
   ASSERT_TRUE(plan.ok()) << plan.status();
   ASSERT_EQ(plan->known_orders.size(), 1);
-  EXPECT_EQ(plan->known_orders[0].original_client_id, prepared->client_id);
+  EXPECT_EQ(plan->known_orders[0].client_order_id, prepared->client_order_id);
   EXPECT_FALSE(plan->markets_to_scan.empty());
   EXPECT_TRUE(plan->pause_stateful_executors);
 
@@ -197,13 +197,13 @@ TEST(RecoveryIntegrationTest, UnknownWriteAndCrashUseOriginalIdWithoutResend) {
                                              clock.UtcNow(), true, true);
   ASSERT_TRUE(restored_hold.ok());
   ASSERT_TRUE(
-      restored_risk.AttachClientId(restored_hold->hold_id, prepared->client_id)
+      restored_risk.AttachClientId(restored_hold->hold_id, prepared->client_order_id)
           .ok());
   ASSERT_TRUE(restored_risk.MarkSubmissionUnknown(restored_hold->hold_id).ok());
   OrderTracker tracker;
   ASSERT_TRUE(
       tracker.Register(recovered->context.recovered_prepared_orders[0]).ok());
-  ASSERT_TRUE(tracker.MarkSubmissionUnknown(prepared->client_id).ok());
+  ASSERT_TRUE(tracker.MarkSubmissionUnknown(prepared->client_order_id).ok());
   FakeSignedRest missing;
   missing.responses.push_back(
       {404, R"({"code":-2013,"msg":"Order does not exist."})"});
@@ -220,7 +220,7 @@ TEST(RecoveryIntegrationTest, UnknownWriteAndCrashUseOriginalIdWithoutResend) {
   rest.responses.push_back(
       {200,
        "{\"symbol\":\"BTCUSDT\",\"clientOrderId\":\"" +
-           prepared->client_id.value +
+           prepared->client_order_id.value +
            "\",\"orderId\":123,\"status\":\"FILLED\",\"executedQty\":\"0.01\","
            "\"cummulativeQuoteQty\":\"1\",\"updateTime\":1499827319559}"});
   rest.responses.push_back(
@@ -236,7 +236,7 @@ TEST(RecoveryIntegrationTest, UnknownWriteAndCrashUseOriginalIdWithoutResend) {
   ASSERT_EQ(queried_order->trades.size(), 1);
   ASSERT_EQ(rest.targets.size(), 2);
   EXPECT_EQ(rest.targets[0], "/api/v3/order?symbol=BTCUSDT&origClientOrderId=" +
-                                 prepared->client_id.value);
+                                 prepared->client_order_id.value);
   ASSERT_TRUE(tracker.ApplyTradeUpdate(queried_order->trades[0]).ok());
   ASSERT_TRUE(tracker.ApplyTradeUpdate(queried_order->trades[0]).ok());
   auto final = tracker.ApplyQueriedOrder(*queried_order->order);

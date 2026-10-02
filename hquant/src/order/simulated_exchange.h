@@ -25,7 +25,7 @@ struct SimulatedExchangeConfig {
 };
 
 struct RestingOrder {
-  ClientOrderId client_id;
+  ClientOrderId client_order_id;
   StrategyId strategy_id;
   OrderRequest request;
 };
@@ -38,10 +38,10 @@ class SimpleSimulatedExchange final : public SimulatedExchange {
   SimpleSimulatedExchange(SimulatedExchangeConfig config, const Clock& clock);
 
   absl::StatusOr<PreparedOrder> PrepareSubmit(ApprovedOrder approved) override;
-  absl::Status StartPrepared(const ClientOrderId& client_id) override;
-  absl::Status AbortPrepared(const ClientOrderId& client_id) override;
+  absl::Status StartPrepared(const ClientOrderId& client_order_id) override;
+  absl::Status AbortPrepared(const ClientOrderId& client_order_id) override;
   absl::Status StartCancel(const StrategyId& strategy_id,
-                           const ClientOrderId& client_id) override;
+                           const ClientOrderId& client_order_id) override;
 
   absl::Status OnBookBbo(const Decimal& bid, const Decimal& ask) override;
   absl::Status OnPublicTrade(Side aggressor, const Decimal& price,

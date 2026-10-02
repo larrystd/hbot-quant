@@ -45,17 +45,17 @@ class OrderStrategyIndex {
   // strategy_id.
   absl::Status SetStrategyRoute(StrategyId strategy_id, AccountId account,
                                 ShardId shard);
-  absl::Status RegisterClient(ClientOrderId client_id, AccountId account,
+  absl::Status RegisterClient(ClientOrderId client_order_id, AccountId account,
                               MarketId market, const StrategyId& strategy_id);
   absl::Status RegisterExchange(
-      AccountId account, MarketId market, ExchangeOrderId exchange_id,
+      AccountId account, MarketId market, ExchangeOrderId exchange_order_id,
       const StrategyId& strategy_id,
-      std::optional<ClientOrderId> client_id = std::nullopt);
+      std::optional<ClientOrderId> client_order_id = std::nullopt);
 
   absl::StatusOr<OrderRoute> Resolve(
       const AccountId& account, const MarketId& market,
-      const std::optional<ClientOrderId>& client_id,
-      const std::optional<ExchangeOrderId>& exchange_id) const;
+      const std::optional<ClientOrderId>& client_order_id,
+      const std::optional<ExchangeOrderId>& exchange_order_id) const;
   bool KnowsAccount(const AccountId& account) const;
 
  private:
@@ -72,7 +72,7 @@ class OrderStrategyIndex {
   using ExchangeKey =
       std::tuple<std::string, std::string, int, std::string, std::string>;
   static ExchangeKey Key(const AccountId& account, const MarketId& market,
-                         const ExchangeOrderId& exchange_id);
+                         const ExchangeOrderId& exchange_order_id);
 
   DecodeStrategyId decode_strategy_id_;
   std::map<uint64_t, StrategyRoute> strategy_routes_;

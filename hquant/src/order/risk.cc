@@ -330,17 +330,17 @@ ErrorCode RiskGate::TryHoldCode(const StrategyId& strategy_id,
   return ErrorCode::kOk;
 }
 
-absl::Status RiskGate::AttachClientId(HoldId hold, ClientOrderId client_id) {
+absl::Status RiskGate::AttachClientId(HoldId hold, ClientOrderId client_order_id) {
   auto it = holds_.find(hold.value);
   if (it == holds_.end())
     return Error(ErrorCode::kFundsHoldNotFound, "unknown hold");
   if (it->second.state == HoldState::Released)
     return Error(ErrorCode::kFundsHoldAlreadyReleased, "hold already released");
-  if (client_id.value.empty() || it->second.client_id) {
+  if (client_order_id.value.empty() || it->second.client_order_id) {
     return Error(ErrorCode::kFundsHoldClientIdConflict,
                  "client ID empty or already attached");
   }
-  it->second.client_id = std::move(client_id);
+  it->second.client_order_id = std::move(client_order_id);
   return absl::OkStatus();
 }
 

@@ -126,7 +126,7 @@ TEST(SimplePmmTest, ReplaysEveryPythonFixtureStep) {
       std::vector<OrderSnapshot> orders;
       for (auto raw : simdjson::dom::array(event["active_orders"])) {
         OrderSnapshot order;
-        order.client_id = ClientOrderId(S(raw, "client_id"));
+        order.client_order_id = ClientOrderId(S(raw, "client_order_id"));
         order.strategy_id = config.strategy_id;
         order.request.account = config.account;
         order.request.market = config.market.market;
@@ -157,7 +157,7 @@ TEST(SimplePmmTest, ReplaysEveryPythonFixtureStep) {
               std::holds_alternative<CancelOrder>(actual.ordered[index]));
           const auto& action = std::get<CancelOrder>(actual.ordered[index]);
           EXPECT_EQ(action.strategy_id, config.strategy_id);
-          EXPECT_EQ(action.client_id.value, S(wanted, "client_id"));
+          EXPECT_EQ(action.client_order_id.value, S(wanted, "client_order_id"));
         } else {
           ASSERT_TRUE(
               std::holds_alternative<SubmitOrder>(actual.ordered[index]));

@@ -158,7 +158,7 @@ class PrintingRecorder final : public OrderHistoryWriter {
         [](const auto& payload) {
           using T = std::decay_t<decltype(payload)>;
           if constexpr (std::is_same_v<T, PreparedOrder>) {
-            std::cout << "[待发订单] " << payload.client_id.value << "："
+            std::cout << "[待发订单] " << payload.client_order_id.value << "："
                       << SideName(payload.request.side) << " "
                       << Plain(payload.request.base_amount) << " @ "
                       << Plain(*payload.request.limit_price);
@@ -173,12 +173,12 @@ class PrintingRecorder final : public OrderHistoryWriter {
                 std::cout << ": " << payload.message;
               std::cout << "）";
             }
-            if (payload.client_id) std::cout << " " << payload.client_id->value;
+            if (payload.client_order_id) std::cout << " " << payload.client_order_id->value;
           } else if constexpr (std::is_same_v<T, OrderUpdate>) {
-            std::cout << "[回报] " << payload.client_id->value << " -> "
+            std::cout << "[回报] " << payload.client_order_id->value << " -> "
                       << StatusName(payload.exchange_status);
           } else if constexpr (std::is_same_v<T, TradeUpdate>) {
-            std::cout << "[成交] " << payload.client_id->value << " 成交 "
+            std::cout << "[成交] " << payload.client_order_id->value << " 成交 "
                       << Plain(payload.base_amount) << " @ "
                       << Plain(payload.price);
             for (const auto& fee : payload.fees) {
@@ -243,7 +243,7 @@ void PrintState(const Shard& shard, const SimpleSimulatedExchange& sim_exchange,
   const auto orders = sim_exchange.OpenOrders();
   if (orders.empty()) std::cout << " 无";
   for (const auto& order : orders) {
-    std::cout << " [" << order.client_id.value << " "
+    std::cout << " [" << order.client_order_id.value << " "
               << SideName(order.request.side) << " "
               << Plain(order.request.base_amount) << " @ "
               << Plain(*order.request.limit_price) << "]";

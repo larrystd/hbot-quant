@@ -90,8 +90,8 @@ bool ValidateSetup(const std::string& family, simdjson::dom::element setup) {
     return false;
   }
   if (family == "order_tracker") {
-    std::string client_id, side;
-    return String(setup, "client_id", &client_id) && !client_id.empty() &&
+    std::string client_order_id, side;
+    return String(setup, "client_order_id", &client_order_id) && !client_order_id.empty() &&
            String(setup, "side", &side) && OneOf(side, {"Buy", "Sell"}) &&
            PositiveDecimalString(setup, "base_amount") &&
            PositiveDecimalString(setup, "limit_price") &&
@@ -196,7 +196,7 @@ bool ValidateEvent(const std::string& family, simdjson::dom::element event) {
     if (kind == "tick") return true;
     if (kind == "cancel") {
       std::string id;
-      return String(event, "client_id", &id) && !id.empty();
+      return String(event, "client_order_id", &id) && !id.empty();
     }
     if (kind == "book_bbo") {
       return PositiveDecimalString(event, "bid") &&
@@ -210,7 +210,7 @@ bool ValidateEvent(const std::string& family, simdjson::dom::element event) {
         return false;
       if (kind == "submit") {
         std::string id;
-        return String(event, "client_id", &id) && !id.empty();
+        return String(event, "client_order_id", &id) && !id.empty();
       }
       return true;
     }
@@ -286,7 +286,7 @@ bool ValidateOutput(const std::string& family, simdjson::dom::element output) {
       if (!String(action, "kind", &kind)) return false;
       if (kind == "cancel") {
         std::string id;
-        if (!String(action, "client_id", &id)) return false;
+        if (!String(action, "client_order_id", &id)) return false;
       } else if (kind == "submit") {
         std::string side, price, amount;
         if (!String(action, "side", &side) || !OneOf(side, {"Buy", "Sell"}) ||
@@ -310,7 +310,7 @@ bool ValidateOutput(const std::string& family, simdjson::dom::element output) {
       if (!String(event, "kind", &kind) ||
           !OneOf(kind, {"OrderOpened", "OrderTraded", "OrderFullyTraded",
                         "OrderCanceled", "OrderFailed"}) ||
-          !String(event, "client_id", &id) || id.empty())
+          !String(event, "client_order_id", &id) || id.empty())
         return false;
       if (kind == "OrderTraded") {
         std::string trade_id;
@@ -323,7 +323,7 @@ bool ValidateOutput(const std::string& family, simdjson::dom::element output) {
     }
     for (auto order : orders) {
       std::string id, side;
-      if (!String(order, "client_id", &id) || id.empty() ||
+      if (!String(order, "client_order_id", &id) || id.empty() ||
           !String(order, "side", &side) || !OneOf(side, {"Buy", "Sell"}) ||
           !PositiveDecimalString(order, "price") ||
           !PositiveDecimalString(order, "amount"))

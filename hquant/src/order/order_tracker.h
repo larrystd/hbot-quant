@@ -76,14 +76,14 @@ class OrderTracker {
   // PendingCreate。订单号重复时返回错误。
   absl::StatusOr<TrackerResult> Register(PreparedOrder prepared);
   // 标记"正在撤单"，显示为 PendingCancel，直到收到撤单结果。终态订单不能撤。
-  absl::StatusOr<TrackerResult> RequestCancel(const ClientOrderId& client_id);
+  absl::StatusOr<TrackerResult> RequestCancel(const ClientOrderId& client_order_id);
   // 发送前就失败了（能证明一个字节都没发出去）：直接把订单置为 Failed。
   // 只有在订单仍是 PendingCreate、没有交易所订单号、没有任何成交时才允许。
-  absl::StatusOr<TrackerResult> FailBeforeWrite(const ClientOrderId& client_id,
+  absl::StatusOr<TrackerResult> FailBeforeWrite(const ClientOrderId& client_order_id,
                                                 std::string reason);
   // 发出后结果未知（超时、5xx）：置为 SubmissionUnknown，等回报或查询确认。
   absl::StatusOr<TrackerResult> MarkSubmissionUnknown(
-      const ClientOrderId& client_id);
+      const ClientOrderId& client_order_id);
   // 处理交易所推来的订单状态变化。
   absl::StatusOr<TrackerResult> ApplyOrderUpdate(const OrderUpdate& update);
   // 处理一笔成交：去重、累计成交量和手续费、检查是否超过下单量。
@@ -93,14 +93,14 @@ class OrderTracker {
   absl::StatusOr<TrackerResult> ApplyQueriedOrder(const OrderUpdate& update);
 
   // 某张订单当前的快照；不存在返回空。
-  std::optional<OrderSnapshot> Snapshot(const ClientOrderId& client_id) const;
+  std::optional<OrderSnapshot> Snapshot(const ClientOrderId& client_order_id) const;
   // 需要向交易所查询的订单：成交明细未到齐，或者状态不是 Confirmed。
   std::vector<ClientOrderId> OrdersNeedingQuery() const;
 
  private:
   // 一张订单的完整内部状态，只在 OrderTracker 内部可见。
   //   prepared：登记时的订单（订单号、策略、原始请求）。
-  //   exchange_id：交易所订单号，第一次在回报里出现时绑定，之后不允许改变。
+  //   exchange_order_id：交易所订单号，第一次在回报里出现时绑定，之后不允许改变。
   //   lifecycle / confirmation / cancel_pending：三者合成对外的
   //   OrderDisplayState。
   //   completion_pending_fills：交易所说已全部成交，但本地累计的成交量还不够，
@@ -113,7 +113,7 @@ class OrderTracker {
   //       累计值核对，或者删掉。
   struct TrackedOrder {
     PreparedOrder prepared;
-    std::optional<ExchangeOrderId> exchange_id;
+    std::optional<ExchangeOrderId> exchange_order_id;
     OrderLifecycle lifecycle = OrderLifecycle::PendingCreate;
     bool cancel_pending = false;
     ConfirmationState confirmation = ConfirmationState::Confirmed;
@@ -135,7 +135,7 @@ class OrderTracker {
 
   static ExchangeKey ExchangeIndexKey(const AccountId& account,
                                       const MarketId& market,
-                                      const ExchangeOrderId& exchange_id);
+                                      const ExchangeOrderId& exchange_order_id);
   static TradeKey TradeIndexKey(const AccountId& account,
                                 const MarketId& market,
                                 const ExchangeTradeId& trade_id);
@@ -148,10 +148,10 @@ class OrderTracker {
   // 是否匹配；不一致时把相关订单标记为 NeedsQuery 并返回错误。
   absl::StatusOr<TrackedOrder*> Find(
       const AccountId& account, const MarketId& market,
-      const std::optional<ClientOrderId>& client_id,
-      const std::optional<ExchangeOrderId>& exchange_id);
+      const std::optional<ClientOrderId>& client_order_id,
+      const std::optional<ExchangeOrderId>& exchange_order_id);
   absl::Status BindExchangeId(
-      TrackedOrder& order, const std::optional<ExchangeOrderId>& exchange_id);
+      TrackedOrder& order, const std::optional<ExchangeOrderId>& exchange_order_id);
   absl::StatusOr<TrackerResult> Update(const OrderUpdate& update,
                                        bool queried_order);
 

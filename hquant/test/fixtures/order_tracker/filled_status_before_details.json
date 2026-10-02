@@ -16,7 +16,7 @@
     "account": "A1",
     "market": "BTC-USDT",
     "strategy_id": 1,
-    "client_id": "B1",
+    "client_order_id": "B1",
     "side": "Buy",
     "base_amount": "1",
     "limit_price": "100",
@@ -31,7 +31,7 @@
     }
   },
   "id_symbols": {
-    "client_id": "B1",
+    "client_order_id": "B1",
     "exchange_order_id": "E1",
     "trade_ids": [
       "T1",
@@ -44,7 +44,7 @@
       "ordinal": 0,
       "event": {
         "kind": "register",
-        "client_id": "B1"
+        "client_order_id": "B1"
       }
     },
     {
@@ -52,7 +52,7 @@
       "ordinal": 0,
       "event": {
         "kind": "order_update",
-        "client_id": "B1",
+        "client_order_id": "B1",
         "exchange_order_id": "E1",
         "exchange_status": "Open"
       }
@@ -62,7 +62,7 @@
       "ordinal": 0,
       "event": {
         "kind": "order_update",
-        "client_id": "B1",
+        "client_order_id": "B1",
         "exchange_order_id": "E1",
         "exchange_status": "Traded",
         "cumulative_base": "1",
@@ -74,7 +74,7 @@
       "ordinal": 0,
       "event": {
         "kind": "trade_update",
-        "client_id": "B1",
+        "client_order_id": "B1",
         "exchange_order_id": "E1",
         "trade_id": "T1",
         "price": "100",

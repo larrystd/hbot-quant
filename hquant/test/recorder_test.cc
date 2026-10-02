@@ -53,7 +53,7 @@ StrategyId MakeStrategyId() {
 OrderHistoryRecord PreparedRecord(uint64_t sequence, RunId run = RunId{11},
                              ShardId shard = ShardId{0}) {
   PreparedOrder prepared;
-  prepared.client_id = ClientOrderId{"B1"};
+  prepared.client_order_id = ClientOrderId{"B1"};
   prepared.strategy_id = MakeStrategyId();
   prepared.request.account = AccountId{"A1"};
   prepared.request.market = Market();
@@ -80,7 +80,7 @@ OrderHistoryRecord Update(uint64_t sequence) {
   OrderUpdate update;
   update.account = AccountId{"A1"};
   update.market = Market();
-  update.client_id = ClientOrderId{"B1"};
+  update.client_order_id = ClientOrderId{"B1"};
   update.exchange_order_id = ExchangeOrderId{"E1"};
   update.exchange_status = ExchangeOrderStatus::PartiallyTraded;
   update.cumulative_base = D("0.004");
@@ -95,7 +95,7 @@ OrderHistoryRecord Trade(uint64_t sequence) {
   TradeUpdate trade;
   trade.account = AccountId{"A1"};
   trade.market = Market();
-  trade.client_id = ClientOrderId{"B1"};
+  trade.client_order_id = ClientOrderId{"B1"};
   trade.exchange_order_id = ExchangeOrderId{"E1"};
   trade.exchange_trade_id = ExchangeTradeId{"T1"};
   trade.price = D("99.9");
@@ -291,14 +291,14 @@ TEST(StorageTest, ActionRecordsPreserveActionOrderAndRejectionReason) {
   EXPECT_TRUE(cancel.accepted);
   EXPECT_EQ(cancel.reason, ErrorCode::kOk);
   EXPECT_EQ(cancel.message, "cancel requested");
-  ASSERT_TRUE(cancel.client_id);
-  EXPECT_EQ(cancel.client_id->value, "B1");
+  ASSERT_TRUE(cancel.client_order_id);
+  EXPECT_EQ(cancel.client_order_id->value, "B1");
   EXPECT_EQ(submit.action_index, 1);
   EXPECT_EQ(submit.action_kind, ActionKind::Submit);
   EXPECT_FALSE(submit.accepted);
   EXPECT_EQ(submit.reason, ErrorCode::kRiskBudgetExhausted);
   EXPECT_EQ(submit.message, "InsufficientBalance");
-  EXPECT_FALSE(submit.client_id);
+  EXPECT_FALSE(submit.client_order_id);
   EXPECT_TRUE((*recorder)->Stop(At(2000)).ok());
 }
 
