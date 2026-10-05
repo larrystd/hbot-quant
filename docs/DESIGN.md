@@ -1,6 +1,6 @@
 # hquant 1.0 设计
 
-目标运行路径：Binance 公开行情或文件回放 → Shard → SQLite 历史。Control 负责查询状态、历史和停止。每个 Shard 固定一个市场、一个 Simple PMM 策略和一个模拟账户；本版不接真实交易所下单。
+目标运行路径：Binance 公开行情或文件回放 → Shard → SQLite 历史。Control 负责查询状态、历史和停止。每个 Shard 固定一个市场、一个 Strategy 和一个模拟账户；本版不接真实交易所下单。
 
 ## 1. 只有三个主要部分
 
@@ -37,13 +37,13 @@ hquant/src/
     market.{h,cc}             # 行情状态与盘口同步
     order_book.{h,cc}
     binance_feed.{h,cc}       # REST 快照、WebSocket 公开数据
-    simple_pmm.{h,cc}         # 策略状态与决策
+    strategy.{h,cc}           # 策略状态与决策
     executor.{h,cc}           # 下单、撤单、账户视图
     order_tracker.{h,cc}      # 订单状态与成交去重
     paper_exchange.{h,cc}    # 模拟撮合与账本
 ~~~
 
-数据类型跟随拥有它的模块：盘口事件放在 market.h，策略决定放在 simple_pmm.h，订单及账户回报放在 executor.h。base 只放真正跨模块的数值和 ID，不再用一个大 market.h / order.h 混放接口和业务结构。网络或 SQLite 实现需要拆小文件时，仍放在所属目录。
+数据类型跟随拥有它的模块：盘口事件放在 market.h，策略决定放在 strategy.h，订单及账户回报放在 executor.h。base 只放真正跨模块的数值和 ID，不再用一个大 market.h / order.h 混放接口和业务结构。网络或 SQLite 实现需要拆小文件时，仍放在所属目录。
 
 ## 3. 关键结构体及归属
 
@@ -53,7 +53,7 @@ hquant/src/
 struct ShardConfig {
   ShardId id;
   MarketConfig market;       // 市场、交易规则、盘口过期时间
-  PmmConfig strategy;        // 价差、数量、刷新周期
+  StrategyConfig strategy;   // 价差、数量、刷新周期
   PaperConfig executor;      // 账户、初始余额、资金上限、费率
 };
 
@@ -111,10 +111,10 @@ class Shard {
   void PostReplay(ReplayRecord, std::function<void()> done); // 跨线程入口
  private:
   void OnMarket(const MarketNotice&);         // Market 通知入口
-  void OnPmmTimer();                          // 策略刷新入口
+  void OnStrategyTimer();                     // 策略刷新入口
   asio::io_context io_;
   Market market_;
-  SimplePmm strategy_;
+  Strategy strategy_;
   Executor executor_;                         // 订单跟踪、资金检查、PaperExchange
   std::thread worker_;
 };
@@ -135,7 +135,7 @@ Shard 构造 Market 时传入一个指向 Shard::OnMarket 的回调。Market 在
 | ShardStatus | 盘口状态、活跃订单数、余额、最近错误 | Shard 生成 |
 | HistoryRecord | run、shard、分片内序号、时间、动作或回报 | Shard 生成，SQLite 保存 |
 
-MarketInput 只用于 Binance Feed 内部和 ReplayRecord。交易处理只接收 MarketNotice 并读取 BookView；Shard 不维护第二份原始行情事件队列。BookChanged 只在盘口同步完成或 Live 盘口更新后发出；PublicTrade 通知携带本次公开成交；BookUnavailable 只在盘口从可交易变为不可交易时发出。Strategy 的一次决定只有三种结果：无动作、撤旧单、提交新报价。不能在同一次决定中同时撤单和重新报价。AccountEvent 分为订单状态、逐笔成交、余额变更；公开成交不是本账户的 Fill。
+MarketInput 只用于 Binance Feed 内部和 ReplayRecord。交易处理只接收 MarketNotice 并读取 BookView；Shard 不维护第二份原始行情事件队列。BookChanged 只在盘口同步完成或 Live 盘口更新后发出；PublicTrade 通知携带本次公开成交；BookUnavailable 只在盘口从可交易变为不可交易时发出。1.0 的 Strategy 是具体类，根据参考价、价差和可用资金生成双边报价，不引入策略基类。它的一次决定只有三种结果：无动作、撤旧单、提交新报价，不能同时撤单和重新报价。AccountEvent 分为订单状态、逐笔成交、余额变更；公开成交不是本账户的 Fill。
 
 ## 4. Shard 的固定处理顺序
 
@@ -152,7 +152,7 @@ Market::HandleInput 更新盘口 / 最近成交，或 Market::CheckStale 标记�
 
 Market 处理完输入、确定新状态后才发通知。快照前缓存增量时不通知；断档、断线或过期只在进入 BookUnavailable 时通知一次，并由 Market 自己重新连接或取快照。Market 的通知回调和 Shard::OnMarket 都在所属 Shard 线程上同步执行。Shard 只负责通知之后的交易顺序，不另存订单冻结表或账户余额。
 
-| MarketNotice | Executor | Simple PMM |
+| MarketNotice | Executor | Strategy |
 | --- | --- | --- |
 | BookChanged | 用更新后的盘口撮合已有模拟订单 | 根据最新盘口决定是否刷新 |
 | PublicTrade | 用本次公开成交撮合已有模拟订单；即使盘口暂不可交易也处理已有订单 | 只在盘口 Live 时允许新报价 |
@@ -160,7 +160,7 @@ Market 处理完输入、确定新状态后才发通知。快照前缓存增量�
 
 Executor 内部先检查交易规则与可用资金，再生成订单 ID、冻结资金、登记订单，最后交给模拟交易所。模拟交易所返回的回报先由 Executor 更新 OrderTracker、资金和余额，然后 Strategy 才能再次读取状态。订单状态先到而成交明细未齐时，订单继续占用资金；成交用 trade_id 去重。
 
-盘口未同步、已过期、断线或序号断档时停止新报价并重新取快照。撤单请求发出后仍可能成交；只有旧单真正结束且成交已入账，Simple PMM 才用**最新**盘口和余额提交替代报价。
+盘口未同步、已过期、断线或序号断档时停止新报价并重新取快照。撤单请求发出后仍可能成交；只有旧单真正结束且成交已入账，Strategy 才用**最新**盘口和余额提交替代报价。
 
 ## 5. 输入和请求时序
 
@@ -172,7 +172,7 @@ sequenceDiagram
     participant M as Market 协程与盘口
     participant S as Shard
     participant E as Executor
-    participant P as Simple PMM
+    participant P as Strategy
     B-->>M: 快照 / 增量 / 公开成交
     M->>M: 解析并 HandleInput，更新盘口或最近成交
     alt 序号断档或断线
@@ -208,7 +208,7 @@ sequenceDiagram
     participant S as Shard
     participant M as Market
     participant E as Executor
-    participant P as Simple PMM
+    participant P as Strategy
     F->>S: 投递记录 + InputTime
     S->>S: asio::post 到本线程；推进虚拟时钟
     alt 行情输入：快照、增量、公开成交或断线
@@ -231,7 +231,7 @@ sequenceDiagram
             M->>S: OnMarket(BookUnavailable)
         end
         opt 盘口状态未改变
-            S->>S: OnPmmTimer()
+            S->>S: OnStrategyTimer()
         end
     end
     S-->>F: 本条处理完成
@@ -246,7 +246,7 @@ sequenceDiagram
 sequenceDiagram
     participant T as 定时器
     participant S as Shard
-    participant P as Simple PMM
+    participant P as Strategy
     participant E as Executor
     participant X as PaperExchange
     T->>S: TimerTick
