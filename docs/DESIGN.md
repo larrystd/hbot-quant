@@ -190,73 +190,91 @@ PaperExchange 是 Executor 的内部组件，也是活动订单和模拟账户�
 | Execute(CancelOrders) | PaperExchange::Cancel，取回完整回报 |
 | Execute(SubmitOrders) | 校验规则和资金上限后调用 PaperExchange::Place，取回完整回报 |
 
-Executor 先检查交易规则和可用资金，再生成订单 ID 并调用 PaperExchange；挂单登记、成交和取消都由 PaperExchange 完成，冻结额度随活动订单变化。Executor 不保留第二份活动订单、冻结表或账户余额。一次 PaperExchange 调用结束后，Strategy 才能读取新的 ExecutionView。PaperExchange 保证同一批回报包含本次订单终结所需的全部成交明细，且 trade_id 不重复。若返回的回报与更新后的订单或余额互相矛盾，Shard 进入停止流程，不执行第二次决策。
+Executor 不保留第二份活动订单、冻结表或账户余额；PaperExchange 调用结束后，Strategy 才能读取新的 ExecutionView。PaperExchange 保证订单终结的整批回报包含全部成交明细，且 trade_id 不重复。若回报与更新后的订单或余额互相矛盾，Shard 进入停止流程，不执行第二次决策。
 
-盘口未同步、已过期、断线或序号断档时停止新单并重新取快照。Executor 完整处理 PaperExchange 的撤单回报后，Shard 才能用**最新**盘口、活动订单和余额进行第二次决策。
+Strategy 除配置外只保存 `next_refresh_at`，初始为空。配置解析拒绝不大于 0 的刷新周期。是否有活动订单由 ExecutionView 提供，Strategy 不保存订单阶段或 `requote_pending`。
 
-## 5. 必要的状态与处理规则
+| Decide 时的条件 | 返回值与时间更新 |
+| --- | --- |
+| 盘口不是 Live | 清空 next_refresh_at；有活动订单则返回包含全部活动订单 ID 的 CancelOrders，否则返回 NoAction |
+| 盘口 Live，但未到 next_refresh_at | NoAction |
+| 盘口 Live，刷新时间已到，仍有活动订单 | 返回包含全部活动订单 ID 的 CancelOrders；next_refresh_at 不变 |
+| 盘口 Live，刷新时间已到或为空，没有活动订单 | 根据当前盘口和余额返回 SubmitOrders；没有有效订单则返回 NoAction；两种结果都将 next_refresh_at 设为当前时间加刷新周期 |
 
-### 5.1 Market：同步中、可交易
+撤单在同一次 PaperExchange 调用中完成。目标订单若仍留在活动集合中，Shard 视为内部错误并停止；否则在盘口仍 Live 时立即进行第二次 Decide，最多两次，不循环。刷新时间前若订单全部成交，等到刷新时间再下单。新单被拒绝也等下一次刷新。
 
-Market 的盘口状态只有 Syncing 和 Live。Syncing 同时涵盖重连、等快照和等第一条衔接增量；这些步骤用 connection_epoch、可选的盘口序号和增量缓冲表示，不各设一个状态。Market 还保存最后一次有效盘口更新时间和同步失败原因。
+SubmitOrders 按订单顺序逐单执行。Executor 用 PaperExchange 的最新余额校验规则和资金上限，前一单被接受后重新计算下一单额度；校验拒绝不调用 Place，由 Shard 记录拒绝结果。PaperExchange 的 Place、Cancel、OnBookBbo、OnPublicTrade 每次调用必须原子完成：成功时订单、余额和完整回报一起提交，可预期的拒绝不改变账户；部分更新或回报矛盾使 Shard 停止。单次撮合成交整张订单，不跨事件部分成交。
+
+买单按金额及最坏情况手续费占用计价资产，卖单按数量占用基础资产。对每种资产，Executor 从 PaperExchange 的余额计算 `已用 = max(0, 初始总额 − 当前总额)`、`冻结 = 当前总额 − 当前可用额`，可下单额度为 `min(当前可用额, max(0, hard_limit − 已用 − 冻结))`。Executor 不另存资金占用表。
+
+## 5. 状态机
+
+本版只有三处跨事件的生命周期转换：Market 盘口、单张模拟订单、Shard。Strategy 的刷新时间是定时门控，决定规则见第 4 节。
+
+### 5.1 Market 盘口同步
+
+Syncing 表示盘口不能用于新下单，Live 表示快照和增量连续、买一卖一有效。重连、等待快照和追增量都属于 Syncing，由连接代次、快照序号和增量缓冲区分，不增加状态。
 
 ~~~mermaid
 stateDiagram-v2
-    [*] --> Syncing
-    Syncing --> Syncing: 等快照、等增量或重新连接
-    Syncing --> Live: 快照与增量序号接上
+    [*] --> Syncing: 启动
+    Syncing --> Syncing: 等输入或重新同步
+    Syncing --> Live: 快照与缓存增量全部接上，盘口有效
     Live --> Live: 连续增量
-    Live --> Syncing: 断档、断线、超时或无效盘口
+    Live --> Syncing: 新连接、断线、断档、过期或无效盘口
+    Syncing --> [*]: Shard 停止
+    Live --> [*]: Shard 停止
 ~~~
 
-| 输入 | Market 处理 |
-| --- | --- |
-| 新连接 | 更新 connection_epoch，清空旧盘口、序号和缓冲，进入 Syncing；若原来是 Live，发一次 BookUnavailable |
-| Syncing 收到增量 | 当前连接的增量按到达顺序缓存；若已有快照，立即尝试从快照序号衔接全部缓存增量；缓冲满则清空并重新同步 |
-| Syncing 收到快照，序号 S | 保存快照，丢弃 last_sequence ≤ S 的旧增量，并尝试从 S+1 衔接全部缓存增量；若尚无增量则继续等待 |
-| Syncing 尝试衔接 | 首个剩余增量须满足 first_sequence ≤ S+1 ≤ last_sequence，后续每条须连续；任一处缺口或最终盘口无效，都丢弃本轮快照并重新同步；全部接上后才进入 Live，发一次 BookChanged |
-| Live 收到增量 | 旧增量忽略；满足 first_sequence ≤ 当前序号+1 ≤ last_sequence 才应用并发 BookChanged；缺口立即回到 Syncing |
-| 断线、无效盘口或盘口过期 | 清空旧盘口并重新连接、取快照；只有从 Live 离开时才发 BookUnavailable |
-
-旧 connection_epoch 的输入始终忽略，重复的 FeedConnected 不重置当前盘口；Live 时到达的快照也忽略。有效公开成交不推进盘口序号，也不能延长盘口有效期；新连接在 Syncing 时收到的公开成交仍可供 Executor 撮合已有订单，Strategy 此时不能下新单。Market::CheckStale 只根据最后一次有效盘口更新判断过期。
-
-### 5.2 Strategy：一个运行时字段
-
-Strategy 除配置外只保存 `next_refresh_at`，初始为空，表示盘口可交易后立即尝试下单。它表示下次允许刷新挂单的时间；配置解析拒绝不大于 0 的刷新周期。SubmitOrders 是一组买卖方向的限价单请求；是否有活动订单由 Executor 的 ExecutionView 提供，Strategy 不另存订单阶段，也不保存 `requote_pending`。
-
-| 条件 | Strategy 返回 |
-| --- | --- |
-| 盘口不是 Live | 清空 next_refresh_at；有活动订单则返回包含全部活动订单 ID 的 CancelOrders，否则无动作 |
-| 盘口 Live，next_refresh_at 尚未到达 | 无动作 |
-| 盘口 Live，刷新时间已到，仍有活动订单 | 返回包含全部活动订单 ID 的 CancelOrders；不同时提交新单，也不推进 next_refresh_at |
-| 盘口 Live，刷新时间已到或为空，没有活动订单 | 用当前盘口和余额计算 SubmitOrders；若无有效订单则返回 NoAction；无论结果如何，都把 next_refresh_at 设为当前时间加刷新周期 |
-
-刷新时间到达且有活动单时，Shard 先按 Strategy 的决定撤单。PaperExchange 在同一次调用中给出完整结果；全部目标订单必须随调用结束，若仍有目标订单留在活动集合中就是内部错误，Shard 停止。活动单已清空、盘口仍 Live 且没有内部错误时，Shard 立刻再调用一次 Decide，用撤单后的余额生成新单。最多两次 Decide，不循环。刷新时间前若订单全部成交，剩余时间内不补单，到刷新时间再下单；新单被拒绝也等下一次刷新。
-
-### 5.3 Executor：活动订单集合
-
-1.0 的 PaperExchange 是本地同步组件：Place、Cancel、OnBookBbo、OnPublicTrade 每次调用都先更新内部订单与余额，再返回本次完整的 AccountEvent 批次。单次调用必须原子完成：成功时状态与回报一起提交，可预期的拒绝不改变状态；若发生部分更新或回报矛盾，Shard 停止。本版 SubmitOrders 按订单逐单调用 Place，不要求整组全成功。PaperExchange 用 `active_orders` 保存仍在挂的单，订单终结后移除并返回终结报告。Executor 转交回报给 Shard 记历史，不再维护另一份订单状态。无需订单生命周期状态枚举；订单报告携带终结原因和累计成交量。
-
-| 处理点 | Executor 动作 |
-| --- | --- |
-| Executor::Execute(SubmitOrders) | 按订单顺序逐单处理：从 PaperExchange 的最新余额计算可用资金，校验规则和资金上限，生成订单 ID，再调用 Place；前一单冻结后重新计算下一单额度 |
-| Executor 校验拒绝 | 返回该订单的拒绝结果，由 Shard 记历史；不调用 Place，不改变 PaperExchange |
-| PaperExchange::Place | 接受时加入 active_orders，使可用额扣除最坏情况支出；拒绝时不改变活动订单或余额，返回 Rejected 报告 |
-| PaperExchange 撮合出 Fill | 扣除实际支出，释放对应冻结，更新余额；本版一次成交整张订单 |
-| PaperExchange::Cancel 或订单成交 | 从 active_orders 移除订单，释放剩余冻结，返回包含全部 Fill 和终结报告的批次 |
-| Executor 收到互相矛盾的回报 | 记录内部错误，通知 Shard 进入停止流程；本地模拟器不得在之后补发本次成交明细 |
-
-本版模拟撮合一次成交整张挂单，不产生跨事件的部分成交。买单按金额及最坏情况手续费冻结计价资产，卖单按数量冻结基础资产。对每种资产，Executor 从 PaperExchange 的余额计算 `已用 = max(0, 初始总额 − 当前总额)`、`冻结 = 当前总额 − 当前可用额`，再取 `min(当前可用额, max(0, hard_limit − 已用 − 冻结))` 作为可下单额度；卖出或撤单释放的额度可再次使用。Executor 不另存资金占用表。`active_orders` 是否包含订单，就是唯一需要长期保存的订单生命周期信息。
-
-### 5.4 还有哪些状态转换
-
-| 对象 | 逻辑转换 | 保存方式 |
+| 转换 | 触发条件 | Market 动作与通知 |
 | --- | --- | --- |
-| Market 盘口 | Syncing ↔ Live | 唯一显式状态枚举；决定能否新下单 |
-| 下单请求与模拟订单 | 请求 → 活动订单 → 结束；校验或 Place 拒绝则请求直接结束，不创建活动订单 | 活动订单在 PaperExchange 的 active_orders 中；结束或拒绝原因写入动作结果和历史 |
-| Shard 生命周期 | 运行 → 停止中 → 已退出 | stop_requested 和工作线程是否结束；停止请求不可逆 |
+| Syncing → Syncing | 新连接；快照或增量尚不足以接上；缓存断档或无效 | 新连接清空旧数据并更新 connection_epoch；当前连接的增量先缓存。有快照后检查首条增量满足 first_sequence ≤ S+1 ≤ last_sequence，并检查后续全部连续；缺口或无效盘口丢弃本轮快照重新同步。不通知 Shard |
+| Syncing → Live | 快照及目前缓存的全部增量连续，最终买一卖一有效 | 应用快照和增量，更新连续序号与盘口时间，发一次 BookChanged |
+| Live → Live | 当前连接的增量满足 first_sequence ≤ 当前序号+1 ≤ last_sequence，应用后盘口有效 | 更新盘口、序号与盘口时间，发 BookChanged；已过期的旧增量直接忽略 |
+| Live → Syncing | 当前连接断线或换代、增量有缺口、盘口过期或盘口无效 | 清空不可用盘口，发一次 BookUnavailable，开始重新连接或取快照 |
 
-这三处在逻辑上都有状态转换。Strategy 的 `next_refresh_at` 是定时门控，不另设阶段；余额是数值数据，订单报告的种类是事件。Executor 不再复制订单状态或账户状态。内部错误和 Control 的 stop 都走同一条停止流程。SQLite 写入器和 Control socket 的启动、关闭由 Runtime 管理，不加入交易状态机。
+快照先到或增量先到都走同一套衔接检查；缓存里后续任何一条断档，都不能短暂进入 Live。旧 connection_epoch 的输入、重复 FeedConnected、Live 时到达的快照直接忽略。PublicTrade 不改变盘口状态或序号，也不延长盘口有效期；Market 通知 Shard 后，Executor 可用它撮合已有订单。Market::Stop 由 Shard 停止流程调用，不是第三个盘口状态。
+
+### 5.2 单张模拟订单
+
+订单只在 PaperExchange 接受 Place 后存在于 active_orders。没有挂单中、撤单中、等待成交明细等持久阶段；本版每次撮合只会整张成交，Place 和 Cancel 都同步返回完整回报。
+
+~~~mermaid
+stateDiagram-v2
+    [*] --> Active: Place 接受，加入 active_orders
+    Active --> [*]: 行情触发整张成交，返回成交报告
+    Active --> [*]: CancelOrders 或 Shard 停止，返回取消报告
+~~~
+
+| 转换 | 条件与效果 |
+| --- | --- |
+| 进入 Active | PaperExchange 接受单张请求，加入 active_orders；活动订单决定冻结额度和可用余额 |
+| Active → 结束：成交 | OnBookBbo 或 OnPublicTrade 命中，更新余额，移除活动订单，返回本次全部 Fill 和终结报告 |
+| Active → 结束：取消 | Cancel 删除活动订单，释放其占用，返回取消报告和余额更新 |
+| 未进入 Active | Executor 校验拒绝或 PaperExchange::Place 拒绝；记录拒绝结果，不创建活动订单，不冻结资金 |
+
+结束只是从 active_orders 移除并写历史，不另存 Done 状态。PaperExchange 是活动订单和余额的唯一所有者；回报与内部数据矛盾时，Shard 进入停止流程。
+
+### 5.3 Shard 生命周期
+
+Shard 的运行阶段用于拦截新策略动作并保证停止顺序。它由 stop_requested 和工作线程是否结束推导，不需要单独的生命周期枚举。
+
+~~~mermaid
+stateDiagram-v2
+    [*] --> Running: 工作线程启动
+    Running --> Stopping: Control stop、回放结束或内部错误
+    Stopping --> Stopping: 重复停止请求
+    Stopping --> Exited: I/O 结束、活动单终结、回放回调完成、历史已提交写队列
+    Exited --> [*]: Runtime join 工作线程
+~~~
+
+| 阶段 | 允许的处理 |
+| --- | --- |
+| Running | 按第 4 节处理行情、定时器和回放；允许 Strategy::Decide |
+| Stopping | stop_requested 已置位；不再调用 Strategy；停止 Market 和定时器、取消活动订单、记录终结回报；所有已排队的回放请求都回调停止错误。重复 stop 不再撤单 |
+| Exited | Shard 工作线程已结束；Runtime join 后刷新并关闭 SQLite，再关闭 Control socket |
+
+停止后的新回放请求直接返回停止错误。SQLite 写入器和 Control socket 只有资源关闭顺序，不加入交易状态机。
 
 ## 6. 输入和请求时序
 
@@ -358,7 +376,7 @@ sequenceDiagram
     end
 ~~~
 
-回放读取器等待 Shard 完成本条处理再读下一条。Market::OnReplayInput 与 RunBinance 共用 HandleInput；区别只在输入来源。ReplayReader 不直接修改盘口、订单或账户，回放也不启动墙上时间定时器。定时事件先检查盘口是否过期；若 Market 已因过期通知 Shard，本次不再触发第二次策略决定。停止时，尚未执行的回放投递也必须各调用一次完成回调，读取器收到停止错误后退出。
+回放读取器等待 Shard 完成本条处理再读下一条。Market::OnReplayInput 与 RunBinance 共用 HandleInput；区别只在输入来源。ReplayReader 不直接修改盘口、订单或账户，回放也不启动墙上时间定时器。定时事件先检查盘口是否过期；若 Market 已因过期通知 Shard，本次不再触发第二次策略决定。文件读到末尾后由 Runtime 发起停止。停止时，尚未执行的回放投递也必须各调用一次完成回调，读取器收到停止错误后退出。
 
 ### 6.3 定时刷新、撤单和重新下单
 
