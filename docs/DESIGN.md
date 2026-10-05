@@ -2,7 +2,7 @@
 
 目标运行路径：Binance 公开行情或文件回放 → Shard → SQLite 历史。Control 负责查询状态、历史和停止。每个 Shard 固定一个市场、一个 Strategy 和一个模拟账户；本版不接真实交易所下单。
 
-## 1. 只有三个主要部分
+## 1. 三个主要部分
 
 ~~~mermaid
 flowchart LR
@@ -158,6 +158,16 @@ Market 处理完输入、确定新状态后才发通知。快照前缓存增量�
 | PublicTrade | 用本次公开成交撮合已有模拟订单；即使盘口暂不可交易也处理已有订单 | 只在盘口 Live 时允许新报价 |
 | BookUnavailable | 不用失效盘口撮合 | 撤掉旧报价，不提交新报价 |
 
+PaperExchange 是 Executor 的内部组件。它的方法同步返回本次产生的 AccountEvent，Executor 立即入账，再把结果交还 Shard。调用位置固定如下：
+
+| Executor 入口 | Executor 内部调用 |
+| --- | --- |
+| OnMarket(BookChanged) | PaperExchange::OnBookBbo，处理返回的回报 |
+| OnMarket(PublicTrade) | PaperExchange::OnPublicTrade，处理返回的回报 |
+| OnMarket(BookUnavailable) | 不调用 PaperExchange |
+| Execute(CancelOrders) | PaperExchange::Cancel，处理返回的回报 |
+| Execute(SubmitQuotes) | 完成校验、冻结和登记后调用 PaperExchange::Place，处理返回的回报 |
+
 Executor 内部先检查交易规则与可用资金，再生成订单 ID、冻结资金、登记订单，最后交给模拟交易所。模拟交易所返回的回报先由 Executor 更新 OrderTracker、资金和余额，然后 Strategy 才能再次读取状态。订单状态先到而成交明细未齐时，订单继续占用资金；成交用 trade_id 去重。
 
 盘口未同步、已过期、断线或序号断档时停止新报价并重新取快照。撤单请求发出后仍可能成交；只有旧单真正结束且成交已入账，Strategy 才用**最新**盘口和余额提交替代报价。
@@ -187,6 +197,7 @@ sequenceDiagram
         S->>M: View()，只读
         M-->>S: 当前 BookView
         S->>E: OnMarket(notice, BookView)
+        E->>E: BookChanged / PublicTrade 时调用 PaperExchange 并入账
         E-->>S: 已入账的模拟成交和账户回报
         S->>P: Decide(BookView, ExecutionView)
         P-->>S: 无动作 / 撤单 / 新报价
@@ -217,6 +228,7 @@ sequenceDiagram
         opt 产生 MarketNotice
             M->>S: OnMarket(notice)，同步调用
             S->>E: OnMarket(notice, Market::View())
+            E->>E: BookChanged / PublicTrade 时调用 PaperExchange 并入账
             E-->>S: 已入账回报
             S->>P: Decide(最新视图)
             P-->>S: 决定
@@ -248,15 +260,12 @@ sequenceDiagram
     participant S as Shard
     participant P as Strategy
     participant E as Executor
-    participant X as PaperExchange
     T->>S: TimerTick
     S->>P: Decide(最新盘口、订单、余额)
     alt 还有旧订单
         P-->>S: CancelOrders
         S->>E: Execute(CancelOrders)
-        E->>X: Cancel
-        X-->>E: 订单状态 / 成交 / 余额回报
-        E->>E: 更新跟踪、资金、账户
+        E->>E: PaperExchange::Cancel；入账返回的回报
         E-->>S: 旧单是否全部结束
         S->>S: 记录撤单动作和回报
         opt 旧单终态且成交明细齐全
@@ -271,15 +280,13 @@ sequenceDiagram
     opt 得到 SubmitQuotes
         S->>E: Execute(SubmitQuotes)
         E->>E: 规则检查 → 冻结资金 → 登记订单
-        E->>X: Place
-        X-->>E: 订单状态 / 成交 / 余额回报
-        E->>E: 入账并更新订单
+        E->>E: PaperExchange::Place；入账返回的回报
         E-->>S: 动作结果和回报
         S->>S: 记录下单动作和回报
     end
 ~~~
 
-如果撤单尚未确认或成交明细尚未齐，重新决策只会继续等待。PaperExchange 的即时回报作为 Executor 调用结果处理，不通过同步回调重入 Shard。
+定时器只触发 Strategy 决策，不直接操作 PaperExchange。行情触发撮合，策略决定触发撤单或下单；这两类操作都经过 Executor。撤单尚未确认或成交明细尚未齐时，重新决策继续等待。PaperExchange 的即时回报由 Executor 入账，不通过同步回调重入 Shard。
 
 ### 5.4 status 与 history
 
