@@ -15,7 +15,7 @@ flowchart LR
 
 Shard 是交易状态的唯一所有者。Market 管连接、解析和盘口；Strategy 只计算报价或撤单意图；Executor 管订单、风险、模拟交易和账户。SQLite 与 Control 不进入每次策略决策的调用链。
 
-每个 Shard 有自己的 io_context 和唯一工作线程。实时行情读取、定时器、Shard 事件循环是这个 io_context 上的协程。协程等待 I/O 时可以交错；处理一条事件时同步调用 Market、Strategy、Executor，中途不 co_await，也不从回调重新进入事件处理。跨线程调用只投递消息，不能直接读写 Shard 对象。
+每个 Shard 有自己的 io_context 和唯一工作线程。Market 的 Binance 读取与盘口过期检查、Shard 的策略定时器都在这个线程上运行。实时行情由 Market 协程读取并直接更新 Market 内的 OrderBook，然后同步通知 Shard；不存在“Market 把事件交给 Shard，Shard 再交回 Market”的步骤。Shard 收到通知后同步调用 Executor、Strategy，中途不 co_await。跨线程的回放和 Control 请求必须先投递到 Shard 的 io_context。
 
 ## 2. 目录
 
@@ -23,6 +23,12 @@ Shard 是交易状态的唯一所有者。Market 管连接、解析和盘口；S
 
 ~~~text
 hquant/src/
+  main.cc                       # 进程入口：读取配置，启动 Runtime
+  config.{h,cc}                 # AppConfig 与配置解析
+  runtime.{h,cc}                # 构建、路由、启动和停止 Shard
+  replay_reader.{h,cc}          # 文件回放输入
+  sqlite_history.{h,cc}         # 异步写入、只读查询
+  control_server.{h,cc}         # Unix socket、JSON 边界
   base/
     decimal.{h,cc}             # 精确数值
     ids.h                     # ShardId、MarketId、OrderId 等值类型
@@ -35,14 +41,6 @@ hquant/src/
     executor.{h,cc}           # 下单、撤单、账户视图
     order_tracker.{h,cc}      # 订单状态与成交去重
     paper_exchange.{h,cc}    # 模拟撮合与账本
-  app/
-    config.{h,cc}
-    runtime.{h,cc}            # 构建、路由、启动和停止 Shard
-    replay_reader.{h,cc}
-    sqlite_history.{h,cc}     # 异步写入、只读查询
-    control_server.{h,cc}     # Unix socket、JSON 边界
-apps/
-  hquant_server.cc
 ~~~
 
 数据类型跟随拥有它的模块：盘口事件放在 market.h，策略决定放在 simple_pmm.h，订单及账户回报放在 executor.h。base 只放真正跨模块的数值和 ID，不再用一个大 market.h / order.h 混放接口和业务结构。网络或 SQLite 实现需要拆小文件时，仍放在所属目录。
@@ -66,14 +64,63 @@ struct AppConfig {
   std::string control_socket;
 };
 
+~~~
+
+Market 和 Shard 的边界固定如下。MarketInput 是 Market 内部处理的已解析行情，MarketNotice 是 Market 完成状态更新后给 Shard 的通知。通知里的 PublicTrade 供模拟撮合使用，盘口由 Shard 同步读取 Market::View()。
+
+~~~cpp
+struct FeedDisconnected {
+  uint64_t connection_epoch;
+  ErrorCode reason;
+};
+struct TimerTick {};
+using MarketInput = std::variant<BookSnapshot, BookDiff, PublicTrade, FeedDisconnected>;
+
+struct MarketNotice {
+  enum class Kind { BookChanged, PublicTrade, BookUnavailable } kind;
+  std::optional<PublicTrade> trade;           // 仅 PublicTrade 通知有值
+};
+
+struct InputTime {
+  int64_t at_us;
+  uint64_t ordinal;                      // 同一时刻的文件顺序
+};
+
+struct ReplayRecord {
+  ShardId target;
+  InputTime time;
+  std::variant<MarketInput, TimerTick> body;
+};
+
+class Market {
+ public:
+  Market(MarketConfig, std::function<void(const MarketNotice&)> notify);
+  awaitable<void> RunBinance();                 // 读入、解析、更新盘口、通知 Shard
+  void OnReplayInput(const MarketInput&);      // 回放：在 Shard 线程上做同样的更新与通知
+  bool CheckStale(MonoTime now);               // 若刚变为不可交易：通知 Shard，返回 true
+  const BookView& View() const;
+ private:
+  void HandleInput(const MarketInput&);       // 上述两种输入共用；仅 Market 调用
+  BinanceFeed feed_;                           // REST / WebSocket 输入
+  OrderBook book_;
+  std::function<void(const MarketNotice&)> notify_; // Shard::OnMarket，同步调用
+};
+
 class Shard {
+ public:
+  void PostReplay(ReplayRecord, std::function<void()> done); // 跨线程入口
+ private:
+  void OnMarket(const MarketNotice&);         // Market 通知入口
+  void OnPmmTimer();                          // 策略刷新入口
   asio::io_context io_;
-  std::thread worker_;
-  Market market_;             // 内含 OrderBook
+  Market market_;
   SimplePmm strategy_;
-  Executor executor_;         // 内含订单跟踪、资金检查、PaperExchange
+  Executor executor_;                         // 订单跟踪、资金检查、PaperExchange
+  std::thread worker_;
 };
 ~~~
+
+Shard 构造 Market 时传入一个指向 Shard::OnMarket 的回调。Market 在所属 Shard 线程同步调用它；回调返回前不处理下一条行情。PostReplay 先 asio::post 到该线程，完成 Market 通知及交易处理后才调用 done。Shard::OnMarket 内不 co_await；它需要再次决策时将工作排到下一次 io_context 调度，不递归调用自身。
 
 | 类型 | 关键字段 | 所有者 |
 | --- | --- | --- |
@@ -88,13 +135,14 @@ class Shard {
 | ShardStatus | 盘口状态、活跃订单数、余额、最近错误 | Shard 生成 |
 | HistoryRecord | run、shard、分片内序号、时间、动作或回报 | Shard 生成，SQLite 保存 |
 
-MarketEvent 只包含快照、增量、公开成交和连接状态。Strategy 的一次决定只有三种结果：无动作、撤旧单、提交新报价。不能在同一次决定中同时撤单和重新报价。AccountEvent 分为订单状态、逐笔成交、余额变更；公开成交不是本账户的 Fill。
+MarketInput 只用于 Binance Feed 内部和 ReplayRecord。交易处理只接收 MarketNotice 并读取 BookView；Shard 不维护第二份原始行情事件队列。BookChanged 只在盘口同步完成或 Live 盘口更新后发出；PublicTrade 通知携带本次公开成交；BookUnavailable 只在盘口从可交易变为不可交易时发出。Strategy 的一次决定只有三种结果：无动作、撤旧单、提交新报价。不能在同一次决定中同时撤单和重新报价。AccountEvent 分为订单状态、逐笔成交、余额变更；公开成交不是本账户的 Fill。
 
 ## 4. Shard 的固定处理顺序
 
 ~~~text
-取一条输入
-  → Market 更新盘口或检查过期
+Market::HandleInput 更新盘口 / 最近成交，或 Market::CheckStale 标记过期
+  → Market 同步调用 Shard::OnMarket(MarketNotice)
+  → Shard 读取 Market::View()
   → Executor 用新行情撮合已有模拟订单，并入账回报
   → Strategy 读取最新 BookView + ExecutionView，作一次决定
   → Executor 执行撤单或新单，并入账即时回报
@@ -102,7 +150,15 @@ MarketEvent 只包含快照、增量、公开成交和连接状态。Strategy �
   → 必要时排入下一条“重新决策”内部事件
 ~~~
 
-Shard 只负责这个顺序，不另存订单冻结表或账户余额。Executor 内部先检查交易规则与可用资金，再生成订单 ID、冻结资金、登记订单，最后交给模拟交易所。模拟交易所返回的回报先由 Executor 更新 OrderTracker、资金和余额，然后 Strategy 才能再次读取状态。订单状态先到而成交明细未齐时，订单继续占用资金；成交用 trade_id 去重。
+Market 处理完输入、确定新状态后才发通知。快照前缓存增量时不通知；断档、断线或过期只在进入 BookUnavailable 时通知一次，并由 Market 自己重新连接或取快照。Market 的通知回调和 Shard::OnMarket 都在所属 Shard 线程上同步执行。Shard 只负责通知之后的交易顺序，不另存订单冻结表或账户余额。
+
+| MarketNotice | Executor | Simple PMM |
+| --- | --- | --- |
+| BookChanged | 用更新后的盘口撮合已有模拟订单 | 根据最新盘口决定是否刷新 |
+| PublicTrade | 用本次公开成交撮合已有模拟订单；即使盘口暂不可交易也处理已有订单 | 只在盘口 Live 时允许新报价 |
+| BookUnavailable | 不用失效盘口撮合 | 撤掉旧报价，不提交新报价 |
+
+Executor 内部先检查交易规则与可用资金，再生成订单 ID、冻结资金、登记订单，最后交给模拟交易所。模拟交易所返回的回报先由 Executor 更新 OrderTracker、资金和余额，然后 Strategy 才能再次读取状态。订单状态先到而成交明细未齐时，订单继续占用资金；成交用 trade_id 去重。
 
 盘口未同步、已过期、断线或序号断档时停止新报价并重新取快照。撤单请求发出后仍可能成交；只有旧单真正结束且成交已入账，Simple PMM 才用**最新**盘口和余额提交替代报价。
 
@@ -114,32 +170,35 @@ Shard 只负责这个顺序，不另存订单冻结表或账户余额。Executor
 sequenceDiagram
     participant B as Binance REST/WS
     participant M as Market 协程与盘口
-    participant S as Shard 事件循环
+    participant S as Shard
     participant E as Executor
     participant P as Simple PMM
     B-->>M: 快照 / 增量 / 公开成交
-    M->>S: 投递 MarketEvent
-    S->>M: Apply(event)
-    alt 序号断档、断线或盘口过期
-        M-->>S: Stale
-        S->>M: 请求重新连接或取快照
-    else 行情已应用
-        M-->>S: BookView + 触发原因
-        S->>E: OnMarket(event, BookView)
+    M->>M: 解析并 HandleInput，更新盘口或最近成交
+    alt 序号断档或断线
+        M->>M: 标记不可交易；自行重连或重新取快照
+        M->>S: OnMarket(BookUnavailable)
+    else 快照、增量或公开成交已应用
+        M->>S: OnMarket(BookChanged / PublicTrade)
+    else 等待快照
+        M->>M: 缓存增量，不通知 Shard
+    end
+    opt Shard 收到通知
+        S->>M: View()，只读
+        M-->>S: 当前 BookView
+        S->>E: OnMarket(notice, BookView)
         E-->>S: 已入账的模拟成交和账户回报
         S->>P: Decide(BookView, ExecutionView)
-        P-->>S: 无动作 / 撤单 / 新报价（盘口有效时）
+        P-->>S: 无动作 / 撤单 / 新报价
         opt 有动作
             S->>E: Execute(decision)
             E-->>S: 动作结果与已入账回报
         end
         S->>S: 写历史；必要时排入重新决策
-    else 等待快照
-        M-->>S: 盘口不可交易
     end
 ~~~
 
-快照前的增量由 Market 自己缓存；快照与增量序号接上后才进入可交易状态。行情协程只生产事件，不直接调用策略或改订单。
+盘口过期由 Market 自己的定时检查触发，走同一个 BookUnavailable 通知。快照前的增量由 Market 缓存；快照与增量序号接上后才进入可交易状态。Market 不调用 Strategy 或 Executor。盘口不可交易时，Strategy 可撤旧单，Executor 拒绝新单。
 
 ### 5.2 文件回放
 
@@ -148,21 +207,38 @@ sequenceDiagram
     participant F as ReplayReader
     participant S as Shard
     participant M as Market
-    participant P as Strategy / Executor
+    participant E as Executor
+    participant P as Simple PMM
     F->>S: 投递记录 + InputTime
-    S->>S: 推进虚拟时钟
-    alt 快照、增量或公开成交
-        S->>M: Apply(event)
-        S->>P: 按 5.1 的顺序处理
+    S->>S: asio::post 到本线程；推进虚拟时钟
+    alt 行情输入：快照、增量、公开成交或断线
+        S->>M: OnReplayInput(MarketInput)
+        M->>M: HandleInput，更新盘口或最近成交
+        opt 产生 MarketNotice
+            M->>S: OnMarket(notice)，同步调用
+            S->>E: OnMarket(notice, Market::View())
+            E-->>S: 已入账回报
+            S->>P: Decide(最新视图)
+            P-->>S: 决定
+            opt 有动作
+                S->>E: Execute(决定)
+                E-->>S: 动作结果与回报
+            end
+        end
     else 定时事件
-        S->>M: 检查盘口过期
-        S->>P: 按 5.3 的顺序处理
+        S->>M: CheckStale(virtual_now)
+        opt 盘口刚变为不可交易
+            M->>S: OnMarket(BookUnavailable)
+        end
+        opt 盘口状态未改变
+            S->>S: OnPmmTimer()
+        end
     end
     S-->>F: 本条处理完成
     F->>F: 读取下一条
 ~~~
 
-回放读取器等待确认再读下一条，以保持文件顺序；它不直接修改盘口、订单或账户。回放不启动墙上时间定时器。
+回放读取器等待 Shard 完成本条处理再读下一条。Market::OnReplayInput 与 RunBinance 共用 HandleInput；区别只在输入来源。ReplayReader 不直接修改盘口、订单或账户，回放也不启动墙上时间定时器。定时事件先检查盘口是否过期；若 Market 已因过期通知 Shard，本次不再触发第二次策略决定。
 
 ### 5.3 定时刷新、撤单和重新报价
 
@@ -182,10 +258,12 @@ sequenceDiagram
         X-->>E: 订单状态 / 成交 / 余额回报
         E->>E: 更新跟踪、资金、账户
         E-->>S: 旧单是否全部结束
-        opt 旧单全部结束
-            S->>S: 排入重新决策事件
-            S->>P: Decide(最新盘口、订单、余额)
-            P-->>S: SubmitQuotes
+        S->>S: 记录撤单动作和回报
+        opt 旧单终态且成交明细齐全
+            S->>S: asio::post(Reevaluate)
+            Note over S: 当前 TimerTick 回调返回
+            S->>P: 下一次调度：Decide(最新视图)
+            P-->>S: SubmitQuotes 或无动作
         end
     else 没有旧订单且盘口有效
         P-->>S: SubmitQuotes
@@ -197,8 +275,8 @@ sequenceDiagram
         X-->>E: 订单状态 / 成交 / 余额回报
         E->>E: 入账并更新订单
         E-->>S: 动作结果和回报
+        S->>S: 记录下单动作和回报
     end
-    S->>S: 记录历史
 ~~~
 
 如果撤单尚未确认或成交明细尚未齐，重新决策只会继续等待。PaperExchange 的即时回报作为 Executor 调用结果处理，不通过同步回调重入 Shard。
