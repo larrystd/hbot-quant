@@ -9,6 +9,7 @@
 #include "order/risk.h"
 #include "order/simulated_exchange.h"
 #include "shard/shard.h"
+#include "shard/simulated_trading.h"
 #include "strategy/strategy.h"
 
 namespace hquant {
@@ -119,12 +120,14 @@ class TriggerFixture : public ::testing::Test {
                                    clock};
   RiskGate risk{{ShardId{0}, D("0"), std::chrono::seconds(300)}};
   MemoryWriter writer;
-  Shard shard{{RunId{1}, ShardId{0}, id, account, spec, scale, rule},
-              clock,
-              strategy,
-              exchange,
-              risk,
-              writer};
+  Shard shard{
+      {RunId{1}, ShardId{0}, id, account, spec, scale, rule},
+      clock,
+      strategy,
+      std::make_unique<SimulatedTrading>(
+          exchange, SimulatedTrading::Config{account, spec, scale}, clock),
+      risk,
+      writer};
   int64_t current_bid = 9999;
 
   void SetUp() override {
@@ -257,8 +260,11 @@ TEST(ShardTriggerTest, ImmediateFillQueuesOneFollowupWithoutRecursion) {
                                      D("100"), origin + std::chrono::hours(1)})
                   .ok());
   MemoryWriter writer;
-  Shard shard({RunId{1}, ShardId{0}, id, account, spec, scale, rule}, clock,
-              strategy, exchange, risk, writer);
+  Shard shard(
+      {RunId{1}, ShardId{0}, id, account, spec, scale, rule}, clock, strategy,
+      std::make_unique<SimulatedTrading>(
+          exchange, SimulatedTrading::Config{account, spec, scale}, clock),
+      risk, writer);
   ASSERT_TRUE(clock.Advance({0, 1}).ok());
   shard.Subscribe(1);
   BookSnapshot snapshot{market,

@@ -5,7 +5,7 @@
   "baseline_commit": "9af100d6822da7d2d0291a906c730ef172284ee2",
   "source_files": [
     "hummingbot/connector/exchange/paper_trade/paper_trade_exchange.pyx",
-    "docs/STRUCTURE_AND_TYPES.md"
+    "docs/README.md"
   ],
   "expectation_kind": "intentional_divergence",
   "divergence_reason": "Python PaperTradeExchange creates an unfunded resting limit order and only cancels it when matching checks the total balance. The C++ RiskGate rejects insufficient BTC before Paper submission.",

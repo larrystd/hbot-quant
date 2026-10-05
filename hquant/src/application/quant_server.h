@@ -15,6 +15,8 @@
 
 namespace hquant {
 
+class SimpleSimulatedExchange;
+
 class Clock;
 class ReplayClock;
 class SqliteOrderHistoryWriter;
@@ -53,6 +55,9 @@ class QuantServer {
   std::unique_ptr<Clock> clock;
   ReplayClock* replay_clock = nullptr;
   std::unique_ptr<SqliteOrderHistoryWriter> writer;
+  // 模拟盘每个分片一个模拟交易所，下标和 shards 一致；实盘为空。
+  // 放在 shards 前面，保证分片先销毁。
+  std::vector<std::unique_ptr<SimpleSimulatedExchange>> simulated_exchanges;
   std::vector<std::unique_ptr<Shard>> shards;
   std::unique_ptr<SqliteOrderHistoryReader> reader;
   std::mutex stop_mutex;

@@ -7,8 +7,7 @@
     "hummingbot/connector/client_order_tracker.py",
     "hummingbot/core/data_type/in_flight_order.py",
     "test/hummingbot/connector/test_client_order_tracker.py",
-    "docs/STRUCTURE_AND_TYPES.md",
-    "docs/ARCHITECTURE.md"
+    "docs/README.md"
   ],
   "expectation_kind": "intentional_divergence",
   "divergence_reason": "C++ preserves the original client ID and full worst-case funds hold after an uncertain socket write. Python ClientOrderTracker has no SubmissionUnknown reconciliation fact or FundsHold output.",

@@ -13,7 +13,7 @@ callbacks have run.
 | `buy_limit_book_touch`, `sell_limit_book_touch` | `paper_trade_exchange.pyx:319-322,641-821,836-892` | A tick with opposite BBO equal to limit fills the entire order at its own limit price. |
 | `public_sell_trade_fills_full_buy`, `public_buy_trade_fills_full_sell` | `paper_trade_exchange.pyx:113-125,190-198,894-939` | A public trade strictly past the limit fills the resting order. Equality does not. The public trade amount is `0.001`, but Python fills the full `0.01` order. **This full fill is Python parity**; the public trade is only a trigger, and its amount is not used to size the fill. A C++ partial fill model would require an intentional divergence fixture. |
 | `cancel_before_touch`, `both_sides_hold_and_release` | `paper_trade_exchange.pyx:278-293,961-1011` | Resting buy holds quote, resting sell holds base. Cancellation removes the order, emits `OrderCanceled`, and restores available balance. |
-| `unfunded_sell_rejected_before_exchange` | `paper_trade_exchange.pyx:385-443,747-775`; `docs/STRUCTURE_AND_TYPES.md` | Python accepts an unfunded limit sell and cancels it on attempted match. The new C++ risk admission rejects it before Paper and emits a normalized failure. This case is an intentional divergence. |
+| `unfunded_sell_rejected_before_exchange` | `paper_trade_exchange.pyx:385-443,747-775`; `docs/README.md` | Python accepts an unfunded limit sell and cancels it on attempted match. The C++ risk admission rejects it before Paper and emits a normalized failure. This case is an intentional divergence. |
 
 For buys, the configured percent fee is deducted from base returns. Buying
 `0.01` BTC at `100` spends `1` USDT and receives `0.00999` BTC after a

@@ -20,6 +20,7 @@
 #include "order/risk.h"
 #include "order/simulated_exchange.h"
 #include "shard/shard.h"
+#include "shard/simulated_trading.h"
 #include "strategy/simple_pmm.h"
 
 namespace {
@@ -173,7 +174,8 @@ class PrintingRecorder final : public OrderHistoryWriter {
                 std::cout << ": " << payload.message;
               std::cout << "）";
             }
-            if (payload.client_order_id) std::cout << " " << payload.client_order_id->value;
+            if (payload.client_order_id)
+              std::cout << " " << payload.client_order_id->value;
           } else if constexpr (std::is_same_v<T, OrderUpdate>) {
             std::cout << "[回报] " << payload.client_order_id.value << " -> "
                       << StatusName(payload.status);
@@ -243,8 +245,7 @@ void PrintState(const Shard& shard, const SimpleSimulatedExchange& sim_exchange,
   if (orders.empty()) std::cout << " 无";
   for (const auto& order : orders) {
     std::cout << " [" << order.client_order_id.value << " "
-              << SideName(order.side) << " "
-              << Plain(order.quantity) << " @ "
+              << SideName(order.side) << " " << Plain(order.quantity) << " @ "
               << Plain(order.price) << "]";
   }
   std::cout << "\n  余额:";
@@ -310,7 +311,13 @@ absl::Status Run(const std::string& config_path,
   // 总管：把订单簿、策略、风控、交易所、记录器串起来。
   Shard shard({RunId{1}, assignment.shard, strategy_config.strategy_id,
                account.account, market.spec, market.tick_lot_size, rule},
-              clock, strategy, sim_exchange, risk, recorder);
+              clock, strategy,
+              std::make_unique<SimulatedTrading>(
+                  sim_exchange,
+                  SimulatedTrading::Config{account.account, market.spec,
+                                           market.tick_lot_size},
+                  clock),
+              risk, recorder);
 
   std::cout << "初始状态\n";
   PrintState(shard, sim_exchange, risk, account.account, market);

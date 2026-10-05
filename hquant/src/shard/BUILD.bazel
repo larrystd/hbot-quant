@@ -35,11 +35,51 @@ hquant_cc_library(
 )
 
 hquant_cc_library(
+    name = "trading_mode",
+    hdrs = ["trading_mode.h"],
+    deps = [
+        "//hquant/src/base:market",
+        "//hquant/src/base:order",
+        "//hquant/src/market:order_book",
+        "@abseil-cpp//absl/status:statusor",
+        "@boost.asio//:boost.asio",
+    ],
+    visibility = ["//visibility:public"],
+)
+
+hquant_cc_library(
+    name = "simulated_trading",
+    srcs = ["simulated_trading.cc"],
+    hdrs = ["simulated_trading.h"],
+    deps = [
+        ":trading_mode",
+        "//hquant/src/base:market",
+        "//hquant/src/base:order",
+        "//hquant/src/base:types",
+        "@abseil-cpp//absl/status:statusor",
+    ],
+    visibility = ["//visibility:public"],
+)
+
+hquant_cc_library(
+    name = "live_trading",
+    hdrs = ["live_trading.h"],
+    deps = [
+        ":trading_mode",
+        "//hquant/src/base:market",
+        "//hquant/src/base:order",
+        "@abseil-cpp//absl/status:statusor",
+    ],
+    visibility = ["//visibility:public"],
+)
+
+hquant_cc_library(
     name = "shard",
     srcs = ["shard.cc"],
     hdrs = ["shard.h"],
     deps = [
         ":action_executor",
+        ":trading_mode",
         "//hquant/src/base:error",
         "//hquant/src/base:types",
         "//hquant/src/base:market",
@@ -49,7 +89,6 @@ hquant_cc_library(
         "//hquant/src/market:order_book",
         "//hquant/src/order:order_tracker",
         "//hquant/src/order:risk",
-        "//hquant/src/order:simulated_exchange",
         "//hquant/src/order_history:order_history",
         "//hquant/src/strategy:strategy",
         "@abseil-cpp//absl/status:status",

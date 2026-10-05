@@ -190,6 +190,40 @@ class TestClock final : public Clock {
   }
 };
 
+// 测试用的行情接收方：把数据应用到一个订单簿，并把结果和错误交给测试。
+class RecordingReceiver final : public MarketDataReceiver {
+ public:
+  explicit RecordingReceiver(OrderBookSync& book) : book_(book) {}
+
+  BookApplyResult OnConnect(uint64_t connection_id) override {
+    return Record(book_.Subscribe(connection_id));
+  }
+  BookApplyResult OnSnapshot(const BookSnapshot& snapshot) override {
+    return Record(book_.OnSnapshot(snapshot));
+  }
+  BookApplyResult OnDiff(const BookDiff& diff) override {
+    return Record(book_.OnDiff(diff));
+  }
+  BookApplyResult OnDisconnect() override {
+    return Record(book_.OnDisconnect());
+  }
+  void OnPublicTrade(const PublicTrade&) override {}
+  void OnStreamError(const absl::Status& status) override {
+    if (on_error) on_error(status);
+  }
+
+  std::function<void(const BookApplyResult&)> on_result;
+  std::function<void(const absl::Status&)> on_error;
+
+ private:
+  BookApplyResult Record(BookApplyResult result) {
+    if (on_result) on_result(result);
+    return result;
+  }
+
+  OrderBookSync& book_;
+};
+
 void RunLocalCycle(uint64_t second_first, bool retry_snapshot,
                    absl::StatusCode expected_status, unsigned http_status = 200,
                    bool delay_http = false,
@@ -252,12 +286,12 @@ void RunLocalCycle(uint64_t second_first, bool retry_snapshot,
       delay_http ? std::chrono::milliseconds(30) : std::chrono::seconds(2);
   config.read_timeout = std::chrono::seconds(2);
   std::vector<BookApplyResult> results;
-  MarketDataStream stream(
-      config, DepthParser(Market(), scale), http_client, websocket, book, clock,
-      StreamCallbacks{
-          [&](const BookApplyResult& result) { results.push_back(result); },
-          {},
-          {}});
+  RecordingReceiver receiver(book);
+  receiver.on_result = [&](const BookApplyResult& result) {
+    results.push_back(result);
+  };
+  MarketDataStream stream(config, DepthParser(Market(), scale), http_client,
+                          websocket, receiver, clock);
   absl::Status outcome;
   asio::co_spawn(
       io,
@@ -317,8 +351,9 @@ TEST(MarketDataStreamTest, InvalidConfigStopsRun) {
   TestClock clock;
   StreamConfig config;
   config.symbol = "ETHUSDT";
+  RecordingReceiver receiver(book);
   MarketDataStream stream(config, DepthParser(Market(), ParserScale()),
-                          http_client, websocket, book, clock);
+                          http_client, websocket, receiver, clock);
   bool guard_fired = false;
   bool completed = false;
   asio::steady_timer guard(io);
@@ -407,19 +442,18 @@ TEST(MarketDataStreamTest, InvalidMessageReconnectsAndRecovers) {
   std::vector<ErrorCode> errors;
   bool live = false;
   MarketDataStream* stream_ptr = nullptr;
-  MarketDataStream stream(
-      config, DepthParser(Market(), ParserScale()), http_client,
-      websocket_client, book, clock,
-      StreamCallbacks{[&](const BookApplyResult& result) {
-                        if (result.state == BookSyncState::Live) {
-                          live = true;
-                          stream_ptr->Stop();
-                        }
-                      },
-                      {},
-                      [&](const absl::Status& status) {
-                        errors.push_back(CodeOf(status));
-                      }});
+  RecordingReceiver receiver(book);
+  receiver.on_result = [&](const BookApplyResult& result) {
+    if (result.state == BookSyncState::Live) {
+      live = true;
+      stream_ptr->Stop();
+    }
+  };
+  receiver.on_error = [&](const absl::Status& status) {
+    errors.push_back(CodeOf(status));
+  };
+  MarketDataStream stream(config, DepthParser(Market(), ParserScale()),
+                          http_client, websocket_client, receiver, clock);
   stream_ptr = &stream;
   asio::steady_timer guard(io);
   guard.expires_after(std::chrono::seconds(1));

@@ -24,6 +24,7 @@
 #include "order_history/order_history_reader.h"
 #include "order_history/order_history_writer.h"
 #include "shard/shard.h"
+#include "shard/simulated_trading.h"
 #include "strategy/simple_pmm.h"
 
 namespace hquant {
@@ -171,9 +172,15 @@ absl::Status QuantServer::CreateComponents() {
                                market.tick_lot_size,
                                rule};
     shard_config.stale_after_us = market.stale_after->count();
+    auto trading = std::make_unique<SimulatedTrading>(
+        *exchange,
+        SimulatedTrading::Config{account.account, market.spec,
+                                 market.tick_lot_size},
+        *clock);
+    simulated_exchanges.push_back(std::move(exchange));
     shards.push_back(
         std::make_unique<Shard>(shard_config, *clock, std::move(*strategy),
-                                std::move(exchange), std::move(risk), *writer));
+                                std::move(trading), std::move(risk), *writer));
   }
   auto read =
       SqliteOrderHistoryReader::Open({storage_path, config.storage.reader_queue,
@@ -460,8 +467,8 @@ boost::asio::awaitable<absl::StatusOr<std::string>> QuantServer::StatusAsync() {
     std::vector<std::string> entries(shards.size());
     if (!live) {
       for (size_t index = 0; index < shards.size(); ++index)
-        entries[index] = ShardStatusJson(*shards[index],
-                                         shards[index]->OwnedExchange(), false);
+        entries[index] =
+            ShardStatusJson(*shards[index], *simulated_exchanges[index], false);
       co_return AggregateStatusJson(entries, *writer);
     }
     auto executor = co_await boost::asio::this_coro::executor;
@@ -472,9 +479,11 @@ boost::asio::awaitable<absl::StatusOr<std::string>> QuantServer::StatusAsync() {
     ready->expires_after(std::chrono::seconds(2));
     for (size_t index = 0; index < shards.size(); ++index) {
       Shard* shard = shards[index].get();
-      boost::asio::post(*shard->LiveIo(), [shard, index, executor, results,
-                                           remaining, ready] {
-        auto json = ShardStatusJson(*shard, shard->OwnedExchange(), true);
+      const SimpleSimulatedExchange* exchange =
+          simulated_exchanges[index].get();
+      boost::asio::post(*shard->LiveIo(), [shard, exchange, index, executor,
+                                           results, remaining, ready] {
+        auto json = ShardStatusJson(*shard, *exchange, true);
         boost::asio::post(executor, [index, results, remaining, ready,
                                      json = std::move(json)]() mutable {
           (*results)[index] = std::move(json);
@@ -500,7 +509,7 @@ boost::asio::awaitable<absl::StatusOr<std::string>> QuantServer::StatusAsync() {
   }
   const auto& market = config.market_specs.front();
   if (!live) {
-    co_return StatusJson(*shards.front(), shards.front()->OwnedExchange(),
+    co_return StatusJson(*shards.front(), *simulated_exchanges.front(),
                          market.spec, *writer);
   }
   auto executor = co_await boost::asio::this_coro::executor;
@@ -508,7 +517,7 @@ boost::asio::awaitable<absl::StatusOr<std::string>> QuantServer::StatusAsync() {
   auto result = std::make_shared<std::optional<absl::StatusOr<std::string>>>();
   ready->expires_after(std::chrono::seconds(2));
   boost::asio::post(*shards.front()->LiveIo(), [this, ready, result, executor] {
-    auto json = StatusJson(*shards.front(), shards.front()->OwnedExchange(),
+    auto json = StatusJson(*shards.front(), *simulated_exchanges.front(),
                            config.market_specs.front().spec, *writer);
     json.pop_back();
     json +=

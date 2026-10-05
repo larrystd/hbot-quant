@@ -25,9 +25,9 @@ reservation, leaving 60.06 USDT; terminal confirmation releases the rest.
 This arithmetic is a fixture policy for risk integration, not a universal fee
 or exchange balance rule. Python has no matching risk reservation field.
 
-The architecture decisions in `docs/STRUCTURE_AND_TYPES.md` §5–6 and
-`docs/ARCHITECTURE.md` §7 supply `AwaitingFills`, orthogonal cancel
-pending state, and `SubmissionUnknown`. Python instead waits asynchronously
+The current C++ design in `docs/README.md` and implementation in
+`hquant/src/order/order_tracker.cc` use `AwaitingTrades`, `PendingCancel`,
+and `SubmissionUnknown`. Python instead waits asynchronously
 up to five seconds on a `FILLED` update and may emit completion with incomplete
 fill data. The C++ fixture expects completion only once trade details and fees
 arrive. `cancel_requested` and `submission_unknown` are C++ inputs, so those

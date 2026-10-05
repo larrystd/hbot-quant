@@ -13,6 +13,7 @@
 #include "order/risk.h"
 #include "order/simulated_exchange.h"
 #include "shard/shard.h"
+#include "shard/simulated_trading.h"
 #include "strategy/simple_pmm.h"
 
 namespace hquant {
@@ -109,8 +110,12 @@ TEST(SimulatedBinanceTest,
                              clock.UtcNow() + std::chrono::hours(1)})
           .ok());
   MemoryRecorder recorder;
-  Shard shard({RunId{1}, ShardId{0}, strategy_id, account, spec, scale, rule},
-              clock, strategy, sim_exchange, risk, recorder);
+  Shard shard(
+      {RunId{1}, ShardId{0}, strategy_id, account, spec, scale, rule}, clock,
+      strategy,
+      std::make_unique<SimulatedTrading>(
+          sim_exchange, SimulatedTrading::Config{account, spec, scale}, clock),
+      risk, recorder);
 
   asio::io_context io;
   HttpClient http_client(io, "127.0.0.1", http_port);
@@ -120,19 +125,9 @@ TEST(SimulatedBinanceTest,
   stream_config.connect_timeout = std::chrono::seconds(2);
   stream_config.snapshot_timeout = std::chrono::seconds(2);
   stream_config.read_timeout = std::chrono::seconds(2);
-  absl::Status callback_status;
   binance_spot::MarketDataStream stream(
       stream_config, binance_spot::DepthParser(market, scale), http_client,
-      websocket, shard.MutableBookSync(), clock,
-      {[&](const BookApplyResult& result) {
-         auto status = shard.OnBookApplied(result);
-         if (!status.ok()) callback_status = status;
-       },
-       [&](const PublicTrade& trade) {
-         auto status = shard.OnPublicTrade(trade);
-         if (!status.ok()) callback_status = status;
-       },
-       {}});
+      websocket, shard.Receiver(), clock);
 
   auto cycle = [&]() {
     absl::Status outcome;
@@ -148,7 +143,7 @@ TEST(SimulatedBinanceTest,
   };
   const auto first = cycle();
   ASSERT_TRUE(first.ok()) << first;
-  ASSERT_TRUE(callback_status.ok()) << callback_status;
+  ASSERT_TRUE(shard.stream_error().ok()) << shard.stream_error();
   ASSERT_EQ(shard.Book().State(), BookSyncState::Live);
   ASSERT_EQ(sim_exchange.OpenOrders().size(), 2);
   auto initial = shard.OnTimer({0, 1});
@@ -159,7 +154,7 @@ TEST(SimulatedBinanceTest,
   ASSERT_TRUE(opening->empty());
   ASSERT_EQ(sim_exchange.OpenOrders().size(), 2);
 
-  shard.MutableBookSync().OnDisconnect();
+  shard.Receiver().OnDisconnect();
   auto paused = shard.OnTimer({15'000'001, 1});
   ASSERT_TRUE(paused.ok()) << paused.status();
   EXPECT_EQ(shard.Book().State(), BookSyncState::Resyncing);
@@ -169,7 +164,7 @@ TEST(SimulatedBinanceTest,
 
   const auto second = cycle();
   EXPECT_TRUE(second.ok()) << second;
-  EXPECT_TRUE(callback_status.ok()) << callback_status;
+  EXPECT_TRUE(shard.stream_error().ok()) << shard.stream_error();
   EXPECT_EQ(stream.StreamEpoch(), 2);
   EXPECT_EQ(shard.Book().State(), BookSyncState::Live);
   auto resumed = shard.OnTimer({30'000'001, 1});

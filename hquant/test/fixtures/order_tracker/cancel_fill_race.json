@@ -7,8 +7,7 @@
     "hummingbot/connector/client_order_tracker.py",
     "hummingbot/core/data_type/in_flight_order.py",
     "test/hummingbot/connector/test_client_order_tracker.py",
-    "docs/STRUCTURE_AND_TYPES.md",
-    "docs/ARCHITECTURE.md"
+    "docs/README.md"
   ],
   "expectation_kind": "intentional_divergence",
   "divergence_reason": "C++ cancel_pending is orthogonal to verified fills and retains the remaining funds hold until exchange cancellation. Python tracker has a PENDING_CANCEL state but no cancel_requested input or FundsHold output.",

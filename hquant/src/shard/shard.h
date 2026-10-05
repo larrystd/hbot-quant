@@ -2,6 +2,7 @@
 
 #include <atomic>
 #include <cstdint>
+#include <deque>
 #include <map>
 #include <memory>
 #include <optional>
@@ -26,7 +27,8 @@
 
 namespace hquant {
 
-class SimpleSimulatedExchange;
+class TradingMode;
+class MarketDataReceiver;
 class HttpClient;
 class WebSocketClient;
 namespace binance_spot {
@@ -93,7 +95,7 @@ struct ShardReport {
   OrderHistoryWriterHealth storage_health;
 };
 
-// G1 single-thread owner of strategy, book, Simulated events, tracker and risk.
+// G1 single-thread owner of strategy, book, trading mode, tracker and risk.
 // The caller advances the clock and feeds inputs in InputTime order.
 class Shard {
  public:
@@ -114,11 +116,11 @@ class Shard {
   };
 
   Shard(Config config, const Clock& clock, Strategy& strategy,
-        SimulatedExchange& exchange, RiskGate& risk,
+        std::unique_ptr<TradingMode> trading, RiskGate& risk,
         OrderHistoryWriter& recorder);
   Shard(Config config, const Clock& clock, std::unique_ptr<Strategy> strategy,
-        std::unique_ptr<SimpleSimulatedExchange> exchange,
-        std::unique_ptr<RiskGate> risk, OrderHistoryWriter& recorder);
+        std::unique_ptr<TradingMode> trading, std::unique_ptr<RiskGate> risk,
+        OrderHistoryWriter& recorder);
   ~Shard();
   Shard(const Shard&) = delete;
   Shard& operator=(const Shard&) = delete;
@@ -127,7 +129,6 @@ class Shard {
   void RequestStop();
   void Join();
   boost::asio::io_context* LiveIo() const { return io_.get(); }
-  const SimpleSimulatedExchange& OwnedExchange() const;
   uint64_t AppliedDiffs() const;
   uint64_t Resyncs() const;
   const absl::Status& stream_error() const { return stream_error_; }
@@ -138,10 +139,8 @@ class Shard {
   absl::Status OnSnapshot(const BookSnapshot& snapshot);
   absl::Status OnDiff(const BookDiff& diff);
   absl::Status OnPublicTrade(const PublicTrade& trade);
-  // An external public stream may update this same OrderBookSync and notify the
-  // shard after each applied batch. All calls remain on the owning shard.
-  OrderBookSync& MutableBookSync() { return book_; }
-  absl::Status OnBookApplied(const BookApplyResult& result);
+  // 实时行情的入口：StartFeed 把它交给行情模块。测试自己驱动行情模块时也用它。
+  MarketDataReceiver& Receiver();
   absl::StatusOr<std::vector<ActionResult>> OnTimer(InputTime stamp);
 
   const OrderBookView& Book() const { return book_.View(); }
@@ -153,28 +152,28 @@ class Shard {
   uint64_t strategy_invocations() const { return strategy_invocations_; }
 
  private:
-  absl::Status UpdateSimulatedExchangeBbo();
   absl::Status AfterBookApply(const BookApplyResult& result);
   absl::Status RunPendingTrigger(std::optional<Trigger> explicit_trigger);
   absl::StatusOr<std::vector<ActionResult>> RunStrategy(
       Trigger why, InputTime stamp, bool allow_followup = true);
-  absl::Status DrainSimulatedExchangeEvents();
+  template <typename Step>
+  absl::Status RunStep(Step&& step);
+  void OnReport(const AccountEvent& report);
+  absl::Status ProcessQueuedReports();
   absl::Status ProcessAccountEvent(const AccountEvent& event);
   absl::Status Record(OrderHistoryRecordPayload payload,
                       const StrategyId& strategy_id);
   void AddGap(uint64_t sequence);
-  std::vector<Balance> BalanceViews() const;
   absl::StatusOr<Decimal> Price(PriceTicks ticks) const;
-  absl::StatusOr<Decimal> Amount(QuantityLots lots) const;
   boost::asio::awaitable<void> TimerLoop();
 
   Config config_;
   std::unique_ptr<Strategy> owned_strategy_;
-  std::unique_ptr<SimpleSimulatedExchange> owned_exchange_;
   std::unique_ptr<RiskGate> owned_risk_;
   const Clock& clock_;
   Strategy& strategy_;
-  SimulatedExchange& exchange_;
+  // 随运行模式不同的部分：模拟盘是 SimulatedTrading，实盘是 LiveTrading。
+  std::unique_ptr<TradingMode> trading_;
   RiskGate& risk_;
   OrderHistoryWriter& recorder_;
   OrderBookSync book_;
@@ -188,9 +187,14 @@ class Shard {
   MonoTime origin_mono_{};
   uint64_t event_ordinal_ = 0;
   bool in_strategy_ = false;
+  // 正在执行步骤时到达的回报，步骤结束后处理。
+  std::deque<AccountEvent> queued_reports_;
+  bool step_running_ = false;
   uint64_t strategy_invocations_ = 0;
   std::optional<Trigger> pending_trigger_;
   std::optional<MonoTime> last_strategy_at_;
+  class StreamReceiver;
+  std::unique_ptr<StreamReceiver> receiver_;
   std::unique_ptr<boost::asio::io_context> io_;
   std::unique_ptr<HttpClient> http_;
   std::unique_ptr<WebSocketClient> websocket_;

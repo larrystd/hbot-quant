@@ -5,7 +5,7 @@
   "baseline_commit": "9af100d6822da7d2d0291a906c730ef172284ee2",
   "source_files": [
     "hummingbot/core/data_type/order_book_tracker.py",
-    "docs/ORDER_BOOK.md"
+    "docs/README.md"
   ],
   "expectation_kind": "intentional_divergence",
   "divergence_reason": "Python tracker has no explicit per-book Stale state or new-order gate; C++ marks the book Stale after the configured silence interval and resumes only on a contiguous update.",

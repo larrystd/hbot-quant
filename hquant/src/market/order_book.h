@@ -49,7 +49,7 @@ class OrderBookSync {
   OrderBookSync(const OrderBookSync&) = delete;
   OrderBookSync& operator=(const OrderBookSync&) = delete;
 
-  BookApplyResult Subscribe(uint64_t connection_id);
+  BookApplyResult Subscribe(uint64_t connection_id);  // 初始化OrderBookSync
   BookApplyResult OnSnapshot(const BookSnapshot& snapshot);
   BookApplyResult OnDiff(const BookDiff& diff);
   BookApplyResult OnTimer(uint64_t now_us);
@@ -67,13 +67,14 @@ class OrderBookSync {
 
   MarketId market_;
   uint64_t tick_lot_version_;
-  uint64_t connection_id_ = 0;
+  uint64_t connection_id_ = 0;  // 只接受这条connection的更新
   size_t max_buffered_diffs_;
-  uint64_t stale_after_us_;
+  uint64_t stale_after_us_;  // 订单薄过期时间
   uint64_t last_update_us_ = 0;
   BookSyncState state_ = BookSyncState::Subscribing;
-  std::optional<uint64_t> sequence_;
-  std::deque<BookDiff> buffered_diffs_;
+  std::optional<uint64_t> sequence_;  // 订单序号，递增
+  std::deque<BookDiff>
+      buffered_diffs_;  // 缓存增量数据，只在快照/订单薄尚未准备好时应用
   std::unique_ptr<OrderBook> book_;
 };
 

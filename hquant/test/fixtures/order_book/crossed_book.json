@@ -6,7 +6,7 @@
   "source_files": [
     "hummingbot/core/data_type/order_book.pyx",
     "hummingbot/core/cpp/OrderBookEntry.cpp",
-    "docs/ORDER_BOOK.md"
+    "docs/README.md"
   ],
   "expectation_kind": "intentional_divergence",
   "divergence_reason": "Python centralized book truncates the older crossed ask by row update ID and keeps trading; C++ treats a crossed continuous-market book as invalid and resynchronizes.",

@@ -6,8 +6,7 @@
   "source_files": [
     "hummingbot/core/data_type/order_book_message.py",
     "hummingbot/core/data_type/order_book.pyx",
-    "docs/ORDER_BOOK.md",
-    "docs/STRUCTURE_AND_TYPES.md"
+    "docs/README.md"
   ],
   "expectation_kind": "intentional_divergence",
   "divergence_reason": "Python OrderBookMessage converts raw price to float and accepts 100.005; C++ TickLotSize 0.01 requires integral ticks and rejects the malformed level before it changes the book.",

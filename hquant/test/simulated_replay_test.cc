@@ -17,6 +17,7 @@
 #include "order_history/order_history_reader.h"
 #include "order_history/order_history_writer.h"
 #include "shard/shard.h"
+#include "shard/simulated_trading.h"
 #include "strategy/simple_pmm.h"
 
 namespace hquant {
@@ -93,8 +94,12 @@ std::string ReplayOnce() {
       {database.path(), RunId{1}, origin, 64, 8});
   if (!recorder.ok())
     throw std::runtime_error(std::string(recorder.status().message()));
-  Shard shard({RunId{1}, ShardId{0}, strategy_id, account, spec, scale, rule},
-              clock, strategy, sim_exchange, risk, **recorder);
+  Shard shard(
+      {RunId{1}, ShardId{0}, strategy_id, account, spec, scale, rule}, clock,
+      strategy,
+      std::make_unique<SimulatedTrading>(
+          sim_exchange, SimulatedTrading::Config{account, spec, scale}, clock),
+      risk, **recorder);
 
   if (!clock.Advance({0, 1}).ok() ||
       shard.Subscribe(1).state != BookSyncState::WaitingSnapshot) {

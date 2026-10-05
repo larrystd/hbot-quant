@@ -3,7 +3,7 @@ module(
     version = "0.1.0",
 )
 
-# 版本选型与理由见 docs/DEPENDENCIES.md；升级依赖时同步更新该文档并提交 MODULE.bazel.lock。
+# 依赖版本以本文件和 MODULE.bazel.lock 为准；运行架构见 docs/README.md。
 
 bazel_dep(name = "rules_cc", version = "0.2.25")
 bazel_dep(name = "platforms", version = "1.1.0")

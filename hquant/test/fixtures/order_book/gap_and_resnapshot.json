@@ -6,8 +6,7 @@
   "source_files": [
     "hummingbot/core/data_type/order_book_tracker.py",
     "hummingbot/core/data_type/order_book.pyx",
-    "docs/ORDER_BOOK.md",
-    "docs/STRUCTURE_AND_TYPES.md"
+    "docs/README.md"
   ],
   "expectation_kind": "intentional_divergence",
   "divergence_reason": "Python applies a skipped diff without sequence continuity checks. C++ detects the gap, invalidates the book, and requires a new stream epoch and snapshot before trading resumes.",

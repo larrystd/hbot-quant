@@ -292,6 +292,8 @@ absl::Status SimpleSimulatedExchange::OnBookBbo(const Decimal& bid,
                  "Simulated BBO invalid");
   }
   for (size_t i = 0; i < orders_.size();) {
+    // orders_ 正在挂的单
+    // order如果是买单，和卖1比较；如果是卖单和买一比较
     const auto& order = orders_[i];
     const auto match = order.side == Side::Buy ? order.price.Compare(ask)
                                                : order.price.Compare(bid);

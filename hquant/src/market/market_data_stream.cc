@@ -302,31 +302,30 @@ absl::StatusOr<std::string> EventKind(std::string_view json) {
 MarketDataStream::MarketDataStream(StreamConfig config, DepthParser parser,
                                    HttpTransport& snapshot_http,
                                    WebSocketClient& websocket,
-                                   OrderBookSync& book, const Clock& clock,
-                                   StreamCallbacks callbacks)
+                                   MarketDataReceiver& receiver,
+                                   const Clock& clock)
     : config_(std::move(config)),
       parser_(std::move(parser)),
       snapshot_http_(snapshot_http),
       websocket_(websocket),
-      book_(book),
-      clock_(clock),
-      callbacks_(std::move(callbacks)) {}
+      receiver_(receiver),
+      clock_(clock) {}
 
 EventTime MarketDataStream::Now() const {
   return EventTime{{}, clock_.UtcNow(), clock_.MonoNow()};
 }
 
-void MarketDataStream::Report(const BookApplyResult& result) const {
-  if (callbacks_.on_book) callbacks_.on_book(result);
+void MarketDataStream::Track(const BookApplyResult& result) {
+  book_state_ = result.state;
 }
 
 absl::Status MarketDataStream::Fault(absl::Status status) {
   if (CodeOf(status) != ErrorCode::kFeedStopped) ++resyncs_;
   websocket_.Cancel();
-  if (book_.View().State() != BookSyncState::Resyncing) {
-    Report(book_.OnDisconnect());
+  if (book_state_ != BookSyncState::Resyncing) {
+    Track(receiver_.OnDisconnect());
   }
-  if (callbacks_.on_error) callbacks_.on_error(status);
+  receiver_.OnStreamError(status);
   return status;
 }
 
@@ -350,7 +349,7 @@ boost::asio::awaitable<absl::Status> MarketDataStream::RunCycle(
                     "invalid Binance stream config");
   }
   ++epoch_;
-  Report(book_.Subscribe(epoch_));
+  Track(receiver_.OnConnect(epoch_));
   auto connected = co_await websocket_.Reconnect(
       std::chrono::steady_clock::now() + config_.connect_timeout);
   if (!connected.ok()) co_return Fault(connected);
@@ -366,16 +365,16 @@ boost::asio::awaitable<absl::Status> MarketDataStream::RunCycle(
     if (*kind == "trade" || *kind == "aggTrade") {
       auto trade = parser_.ParseTrade(*text, Now());
       if (!trade.ok()) co_return Fault(trade.status());
-      if (callbacks_.on_trade) callbacks_.on_trade(*trade);
+      receiver_.OnPublicTrade(*trade);
       continue;
     }
     if (kind->empty()) continue;  // e.g. subscription acknowledgement
     auto diff = parser_.ParseDiff(*text, epoch_, Now());
     if (!diff.ok()) co_return Fault(diff.status());
     first_update = diff->first_sequence;
-    auto result = book_.OnDiff(*diff);
+    auto result = receiver_.OnDiff(*diff);
     if (result.applied) ++applied_diffs_;
-    Report(result);
+    Track(result);
     if (result.state == BookSyncState::Resyncing) {
       co_return Fault(Error(result.reason, "buffered depth invalid"));
     }
@@ -410,9 +409,9 @@ boost::asio::awaitable<absl::Status> MarketDataStream::RunCycle(
     auto snapshot = parser_.ParseSnapshot(response->body, epoch_, Now());
     if (!snapshot.ok()) co_return Fault(snapshot.status());
     if (snapshot->last_sequence < first_update) continue;
-    auto result = book_.OnSnapshot(*snapshot);
+    auto result = receiver_.OnSnapshot(*snapshot);
     if (result.state == BookSyncState::Live) cycle_became_live_ = true;
-    Report(result);
+    Track(result);
     if (result.state == BookSyncState::Resyncing) {
       co_return Fault(Error(result.reason, "snapshot replay failed"));
     }
@@ -434,16 +433,16 @@ boost::asio::awaitable<absl::Status> MarketDataStream::RunCycle(
     if (*kind == "trade" || *kind == "aggTrade") {
       auto trade = parser_.ParseTrade(*text, Now());
       if (!trade.ok()) co_return Fault(trade.status());
-      if (callbacks_.on_trade) callbacks_.on_trade(*trade);
+      receiver_.OnPublicTrade(*trade);
       continue;
     }
     if (kind->empty()) continue;
     auto diff = parser_.ParseDiff(*text, epoch_, Now());
     if (!diff.ok()) co_return Fault(diff.status());
-    auto result = book_.OnDiff(*diff);
+    auto result = receiver_.OnDiff(*diff);
     if (result.applied) ++applied_diffs_;
     if (result.state == BookSyncState::Live) cycle_became_live_ = true;
-    Report(result);
+    Track(result);
     if (result.state == BookSyncState::Resyncing) {
       co_return Fault(Error(result.reason, "depth sequence or book invalid"));
     }
@@ -477,9 +476,8 @@ boost::asio::awaitable<void> MarketDataStream::Run() {
               ? consecutive_scale_mismatches + 1
               : 0;
       if (consecutive_scale_mismatches >= 3) {
-        if (callbacks_.on_error)
-          callbacks_.on_error(Error(ErrorCode::kFeedConfigInvalid,
-                                    "repeated TickLotSize mismatch"));
+        receiver_.OnStreamError(Error(ErrorCode::kFeedConfigInvalid,
+                                      "repeated TickLotSize mismatch"));
         break;
       }
       if (consecutive_resyncs >= 8) break;

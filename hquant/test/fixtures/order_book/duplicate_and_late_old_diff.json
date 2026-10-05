@@ -6,7 +6,7 @@
   "source_files": [
     "hummingbot/core/data_type/order_book_tracker.py",
     "hummingbot/core/data_type/order_book.pyx",
-    "docs/ORDER_BOOK.md"
+    "docs/README.md"
   ],
   "expectation_kind": "intentional_divergence",
   "divergence_reason": "Python routes every diff newer than the initial snapshot and apply_diffs overwrites levels even when its update ID is older than the current diff; C++ discards last_sequence <= current_sequence.",

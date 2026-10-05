@@ -7,8 +7,7 @@
     "hummingbot/connector/client_order_tracker.py",
     "hummingbot/core/data_type/in_flight_order.py",
     "test/hummingbot/connector/test_client_order_tracker.py",
-    "docs/STRUCTURE_AND_TYPES.md",
-    "docs/ARCHITECTURE.md"
+    "docs/README.md"
   ],
   "expectation_kind": "intentional_divergence",
   "divergence_reason": "Python waits asynchronously up to five seconds on a Filled status and may complete with missing fills. C++ exposes AwaitingFills and completes only after trade details and fees; its explicit funds hold follows the fixture fee buffer.",

@@ -1,67 +1,76 @@
-# HQuant C++ 文档
+# hquant 当前架构
 
-本目录是 HQuant 的设计与开发文档。项目以 Hummingbot 的 Python 实现为行为基线，使用 C++ 重写。架构采用**分片线程**模型：每个分片线程独占其策略需要的行情、订单、资金状态和 socket。早期的“单交易线程 + 网络 I/O 线程池”方案已废弃，其中仍然成立的内容已并入下列文档。
+本文描述 `hquant/src` 当前接入 `hquant_server` 的运行链路。设计以源码为准；下文“当前范围”列出尚未接入的组件。
 
-当前代码按职责放在 `hquant/src/`，全部测试与夹具放在 `hquant/test/`。
-
-## 1. 文档地图
-
-| 文档 | 内容 | 什么时候读 |
-| --- | --- | --- |
-| [ROADMAP.md](ROADMAP.md) | 目标、Python 基线、交付版本、开发关口 G0–G5、当前进度、验证与实盘启用门槛 | 想知道做到哪一步、下一步做什么 |
-| [ARCHITECTURE.md](ARCHITECTURE.md) | 进程与线程、分片内部、热路径、回报路径、多分片资源、策略触发、状态机、持久化与重启对账、延迟测量 | 理解运行时语义；线程、发单和风险语义以此为准 |
-| [CONNECTIONS.md](CONNECTIONS.md) | 程序与交易所之间的五种通道、连接数量、顺序保证、断线处理 | 接入或调试交易所连接 |
-| [ORDER_BOOK.md](ORDER_BOOK.md) | 行情类型、同步状态机、增量应用规则、L2/L3 内存结构、策略读取方式 | 实现或调试订单簿 |
-| [STRUCTURE_AND_TYPES.md](STRUCTURE_AND_TYPES.md) | 目录与 Bazel 包、依赖方向、关键数据类型与不变量、Python/C++ 语义对照、契约测试 | 写代码前确认文件、target 和字段 |
-| [DEPENDENCIES.md](DEPENDENCIES.md) | 第三方依赖选型与版本、Bazel 约定、各库的使用边界 | 改构建、引入或升级依赖 |
-| [DEVELOPMENT.md](DEVELOPMENT.md) | C++ 写法约束、协程与关闭规则、多 Agent 协作和验证命令 | 写代码、提交与集成 |
-| [ERRORS.md](ERRORS.md) | 业务错误码：负数错误码、处理方式、完整注册表及兼容格式 | 新增或处理错误时 |
-| [GLOSSARY.md](GLOSSARY.md) | 当前代码与配置使用的交易术语 | 核对术语、类型和状态名 |
-| [BENCH.md](BENCH.md) | 管理入口与本地行情压测的命令、参数和指标 | 验证 Asio 网络链路或做性能对照 |
-
-文档冲突时的优先级：运行时与线程语义以 `ARCHITECTURE.md` 为准；文件名、target 与字段以 `STRUCTURE_AND_TYPES.md` 为准；订单簿算法以 `ORDER_BOOK.md` 为准；依赖版本以仓库根目录的 [`MODULE.bazel`](../MODULE.bazel) 为准。实现中发现冲突，先更新文档和对应测试，再改代码。
-
-## 2. 一句话架构
+## 总览
 
 ```text
-hquant_bench（管理命令）──Unix socket──▶ hquant_server / ControlServer 管理线程
-                                              ├─ QuantServer：组装交易链
-                                              ├─ 分片线程：行情 WS → 订单簿 / 策略 / 风控 / 模拟撮合
-                                              ├─ SqliteHistoryWriter 线程：SQLite WAL 批量写
-                                              └─ SqliteHistoryReader 线程：异步历史查询
-hquant_bench feed（本地 HTTP + WS）──────────▶ 分片的公开行情连接
+┌────────────────────┐      ┌───────────────────────────────┐      ┌──────────────────────┐
+│ 行情输入           │ ───▶ │ Shard Engine                  │ ───▶ │ SQLite / Control     │
+│ 文件回放或 Binance │      │ 盘口、策略、风控、模拟交易、    │      │ 历史、状态、停止     │
+│ 公开行情           │      │ 订单状态                      │      │                      │
+└────────────────────┘      └───────────────────────────────┘      └──────────────────────┘
 ```
 
-## 3. 基线与范围
+行情推动分片决策。分片把订单和动作记录送入历史队列；ControlServer 查询分片状态与历史，并接收停止命令。SQLite 写入和管理请求不参与每次策略决策。
 
-- Python 行为基线：`../../hummingbot` 的 `9af100d6822da7d2d0291a906c730ef172284ee2`（包版本 `2.17.0`）。迁移的是**可观察交易行为**（订单状态、资金、费用、策略触发、动作顺序、恢复结果），不迁移 GIL、`asyncio`、每秒 `Clock` 轮询或 SQLAlchemy 对象。
-- 首条链路：Binance 现货 + `simple_pmm` + 模拟盘，随后是多分片下的隔离环境实盘。XEMM、V2 Controller/Executor、回测和更多连接器在其后逐项迁移。
-- 构建：C++20、Bazel 9.2.0（Bzlmod），依赖见 [DEPENDENCIES.md](DEPENDENCIES.md)。
+入口是 [`apps/hquant_server.cc`](../apps/hquant_server.cc)：读取 YAML 配置，调用 [`Launch`](../hquant/src/application/launcher.cc)，由 [`QuantServer`](../hquant/src/application/quant_server.cc) 创建、启动并关闭组件。
 
-## 4. 快速运行
+## 行情输入
 
-固定行情模拟盘（离线）：
+配置的 `market_data_source` 选择以下一种来源，两者最终都向 `Shard` 提交订单簿更新或公开成交：
 
-```bash
-bazel run //apps:hquant_server -- examples/simulated_replay.yaml /tmp/hquant-simulated-demo
-bazel run //apps:hquant_bench -- status  --state-dir /tmp/hquant-simulated-demo
-bazel run //apps:hquant_bench -- history --state-dir /tmp/hquant-simulated-demo --limit 20
-bazel run //apps:hquant_bench -- stop    --state-dir /tmp/hquant-simulated-demo
-```
-
-真实公开行情驱动模拟盘：把配置换成 `examples/simulated_binance_pmm.yaml`。本地压测使用 `examples/bench_feed.yaml`，步骤见 [BENCH.md](BENCH.md)。`hquant_server` 在前台运行，其余命令在另一个终端执行。全量测试：`bazel test //...`。
-
-本机验收记录见 [`dev/VALIDATION_2026-09-27.md`](../dev/VALIDATION_2026-09-27.md)，Linux CI 状态见 [`dev/LINUX_VALIDATION.md`](../dev/LINUX_VALIDATION.md)。
-
-## 5. 常用术语
-
-| 术语 | 含义 |
+| 来源 | 当前路径 |
 | --- | --- |
-| 分片（shard） | 一个 OS 线程 + 一个 `io_context`，独占若干市场的行情、订单、策略、风控与 socket |
-| `strategy_id` | 稳定的数字策略 ID，编入客户端订单号；分片号可在重启后改变 |
-| `TickLotSize` | 行情流的价格/数量步长，用于把盘口转成整数 ticks/lots；不同于下单规则 `TradingRule` |
-| `ActionBatch` | 策略回调返回的有序动作列表，由 `ActionExecutor` 在回调结束后逐个验证执行 |
-| `SubmissionUnknown` | 写请求结果不明；保留最坏敞口，用原 client ID 补查，绝不换 ID 重发 |
-| `AwaitingTrades` | 交易所已报 Filled 但成交明细未齐，由定时器/REST 补查 |
-| 风控额度（risk budget） | 服务线程静态分给各分片的资金/限速额度；热路径只查本分片额度 |
-| 历史缺口 | Recorder 入队或写入失败造成的记录缺失；继续交易，但 `status/history` 显示不完整 |
+| 文件回放 | [`ReadReplayFile`](../hquant/src/market/replay_feed.cc) 按 `InputTime` 顺序读取；`QuantServer::RunReplay` 推进 `ReplayClock`，再调用对应分片的 `Subscribe`、`OnSnapshot`、`OnDiff`、`OnPublicTrade` 或 `OnTimer`。回放在 `Start()` 中同步完成，之后才启动 ControlServer。 |
+| Binance 公开行情 | 每个分片的 [`MarketDataStream`](../hquant/src/market/market_data_stream.cc) 接收 WebSocket 深度和公开成交，使用 REST 深度快照完成同步。`DepthParser` 将十进制文本精确转换为整数 ticks/lots；连接中断、序号缺口或无效盘口触发重新同步。 |
+
+[`OrderBookSync`](../hquant/src/market/order_book.cc) 拥有分片的 L2 盘口。新连接先缓存增量，快照到达后按序追平；只接受连续更新，丢弃旧增量。盘口可能处于 `WaitingSnapshot`、`CatchingUp`、`Live`、`Stale`、`Resyncing` 等状态。只有 `Live` 盘口允许新单通过风控。盘口的近端价位放在整数数组中，远端价位放在有序映射中。
+
+## Shard Engine
+
+[`QuantServer::Create`](../hquant/src/application/quant_server.cc) 当前允许 1～8 个分片；每个分片恰好对应 **1 个市场、1 个策略、1 个账户**，同一账户不能分配给多个分片。每个 [`Shard`](../hquant/src/shard/shard.h) 独占自己的 `OrderBookSync`、策略实例、`RiskGate`、`OrderTracker` 和 `ActionExecutor`；`QuantServer` 持有该分片专用的模拟交易所。交易状态在所属分片内串行更新。
+
+### 事件处理顺序
+
+1. **盘口更新：** `Shard::AfterBookApply` 先让模拟交易所按最新买一卖一撮合已有挂单，并处理产生的账户回报；随后按策略的触发规则决定是否运行策略。
+2. **公开成交：** `Shard::OnPublicTrade` 更新最近成交价，让模拟交易所尝试撮合，再检查策略触发规则。公开成交本身不是本账户的成交。
+3. **定时器：** 检查盘口是否过期，再运行策略。实时行情的定时器由分片的 Asio 事件循环驱动；回放由文件中的定时器输入驱动。
+4. **策略决策：** `Shard::RunStrategy` 组装盘口、活跃订单、模拟账户余额、规则、时间和就绪状态，调用 `Strategy::Decide` 得到有序动作批次。执行动作期间的回报先排队，步骤结束后按顺序处理；回报引起的新触发最多补跑一轮。
+
+当前装配的唯一策略是 [`SimplePmm`](../hquant/src/strategy/simple_pmm.cc)。它在盘口顶部变化和定时器触发时检查刷新周期；首个就绪输入只完成初始化。刷新时先请求撤销旧单，再以中间价或最近成交价为参考生成买卖两侧报价。
+
+### 下单与回报
+
+[`ActionExecutor`](../hquant/src/shard/action_executor.cc) 按策略给出的顺序执行撤单和下单。下单先按交易规则向下量化价格与数量，再由 [`RiskGate`](../hquant/src/order/risk.cc) 检查盘口、账户新鲜度、规则时效、最小交易量和静态资金额度，并冻结最坏情况支出。通过后依次准备订单、登记 [`OrderTracker`](../hquant/src/order/order_tracker.cc)、启动提交，同时把订单和动作结果非阻塞地送入历史队列。
+
+当前发送出口是 [`SimulatedTrading`](../hquant/src/shard/simulated_trading.cc)，它转发给 [`SimpleSimulatedExchange`](../hquant/src/order/simulated_exchange.cc)。模拟交易所根据相反方向的盘口触价或公开成交穿价撮合；匹配时按挂单自身限价**全额成交**，更新余额、手续费并产生账户回报。
+
+回报返回 `Shard` 后，`OrderTracker` 根据客户端订单 ID 和成交 ID 去重、推进订单状态。结束状态先于成交明细到达时，订单进入 `AwaitingTrades`，待明细齐全再结束并释放资金冻结；冲突或结果不确定的状态保留待查询标记。`Shard` 对确认的成交更新风控占用，并把订单回报送入历史队列。
+
+## SQLite 与 Control
+
+[`SqliteOrderHistoryWriter`](../hquant/src/order_history/order_history_writer.cc) 为每个分片提供有界单生产者队列。分片分配本地递增序号后调用 `TryPush`，无需等待 SQLite 提交。Writer 线程攒批写入 WAL 数据库；队列满或写入失败会登记历史缺口。单独的 [`SqliteOrderHistoryReader`](../hquant/src/order_history/order_history_reader.cc) 线程用只读连接处理有界分页查询。
+
+[`ControlServer`](../hquant/src/application/control_server.cc) 在独立线程上通过 `STATE_DIR/control.sock` 提供按行分帧的 JSON 请求：`status`、`history`、`stop`。实时模式的状态读取会投递到分片线程；历史查询由 Reader 完成。收到停止请求后，`QuantServer` 停止新的管理接入并汇合分片，随后结束 Writer 和 Reader，最后移除管理 socket。
+
+## 线程与生命周期
+
+| 工作 | 所属线程 |
+| --- | --- |
+| 文件回放及其分片事件 | 启动调用线程，按输入顺序执行；回放完成后开放管理接口 |
+| Binance 公开行情、定时器、对应分片状态 | 每个分片一个 Asio `io_context` 线程 |
+| 历史批量写入 | Writer 线程 |
+| 历史查询 | Reader 线程 |
+| Unix socket 管理请求及信号 | ControlServer 线程 |
+
+`QuantServer` 拥有这些组件及其生命周期。实时公开行情使用阻塞式 Asio 事件循环；回放使用虚拟时钟，按文件输入顺序推进事件时间。
+
+## 当前范围
+
+- 配置只接受 `mode: simulated`。Binance 公开行情可以驱动模拟交易，但不会发送真实订单。
+- [`LiveTrading`](../hquant/src/shard/live_trading.h)、[`BinanceOrderGateway`](../hquant/src/order/order_gateway.h)、[账户推送和查询](../hquant/src/order/account_reports.h)、[跨分片回报路由](../hquant/src/shard/routing.h)已有独立代码，尚未由 `QuantServer` 接入运行链路。
+- 运行时只创建 `SimplePmm`；配置和静态额度按当前的一市场、一策略、一账户分片约束校验。
+- 历史读取包含前次运行记录的读取能力，但当前启动链没有执行交易所对账和自动恢复。
+
+查看具体行为时，从 [`QuantServer::Start`](../hquant/src/application/quant_server.cc)、[`Shard`](../hquant/src/shard/shard.cc)、[`ActionExecutor`](../hquant/src/shard/action_executor.cc) 三处顺序阅读即可。

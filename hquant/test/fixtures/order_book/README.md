@@ -19,8 +19,8 @@ level arrays are integer ticks and lots; `9990` means 99.90 and `1000` means
 | `stale_then_continuous_resume` | The Python tracker has no explicit per-book Stale state (`order_book_tracker.py:634-665`). | Silence past 5 seconds marks Stale; a contiguous diff returns to Live. |
 
 `parity` means the accepted price levels match the pinned Python behavior. The
-C++ synchronization state and integer representation are governed by
-`docs/ORDER_BOOK.md` and `STRUCTURE_AND_TYPES.md`. Cases that exercise
+C++ synchronization state and integer representation are described in
+`docs/README.md` and implemented in `hquant/src/market/order_book.cc`. Cases that exercise
 different acceptance or safety behavior use `intentional_divergence` and state
 the reason in their JSON envelope. The Cython `order_book` extension is not
 built in this checkout, so the Python observations above are traced to the
