@@ -5,7 +5,7 @@
 set -euo pipefail
 export MAP="$1"
 ext="${2:-cc|h|bazel|bzl|yaml|json|md}"
-find hquant apps examples dev docs -type f | grep -E "\.(${ext})$" | tr '\n' '\0' |
+find hquant dev docs -type f | grep -E "\.(${ext})$" | tr '\n' '\0' |
 xargs -0 perl -i -pe '
   BEGIN {
     open(my $fh, "<", $ENV{MAP}) or die "map: $!";

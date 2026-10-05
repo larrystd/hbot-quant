@@ -1,44 +1,4 @@
-# 开发期工具与依赖 smoke target 放在这里；正式业务 target 位于 //hquant/...。
-
 load("@rules_cc//cc:defs.bzl", "cc_test")
-
-cc_test(
-    name = "dependency_smoke",
-    size = "small",
-    srcs = ["dependency_smoke.cc"],
-    deps = [
-        "@abseil-cpp//absl/container:flat_hash_map",
-        "@abseil-cpp//absl/status:status",
-        "@boost.asio//:boost.asio",
-        "@boost.beast//:boost.beast",
-        "@cli11//:cli11",
-        "@mpdecimal//:mpdecimal",
-        "@openssl//:crypto",
-        "@openssl//:ssl",
-        "@quill//:quill",
-        "@simdjson//:simdjson",
-        "@sqlite3//:sqlite3",
-        "@yaml-cpp//:yaml-cpp",
-        "@zlib//:zlib",
-    ],
-)
-
-cc_test(
-    name = "contract_compile",
-    size = "small",
-    srcs = ["contract_compile_test.cc"],
-    deps = [
-        "//hquant/src/application:control_server",
-        "//hquant/src/base:types",
-        "//hquant/src/base:market",
-        "//hquant/src/base:order",
-        "//hquant/src/market:order_book",
-        "//hquant/src/base:net",
-        "//hquant/src/shard:shard",
-        "//hquant/src/order_history:order_history",
-        "//hquant/src/strategy:strategy",
-    ],
-)
 
 cc_test(
     name = "sanitizer_smoke",

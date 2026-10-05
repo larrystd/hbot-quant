@@ -1,0 +1,95 @@
+load("@rules_cc//cc:defs.bzl", "cc_binary", "cc_library")
+
+cc_library(
+    name = "config",
+    srcs = ["config.cc"],
+    hdrs = ["config.h"],
+    strip_include_prefix = "/hquant/src",
+    include_prefix = "hquant",
+    deps = [
+        "//hquant/src/base:fixed",
+        "//hquant/src/base:ids",
+        "@abseil-cpp//absl/status:status",
+        "@abseil-cpp//absl/status:statusor",
+        "@yaml-cpp//:yaml-cpp",
+    ],
+    visibility = ["//hquant/src:__subpackages__"],
+)
+
+cc_library(
+    name = "runtime",
+    srcs = ["runtime.cc"],
+    hdrs = ["runtime.h"],
+    strip_include_prefix = "/hquant/src",
+    include_prefix = "hquant",
+    deps = [
+        ":config",
+        ":control_server",
+        ":replay_reader",
+        ":sqlite_history",
+        "//hquant/src/shard:shard",
+        "@abseil-cpp//absl/status:status",
+        "@abseil-cpp//absl/status:statusor",
+    ],
+    visibility = ["//visibility:public"],
+)
+
+cc_library(
+    name = "replay_reader",
+    srcs = ["replay_reader.cc"],
+    hdrs = ["replay_reader.h"],
+    strip_include_prefix = "/hquant/src",
+    include_prefix = "hquant",
+    deps = [
+        ":config",
+        "//hquant/src/shard:shard",
+        "@abseil-cpp//absl/status:status",
+        "@abseil-cpp//absl/status:statusor",
+        "@simdjson//:simdjson",
+    ],
+    visibility = ["//hquant/src:__subpackages__"],
+)
+
+cc_library(
+    name = "control_server",
+    srcs = ["control_server.cc"],
+    hdrs = ["control_server.h"],
+    strip_include_prefix = "/hquant/src",
+    include_prefix = "hquant",
+    deps = [
+        ":sqlite_history",
+        "//hquant/src/base:fixed",
+        "//hquant/src/shard:shard",
+        "@abseil-cpp//absl/status:status",
+        "@abseil-cpp//absl/status:statusor",
+        "@simdjson//:simdjson",
+    ],
+    visibility = ["//hquant/src:__subpackages__"],
+)
+
+cc_library(
+    name = "sqlite_history",
+    srcs = ["sqlite_history.cc"],
+    hdrs = ["sqlite_history.h"],
+    strip_include_prefix = "/hquant/src",
+    include_prefix = "hquant",
+    deps = [
+        "//hquant/src/base:ids",
+        "@abseil-cpp//absl/status:status",
+        "@abseil-cpp//absl/status:statusor",
+        "@sqlite3//:sqlite3",
+    ],
+    visibility = ["//hquant/src:__subpackages__"],
+)
+
+cc_binary(
+    name = "hquant_server",
+    srcs = ["main.cc"],
+    deps = [
+        ":config",
+        ":runtime",
+        "//hquant/src/base:fixed",
+        "@abseil-cpp//absl/status:status",
+        "@gflags//:gflags",
+    ],
+)

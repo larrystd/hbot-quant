@@ -1,6 +1,6 @@
 # hquant 1.0 设计
 
-目标运行路径：Binance 公开行情或文件回放 → Shard → SQLite 历史。Control 负责查询状态、历史和停止。每个 Shard 固定一个市场、一个 Strategy 和一个模拟账户；本版不接真实交易所下单。
+目标运行路径：Binance 公开行情或文件回放 → Shard → SQLite 历史。Control 负责查询状态、历史、修改策略参数和停止。每个 Shard 固定一个市场、一个 Strategy 和一个模拟账户；本版不接真实交易所下单。
 
 ## 1. 三个主要部分
 
@@ -30,11 +30,13 @@ hquant/src/
   sqlite_history.{h,cc}         # 异步写入、只读查询
   control_server.{h,cc}         # Unix socket、JSON 边界
   base/
-    decimal.{h,cc}             # 精确数值
+    fixed.{h,cc}               # 十进制文本转 uint64 定点数
     ids.h                     # ShardId、MarketId、OrderId 等值类型
+    net.{h,cc}                # REST/WebSocket 通用传输
   shard/
     shard.{h,cc}              # 线程、事件循环、调用顺序
     market.{h,cc}             # 行情状态与盘口同步
+    market_type.h            # 行情输入和通知值类型
     order_book.{h,cc}
     binance_feed.{h,cc}       # REST 快照、WebSocket 公开数据
     strategy.{h,cc}           # 刷新时间与策略决策
@@ -42,7 +44,9 @@ hquant/src/
     paper_exchange.{h,cc}    # 唯一的活动订单和模拟账户、撮合
 ~~~
 
-数据类型跟随拥有它的模块：盘口事件放在 market.h，策略决定放在 strategy.h，订单及账户回报放在 executor.h。base 只放真正跨模块的数值和 ID，不再用一个大 market.h / order.h 混放接口和业务结构。网络或 SQLite 实现需要拆小文件时，仍放在所属目录。
+数据类型跟随拥有它的模块：盘口事件放在 market_type.h，策略决定放在 strategy.h，订单及账户回报放在 executor.h。base 只放真正跨模块的数值和 ID，不再用一个大 market.h / order.h 混放接口和业务结构。网络或 SQLite 实现需要拆小文件时，仍放在所属目录。
+
+配置中的金额、数量和比例用 `uint64_t` 定点数，缩放因子为 10^9；字段名用 `_nanos` 或 `_ppb` 明示单位。十进制文本解析时拒绝超出九位有效小数和整数溢出，不经过 `double`。盘口保持整数 ticks/lots，网络价格和数量先精确转为定点数，再检查能否被配置的 tick/lot 整除。Market 和 Shard 直接持有各自状态，不使用 `Impl`/pimpl。
 
 ## 3. 关键结构体及归属
 
@@ -64,6 +68,8 @@ struct AppConfig {
 };
 
 ~~~
+
+启动参数由 gflags 在 `main.cc` 解析。`--config` 提供完整 YAML，`--state_dir` 指定运行目录；显式指定 `--strategy_shard` 时，可用 `--order_amount`、`--bid_spread`、`--ask_spread`、`--refresh_ms` 覆盖该分片的策略参数。入口把覆盖值解析并校验成 `AppConfig` 后构造 Runtime；Shard 不读取全局 flags。运行中修改经 Control `set_strategy` 投递到目标 Shard，规则见第 6.5 节。
 
 Market 和 Shard 的边界固定如下。MarketInput 是 Market 内部处理的已解析行情，MarketNotice 是 Market 完成状态更新后给 Shard 的通知。通知里的 PublicTrade 供模拟撮合使用，盘口由 Shard 同步读取 Market::View()。
 
@@ -97,7 +103,7 @@ struct ReplayRecord {
 
 struct NoAction {};
 struct CancelOrders { std::vector<OrderId> ids; };
-struct LimitOrderRequest { Side side; Decimal price; Decimal quantity; };
+struct LimitOrderRequest { Side side; uint64_t price_nanos; uint64_t quantity_nanos; };
 struct SubmitOrders { std::vector<LimitOrderRequest> orders; };
 using StrategyDecision = std::variant<NoAction, CancelOrders, SubmitOrders>;
 
@@ -151,7 +157,8 @@ Shard 构造 Market 时传入一个指向 Shard::OnMarket 的回调。Market 在
 | BookView | 同步状态、连续序号、买一卖一、最近成交；只在当前事件内借用 | Market |
 | CancelOrders / SubmitOrders | 待撤的订单 ID / 待下单的方向、价格、数量 | Strategy 输出 |
 | Order | ID、市场、账户、方向、价格、数量；提交后核心字段不变 | PaperExchange（Executor 内部） |
-| OrderReport / Fill / BalanceUpdate | 接受或终结报告与累计成交 / 唯一成交 ID 与费用 / 资产总额与可用额 | PaperExchange 产生，Executor 转交 |
+| CommandResult | 本地命令是否派发及本地拒绝原因；不表示交易所接受或成交 | Executor 生成 |
+| OrderReport / Fill / BalanceUpdate | 拒绝、接受、部分成交、完成、取消 / 唯一成交 ID 与费用 / 资产总额与可用额 | PaperExchange 产生，Shard 经账户事件入口处理 |
 | ExecutionView | 活动订单、可用余额、资金占用；只在当前事件内借用 PaperExchange 数据 | Executor 提供 |
 | ShardStatus | 运行状态、盘口状态、活动订单数、余额、最近错误 | Shard 生成 |
 | HistoryRecord | run、shard、分片内序号、时间、动作或回报 | Shard 生成，SQLite 保存 |
@@ -166,10 +173,11 @@ Market::HandleInput 更新盘口 / 最近成交，或 Market::CheckStale 标记�
   → Shard 读取 Market::View()
   → Executor 调用 PaperExchange，用新行情撮合已有模拟订单
   → Strategy 读取最新 BookView + ExecutionView，作一次决定
-  → Executor 执行撤单或新单，取得完整的模拟回报
-  → Shard 记录动作和回报
+  → Executor 执行撤单或新单，返回本地 CommandResult
+  → Shard 记录本地命令结果；PaperExchange 的 EventSink 已投递账户事件
   → 若刚才撤单且全部结束、盘口仍可交易，再调用一次 Strategy::Decide
-  → 若第二次决定下单，Executor 执行并取得回报；本条输入到此结束
+  → 若第二次决定下单，Executor 执行并记录本地命令结果
+  → 当前回调结束后，Shard::OnAccountEvent 逐条处理已投递事件
 ~~~
 
 Market 处理完输入、确定新状态后才发通知。快照前缓存增量时不通知；断档、断线或过期导致盘口从 Live 离开时发一次 BookUnavailable，并由 Market 自己重新连接或取快照。Market 的通知回调和 Shard::OnMarket 都在所属 Shard 线程上同步执行。Shard 只负责通知之后的交易顺序，不另存订单或账户余额。
@@ -180,17 +188,17 @@ Market 处理完输入、确定新状态后才发通知。快照前缓存增量�
 | PublicTrade | 用本次公开成交撮合已有模拟订单；即使盘口暂不可交易也处理已有订单 | 只在盘口 Live 时允许新单 |
 | BookUnavailable | 不用失效盘口撮合 | 撤掉旧挂单，不提交新单 |
 
-PaperExchange 是 Executor 的内部组件，也是活动订单和模拟账户余额的唯一保存处；冻结额度从活动订单推导。它的方法先更新自己的订单和账户，再同步返回本次完整的 AccountEvent；Executor 从更新后的 PaperExchange 构造 ExecutionView，并把回报交还 Shard。调用位置固定如下：
+PaperExchange 是 Executor 的内部组件，也是活动订单和模拟账户余额的唯一保存处；冻结额度从活动订单的剩余量推导。`Executor::Dispatch` 只返回本地 `CommandResult`：`dispatched` 表示指令已送到模拟交易所，不表示订单被接受或成交。PaperExchange 原子更新内部状态，再经 EventSink 把 `AccountEvent` 投递到 Shard 的 `io_context`；Shard 通过 `OnAccountEvent` 路径处理。回放在这一批事件处理完后才读取下一条输入。未来实盘适配器可从交易所私有账户流向同一入口提供事件。调用位置固定如下：
 
 | Executor 入口 | Executor 内部调用 |
 | --- | --- |
-| OnMarket(BookChanged) | PaperExchange::OnBookBbo，取回完整回报 |
-| OnMarket(PublicTrade) | PaperExchange::OnPublicTrade，取回完整回报 |
+| OnMarket(BookChanged) | PaperExchange::OnBookBbo，按可见数量模拟撮合并生成账户事件 |
+| OnMarket(PublicTrade) | PaperExchange::OnPublicTrade，按公开成交量模拟撮合并生成账户事件 |
 | OnMarket(BookUnavailable) | 不调用 PaperExchange |
-| Execute(CancelOrders) | PaperExchange::Cancel，取回完整回报 |
-| Execute(SubmitOrders) | 校验规则和资金上限后调用 PaperExchange::Place，取回完整回报 |
+| Dispatch(CancelOrders) | PaperExchange::Cancel，返回本地命令结果；账户事件另行处理 |
+| Dispatch(SubmitOrders) | 校验规则和资金上限后调用 PaperExchange::Place，返回本地命令结果；账户事件另行处理 |
 
-Executor 不保留第二份活动订单、冻结表或账户余额；PaperExchange 调用结束后，Strategy 才能读取新的 ExecutionView。PaperExchange 保证订单终结的整批回报包含全部成交明细，且 trade_id 不重复。若回报与更新后的订单或余额互相矛盾，Shard 进入停止流程，不执行第二次决策。
+Executor 不保留第二份活动订单、冻结表或账户余额；PaperExchange 更新后，Strategy 才能读取新的 ExecutionView。每次部分成交生成一条 Fill 和一条带剩余量的 OrderReport，trade_id 不重复。单次操作若无法同时完成订单、余额及对应事件的更新，Shard 进入停止流程，不执行第二次决策。
 
 Strategy 除配置外只保存 `next_refresh_at`，初始为空。配置解析拒绝不大于 0 的刷新周期。是否有活动订单由 ExecutionView 提供，Strategy 不保存订单阶段或 `requote_pending`。
 
@@ -203,7 +211,7 @@ Strategy 除配置外只保存 `next_refresh_at`，初始为空。配置解析�
 
 撤单在同一次 PaperExchange 调用中完成。目标订单若仍留在活动集合中，Shard 视为内部错误并停止；否则在盘口仍 Live 时立即进行第二次 Decide，最多两次，不循环。刷新时间前若订单全部成交，等到刷新时间再下单。新单被拒绝也等下一次刷新。
 
-SubmitOrders 按订单顺序逐单执行。Executor 用 PaperExchange 的最新余额校验规则和资金上限，前一单被接受后重新计算下一单额度；校验拒绝不调用 Place，由 Shard 记录拒绝结果。PaperExchange 的 Place、Cancel、OnBookBbo、OnPublicTrade 每次调用必须原子完成：成功时订单、余额和完整回报一起提交，可预期的拒绝不改变账户；部分更新或回报矛盾使 Shard 停止。单次撮合成交整张订单，不跨事件部分成交。
+SubmitOrders 按订单顺序逐单执行。Executor 用 PaperExchange 的最新余额校验规则和资金上限，前一单派发后重新计算下一单额度；本地校验拒绝不调用 Place，由 Shard 记录命令结果。PaperExchange 也可通过 OrderRejected 事件拒绝已派发请求。Place、Cancel、OnBookBbo、OnPublicTrade 每次调用必须原子完成：订单、余额与生成的账户事件一起提交。一次行情只按可见数量成交，剩余量继续留在活动订单；后续行情可再次部分成交，撤单只释放剩余占用。
 
 买单按金额及最坏情况手续费占用计价资产，卖单按数量占用基础资产。对每种资产，Executor 从 PaperExchange 的余额计算 `已用 = max(0, 初始总额 − 当前总额)`、`冻结 = 当前总额 − 当前可用额`，可下单额度为 `min(当前可用额, max(0, hard_limit − 已用 − 冻结))`。Executor 不另存资金占用表。
 
@@ -237,23 +245,26 @@ stateDiagram-v2
 
 ### 5.2 单张模拟订单
 
-订单只在 PaperExchange 接受 Place 后存在于 active_orders。没有挂单中、撤单中、等待成交明细等持久阶段；本版每次撮合只会整张成交，Place 和 Cancel 都同步返回完整回报。
+订单在 PaperExchange 接受 Place 请求时进入 active_orders，同时投递 OrderAccepted 事件。本地 `CommandResult::dispatched` 只表示提交请求通过本地校验。活动订单保存原始数量、剩余数量和剩余资金占用；每次模拟撮合可部分成交。订单报告、成交和余额变化作为独立账户事件交给 Shard。
 
 ~~~mermaid
 stateDiagram-v2
-    [*] --> Active: Place 接受，加入 active_orders
-    Active --> [*]: 行情触发整张成交，返回成交报告
-    Active --> [*]: CancelOrders 或 Shard 停止，返回取消报告
+    [*] --> Active: OrderAccepted
+    [*] --> Rejected: OrderRejected
+    Active --> Active: Fill + PartiallyFilled，减少剩余量
+    Active --> Filled: Fill + Filled，剩余量归零
+    Active --> Cancelled: CancelOrders 或 Shard 停止
 ~~~
 
 | 转换 | 条件与效果 |
 | --- | --- |
-| 进入 Active | PaperExchange 接受单张请求，加入 active_orders；活动订单决定冻结额度和可用余额 |
-| Active → 结束：成交 | OnBookBbo 或 OnPublicTrade 命中，更新余额，移除活动订单，返回本次全部 Fill 和终结报告 |
-| Active → 结束：取消 | Cancel 删除活动订单，释放其占用，返回取消报告和余额更新 |
-| 未进入 Active | Executor 校验拒绝或 PaperExchange::Place 拒绝；记录拒绝结果，不创建活动订单，不冻结资金 |
+| 进入 Active | PaperExchange 接受请求，加入 active_orders 并产生 OrderAccepted 和余额事件 |
+| Active → Active | OnBookBbo 或 OnPublicTrade 命中部分数量，更新余额与剩余占用，产生 Fill、PartiallyFilled 和余额事件 |
+| Active → 结束：成交 | 剩余数量归零，移除活动订单，产生 Fill、Filled 和余额事件 |
+| Active → 结束：取消 | Cancel 移除活动订单，释放剩余占用，产生 Cancelled 和余额事件 |
+| 未进入 Active | Executor 本地拒绝产生未派发的 CommandResult；PaperExchange 拒绝已派发请求产生 OrderRejected 事件，不冻结资金 |
 
-结束只是从 active_orders 移除并写历史，不另存 Done 状态。PaperExchange 是活动订单和余额的唯一所有者；回报与内部数据矛盾时，Shard 进入停止流程。
+结束只是从 active_orders 移除并写历史，不另存 Done 状态。PaperExchange 是活动订单和余额的唯一所有者；事件与内部数据矛盾时，Shard 进入停止流程。公开行情只能支撑模拟成交假设，不能证明真实账户成交；实盘成交必须由交易所私有账户事件确认。
 
 ### 5.3 Shard 生命周期
 
@@ -304,21 +315,21 @@ sequenceDiagram
         M-->>S: 当前 BookView
         S->>E: OnMarket(notice, BookView)
         E->>E: BookChanged / PublicTrade 时调用 PaperExchange；内部更新订单和账户
-        E-->>S: 完整的模拟成交和账户回报
+        E-->>S: 模拟账户事件；Shard 逐条处理
         S->>P: Decide(BookView, ExecutionView)
         P-->>S: NoAction / CancelOrders / SubmitOrders
         opt 首次决定有动作
-            S->>E: Execute(decision)
+            S->>E: Dispatch(decision)
             E->>E: Place 或 Cancel；PaperExchange 更新内部状态
-            E-->>S: 动作结果与完整回报
+            E-->>S: 本地命令结果；账户事件另行处理
         end
         opt 首次决定为 CancelOrders，旧单已清空、盘口 Live 且无错误
             S->>P: 再次 Decide(撤单后的最新视图)
             P-->>S: NoAction / SubmitOrders
             opt SubmitOrders
-                S->>E: Execute(SubmitOrders)
+                S->>E: Dispatch(SubmitOrders)
                 E->>E: Place；PaperExchange 更新内部状态
-                E-->>S: 下单结果与完整回报
+                E-->>S: 本地命令结果；账户事件另行处理
             end
         end
         S->>S: 写历史；本条输入结束
@@ -345,19 +356,19 @@ sequenceDiagram
             M->>S: OnMarket(notice)，同步调用
             S->>E: OnMarket(notice, Market::View())
             E->>E: BookChanged / PublicTrade 时调用 PaperExchange；内部更新状态
-            E-->>S: 完整回报
+            E-->>S: 模拟账户事件；Shard 逐条处理
             S->>P: Decide(最新视图)
             P-->>S: 决定
             opt 有动作
-                S->>E: Execute(决定)
-                E-->>S: 动作结果与回报
+                S->>E: Dispatch(决定)
+                E-->>S: 本地命令结果；账户事件另行处理
             end
             opt 撤单后旧单已清空、盘口 Live 且无错误
                 S->>P: 再次 Decide(撤单后的最新视图)
                 P-->>S: NoAction / SubmitOrders
                 opt SubmitOrders
-                    S->>E: Execute(SubmitOrders)
-                    E-->>S: 下单结果与回报
+                    S->>E: Dispatch(SubmitOrders)
+                    E-->>S: 本地命令结果；账户事件另行处理
                 end
             end
         end
@@ -390,10 +401,10 @@ sequenceDiagram
     S->>P: Decide(最新盘口、订单、余额)
     alt 决定撤单
         P-->>S: CancelOrders
-        S->>E: Execute(CancelOrders)
+        S->>E: Dispatch(CancelOrders)
         E->>E: PaperExchange::Cancel；内部更新订单和账户
-        E-->>S: 动作结果、回报、当前活动订单数
-        S->>S: 记录撤单动作和回报
+        E-->>S: 本地命令结果；另行产生取消和余额事件
+        S->>S: 分别记录命令和账户事件
         opt 已无活动旧单，盘口仍 Live 且无错误
             S->>P: 再次 Decide(撤单后的最新视图)
             P-->>S: SubmitOrders / NoAction
@@ -404,15 +415,15 @@ sequenceDiagram
         P-->>S: 无动作
     end
     opt 当前决定为 SubmitOrders
-        S->>E: Execute(SubmitOrders)
+        S->>E: Dispatch(SubmitOrders)
         E->>E: Executor 校验规则与额度
         E->>E: PaperExchange::Place；内部冻结、登记或拒绝
-        E-->>S: 动作结果和回报
-        S->>S: 记录下单动作和回报
+        E-->>S: 本地命令结果；另行产生订单和余额事件
+        S->>S: 分别记录命令和账户事件
     end
 ~~~
 
-定时器只触发 Strategy 决策，不直接操作 PaperExchange。行情触发撮合，Strategy 决定触发撤单或下单；两条路径都经过 Executor。PaperExchange 的本地调用先完成订单和账户更新，再同步返回完整回报批次；每条输入最多撤单一次、下单一次。回报不齐视为内部错误并阻止新单。
+定时器只触发 Strategy 决策，不直接操作 PaperExchange。行情触发模拟撮合，Strategy 决定撤单或下单；两条路径都经过 Executor。命令结果与账户事件分开记录；PaperExchange 将同一次操作的状态更新和事件生成原子提交。每条输入最多撤单一次、下单一次。
 
 ### 6.4 status 与 history
 
@@ -439,7 +450,36 @@ sequenceDiagram
 
 status 在 Shard 当前事件结束后取快照；history 只走 SQLite 读连接，不进入交易事件循环。JSON 编解码只在 ControlServer 边界。
 
-### 6.5 stop
+### 6.5 set_strategy
+
+~~~mermaid
+sequenceDiagram
+    participant C as Control 客户端
+    participant A as ControlServer / Runtime
+    participant S as 目标 Shard
+    participant P as Strategy
+    participant E as Executor
+    C->>A: set_strategy(shard_id, expected_version, patch)
+    A->>A: 解析允许字段和数值类型
+    A->>S: 投递 StrategyPatch
+    S->>S: 复制当前配置，应用 patch，校验完整候选值
+    alt 版本不符或参数非法
+        S-->>A: 错误；原配置和版本不变
+    else 提交成功
+        S->>P: 替换配置，清空 next_refresh_at
+        S->>E: 撤销旧单，记录本地命令结果和取消事件
+        S->>P: 用当前盘口和余额决定是否重新下单
+        opt 有新单
+            S->>E: 执行新单
+        end
+        S-->>A: 新版本和本次动作结果
+    end
+    A-->>C: 同一 request_id 的响应
+~~~
+
+`expected_version` 是目标 Shard 的策略配置版本，初始值为 1；每次成功提交加 1。多个字段作为一个 patch 提交，任一字段无效则整组不生效。只允许修改下单数量、买卖价差和刷新周期；盘口、交易规则、账户、费率和存储配置在运行中不变。配置提交与该 Shard 的行情事件串行，不会在一次决策中混用新旧参数。参数更新复用第 4 节的撤单、第二次决策和回报记录流程。
+
+### 6.6 stop
 
 ~~~mermaid
 sequenceDiagram

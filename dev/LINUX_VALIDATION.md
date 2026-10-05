@@ -11,7 +11,4 @@
 
 CI 工作流位于 [linux-bazel.yml](../.github/workflows/linux-bazel.yml)，使用 `ubuntu-24.04` x86_64 runner 和仓库 `.bazelversion` 指定的 Bazel 9.2.0。Sanitizer 检查只证明配置、链接和运行时对一个并发 C++ 测试可用；业务目标的 sanitizer 结果仍须单独验证，例如：
 
-```sh
-bazel test --config=asan //hquant/test:simulated_replay
-bazel test --config=tsan //hquant/test:recorder_test
-```
+当前 CI 只对 `//dev:sanitizer_smoke` 运行 sanitizer；业务目标的 sanitizer 验证尚未执行。

@@ -5,7 +5,7 @@ PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BAZEL_BIN="${BAZEL_BIN:-$(command -v bazelisk || command -v bazel || true)}"
 PYTHON_BIN="${PYTHON_BIN:-$(command -v python3 || true)}"
 LLVM_MAJOR=20
-SOURCE_ROOTS=(hquant apps dev)
+SOURCE_ROOTS=(hquant dev)
 
 cd "${PROJECT_DIR}"
 

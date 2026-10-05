@@ -1,99 +1,131 @@
-load("//:hquant_cc.bzl", "hquant_cc_library")
+load("@rules_cc//cc:defs.bzl", "cc_library")
 
-hquant_cc_library(
-    name = "routing",
-    srcs = ["routing.cc"],
-    hdrs = ["routing.h"],
-    deps = [
-        "//hquant/src/base:error",
-        "//hquant/src/base:types",
-        "//hquant/src/base:market",
-        "//hquant/src/base:order",
-        "@abseil-cpp//absl/status:status",
-        "@abseil-cpp//absl/status:statusor",
-    ],
-    visibility = ["//visibility:public"],
+cc_library(
+    name = "order_book",
+    srcs = ["order_book.cc"],
+    hdrs = ["order_book.h"],
+    strip_include_prefix = "/hquant/src",
+    include_prefix = "hquant",
+    visibility = ["//hquant/src:__subpackages__"],
 )
 
-hquant_cc_library(
-    name = "action_executor",
-    srcs = ["action_executor.cc"],
-    hdrs = ["action_executor.h"],
+cc_library(
+    name = "market_type",
+    hdrs = ["market_type.h"],
+    strip_include_prefix = "/hquant/src",
+    include_prefix = "hquant",
     deps = [
-        "//hquant/src/base:error",
-        "//hquant/src/base:types",
-        "//hquant/src/base:market",
-        "//hquant/src/base:order",
-        "//hquant/src/order:order_tracker",
-        "//hquant/src/order:risk",
-        "//hquant/src/order_history:order_history",
-        "//hquant/src/strategy:strategy",
-        "@abseil-cpp//absl/status:status",
-        "@abseil-cpp//absl/status:statusor",
+        ":order_book",
+        "//hquant/src/base:ids",
     ],
-    visibility = ["//visibility:public"],
+    visibility = ["//hquant/src:__subpackages__"],
 )
 
-hquant_cc_library(
-    name = "trading_mode",
-    hdrs = ["trading_mode.h"],
+cc_library(
+    name = "binance_feed",
+    srcs = ["binance_feed.cc"],
+    hdrs = ["binance_feed.h"],
+    strip_include_prefix = "/hquant/src",
+    include_prefix = "hquant",
     deps = [
-        "//hquant/src/base:market",
-        "//hquant/src/base:order",
-        "//hquant/src/market:order_book",
+        ":market_type",
+        "//hquant/src:config",
+        "//hquant/src/base:fixed",
+        "//hquant/src/base:net",
+        "@abseil-cpp//absl/status:status",
         "@abseil-cpp//absl/status:statusor",
         "@boost.asio//:boost.asio",
+        "@simdjson//:simdjson",
     ],
-    visibility = ["//visibility:public"],
+    visibility = ["//hquant/src:__subpackages__"],
 )
 
-hquant_cc_library(
-    name = "simulated_trading",
-    srcs = ["simulated_trading.cc"],
-    hdrs = ["simulated_trading.h"],
+cc_library(
+    name = "market",
+    srcs = ["market.cc"],
+    hdrs = ["market.h"],
+    strip_include_prefix = "/hquant/src",
+    include_prefix = "hquant",
     deps = [
-        ":trading_mode",
-        "//hquant/src/base:market",
-        "//hquant/src/base:order",
-        "//hquant/src/base:types",
+        ":binance_feed",
+        ":market_type",
+        ":order_book",
+        "//hquant/src:config",
+        "@boost.asio//:boost.asio",
+    ],
+    visibility = ["//hquant/src:__subpackages__"],
+)
+
+cc_library(
+    name = "strategy",
+    srcs = ["strategy.cc"],
+    hdrs = ["strategy.h"],
+    strip_include_prefix = "/hquant/src",
+    include_prefix = "hquant",
+    deps = [
+        ":market_type",
+        "//hquant/src:config",
+        "//hquant/src/base:fixed",
+        "//hquant/src/base:ids",
+        "@abseil-cpp//absl/status:status",
         "@abseil-cpp//absl/status:statusor",
     ],
-    visibility = ["//visibility:public"],
+    visibility = ["//hquant/src:__subpackages__"],
 )
 
-hquant_cc_library(
-    name = "live_trading",
-    hdrs = ["live_trading.h"],
+cc_library(
+    name = "paper_exchange",
+    srcs = ["paper_exchange.cc"],
+    hdrs = ["paper_exchange.h"],
+    strip_include_prefix = "/hquant/src",
+    include_prefix = "hquant",
     deps = [
-        ":trading_mode",
-        "//hquant/src/base:market",
-        "//hquant/src/base:order",
+        ":market_type",
+        ":strategy",
+        "//hquant/src:config",
+        "//hquant/src/base:fixed",
+        "//hquant/src/base:ids",
+        "@abseil-cpp//absl/status:status",
         "@abseil-cpp//absl/status:statusor",
     ],
-    visibility = ["//visibility:public"],
+    visibility = ["//hquant/src:__subpackages__"],
 )
 
-hquant_cc_library(
+cc_library(
+    name = "executor",
+    srcs = ["executor.cc"],
+    hdrs = ["executor.h"],
+    strip_include_prefix = "/hquant/src",
+    include_prefix = "hquant",
+    deps = [
+        ":market_type",
+        ":paper_exchange",
+        ":strategy",
+        "//hquant/src:config",
+        "//hquant/src/base:fixed",
+        "@abseil-cpp//absl/status:status",
+        "@abseil-cpp//absl/status:statusor",
+    ],
+    visibility = ["//hquant/src:__subpackages__"],
+)
+
+cc_library(
     name = "shard",
     srcs = ["shard.cc"],
     hdrs = ["shard.h"],
+    strip_include_prefix = "/hquant/src",
+    include_prefix = "hquant",
     deps = [
-        ":action_executor",
-        ":trading_mode",
-        "//hquant/src/base:error",
-        "//hquant/src/base:types",
-        "//hquant/src/base:market",
-        "//hquant/src/base:net",
-        "//hquant/src/base:order",
-        "//hquant/src/market:market_data_stream",
-        "//hquant/src/market:order_book",
-        "//hquant/src/order:order_tracker",
-        "//hquant/src/order:risk",
-        "//hquant/src/order_history:order_history",
-        "//hquant/src/strategy:strategy",
+        ":executor",
+        ":market",
+        ":market_type",
+        ":paper_exchange",
+        ":strategy",
+        "//hquant/src:config",
+        "//hquant/src:sqlite_history",
         "@abseil-cpp//absl/status:status",
         "@abseil-cpp//absl/status:statusor",
         "@boost.asio//:boost.asio",
     ],
-    visibility = ["//visibility:public"],
+    visibility = ["//hquant/src:__subpackages__"],
 )

@@ -1,27 +1,26 @@
-#include "base/net.h"
+#include "hquant/base/net.h"
 
 #include <charconv>
 #include <cstdint>
 
 #include "absl/status/status.h"
-#include "base/error.h"
 #include "boost/asio/ssl.hpp"
 #include "boost/system/error_code.hpp"
 
-namespace hquant {
+namespace hquant::v1 {
 
 absl::Status ConfigureTlsContext(boost::asio::ssl::context& context,
                                  const TlsConfig& config) {
   if (!config.enabled) return absl::OkStatus();
   boost::system::error_code ec;
   context.set_options(boost::asio::ssl::context::default_workarounds, ec);
-  if (ec) return hquant::Error(ErrorCode::kNetTlsConfigInvalid, ec.message());
+  if (ec) return absl::FailedPreconditionError(ec.message());
   if (config.verify_peer) {
     if (config.ca_file.empty())
       context.set_default_verify_paths(ec);
     else
       context.load_verify_file(config.ca_file, ec);
-    if (ec) return hquant::Error(ErrorCode::kNetTlsConfigInvalid, ec.message());
+    if (ec) return absl::FailedPreconditionError(ec.message());
     context.set_verify_mode(boost::asio::ssl::verify_peer);
   } else {
     context.set_verify_mode(boost::asio::ssl::verify_none);
@@ -29,7 +28,7 @@ absl::Status ConfigureTlsContext(boost::asio::ssl::context& context,
   return absl::OkStatus();
 }
 
-}  // namespace hquant
+}  // namespace hquant::v1
 
 #include <utility>
 
@@ -38,7 +37,7 @@ absl::Status ConfigureTlsContext(boost::asio::ssl::context& context,
 #include "boost/beast/http.hpp"
 #include "openssl/ssl.h"
 
-namespace hquant {
+namespace hquant::v1 {
 namespace {
 namespace asio = boost::asio;
 namespace beast = boost::beast;
@@ -49,12 +48,12 @@ absl::Status NetworkError(const boost::system::error_code& ec,
                           bool cancelled) {
   if (std::chrono::steady_clock::now() >= deadline ||
       ec == beast::error::timeout || ec == asio::error::timed_out) {
-    return hquant::Error(ErrorCode::kNetTimeout, ec.message());
+    return absl::DeadlineExceededError(ec.message());
   }
   if (cancelled || ec == asio::error::operation_aborted) {
-    return hquant::Error(ErrorCode::kNetCancelled, ec.message());
+    return absl::CancelledError(ec.message());
   }
-  return hquant::Error(ErrorCode::kNetUnavailable, ec.message());
+  return absl::UnavailableError(ec.message());
 }
 
 bool StaleConnectionError(const boost::system::error_code& ec) {
@@ -107,8 +106,7 @@ asio::awaitable<absl::Status> HttpClient::Connect(
     std::chrono::steady_clock::time_point deadline) {
   if (Connected()) co_return absl::OkStatus();
   if (std::chrono::steady_clock::now() >= deadline) {
-    co_return hquant::Error(ErrorCode::kNetTimeout,
-                            "HTTP connect deadline elapsed");
+    co_return absl::DeadlineExceededError("HTTP connect deadline elapsed");
   }
   boost::system::error_code ec;
   resolver_deadline_.expires_at(deadline);
@@ -136,8 +134,7 @@ asio::awaitable<absl::Status> HttpClient::Connect(
         tls_.server_name.empty() ? host_ : tls_.server_name;
     if (!SSL_set_tlsext_host_name(secure_->native_handle(), name.c_str())) {
       DropConnection();
-      co_return hquant::Error(ErrorCode::kNetTlsConfigInvalid,
-                              "TLS SNI setup failed");
+      co_return absl::FailedPreconditionError("TLS SNI setup failed");
     }
     if (tls_.verify_peer) {
       secure_->set_verify_callback(asio::ssl::host_name_verification(name));
@@ -157,8 +154,7 @@ asio::awaitable<absl::Status> HttpClient::Connect(
           tls_.verify_peer &&
           SSL_get_verify_result(secure_->native_handle()) != X509_V_OK;
       DropConnection();
-      if (verify_failed)
-        co_return hquant::Error(ErrorCode::kNetTlsVerifyFailed, ec.message());
+      if (verify_failed) co_return absl::UnavailableError(ec.message());
       co_return NetworkError(ec, deadline, cancelled_);
     }
   }
@@ -168,8 +164,7 @@ asio::awaitable<absl::Status> HttpClient::Connect(
 asio::awaitable<absl::StatusOr<HttpResponse>> HttpClient::Send(
     HttpRequest request) {
   if (in_flight_)
-    co_return hquant::Error(ErrorCode::kNetConcurrentCall,
-                            "concurrent HTTP Send");
+    co_return absl::FailedPreconditionError("concurrent HTTP Send");
   in_flight_ = true;
   struct Reset {
     bool& value;
@@ -179,12 +174,10 @@ asio::awaitable<absl::StatusOr<HttpResponse>> HttpClient::Send(
   if (!tls_status_.ok()) co_return tls_status_;
   if (request.method.empty() || request.target.empty() ||
       request.target[0] != '/') {
-    co_return hquant::Error(ErrorCode::kNetTargetInvalid,
-                            "HTTP method or target invalid");
+    co_return absl::InvalidArgumentError("HTTP method or target invalid");
   }
   if (std::chrono::steady_clock::now() >= request.deadline) {
-    co_return hquant::Error(ErrorCode::kNetTimeout,
-                            "HTTP request deadline elapsed");
+    co_return absl::DeadlineExceededError("HTTP request deadline elapsed");
   }
   http::request<http::string_body> wire;
   wire.version(11);
@@ -263,15 +256,14 @@ asio::awaitable<absl::StatusOr<HttpResponse>> HttpClient::Send(
     DropConnection();
     if (!retry) co_return error;
   }
-  co_return hquant::Error(ErrorCode::kNetUnavailable,
-                          "stale HTTP connection retry exhausted");
+  co_return absl::UnavailableError("stale HTTP connection retry exhausted");
 }
 
-}  // namespace hquant
+}  // namespace hquant::v1
 
 #include "boost/beast/websocket/ssl.hpp"
 
-namespace hquant {
+namespace hquant::v1 {
 namespace {
 namespace asio = boost::asio;
 namespace beast = boost::beast;
@@ -310,12 +302,12 @@ absl::Status WebSocketClient::Error(
     std::chrono::steady_clock::time_point deadline) const {
   if (std::chrono::steady_clock::now() >= deadline ||
       ec == beast::error::timeout || ec == asio::error::timed_out) {
-    return hquant::Error(ErrorCode::kNetTimeout, ec.message());
+    return absl::DeadlineExceededError(ec.message());
   }
   if (cancelled_ || ec == asio::error::operation_aborted) {
-    return hquant::Error(ErrorCode::kNetCancelled, ec.message());
+    return absl::CancelledError(ec.message());
   }
-  return hquant::Error(ErrorCode::kNetUnavailable, ec.message());
+  return absl::UnavailableError(ec.message());
 }
 
 void WebSocketClient::DropConnection() {
@@ -347,8 +339,7 @@ bool WebSocketClient::Connected() const { return connected_; }
 asio::awaitable<absl::Status> WebSocketClient::Connect(
     std::chrono::steady_clock::time_point deadline) {
   if (in_flight_)
-    co_return hquant::Error(ErrorCode::kNetConcurrentCall,
-                            "concurrent WebSocket operation");
+    co_return absl::FailedPreconditionError("concurrent WebSocket operation");
   in_flight_ = true;
   struct Reset {
     bool& value;
@@ -357,14 +348,12 @@ asio::awaitable<absl::Status> WebSocketClient::Connect(
   cancelled_ = false;
   if (!tls_status_.ok()) co_return tls_status_;
   if (target_.empty() || target_[0] != '/') {
-    co_return hquant::Error(ErrorCode::kNetTargetInvalid,
-                            "WebSocket target invalid");
+    co_return absl::InvalidArgumentError("WebSocket target invalid");
   }
   if (connected_) co_return absl::OkStatus();
   DropConnection();
   if (std::chrono::steady_clock::now() >= deadline) {
-    co_return hquant::Error(ErrorCode::kNetTimeout,
-                            "WebSocket connect deadline elapsed");
+    co_return absl::DeadlineExceededError("WebSocket connect deadline elapsed");
   }
   boost::system::error_code ec;
   resolver_deadline_.expires_at(deadline);
@@ -398,8 +387,7 @@ asio::awaitable<absl::Status> WebSocketClient::Connect(
     if (!SSL_set_tlsext_host_name(secure_->next_layer().native_handle(),
                                   name.c_str())) {
       DropConnection();
-      co_return hquant::Error(ErrorCode::kNetTlsConfigInvalid,
-                              "TLS SNI setup failed");
+      co_return absl::FailedPreconditionError("TLS SNI setup failed");
     }
     if (tls_.verify_peer) {
       secure_->next_layer().set_verify_callback(
@@ -422,8 +410,7 @@ asio::awaitable<absl::Status> WebSocketClient::Connect(
           SSL_get_verify_result(secure_->next_layer().native_handle()) !=
               X509_V_OK;
       DropConnection();
-      if (verify_failed)
-        co_return hquant::Error(ErrorCode::kNetTlsVerifyFailed, ec.message());
+      if (verify_failed) co_return absl::UnavailableError(ec.message());
       co_return Error(ec, deadline);
     }
     beast::get_lowest_layer(*secure_).expires_at(deadline);
@@ -442,8 +429,7 @@ asio::awaitable<absl::Status> WebSocketClient::Connect(
 asio::awaitable<absl::Status> WebSocketClient::Reconnect(
     std::chrono::steady_clock::time_point deadline) {
   if (in_flight_)
-    co_return hquant::Error(ErrorCode::kNetConcurrentCall,
-                            "concurrent WebSocket operation");
+    co_return absl::FailedPreconditionError("concurrent WebSocket operation");
   DropConnection();
   co_return co_await Connect(deadline);
 }
@@ -451,12 +437,10 @@ asio::awaitable<absl::Status> WebSocketClient::Reconnect(
 asio::awaitable<absl::Status> WebSocketClient::WriteText(
     std::string message, std::chrono::steady_clock::time_point deadline) {
   if (in_flight_) {
-    co_return hquant::Error(ErrorCode::kNetConcurrentCall,
-                            "concurrent WebSocket operation");
+    co_return absl::FailedPreconditionError("concurrent WebSocket operation");
   }
   if (!connected_) {
-    co_return hquant::Error(ErrorCode::kNetNotConnected,
-                            "WebSocket not connected");
+    co_return absl::UnavailableError("WebSocket not connected");
   }
   in_flight_ = true;
   struct Reset {
@@ -488,12 +472,10 @@ asio::awaitable<absl::Status> WebSocketClient::WriteText(
 asio::awaitable<absl::StatusOr<std::string>> WebSocketClient::Read(
     std::chrono::steady_clock::time_point deadline) {
   if (in_flight_) {
-    co_return hquant::Error(ErrorCode::kNetConcurrentCall,
-                            "concurrent WebSocket operation");
+    co_return absl::FailedPreconditionError("concurrent WebSocket operation");
   }
   if (!connected_) {
-    co_return hquant::Error(ErrorCode::kNetNotConnected,
-                            "WebSocket not connected");
+    co_return absl::UnavailableError("WebSocket not connected");
   }
   in_flight_ = true;
   struct Reset {
@@ -527,8 +509,7 @@ asio::awaitable<absl::Status> WebSocketClient::Close(
     DropConnection();
     co_return absl::OkStatus();
   }
-  if (in_flight_)
-    co_return hquant::Error(ErrorCode::kNetConcurrentCall, "WebSocket busy");
+  if (in_flight_) co_return absl::FailedPreconditionError("WebSocket busy");
   in_flight_ = true;
   struct Reset {
     bool& value;
@@ -552,4 +533,4 @@ asio::awaitable<absl::Status> WebSocketClient::Close(
   co_return absl::OkStatus();
 }
 
-}  // namespace hquant
+}  // namespace hquant::v1

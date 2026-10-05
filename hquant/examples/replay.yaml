@@ -1,0 +1,34 @@
+schema_version: 1
+input:
+  source: replay
+  replay_file: hquant/examples/replay_market.json
+shards:
+  - id: 0
+    market:
+      symbol: BTCUSDT
+      base_asset: BTC
+      quote_asset: USDT
+      price_per_tick: "0.01"
+      amount_per_lot: "0.001"
+      stale_after_ms: 30000
+      max_buffered_diffs: 1024
+      trading_rule:
+        price_increment: "0.01"
+        base_increment: "0.001"
+        min_base_amount: "0.001"
+        min_order_value: "5"
+    strategy:
+      order_amount: "0.1"
+      bid_spread: "0.001"
+      ask_spread: "0.001"
+      refresh_ms: 15000
+    executor:
+      mode: paper
+      account: simulated
+      initial_balances:
+        BTC: "0.2"
+        USDT: "2000"
+      hard_limits:
+        BTC: "0.2"
+        USDT: "2000"
+      maker_fee_rate: "0.001"

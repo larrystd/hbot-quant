@@ -1,1 +1,1 @@
-# 工作区根 package。业务与测试 target 位于 //hquant/src/...、//hquant/test，入口位于 //apps。
+# 工作区根 package。运行入口位于 //hquant/src:hquant_server。

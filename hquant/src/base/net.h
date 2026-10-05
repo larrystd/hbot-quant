@@ -16,7 +16,7 @@
 #include "boost/beast/ssl.hpp"
 #include "boost/beast/websocket.hpp"
 
-namespace hquant {
+namespace hquant::v1 {
 
 struct TlsConfig {
   bool enabled = false;
@@ -136,4 +136,4 @@ class WebSocketClient {
   bool in_flight_ = false;
 };
 
-}  // namespace hquant
+}  // namespace hquant::v1
