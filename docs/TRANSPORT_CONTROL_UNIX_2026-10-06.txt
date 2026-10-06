@@ -1,0 +1,6 @@
+mode=unix sockets=1000 messages=100000 interval_ns=100000 nodelay=0
+send_call mean=3.271 p50=2.000 p99=24.000 max=7632.000 us
+send_to_kqueue_return mean=63.417 p50=9.000 p99=1152.000 max=28861.000 us
+send_return_to_kqueue_return mean=60.146 p50=7.000 p99=1147.000 max=28853.000 us
+kqueue_return_to_recv_return mean=4.970 p50=1.000 p99=47.000 max=9446.000 us
+send_to_recv_return mean=68.386 p50=10.000 p99=1520.000 max=28865.000 us

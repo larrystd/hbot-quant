@@ -1,6 +1,6 @@
 # hquant 1.0 开发文档
 
-本文件说明如何把 [设计](DESIGN.md) 落成代码。目标是 C++20、一个 Shard 一个线程、Shard 内用协程处理行情 I/O；1.0 只做 Binance 公开行情、文件回放和本地模拟交易。
+本文件说明如何把 [设计](DESIGN.md) 落成代码。目标是 C++20、Shard 共用最多 8 个 Asio 工作线程并在所属线程串行处理事件；1.0 只做 Binance 公开行情、文件回放和本地模拟交易。
 
 ## 1. 代码边界
 
@@ -9,7 +9,7 @@
 | 所有者 | 持有的数据 | 对外方法 |
 | --- | --- | --- |
 | Runtime | Shard、Control、SQLite 的生命周期与路由 | `Start`、`Stop`、`Wait`、投递状态或配置请求 |
-| Shard | 本线程 `io_context`、Market、Strategy、Executor、策略定时器 | `OnMarket`、`OnTimer`、`PostReplay`、`UpdateStrategy`、`RequestStop` |
+| Shard | 所属 `io_context` 的引用、Market、Strategy、Executor、策略定时器 | `OnMarket`、`OnTimer`、`PostReplay`、`UpdateStrategy`、`RequestStop` |
 | Market | 连接代次、盘口、快照序号、增量缓冲、最近成交 | 行情协程、`OnReplayInput`、`View`、`CheckStale` |
 | Strategy | 配置和 `next_refresh_at` | `Decide`、`UpdateConfig` |
 | Executor | PaperExchange、交易规则、静态资金上限 | `OnMarket`、`Execute`、`View` |
@@ -59,7 +59,7 @@ Runtime 不用 `gflags::SetCommandLineOption` 向工作线程传播配置；这�
 ## 4. 实现顺序
 
 1. **入口与配置**：加入 gflags 依赖、新 `main.cc` 和扁平 `AppConfig`；完成启动 flag 覆盖与静态校验。
-2. **Shard 核心**：创建每分片一个 `io_context` 和工作线程；实现同步的 `OnMarket`、定时入口、跨线程投递及有序停止。
+2. **Shard 核心**：Runtime 创建共享的 `io_context` 和工作线程，并把每个 Shard 固定分配给一个线程；实现同步的 `OnMarket`、定时入口、跨线程投递及有序停止。
 3. **Market**：把 Binance REST/WS 解析、快照/增量同步和回放输入收进一个具体 `Market`；只保留 Syncing/Live 两态。
 4. **Strategy 与 Executor**：实现具体 `Strategy`、限价单决定、PaperExchange 账户事件、活动订单与余额的唯一所有权；移除目标路径上的重复资金冻结表。模拟下单回执与订单事件使用实盘可采用的分离语义。
 5. **回放、历史、Control**：回放按输入时间逐条投递并等待完成；SQLite 异步写入；Control 提供 `status`、`history`、`set_strategy`、`stop`，动态配置只在 Shard 线程提交。
@@ -73,11 +73,11 @@ Runtime 不用 `gflags::SetCommandLineOption` 向工作线程传播配置；这�
 
 **Shard / 调用顺序**
 
-> 按 DESIGN.md 第 3、4、5 节实现一个 Shard 一个 io_context 和一个工作线程。Market 更新完状态后同步回调 Shard；Shard 在一个事件里依次做模拟撮合、Strategy 决策、Executor 执行，撤单后最多再决策一次。跨线程入口只投递值对象到 Shard 线程。保留实际必要的状态，避免 Strategy/TradingMode 等虚基类和第二份订单、余额状态。标出线程归属和回调完成边界，其他显然的步骤不加注释。
+> 按 DESIGN.md 第 3、4、5 节实现 Runtime 持有共享 io_context 和工作线程、每个 Shard 固定归属一个 io_context。Market 更新完状态后同步回调 Shard；Shard 在一个事件里依次做模拟撮合、Strategy 决策、Executor 执行，撤单后最多再决策一次。跨线程入口只投递值对象到所属线程。保留实际必要的状态，避免 Strategy/TradingMode 等虚基类和第二份订单、余额状态。标出线程归属和回调完成边界，其他显然的步骤不加注释。
 
 **Market / 行情**
 
-> 按 DESIGN.md 第 5.1、6.1、6.2 节实现 Market 的 Syncing/Live 转换。盘口用整数 ticks/lots；同一连接的快照与增量严格按序衔接，缓存设上限。Binance 与回放只在输入解析处不同，进入同一个 HandleInput。状态更新完成后才发 BookChanged、PublicTrade 或 BookUnavailable；不要把原始行情绕 Shard 再送回 Market。仅对序号边界和失效通知加必要注释。
+> 按 DESIGN.md 第 5.1、6.1、6.2 节实现 Market 的 Syncing/Live 转换。盘口用整数 ticks/lots；实时输入的快照与增量严格按序衔接，缓存设上限；文件回放还允许连续序号的完整快照直接替换盘口。状态更新完成后才发 BookChanged、PublicTrade 或 BookUnavailable；不要把原始行情绕 Shard 再送回 Market。仅对序号边界和失效通知加必要注释。
 
 **Strategy / Executor / PaperExchange**
 

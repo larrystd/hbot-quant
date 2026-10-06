@@ -1,6 +1,15 @@
 load("@rules_cc//cc:defs.bzl", "cc_binary", "cc_library")
 
 cc_library(
+    name = "perf_probe",
+    hdrs = ["perf_probe.h"],
+    strip_include_prefix = "/hquant/src",
+    include_prefix = "hquant",
+    deps = ["//hquant/src/base:ids"],
+    visibility = ["//hquant/src:__subpackages__", "//hquant/bench:__pkg__"],
+)
+
+cc_library(
     name = "config",
     srcs = ["config.cc"],
     hdrs = ["config.h"],
@@ -13,7 +22,7 @@ cc_library(
         "@abseil-cpp//absl/status:statusor",
         "@yaml-cpp//:yaml-cpp",
     ],
-    visibility = ["//hquant/src:__subpackages__"],
+    visibility = ["//hquant/src:__subpackages__", "//hquant/bench:__pkg__"],
 )
 
 cc_library(
@@ -25,6 +34,7 @@ cc_library(
     deps = [
         ":config",
         ":control_server",
+        ":perf_probe",
         ":replay_reader",
         ":sqlite_history",
         "//hquant/src/shard:shard",
@@ -47,7 +57,7 @@ cc_library(
         "@abseil-cpp//absl/status:statusor",
         "@simdjson//:simdjson",
     ],
-    visibility = ["//hquant/src:__subpackages__"],
+    visibility = ["//hquant/src:__subpackages__", "//hquant/bench:__pkg__"],
 )
 
 cc_library(
@@ -58,6 +68,7 @@ cc_library(
     include_prefix = "hquant",
     deps = [
         ":sqlite_history",
+        ":perf_probe",
         "//hquant/src/base:fixed",
         "//hquant/src/shard:shard",
         "@abseil-cpp//absl/status:status",
@@ -75,6 +86,7 @@ cc_library(
     include_prefix = "hquant",
     deps = [
         "//hquant/src/base:ids",
+        ":perf_probe",
         "@abseil-cpp//absl/status:status",
         "@abseil-cpp//absl/status:statusor",
         "@sqlite3//:sqlite3",
@@ -85,8 +97,10 @@ cc_library(
 cc_binary(
     name = "hquant_server",
     srcs = ["main.cc"],
+    visibility = ["//hquant/test:__pkg__"],
     deps = [
         ":config",
+        ":perf_probe",
         ":runtime",
         "//hquant/src/base:fixed",
         "@abseil-cpp//absl/status:status",

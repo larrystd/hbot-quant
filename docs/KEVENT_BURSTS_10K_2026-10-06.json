@@ -1,0 +1,61 @@
+{
+  "case": "1000 stocks, 10k/s, 30s, kqueue probe, valid run",
+  "raw_state_dir": "/private/tmp/hquant-kevent-10k-20261006-r3",
+  "result_file": "KEVENT_TRACE_10K_2026-10-06.json",
+  "threshold": "send() return to matching kqueue EVFILT_READ return > 1000 us",
+  "worker_assignment": "shard_index modulo 8",
+  "total_over_threshold": 665,
+  "windows": [
+    {
+      "sent_time_from_first_s": [
+        8.03,
+        8.06
+      ],
+      "counts_by_worker": {
+        "0": 18,
+        "1": 18,
+        "2": 18,
+        "3": 17,
+        "4": 17,
+        "5": 17,
+        "6": 18,
+        "7": 18
+      },
+      "total": 141
+    },
+    {
+      "sent_time_from_first_s": [
+        15.07,
+        15.09
+      ],
+      "counts_by_worker": {
+        "0": 17,
+        "1": 18,
+        "2": 18,
+        "3": 17,
+        "4": 17,
+        "5": 18,
+        "6": 16,
+        "7": 18
+      },
+      "total": 139
+    },
+    {
+      "sent_time_from_first_s": [
+        18.46,
+        18.51
+      ],
+      "counts_by_worker": {
+        "0": 37,
+        "1": 37,
+        "2": 36,
+        "3": 39,
+        "4": 38,
+        "5": 38,
+        "6": 38,
+        "7": 38
+      },
+      "total": 301
+    }
+  ]
+}

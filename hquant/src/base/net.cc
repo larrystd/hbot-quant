@@ -2,12 +2,21 @@
 
 #include <charconv>
 #include <cstdint>
+#include <dlfcn.h>
+#include <time.h>
 
 #include "absl/status/status.h"
 #include "boost/asio/ssl.hpp"
 #include "boost/system/error_code.hpp"
 
 namespace hquant::v1 {
+
+uint64_t BenchKeventReadReadyNs(int fd) {
+  using Probe = uint64_t (*)(int);
+  static Probe probe = reinterpret_cast<Probe>(
+      dlsym(RTLD_DEFAULT, "hquant_kevent_read_ready_ns"));
+  return probe ? probe(fd) : 0;
+}
 
 absl::Status ConfigureTlsContext(boost::asio::ssl::context& context,
                                  const TlsConfig& config) {
@@ -470,7 +479,8 @@ asio::awaitable<absl::Status> WebSocketClient::WriteText(
 }
 
 asio::awaitable<absl::StatusOr<std::string>> WebSocketClient::Read(
-    std::chrono::steady_clock::time_point deadline) {
+    std::chrono::steady_clock::time_point deadline,
+    uint64_t* frame_complete_ns, WebSocketReadTrace* read_trace) {
   if (in_flight_) {
     co_return absl::FailedPreconditionError("concurrent WebSocket operation");
   }
@@ -486,14 +496,31 @@ asio::awaitable<absl::StatusOr<std::string>> WebSocketClient::Read(
   beast::flat_buffer buffer;
   boost::system::error_code ec;
   ArmDeadline(deadline);
+  if (read_trace) {
+    *read_trace = {};
+    timespec now{};
+    ::clock_gettime(CLOCK_MONOTONIC, &now);
+    read_trace->armed_ns =
+        static_cast<uint64_t>(now.tv_sec) * 1'000'000'000ULL +
+        static_cast<uint64_t>(now.tv_nsec);
+  }
   if (plain_) {
+    plain_->next_layer().SetReadTrace(read_trace);
     beast::get_lowest_layer(*plain_).expires_at(deadline);
     co_await plain_->async_read(buffer,
                                 asio::redirect_error(asio::use_awaitable, ec));
+    plain_->next_layer().SetReadTrace(nullptr);
   } else {
     beast::get_lowest_layer(*secure_).expires_at(deadline);
     co_await secure_->async_read(buffer,
                                  asio::redirect_error(asio::use_awaitable, ec));
+  }
+  if (frame_complete_ns) {
+    timespec now{};
+    ::clock_gettime(CLOCK_MONOTONIC, &now);
+    *frame_complete_ns =
+        static_cast<uint64_t>(now.tv_sec) * 1'000'000'000ULL +
+        static_cast<uint64_t>(now.tv_nsec);
   }
   DisarmDeadline();
   if (ec) {

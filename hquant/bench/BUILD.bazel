@@ -1,0 +1,13 @@
+load("@rules_cc//cc:defs.bzl", "cc_binary")
+
+cc_binary(
+    name = "replay_bench",
+    srcs = ["replay_bench.cc"],
+    deps = [
+        "//hquant/src:config",
+        "//hquant/src:perf_probe",
+        "//hquant/src:replay_reader",
+        "//hquant/src:runtime",
+        "@abseil-cpp//absl/status:status",
+    ],
+)

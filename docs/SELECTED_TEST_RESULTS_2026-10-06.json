@@ -1,0 +1,101 @@
+{
+  "10k": {
+    "state_dir": "/private/tmp/hquant-phase-10k-20261006",
+    "raw_ack_record_fields": 13,
+    "correctness_valid": true,
+    "paced_valid": true,
+    "completed_qps": 9966.889260526817,
+    "timed_frames": 299000,
+    "e2e": {
+      "count": 299000,
+      "mean_us": 50.15949163879599,
+      "p50_us": 45.0,
+      "p95_us": 73.0,
+      "p99_us": 130.0,
+      "p999_us": 551.0,
+      "max_us": 2695.0
+    },
+    "beast_frame_to_handler_done": {
+      "count": 299000,
+      "mean_us": 5.986812709030101,
+      "p50_us": 6.0,
+      "p99_us": 21.0
+    },
+    "feed_read_to_handler_done": {
+      "count": 299000,
+      "mean_us": 5.266648829431438,
+      "p50_us": 5.0,
+      "p95_us": 7.0,
+      "p99_us": 18.0,
+      "p999_us": 44.0,
+      "max_us": 1936.0
+    },
+    "valid": true
+  },
+  "20k": {
+    "state_dir": "/private/tmp/hquant-20k-full-2",
+    "raw_ack_record_fields": 9,
+    "correctness_valid": true,
+    "paced_valid": true,
+    "completed_qps": 19968.215534584968,
+    "timed_frames": 599000,
+    "e2e": {
+      "count": 599000,
+      "mean_us": 55.99073455759599,
+      "p50_us": 47.0,
+      "p95_us": 62.0,
+      "p99_us": 98.0,
+      "p999_us": 516.0,
+      "max_us": 15555.0
+    },
+    "beast_frame_to_handler_done": {
+      "count": 599000,
+      "mean_us": 4.8621001669449075,
+      "p50_us": 5.0,
+      "p99_us": 11.0
+    },
+    "feed_read_to_handler_done": {
+      "count": 599000,
+      "mean_us": 4.3241602671118535,
+      "p50_us": 4.0,
+      "p95_us": 5.0,
+      "p99_us": 9.0,
+      "p999_us": 30.0,
+      "max_us": 152.0
+    },
+    "valid": true
+  },
+  "40k": {
+    "state_dir": "/private/tmp/hquant-40k-nativeboth-1",
+    "raw_ack_record_fields": 9,
+    "correctness_valid": true,
+    "paced_valid": true,
+    "completed_qps": 39967.03969237046,
+    "timed_frames": 1199000,
+    "e2e": {
+      "count": 1199000,
+      "mean_us": 60.82160633861552,
+      "p50_us": 48.0,
+      "p95_us": 90.0,
+      "p99_us": 224.0,
+      "p999_us": 1463.0,
+      "max_us": 15458.0
+    },
+    "beast_frame_to_handler_done": {
+      "count": 1199000,
+      "mean_us": 5.822969140950792,
+      "p50_us": 5.0,
+      "p99_us": 22.0
+    },
+    "feed_read_to_handler_done": {
+      "count": 1199000,
+      "mean_us": 5.205830692243536,
+      "p50_us": 5.0,
+      "p95_us": 9.0,
+      "p99_us": 19.0,
+      "p999_us": 46.0,
+      "max_us": 788.0
+    },
+    "valid": true
+  }
+}

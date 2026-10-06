@@ -1,0 +1,1844 @@
+{
+  "case": "stress",
+  "symbols": 1000,
+  "strategy_refresh_ms": 15000,
+  "spread_symbols_us": 0,
+  "scheduled_peak_1ms": 12,
+  "measurement_mode": "completion_acks",
+  "duration_seconds": 30.0,
+  "speed": 1.0,
+  "state_dir": "/private/tmp/hquant-kevent-10k-20261006-r3",
+  "expected_depth": 240000,
+  "expected_trades": 60000,
+  "kevent_probe": true,
+  "startup_seconds": 1.209758750000006,
+  "clock": {
+    "offset_ns": 4100474375,
+    "bench_offset_ns": 0,
+    "best_rtt_us": 44.0
+  },
+  "warmup_messages": 1000,
+  "sender": {
+    "sent": 299000,
+    "send_seconds": 29.9995,
+    "sender_cpu_seconds": 29.7598,
+    "eagain_count": 0,
+    "partial_count": 0,
+    "schedule_seconds": 29.9995,
+    "frame_prepare_seconds": 0.79319,
+    "frame_prepare_cpu_seconds": 0.792368,
+    "drain_seconds": 0,
+    "peak_transport_buffer_bytes": 0,
+    "worst_schedule_seconds": [
+      {
+        "second": 13,
+        "count": 10000,
+        "mean_us": 1.7731,
+        "p50_us": 0.0,
+        "p95_us": 6.0,
+        "p99_us": 23.0,
+        "p999_us": 194.0,
+        "max_us": 1166.0
+      },
+      {
+        "second": 29,
+        "count": 10000,
+        "mean_us": 1.4859,
+        "p50_us": 0.0,
+        "p95_us": 6.0,
+        "p99_us": 21.0,
+        "p999_us": 149.0,
+        "max_us": 339.0
+      },
+      {
+        "second": 5,
+        "count": 10000,
+        "mean_us": 20.681,
+        "p50_us": 0.0,
+        "p95_us": 4.0,
+        "p99_us": 20.0,
+        "p999_us": 6354.0,
+        "max_us": 10757.0
+      },
+      {
+        "second": 23,
+        "count": 10000,
+        "mean_us": 1.8317,
+        "p50_us": 0.0,
+        "p95_us": 4.0,
+        "p99_us": 18.0,
+        "p999_us": 262.0,
+        "max_us": 563.0
+      },
+      {
+        "second": 16,
+        "count": 10000,
+        "mean_us": 0.9148999999999999,
+        "p50_us": 0.0,
+        "p95_us": 3.0,
+        "p99_us": 14.0,
+        "p999_us": 91.0,
+        "max_us": 273.0
+      },
+      {
+        "second": 19,
+        "count": 10000,
+        "mean_us": 1.1053,
+        "p50_us": 0.0,
+        "p95_us": 4.0,
+        "p99_us": 14.0,
+        "p999_us": 155.0,
+        "max_us": 485.0
+      },
+      {
+        "second": 26,
+        "count": 10000,
+        "mean_us": 1.3289000000000002,
+        "p50_us": 0.0,
+        "p95_us": 4.0,
+        "p99_us": 14.0,
+        "p999_us": 217.0,
+        "max_us": 636.0
+      },
+      {
+        "second": 0,
+        "count": 9000,
+        "mean_us": 1.4336666666666666,
+        "p50_us": 0.0,
+        "p95_us": 4.0,
+        "p99_us": 13.0,
+        "p999_us": 247.0,
+        "max_us": 759.0
+      },
+      {
+        "second": 20,
+        "count": 10000,
+        "mean_us": 0.8901,
+        "p50_us": 0.0,
+        "p95_us": 4.0,
+        "p99_us": 12.0,
+        "p999_us": 97.0,
+        "max_us": 178.0
+      },
+      {
+        "second": 21,
+        "count": 10000,
+        "mean_us": 0.8291000000000001,
+        "p50_us": 0.0,
+        "p95_us": 3.0,
+        "p99_us": 12.0,
+        "p999_us": 76.0,
+        "max_us": 185.0
+      }
+    ],
+    "schedule_lateness": {
+      "count": 299000,
+      "mean_us": 1.6342173913043478,
+      "p50_us": 0.0,
+      "p95_us": 4.0,
+      "p99_us": 12.0,
+      "p999_us": 136.0,
+      "max_us": 10757.0
+    },
+    "write_call": {
+      "count": 299000,
+      "mean_us": 3.688685618729097,
+      "p50_us": 3.0,
+      "p95_us": 7.0,
+      "p99_us": 21.0,
+      "p999_us": 122.0,
+      "max_us": 9639.0
+    },
+    "worst_second_p99_us": 23.0
+  },
+  "completion_receiver": {
+    "received": 299000,
+    "malformed": 0,
+    "kernel_timestamped": 299000,
+    "receiver_cpu_seconds": 1.46598
+  },
+  "completion": {
+    "expected": 299000,
+    "received": 299000,
+    "unique": 299000,
+    "errors": [],
+    "clock_pair_gaps_over_100us": 0,
+    "socket_reads_missing": 5,
+    "socket_reads_multiple": 0,
+    "read_armed_after_send": 213,
+    "first_read_before_send_return": 306,
+    "kevent_stamps_missing": 0,
+    "kevent_stamps_stale": 113,
+    "kevent_ready_before_send_return": 625,
+    "pending_before_read_peak": 298,
+    "pending_before_server_done_peak": 298,
+    "pending_before_ack_peak": 314,
+    "server_completed_per_second": {
+      "0": 9000,
+      "1": 10000,
+      "2": 10000,
+      "3": 10000,
+      "4": 10000,
+      "5": 10000,
+      "6": 10000,
+      "7": 10000,
+      "8": 10000,
+      "9": 10000,
+      "10": 10000,
+      "11": 10000,
+      "12": 10000,
+      "13": 10000,
+      "14": 10000,
+      "15": 10000,
+      "16": 10000,
+      "17": 10000,
+      "18": 10000,
+      "19": 10000,
+      "20": 10000,
+      "21": 10000,
+      "22": 10000,
+      "23": 10000,
+      "24": 10000,
+      "25": 10000,
+      "26": 10000,
+      "27": 10000,
+      "28": 10000,
+      "29": 10000
+    },
+    "acknowledged_per_second": {
+      "0": 9000,
+      "1": 10000,
+      "2": 10000,
+      "3": 10000,
+      "4": 10000,
+      "5": 10000,
+      "6": 10000,
+      "7": 10000,
+      "8": 10000,
+      "9": 10000,
+      "10": 10000,
+      "11": 10000,
+      "12": 10000,
+      "13": 10000,
+      "14": 10000,
+      "15": 10000,
+      "16": 10000,
+      "17": 10000,
+      "18": 10000,
+      "19": 10000,
+      "20": 10000,
+      "21": 10000,
+      "22": 10000,
+      "23": 10000,
+      "24": 10000,
+      "25": 10000,
+      "26": 10000,
+      "27": 10000,
+      "28": 10000,
+      "29": 10000
+    },
+    "end_to_end": {
+      "count": 299000,
+      "mean_us": 82.05071237458193,
+      "p50_us": 44.0,
+      "p95_us": 64.0,
+      "p99_us": 107.0,
+      "p999_us": 10010.0,
+      "max_us": 47156.0
+    },
+    "sender_to_ws_frame_complete": {
+      "count": 299000,
+      "mean_us": 55.567498327759196,
+      "p50_us": 19.0,
+      "p95_us": 34.0,
+      "p99_us": 60.0,
+      "p999_us": 9431.0,
+      "max_us": 46609.0
+    },
+    "ws_frame_complete_to_feed": {
+      "count": 299000,
+      "mean_us": 0.5913010033444817,
+      "p50_us": 1.0,
+      "p95_us": 1.0,
+      "p99_us": 1.0,
+      "p999_us": 11.0,
+      "max_us": 93.0
+    },
+    "sender_to_server_read": {
+      "count": 299000,
+      "mean_us": 56.15879933110368,
+      "p50_us": 20.0,
+      "p95_us": 35.0,
+      "p99_us": 61.0,
+      "p999_us": 9432.0,
+      "max_us": 46612.0
+    },
+    "server_receive_to_done": {
+      "count": 299000,
+      "mean_us": 4.767675585284281,
+      "p50_us": 5.0,
+      "p95_us": 6.0,
+      "p99_us": 13.0,
+      "p999_us": 33.0,
+      "max_us": 2097.0
+    },
+    "server_parse": {
+      "count": 299000,
+      "mean_us": 2.1810367892976585,
+      "p50_us": 2.0,
+      "p95_us": 3.0,
+      "p99_us": 5.0,
+      "p999_us": 23.0,
+      "max_us": 250.0
+    },
+    "server_handler": {
+      "count": 299000,
+      "mean_us": 2.586638795986622,
+      "p50_us": 2.0,
+      "p95_us": 3.0,
+      "p99_us": 7.0,
+      "p999_us": 21.0,
+      "max_us": 2094.0
+    },
+    "ack_prepare": {
+      "count": 299000,
+      "mean_us": 1.2810234113712375,
+      "p50_us": 1.0,
+      "p95_us": 2.0,
+      "p99_us": 4.0,
+      "p999_us": 14.0,
+      "max_us": 2253.0
+    },
+    "ack_send_to_receive": {
+      "count": 299000,
+      "mean_us": 19.84321404682274,
+      "p50_us": 17.0,
+      "p95_us": 24.0,
+      "p99_us": 45.0,
+      "p999_us": 585.0,
+      "max_us": 18205.0
+    },
+    "ack_send_to_kernel": {
+      "count": 299000,
+      "mean_us": 12.351941341137124,
+      "p50_us": 11.625,
+      "p95_us": 15.459,
+      "p99_us": 19.833,
+      "p999_us": 186.292,
+      "max_us": 617.958
+    },
+    "ack_receiver_dispatch": {
+      "count": 299000,
+      "mean_us": 7.55129981270903,
+      "p50_us": 5.375,
+      "p95_us": 10.625,
+      "p99_us": 29.334,
+      "p999_us": 476.0,
+      "max_us": 18195.75
+    },
+    "ack_split_clock_residual": {
+      "count": 299000,
+      "mean_us": 0.3506566254180602,
+      "p50_us": 0.292,
+      "p95_us": 0.833,
+      "p99_us": 1.0,
+      "p999_us": 2.0,
+      "max_us": 44.084
+    },
+    "outside_server": {
+      "count": 299000,
+      "mean_us": 77.28303678929767,
+      "p50_us": 39.0,
+      "p95_us": 58.0,
+      "p99_us": 98.0,
+      "p999_us": 10005.0,
+      "max_us": 47142.0
+    },
+    "sender_to_first_socket_read": {
+      "count": 298995,
+      "mean_us": 55.03531162728474,
+      "p50_us": 19.0,
+      "p95_us": 33.0,
+      "p99_us": 58.0,
+      "p999_us": 9430.0,
+      "max_us": 46607.0
+    },
+    "first_to_last_socket_read": {
+      "count": 298995,
+      "mean_us": 0.0,
+      "p50_us": 0.0,
+      "p95_us": 0.0,
+      "p99_us": 0.0,
+      "p999_us": 0.0,
+      "max_us": 0.0
+    },
+    "last_socket_read_to_frame_complete": {
+      "count": 298995,
+      "mean_us": 0.5321761233465443,
+      "p50_us": 0.0,
+      "p95_us": 1.0,
+      "p99_us": 1.0,
+      "p999_us": 12.0,
+      "max_us": 84.0
+    },
+    "send_return_to_first_socket_read": {
+      "count": 298995,
+      "mean_us": 51.3465910801184,
+      "p50_us": 16.0,
+      "p95_us": 29.0,
+      "p99_us": 50.0,
+      "p999_us": 9399.0,
+      "max_us": 46605.0
+    },
+    "send_return_to_kevent_read_ready": {
+      "count": 298882,
+      "mean_us": 45.00069927262264,
+      "p50_us": 11.0,
+      "p95_us": 16.0,
+      "p99_us": 32.0,
+      "p999_us": 9149.0,
+      "max_us": 46391.0
+    },
+    "kevent_read_ready_to_first_socket_read": {
+      "count": 298882,
+      "mean_us": 6.346651855916382,
+      "p50_us": 4.0,
+      "p95_us": 18.0,
+      "p99_us": 27.0,
+      "p999_us": 260.0,
+      "max_us": 1186.0
+    },
+    "by_kind": {
+      "depth": {
+        "end_to_end": {
+          "count": 239000,
+          "mean_us": 78.00892468619246,
+          "p50_us": 43.0,
+          "p95_us": 62.0,
+          "p99_us": 99.0,
+          "p999_us": 8507.0,
+          "max_us": 47156.0
+        },
+        "sender_to_ws_frame_complete": {
+          "count": 239000,
+          "mean_us": 50.90874476987448,
+          "p50_us": 19.0,
+          "p95_us": 30.0,
+          "p99_us": 53.0,
+          "p999_us": 7863.0,
+          "max_us": 46609.0
+        },
+        "ws_frame_complete_to_feed": {
+          "count": 239000,
+          "mean_us": 0.5984518828451882,
+          "p50_us": 1.0,
+          "p95_us": 1.0,
+          "p99_us": 1.0,
+          "p999_us": 11.0,
+          "max_us": 93.0
+        },
+        "sender_to_server_read": {
+          "count": 239000,
+          "mean_us": 51.507196652719664,
+          "p50_us": 19.0,
+          "p95_us": 31.0,
+          "p99_us": 54.0,
+          "p999_us": 7865.0,
+          "max_us": 46612.0
+        },
+        "server_receive_to_done": {
+          "count": 239000,
+          "mean_us": 5.2402552301255225,
+          "p50_us": 5.0,
+          "p95_us": 6.0,
+          "p99_us": 13.0,
+          "p999_us": 33.0,
+          "max_us": 2097.0
+        },
+        "server_parse": {
+          "count": 239000,
+          "mean_us": 2.457230125523013,
+          "p50_us": 2.0,
+          "p95_us": 3.0,
+          "p99_us": 5.0,
+          "p999_us": 23.0,
+          "max_us": 250.0
+        },
+        "server_handler": {
+          "count": 239000,
+          "mean_us": 2.7830251046025105,
+          "p50_us": 3.0,
+          "p95_us": 3.0,
+          "p99_us": 7.0,
+          "p999_us": 21.0,
+          "max_us": 2094.0
+        },
+        "ack_prepare": {
+          "count": 239000,
+          "mean_us": 1.4837196652719664,
+          "p50_us": 1.0,
+          "p95_us": 2.0,
+          "p99_us": 4.0,
+          "p999_us": 14.0,
+          "max_us": 2253.0
+        },
+        "ack_send_to_receive": {
+          "count": 239000,
+          "mean_us": 19.77775313807531,
+          "p50_us": 17.0,
+          "p95_us": 24.0,
+          "p99_us": 42.0,
+          "p999_us": 590.0,
+          "max_us": 18205.0
+        },
+        "ack_send_to_kernel": {
+          "count": 239000,
+          "mean_us": 12.396418418410041,
+          "p50_us": 11.625,
+          "p95_us": 15.084,
+          "p99_us": 18.958,
+          "p999_us": 178.167,
+          "max_us": 617.958
+        },
+        "ack_receiver_dispatch": {
+          "count": 239000,
+          "mean_us": 7.447408765690376,
+          "p50_us": 5.292,
+          "p95_us": 10.291,
+          "p99_us": 27.833,
+          "p999_us": 471.125,
+          "max_us": 18195.75
+        },
+        "ack_split_clock_residual": {
+          "count": 239000,
+          "mean_us": 0.3518237531380753,
+          "p50_us": 0.292,
+          "p95_us": 0.833,
+          "p99_us": 1.042,
+          "p999_us": 2.084,
+          "max_us": 27.833
+        },
+        "outside_server": {
+          "count": 239000,
+          "mean_us": 72.76866945606695,
+          "p50_us": 38.0,
+          "p95_us": 56.0,
+          "p99_us": 89.0,
+          "p999_us": 8494.0,
+          "max_us": 47142.0
+        },
+        "sender_to_first_socket_read": {
+          "count": 239000,
+          "mean_us": 50.37641841004184,
+          "p50_us": 18.0,
+          "p95_us": 30.0,
+          "p99_us": 51.0,
+          "p999_us": 7861.0,
+          "max_us": 46607.0
+        },
+        "first_to_last_socket_read": {
+          "count": 239000,
+          "mean_us": 0.0,
+          "p50_us": 0.0,
+          "p95_us": 0.0,
+          "p99_us": 0.0,
+          "p999_us": 0.0,
+          "max_us": 0.0
+        },
+        "last_socket_read_to_frame_complete": {
+          "count": 239000,
+          "mean_us": 0.532326359832636,
+          "p50_us": 0.0,
+          "p95_us": 1.0,
+          "p99_us": 1.0,
+          "p999_us": 11.0,
+          "max_us": 84.0
+        },
+        "send_return_to_first_socket_read": {
+          "count": 239000,
+          "mean_us": 46.62233891213389,
+          "p50_us": 15.0,
+          "p95_us": 23.0,
+          "p99_us": 42.0,
+          "p999_us": 7855.0,
+          "max_us": 46605.0
+        },
+        "send_return_to_kevent_read_ready": {
+          "count": 239000,
+          "mean_us": 40.944163179916316,
+          "p50_us": 11.0,
+          "p95_us": 16.0,
+          "p99_us": 27.0,
+          "p999_us": 7489.0,
+          "max_us": 46391.0
+        },
+        "kevent_read_ready_to_first_socket_read": {
+          "count": 239000,
+          "mean_us": 5.678175732217573,
+          "p50_us": 4.0,
+          "p95_us": 9.0,
+          "p99_us": 20.0,
+          "p999_us": 284.0,
+          "max_us": 1186.0
+        }
+      },
+      "trade": {
+        "end_to_end": {
+          "count": 60000,
+          "mean_us": 98.1505,
+          "p50_us": 45.0,
+          "p95_us": 72.0,
+          "p99_us": 127.0,
+          "p999_us": 17656.0,
+          "max_us": 46788.0
+        },
+        "sender_to_ws_frame_complete": {
+          "count": 60000,
+          "mean_us": 74.12486666666666,
+          "p50_us": 21.0,
+          "p95_us": 42.0,
+          "p99_us": 77.0,
+          "p999_us": 17561.0,
+          "max_us": 45472.0
+        },
+        "ws_frame_complete_to_feed": {
+          "count": 60000,
+          "mean_us": 0.5628166666666667,
+          "p50_us": 1.0,
+          "p95_us": 1.0,
+          "p99_us": 2.0,
+          "p999_us": 13.0,
+          "max_us": 63.0
+        },
+        "sender_to_server_read": {
+          "count": 60000,
+          "mean_us": 74.68768333333334,
+          "p50_us": 21.0,
+          "p95_us": 43.0,
+          "p99_us": 78.0,
+          "p999_us": 17561.0,
+          "max_us": 45473.0
+        },
+        "server_receive_to_done": {
+          "count": 60000,
+          "mean_us": 2.8852333333333333,
+          "p50_us": 3.0,
+          "p95_us": 4.0,
+          "p99_us": 11.0,
+          "p999_us": 30.0,
+          "max_us": 345.0
+        },
+        "server_parse": {
+          "count": 60000,
+          "mean_us": 1.0808666666666666,
+          "p50_us": 1.0,
+          "p95_us": 2.0,
+          "p99_us": 4.0,
+          "p999_us": 22.0,
+          "max_us": 68.0
+        },
+        "server_handler": {
+          "count": 60000,
+          "mean_us": 1.8043666666666665,
+          "p50_us": 2.0,
+          "p95_us": 2.0,
+          "p99_us": 8.0,
+          "p999_us": 20.0,
+          "max_us": 343.0
+        },
+        "ack_prepare": {
+          "count": 60000,
+          "mean_us": 0.4736166666666667,
+          "p50_us": 0.0,
+          "p95_us": 1.0,
+          "p99_us": 4.0,
+          "p999_us": 10.0,
+          "max_us": 76.0
+        },
+        "ack_send_to_receive": {
+          "count": 60000,
+          "mean_us": 20.10396666666667,
+          "p50_us": 18.0,
+          "p95_us": 26.0,
+          "p99_us": 55.0,
+          "p999_us": 571.0,
+          "max_us": 1499.0
+        },
+        "ack_send_to_kernel": {
+          "count": 60000,
+          "mean_us": 12.174774316666666,
+          "p50_us": 11.667,
+          "p95_us": 16.333,
+          "p99_us": 23.541,
+          "p999_us": 347.542,
+          "max_us": 606.167
+        },
+        "ack_receiver_dispatch": {
+          "count": 60000,
+          "mean_us": 7.965132483333334,
+          "p50_us": 5.708,
+          "p95_us": 11.916,
+          "p99_us": 34.583,
+          "p999_us": 489.917,
+          "max_us": 1485.959
+        },
+        "ack_split_clock_residual": {
+          "count": 60000,
+          "mean_us": 0.34600756666666665,
+          "p50_us": 0.292,
+          "p95_us": 0.792,
+          "p99_us": 0.958,
+          "p999_us": 1.833,
+          "max_us": 44.084
+        },
+        "outside_server": {
+          "count": 60000,
+          "mean_us": 95.26526666666666,
+          "p50_us": 42.0,
+          "p95_us": 68.0,
+          "p99_us": 122.0,
+          "p999_us": 17654.0,
+          "max_us": 46782.0
+        },
+        "sender_to_first_socket_read": {
+          "count": 59995,
+          "mean_us": 73.59478289857488,
+          "p50_us": 20.0,
+          "p95_us": 41.0,
+          "p99_us": 75.0,
+          "p999_us": 17560.0,
+          "max_us": 45471.0
+        },
+        "first_to_last_socket_read": {
+          "count": 59995,
+          "mean_us": 0.0,
+          "p50_us": 0.0,
+          "p95_us": 0.0,
+          "p99_us": 0.0,
+          "p999_us": 0.0,
+          "max_us": 0.0
+        },
+        "last_socket_read_to_frame_complete": {
+          "count": 59995,
+          "mean_us": 0.5315776314692892,
+          "p50_us": 0.0,
+          "p95_us": 1.0,
+          "p99_us": 2.0,
+          "p999_us": 15.0,
+          "max_us": 34.0
+        },
+        "send_return_to_first_socket_read": {
+          "count": 59995,
+          "mean_us": 70.16643053587799,
+          "p50_us": 18.0,
+          "p95_us": 37.0,
+          "p99_us": 69.0,
+          "p999_us": 17558.0,
+          "max_us": 45469.0
+        },
+        "send_return_to_kevent_read_ready": {
+          "count": 59882,
+          "mean_us": 61.191075782371996,
+          "p50_us": 13.0,
+          "p95_us": 20.0,
+          "p99_us": 45.0,
+          "p999_us": 17399.0,
+          "max_us": 45458.0
+        },
+        "kevent_read_ready_to_first_socket_read": {
+          "count": 59882,
+          "mean_us": 9.014662168932233,
+          "p50_us": 5.0,
+          "p95_us": 22.0,
+          "p99_us": 41.0,
+          "p999_us": 197.0,
+          "max_us": 640.0
+        }
+      }
+    },
+    "by_second": {
+      "0": {
+        "sender_to_server_read": {
+          "count": 9000,
+          "mean_us": 24.642555555555553,
+          "p50_us": 21.0,
+          "p95_us": 43.0,
+          "p99_us": 61.0,
+          "p999_us": 170.0,
+          "max_us": 1007.0
+        },
+        "ack_send_to_receive": {
+          "count": 9000,
+          "mean_us": 20.922555555555554,
+          "p50_us": 18.0,
+          "p95_us": 41.0,
+          "p99_us": 69.0,
+          "p999_us": 130.0,
+          "max_us": 759.0
+        },
+        "end_to_end": {
+          "count": 9000,
+          "mean_us": 51.53388888888889,
+          "p50_us": 45.0,
+          "p95_us": 88.0,
+          "p99_us": 133.0,
+          "p999_us": 376.0,
+          "max_us": 1107.0
+        }
+      },
+      "1": {
+        "sender_to_server_read": {
+          "count": 10000,
+          "mean_us": 22.2147,
+          "p50_us": 20.0,
+          "p95_us": 33.0,
+          "p99_us": 48.0,
+          "p999_us": 221.0,
+          "max_us": 404.0
+        },
+        "ack_send_to_receive": {
+          "count": 10000,
+          "mean_us": 17.9889,
+          "p50_us": 17.0,
+          "p95_us": 23.0,
+          "p99_us": 36.0,
+          "p999_us": 62.0,
+          "max_us": 604.0
+        },
+        "end_to_end": {
+          "count": 10000,
+          "mean_us": 45.989599999999996,
+          "p50_us": 44.0,
+          "p95_us": 57.0,
+          "p99_us": 78.0,
+          "p999_us": 304.0,
+          "max_us": 630.0
+        }
+      },
+      "2": {
+        "sender_to_server_read": {
+          "count": 10000,
+          "mean_us": 21.5314,
+          "p50_us": 20.0,
+          "p95_us": 32.0,
+          "p99_us": 45.0,
+          "p999_us": 192.0,
+          "max_us": 361.0
+        },
+        "ack_send_to_receive": {
+          "count": 10000,
+          "mean_us": 18.2849,
+          "p50_us": 17.0,
+          "p95_us": 23.0,
+          "p99_us": 32.0,
+          "p999_us": 202.0,
+          "max_us": 869.0
+        },
+        "end_to_end": {
+          "count": 10000,
+          "mean_us": 45.4519,
+          "p50_us": 43.0,
+          "p95_us": 55.0,
+          "p99_us": 77.0,
+          "p999_us": 384.0,
+          "max_us": 900.0
+        }
+      },
+      "3": {
+        "sender_to_server_read": {
+          "count": 10000,
+          "mean_us": 34.286,
+          "p50_us": 20.0,
+          "p95_us": 33.0,
+          "p99_us": 56.0,
+          "p999_us": 5870.0,
+          "max_us": 10737.0
+        },
+        "ack_send_to_receive": {
+          "count": 10000,
+          "mean_us": 18.2841,
+          "p50_us": 17.0,
+          "p95_us": 23.0,
+          "p99_us": 41.0,
+          "p999_us": 98.0,
+          "max_us": 592.0
+        },
+        "end_to_end": {
+          "count": 10000,
+          "mean_us": 58.452,
+          "p50_us": 44.0,
+          "p95_us": 60.0,
+          "p99_us": 92.0,
+          "p999_us": 5926.0,
+          "max_us": 10860.0
+        }
+      },
+      "4": {
+        "sender_to_server_read": {
+          "count": 10000,
+          "mean_us": 21.884400000000003,
+          "p50_us": 20.0,
+          "p95_us": 32.0,
+          "p99_us": 47.0,
+          "p999_us": 236.0,
+          "max_us": 342.0
+        },
+        "ack_send_to_receive": {
+          "count": 10000,
+          "mean_us": 18.116,
+          "p50_us": 17.0,
+          "p95_us": 23.0,
+          "p99_us": 35.0,
+          "p999_us": 69.0,
+          "max_us": 659.0
+        },
+        "end_to_end": {
+          "count": 10000,
+          "mean_us": 45.673,
+          "p50_us": 43.0,
+          "p95_us": 57.0,
+          "p99_us": 78.0,
+          "p999_us": 319.0,
+          "max_us": 689.0
+        }
+      },
+      "5": {
+        "sender_to_server_read": {
+          "count": 10000,
+          "mean_us": 45.5568,
+          "p50_us": 20.0,
+          "p95_us": 33.0,
+          "p99_us": 77.0,
+          "p999_us": 12160.0,
+          "max_us": 19128.0
+        },
+        "ack_send_to_receive": {
+          "count": 10000,
+          "mean_us": 28.028,
+          "p50_us": 17.0,
+          "p95_us": 24.0,
+          "p99_us": 51.0,
+          "p999_us": 953.0,
+          "max_us": 18205.0
+        },
+        "end_to_end": {
+          "count": 10000,
+          "mean_us": 79.33030000000001,
+          "p50_us": 43.0,
+          "p95_us": 59.0,
+          "p99_us": 133.0,
+          "p999_us": 12939.0,
+          "max_us": 19786.0
+        }
+      },
+      "6": {
+        "sender_to_server_read": {
+          "count": 10000,
+          "mean_us": 21.678,
+          "p50_us": 20.0,
+          "p95_us": 32.0,
+          "p99_us": 47.0,
+          "p999_us": 201.0,
+          "max_us": 423.0
+        },
+        "ack_send_to_receive": {
+          "count": 10000,
+          "mean_us": 17.9387,
+          "p50_us": 17.0,
+          "p95_us": 23.0,
+          "p99_us": 36.0,
+          "p999_us": 61.0,
+          "max_us": 559.0
+        },
+        "end_to_end": {
+          "count": 10000,
+          "mean_us": 45.5474,
+          "p50_us": 43.0,
+          "p95_us": 57.0,
+          "p99_us": 79.0,
+          "p999_us": 305.0,
+          "max_us": 584.0
+        }
+      },
+      "7": {
+        "sender_to_server_read": {
+          "count": 10000,
+          "mean_us": 21.798,
+          "p50_us": 20.0,
+          "p95_us": 33.0,
+          "p99_us": 48.0,
+          "p999_us": 165.0,
+          "max_us": 341.0
+        },
+        "ack_send_to_receive": {
+          "count": 10000,
+          "mean_us": 18.0042,
+          "p50_us": 17.0,
+          "p95_us": 23.0,
+          "p99_us": 36.0,
+          "p999_us": 76.0,
+          "max_us": 596.0
+        },
+        "end_to_end": {
+          "count": 10000,
+          "mean_us": 45.531,
+          "p50_us": 43.0,
+          "p95_us": 56.0,
+          "p99_us": 79.0,
+          "p999_us": 280.0,
+          "max_us": 624.0
+        }
+      },
+      "8": {
+        "sender_to_server_read": {
+          "count": 10000,
+          "mean_us": 121.8209,
+          "p50_us": 20.0,
+          "p95_us": 36.0,
+          "p99_us": 4568.0,
+          "p999_us": 11761.0,
+          "max_us": 12232.0
+        },
+        "ack_send_to_receive": {
+          "count": 10000,
+          "mean_us": 23.495,
+          "p50_us": 17.0,
+          "p95_us": 24.0,
+          "p99_us": 254.0,
+          "p999_us": 742.0,
+          "max_us": 994.0
+        },
+        "end_to_end": {
+          "count": 10000,
+          "mean_us": 151.2216,
+          "p50_us": 44.0,
+          "p95_us": 63.0,
+          "p99_us": 4852.0,
+          "p999_us": 12398.0,
+          "max_us": 13023.0
+        }
+      },
+      "9": {
+        "sender_to_server_read": {
+          "count": 10000,
+          "mean_us": 21.673099999999998,
+          "p50_us": 20.0,
+          "p95_us": 32.0,
+          "p99_us": 46.0,
+          "p999_us": 197.0,
+          "max_us": 492.0
+        },
+        "ack_send_to_receive": {
+          "count": 10000,
+          "mean_us": 18.0575,
+          "p50_us": 17.0,
+          "p95_us": 23.0,
+          "p99_us": 31.0,
+          "p999_us": 181.0,
+          "max_us": 639.0
+        },
+        "end_to_end": {
+          "count": 10000,
+          "mean_us": 45.4155,
+          "p50_us": 43.0,
+          "p95_us": 55.0,
+          "p99_us": 75.0,
+          "p999_us": 355.0,
+          "max_us": 666.0
+        }
+      },
+      "10": {
+        "sender_to_server_read": {
+          "count": 10000,
+          "mean_us": 21.5236,
+          "p50_us": 20.0,
+          "p95_us": 32.0,
+          "p99_us": 45.0,
+          "p999_us": 207.0,
+          "max_us": 412.0
+        },
+        "ack_send_to_receive": {
+          "count": 10000,
+          "mean_us": 17.7097,
+          "p50_us": 17.0,
+          "p95_us": 23.0,
+          "p99_us": 35.0,
+          "p999_us": 60.0,
+          "max_us": 420.0
+        },
+        "end_to_end": {
+          "count": 10000,
+          "mean_us": 44.9216,
+          "p50_us": 43.0,
+          "p95_us": 55.0,
+          "p99_us": 77.0,
+          "p999_us": 250.0,
+          "max_us": 482.0
+        }
+      },
+      "11": {
+        "sender_to_server_read": {
+          "count": 10000,
+          "mean_us": 21.419900000000002,
+          "p50_us": 19.0,
+          "p95_us": 32.0,
+          "p99_us": 49.0,
+          "p999_us": 218.0,
+          "max_us": 440.0
+        },
+        "ack_send_to_receive": {
+          "count": 10000,
+          "mean_us": 18.0,
+          "p50_us": 17.0,
+          "p95_us": 23.0,
+          "p99_us": 37.0,
+          "p999_us": 101.0,
+          "max_us": 796.0
+        },
+        "end_to_end": {
+          "count": 10000,
+          "mean_us": 45.2369,
+          "p50_us": 43.0,
+          "p95_us": 56.0,
+          "p99_us": 82.0,
+          "p999_us": 325.0,
+          "max_us": 824.0
+        }
+      },
+      "12": {
+        "sender_to_server_read": {
+          "count": 10000,
+          "mean_us": 20.2589,
+          "p50_us": 19.0,
+          "p95_us": 32.0,
+          "p99_us": 47.0,
+          "p999_us": 189.0,
+          "max_us": 450.0
+        },
+        "ack_send_to_receive": {
+          "count": 10000,
+          "mean_us": 16.935,
+          "p50_us": 16.0,
+          "p95_us": 22.0,
+          "p99_us": 35.0,
+          "p999_us": 68.0,
+          "max_us": 625.0
+        },
+        "end_to_end": {
+          "count": 10000,
+          "mean_us": 43.9519,
+          "p50_us": 43.0,
+          "p95_us": 57.0,
+          "p99_us": 83.0,
+          "p999_us": 273.0,
+          "max_us": 654.0
+        }
+      },
+      "13": {
+        "sender_to_server_read": {
+          "count": 10000,
+          "mean_us": 27.3294,
+          "p50_us": 22.0,
+          "p95_us": 51.0,
+          "p99_us": 81.0,
+          "p999_us": 245.0,
+          "max_us": 393.0
+        },
+        "ack_send_to_receive": {
+          "count": 10000,
+          "mean_us": 20.653299999999998,
+          "p50_us": 18.0,
+          "p95_us": 35.0,
+          "p99_us": 48.0,
+          "p999_us": 83.0,
+          "max_us": 664.0
+        },
+        "end_to_end": {
+          "count": 10000,
+          "mean_us": 55.355599999999995,
+          "p50_us": 47.0,
+          "p95_us": 92.0,
+          "p99_us": 126.0,
+          "p999_us": 350.0,
+          "max_us": 694.0
+        }
+      },
+      "14": {
+        "sender_to_server_read": {
+          "count": 10000,
+          "mean_us": 21.979,
+          "p50_us": 20.0,
+          "p95_us": 33.0,
+          "p99_us": 48.0,
+          "p999_us": 199.0,
+          "max_us": 416.0
+        },
+        "ack_send_to_receive": {
+          "count": 10000,
+          "mean_us": 18.216900000000003,
+          "p50_us": 17.0,
+          "p95_us": 23.0,
+          "p99_us": 35.0,
+          "p999_us": 245.0,
+          "max_us": 642.0
+        },
+        "end_to_end": {
+          "count": 10000,
+          "mean_us": 45.9456,
+          "p50_us": 43.0,
+          "p95_us": 58.0,
+          "p99_us": 79.0,
+          "p999_us": 354.0,
+          "max_us": 668.0
+        }
+      },
+      "15": {
+        "sender_to_server_read": {
+          "count": 10000,
+          "mean_us": 118.42160000000001,
+          "p50_us": 20.0,
+          "p95_us": 35.0,
+          "p99_us": 4404.0,
+          "p999_us": 11400.0,
+          "max_us": 12056.0
+        },
+        "ack_send_to_receive": {
+          "count": 10000,
+          "mean_us": 27.8696,
+          "p50_us": 17.0,
+          "p95_us": 24.0,
+          "p99_us": 506.0,
+          "p999_us": 975.0,
+          "max_us": 1868.0
+        },
+        "end_to_end": {
+          "count": 10000,
+          "mean_us": 152.1665,
+          "p50_us": 44.0,
+          "p95_us": 63.0,
+          "p99_us": 4944.0,
+          "p999_us": 12148.0,
+          "max_us": 12927.0
+        }
+      },
+      "16": {
+        "sender_to_server_read": {
+          "count": 10000,
+          "mean_us": 21.9806,
+          "p50_us": 20.0,
+          "p95_us": 33.0,
+          "p99_us": 48.0,
+          "p999_us": 260.0,
+          "max_us": 423.0
+        },
+        "ack_send_to_receive": {
+          "count": 10000,
+          "mean_us": 17.9422,
+          "p50_us": 17.0,
+          "p95_us": 23.0,
+          "p99_us": 33.0,
+          "p999_us": 62.0,
+          "max_us": 571.0
+        },
+        "end_to_end": {
+          "count": 10000,
+          "mean_us": 45.673300000000005,
+          "p50_us": 43.0,
+          "p95_us": 57.0,
+          "p99_us": 79.0,
+          "p999_us": 320.0,
+          "max_us": 598.0
+        }
+      },
+      "17": {
+        "sender_to_server_read": {
+          "count": 10000,
+          "mean_us": 21.858400000000003,
+          "p50_us": 20.0,
+          "p95_us": 32.0,
+          "p99_us": 47.0,
+          "p999_us": 227.0,
+          "max_us": 422.0
+        },
+        "ack_send_to_receive": {
+          "count": 10000,
+          "mean_us": 17.9925,
+          "p50_us": 17.0,
+          "p95_us": 23.0,
+          "p99_us": 33.0,
+          "p999_us": 79.0,
+          "max_us": 580.0
+        },
+        "end_to_end": {
+          "count": 10000,
+          "mean_us": 45.591,
+          "p50_us": 43.0,
+          "p95_us": 56.0,
+          "p99_us": 77.0,
+          "p999_us": 359.0,
+          "max_us": 608.0
+        }
+      },
+      "18": {
+        "sender_to_server_read": {
+          "count": 10000,
+          "mean_us": 791.6629,
+          "p50_us": 20.0,
+          "p95_us": 40.0,
+          "p99_us": 38294.0,
+          "p999_us": 45473.0,
+          "max_us": 46612.0
+        },
+        "ack_send_to_receive": {
+          "count": 10000,
+          "mean_us": 35.4921,
+          "p50_us": 17.0,
+          "p95_us": 28.0,
+          "p99_us": 669.0,
+          "p999_us": 1227.0,
+          "max_us": 1328.0
+        },
+        "end_to_end": {
+          "count": 10000,
+          "mean_us": 833.0536,
+          "p50_us": 43.0,
+          "p95_us": 70.0,
+          "p99_us": 39105.0,
+          "p999_us": 46313.0,
+          "max_us": 47156.0
+        }
+      },
+      "19": {
+        "sender_to_server_read": {
+          "count": 10000,
+          "mean_us": 22.5121,
+          "p50_us": 20.0,
+          "p95_us": 34.0,
+          "p99_us": 51.0,
+          "p999_us": 193.0,
+          "max_us": 591.0
+        },
+        "ack_send_to_receive": {
+          "count": 10000,
+          "mean_us": 18.2175,
+          "p50_us": 17.0,
+          "p95_us": 23.0,
+          "p99_us": 37.0,
+          "p999_us": 79.0,
+          "max_us": 609.0
+        },
+        "end_to_end": {
+          "count": 10000,
+          "mean_us": 46.6149,
+          "p50_us": 44.0,
+          "p95_us": 60.0,
+          "p99_us": 85.0,
+          "p999_us": 303.0,
+          "max_us": 640.0
+        }
+      },
+      "20": {
+        "sender_to_server_read": {
+          "count": 10000,
+          "mean_us": 22.4191,
+          "p50_us": 20.0,
+          "p95_us": 34.0,
+          "p99_us": 50.0,
+          "p999_us": 246.0,
+          "max_us": 547.0
+        },
+        "ack_send_to_receive": {
+          "count": 10000,
+          "mean_us": 18.214,
+          "p50_us": 17.0,
+          "p95_us": 23.0,
+          "p99_us": 38.0,
+          "p999_us": 69.0,
+          "max_us": 688.0
+        },
+        "end_to_end": {
+          "count": 10000,
+          "mean_us": 46.448699999999995,
+          "p50_us": 44.0,
+          "p95_us": 60.0,
+          "p99_us": 85.0,
+          "p999_us": 322.0,
+          "max_us": 719.0
+        }
+      },
+      "21": {
+        "sender_to_server_read": {
+          "count": 10000,
+          "mean_us": 21.7268,
+          "p50_us": 20.0,
+          "p95_us": 32.0,
+          "p99_us": 46.0,
+          "p999_us": 212.0,
+          "max_us": 504.0
+        },
+        "ack_send_to_receive": {
+          "count": 10000,
+          "mean_us": 17.9298,
+          "p50_us": 17.0,
+          "p95_us": 23.0,
+          "p99_us": 34.0,
+          "p999_us": 75.0,
+          "max_us": 616.0
+        },
+        "end_to_end": {
+          "count": 10000,
+          "mean_us": 45.3849,
+          "p50_us": 43.0,
+          "p95_us": 56.0,
+          "p99_us": 77.0,
+          "p999_us": 287.0,
+          "max_us": 641.0
+        }
+      },
+      "22": {
+        "sender_to_server_read": {
+          "count": 10000,
+          "mean_us": 21.952,
+          "p50_us": 20.0,
+          "p95_us": 33.0,
+          "p99_us": 50.0,
+          "p999_us": 238.0,
+          "max_us": 426.0
+        },
+        "ack_send_to_receive": {
+          "count": 10000,
+          "mean_us": 18.0587,
+          "p50_us": 17.0,
+          "p95_us": 23.0,
+          "p99_us": 37.0,
+          "p999_us": 68.0,
+          "max_us": 558.0
+        },
+        "end_to_end": {
+          "count": 10000,
+          "mean_us": 45.7712,
+          "p50_us": 43.0,
+          "p95_us": 58.0,
+          "p99_us": 82.0,
+          "p999_us": 314.0,
+          "max_us": 583.0
+        }
+      },
+      "23": {
+        "sender_to_server_read": {
+          "count": 10000,
+          "mean_us": 28.5929,
+          "p50_us": 20.0,
+          "p95_us": 45.0,
+          "p99_us": 191.0,
+          "p999_us": 1351.0,
+          "max_us": 1605.0
+        },
+        "ack_send_to_receive": {
+          "count": 10000,
+          "mean_us": 22.526400000000002,
+          "p50_us": 17.0,
+          "p95_us": 30.0,
+          "p99_us": 111.0,
+          "p999_us": 884.0,
+          "max_us": 1552.0
+        },
+        "end_to_end": {
+          "count": 10000,
+          "mean_us": 57.1434,
+          "p50_us": 44.0,
+          "p95_us": 80.0,
+          "p99_us": 342.0,
+          "p999_us": 1786.0,
+          "max_us": 1987.0
+        }
+      },
+      "24": {
+        "sender_to_server_read": {
+          "count": 10000,
+          "mean_us": 22.5927,
+          "p50_us": 20.0,
+          "p95_us": 34.0,
+          "p99_us": 53.0,
+          "p999_us": 234.0,
+          "max_us": 486.0
+        },
+        "ack_send_to_receive": {
+          "count": 10000,
+          "mean_us": 18.4335,
+          "p50_us": 17.0,
+          "p95_us": 23.0,
+          "p99_us": 39.0,
+          "p999_us": 128.0,
+          "max_us": 720.0
+        },
+        "end_to_end": {
+          "count": 10000,
+          "mean_us": 46.9396,
+          "p50_us": 44.0,
+          "p95_us": 60.0,
+          "p99_us": 89.0,
+          "p999_us": 358.0,
+          "max_us": 752.0
+        }
+      },
+      "25": {
+        "sender_to_server_read": {
+          "count": 10000,
+          "mean_us": 24.099,
+          "p50_us": 20.0,
+          "p95_us": 33.0,
+          "p99_us": 56.0,
+          "p999_us": 856.0,
+          "max_us": 1554.0
+        },
+        "ack_send_to_receive": {
+          "count": 10000,
+          "mean_us": 18.0989,
+          "p50_us": 17.0,
+          "p95_us": 23.0,
+          "p99_us": 43.0,
+          "p999_us": 102.0,
+          "max_us": 166.0
+        },
+        "end_to_end": {
+          "count": 10000,
+          "mean_us": 50.425599999999996,
+          "p50_us": 44.0,
+          "p95_us": 62.0,
+          "p99_us": 95.0,
+          "p999_us": 1486.0,
+          "max_us": 2394.0
+        }
+      },
+      "26": {
+        "sender_to_server_read": {
+          "count": 10000,
+          "mean_us": 22.851,
+          "p50_us": 20.0,
+          "p95_us": 34.0,
+          "p99_us": 53.0,
+          "p999_us": 293.0,
+          "max_us": 746.0
+        },
+        "ack_send_to_receive": {
+          "count": 10000,
+          "mean_us": 18.1638,
+          "p50_us": 17.0,
+          "p95_us": 23.0,
+          "p99_us": 37.0,
+          "p999_us": 75.0,
+          "max_us": 633.0
+        },
+        "end_to_end": {
+          "count": 10000,
+          "mean_us": 46.9597,
+          "p50_us": 44.0,
+          "p95_us": 60.0,
+          "p99_us": 84.0,
+          "p999_us": 431.0,
+          "max_us": 788.0
+        }
+      },
+      "27": {
+        "sender_to_server_read": {
+          "count": 10000,
+          "mean_us": 21.2446,
+          "p50_us": 19.0,
+          "p95_us": 32.0,
+          "p99_us": 50.0,
+          "p999_us": 450.0,
+          "max_us": 1230.0
+        },
+        "ack_send_to_receive": {
+          "count": 10000,
+          "mean_us": 17.1371,
+          "p50_us": 16.0,
+          "p95_us": 22.0,
+          "p99_us": 39.0,
+          "p999_us": 185.0,
+          "max_us": 581.0
+        },
+        "end_to_end": {
+          "count": 10000,
+          "mean_us": 44.718900000000005,
+          "p50_us": 42.0,
+          "p95_us": 57.0,
+          "p99_us": 91.0,
+          "p999_us": 607.0,
+          "max_us": 1282.0
+        }
+      },
+      "28": {
+        "sender_to_server_read": {
+          "count": 10000,
+          "mean_us": 22.6747,
+          "p50_us": 20.0,
+          "p95_us": 33.0,
+          "p99_us": 52.0,
+          "p999_us": 348.0,
+          "max_us": 1142.0
+        },
+        "ack_send_to_receive": {
+          "count": 10000,
+          "mean_us": 17.9054,
+          "p50_us": 17.0,
+          "p95_us": 23.0,
+          "p99_us": 36.0,
+          "p999_us": 82.0,
+          "max_us": 583.0
+        },
+        "end_to_end": {
+          "count": 10000,
+          "mean_us": 46.484199999999994,
+          "p50_us": 43.0,
+          "p95_us": 59.0,
+          "p99_us": 83.0,
+          "p999_us": 508.0,
+          "max_us": 1199.0
+        }
+      },
+      "29": {
+        "sender_to_server_read": {
+          "count": 10000,
+          "mean_us": 27.4273,
+          "p50_us": 22.0,
+          "p95_us": 52.0,
+          "p99_us": 75.0,
+          "p999_us": 210.0,
+          "max_us": 445.0
+        },
+        "ack_send_to_receive": {
+          "count": 10000,
+          "mean_us": 20.7881,
+          "p50_us": 19.0,
+          "p95_us": 36.0,
+          "p99_us": 47.0,
+          "p999_us": 99.0,
+          "max_us": 624.0
+        },
+        "end_to_end": {
+          "count": 10000,
+          "mean_us": 55.5364,
+          "p50_us": 48.0,
+          "p95_us": 93.0,
+          "p99_us": 124.0,
+          "p999_us": 337.0,
+          "max_us": 651.0
+        }
+      }
+    },
+    "end_to_end_qps": 9966.820820162018,
+    "server_completed_qps": 9966.881619080252,
+    "end_to_end_seconds": 29.999536,
+    "server_window_seconds": 29.999353
+  },
+  "clock_after": {
+    "offset_ns": 4100326958,
+    "bench_offset_ns": 1500,
+    "best_rtt_us": 37.0
+  },
+  "clock_drift_us": -147.417,
+  "bench_clock_drift_us": 1.5,
+  "status_errors": [],
+  "status_totals": {
+    "applied_depth": 240000,
+    "accepted_trades": 60000,
+    "active_orders": 2000,
+    "strategy_timer_ticks": 2000
+  },
+  "wire": {
+    "ws_connects": 1000,
+    "ws_disconnects_before_stop": 0,
+    "rest_requests": 1000,
+    "errors": []
+  },
+  "server_exit": 0,
+  "probe": {
+    "live_wire_messages": 300000,
+    "bad_sender_timestamps": 0,
+    "bench_ack_sent": 299000,
+    "bench_ack_errors": 0,
+    "bench_ack_bad_frame": 0,
+    "bench_ack_send_errors": 0,
+    "bench_ack_last_errno": 0,
+    "account_events": 28000,
+    "history_records_attempted": 40000,
+    "live_phase_invalid": 0,
+    "history_records_written": 40000,
+    "history_queue_peak": 5090,
+    "sqlite_transactions": 2440,
+    "sqlite_writer_busy_ms": 355.585,
+    "worst_wire_seconds": [],
+    "wire_to_read": {
+      "count": 0,
+      "mean_us": 0.0,
+      "p50_us": 0.0,
+      "p95_us": 0.0,
+      "p99_us": 0.0,
+      "p999_us": 0.0,
+      "max_us": 0.0
+    },
+    "read_to_parse": {
+      "count": 30000,
+      "mean_us": 2.293,
+      "p50_us": 2.0,
+      "p95_us": 3.0,
+      "p99_us": 3.0,
+      "p999_us": 17.0,
+      "max_us": 37.0
+    },
+    "parse_to_market": {
+      "count": 30000,
+      "mean_us": 2.62,
+      "p50_us": 3.0,
+      "p95_us": 3.0,
+      "p99_us": 5.0,
+      "p999_us": 17.0,
+      "max_us": 58.0
+    },
+    "wire_to_market": {
+      "count": 0,
+      "mean_us": 0.0,
+      "p50_us": 0.0,
+      "p95_us": 0.0,
+      "p99_us": 0.0,
+      "p999_us": 0.0,
+      "max_us": 0.0
+    },
+    "paper_match": {
+      "count": 300000,
+      "mean_us": 0.214,
+      "p50_us": 0.167,
+      "p95_us": 0.416,
+      "p99_us": 0.584,
+      "p999_us": 1.292,
+      "max_us": 74.833
+    },
+    "decision": {
+      "count": 302000,
+      "mean_us": 0.993,
+      "p50_us": 0.875,
+      "p95_us": 1.125,
+      "p99_us": 3.959,
+      "p999_us": 15.167,
+      "max_us": 340.125
+    },
+    "history_enqueue": {
+      "count": 40000,
+      "mean_us": 1.099,
+      "p50_us": 0.084,
+      "p95_us": 1.5,
+      "p99_us": 32.291,
+      "p999_us": 118.166,
+      "max_us": 284.333
+    },
+    "live_feed_dispatch": {
+      "count": 300000,
+      "mean_us": 0.303,
+      "p50_us": 0.0,
+      "p95_us": 1.0,
+      "p99_us": 1.0,
+      "p999_us": 2.0,
+      "max_us": 72.0
+    },
+    "live_market": {
+      "count": 300000,
+      "mean_us": 0.87,
+      "p50_us": 1.0,
+      "p95_us": 2.0,
+      "p99_us": 2.0,
+      "p999_us": 9.0,
+      "max_us": 268.0
+    },
+    "live_paper": {
+      "count": 300000,
+      "mean_us": 0.151,
+      "p50_us": 0.0,
+      "p95_us": 1.0,
+      "p99_us": 1.0,
+      "p999_us": 1.0,
+      "max_us": 43.0
+    },
+    "live_account_view": {
+      "count": 300000,
+      "mean_us": 0.57,
+      "p50_us": 1.0,
+      "p95_us": 1.0,
+      "p99_us": 1.0,
+      "p999_us": 6.0,
+      "max_us": 216.0
+    },
+    "live_strategy": {
+      "count": 300000,
+      "mean_us": 0.041,
+      "p50_us": 0.0,
+      "p95_us": 0.0,
+      "p99_us": 1.0,
+      "p999_us": 1.0,
+      "max_us": 58.0
+    },
+    "live_executor": {
+      "count": 300000,
+      "mean_us": 0.062,
+      "p50_us": 0.0,
+      "p95_us": 0.0,
+      "p99_us": 1.0,
+      "p999_us": 4.0,
+      "max_us": 95.0
+    },
+    "live_command_history": {
+      "count": 300000,
+      "mean_us": 0.051,
+      "p50_us": 0.0,
+      "p95_us": 0.0,
+      "p99_us": 1.0,
+      "p999_us": 3.0,
+      "max_us": 83.0
+    },
+    "live_shard_other": {
+      "count": 300000,
+      "mean_us": 0.538,
+      "p50_us": 0.0,
+      "p95_us": 2.0,
+      "p99_us": 2.0,
+      "p999_us": 6.0,
+      "max_us": 2092.0
+    },
+    "sqlite_queue_wait": {
+      "count": 40000,
+      "mean_us": 3093.77,
+      "p50_us": 81.834,
+      "p95_us": 27070.125,
+      "p99_us": 37941.0,
+      "p999_us": 39461.583,
+      "max_us": 39766.834
+    },
+    "sqlite_enqueue_to_commit": {
+      "count": 40000,
+      "mean_us": 3313.699,
+      "p50_us": 214.833,
+      "p95_us": 27546.292,
+      "p99_us": 38320.0,
+      "p999_us": 39808.583,
+      "max_us": 39958.417
+    },
+    "sqlite_batch_write": {
+      "count": 2440,
+      "mean_us": 145.732,
+      "p50_us": 110.458,
+      "p95_us": 390.291,
+      "p99_us": 573.709,
+      "p999_us": 1882.458,
+      "max_us": 2388.0
+    }
+  },
+  "history": {
+    "records": 40000,
+    "balance_rows": 16000,
+    "shards_with_records": 1000
+  },
+  "valid": true,
+  "correctness_valid": true,
+  "paced_valid": true
+}

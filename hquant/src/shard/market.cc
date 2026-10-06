@@ -13,21 +13,56 @@
 #include "boost/asio/use_awaitable.hpp"
 
 namespace hquant::v1 {
+namespace {
+
+uint64_t HashWord(uint64_t hash, uint64_t value) {
+  for (int i = 0; i < 8; ++i) {
+    hash = (hash ^ (value & 0xff)) * 1099511628211ULL;
+    value >>= 8;
+  }
+  return hash;
+}
+
+uint64_t HashDiff(uint64_t hash, const BookDiff& diff) {
+  hash = HashWord(hash, diff.first_sequence);
+  hash = HashWord(hash, diff.last_sequence);
+  hash = HashWord(hash, diff.bids.size());
+  for (const BookLevel& level : diff.bids) {
+    hash = HashWord(hash, level.price_ticks);
+    hash = HashWord(hash, level.quantity_lots);
+  }
+  hash = HashWord(hash, diff.asks.size());
+  for (const BookLevel& level : diff.asks) {
+    hash = HashWord(hash, level.price_ticks);
+    hash = HashWord(hash, level.quantity_lots);
+  }
+  return hash;
+}
+
+uint64_t HashTrade(uint64_t hash, const PublicTrade& trade) {
+  hash = HashWord(hash, trade.trade_id);
+  hash = HashWord(hash, trade.price_ticks);
+  hash = HashWord(hash, trade.quantity_lots);
+  return HashWord(hash, trade.aggressor == Side::Buy ? 1 : 2);
+}
+
+}  // namespace
 
 Market::Market(boost::asio::io_context& io, const MarketConfig& config,
                const InputConfig& input,
-               std::function<void(const MarketNotice&)> notify)
+               std::function<void(const MarketNotice&)> notify, ShardPerf* perf)
     : io_(io),
       config_(config),
       input_(input),
       notify_(std::move(notify)),
+      perf_(perf),
       stale_timer_(io),
       feed_(io, config, input,
             [this](const MarketInput& value, MonoTime now) {
               HandleInput(value, now);
               return needs_resync_;
             },
-            [this](std::string error) { last_error_ = std::move(error); }) {}
+            [this](std::string error) { last_error_ = std::move(error); }, perf) {}
 
 void Market::RefreshView() {
   view_.last_sequence = sequence_;
@@ -82,6 +117,8 @@ void Market::ApplyBuffered(MonoTime now) {
       return;
     }
     sequence_ = diff.last_sequence;
+    ++applied_depth_events_;
+    depth_digest_ = HashDiff(depth_digest_, diff);
     view_.last_book_at = now;
     applied = true;
   }
@@ -114,6 +151,26 @@ void Market::OnSnapshot(const BookSnapshot& input, MonoTime now) {
   ApplyBuffered(now);
 }
 
+void Market::OnReplaySnapshot(const BookSnapshot& input, MonoTime now) {
+  if (connection_epoch_ == 0 || input.connection_epoch != connection_epoch_ ||
+      needs_resync_) return;
+  if (input.market != config_.id || input.last_sequence == 0 ||
+      input.last_sequence == std::numeric_limits<uint64_t>::max() ||
+      (sequence_ && input.last_sequence != *sequence_ + 1) ||
+      !book_.ApplySnapshot(input.bids, input.asks)) {
+    EnterSyncing("invalid replay snapshot or sequence", true);
+    return;
+  }
+  sequence_ = input.last_sequence;
+  snapshot_ready_ = true;
+  buffered_diffs_.clear();
+  view_.state = BookState::Live;
+  view_.last_book_at = now;
+  last_error_.clear();
+  RefreshView();
+  notify_(MarketNotice{MarketNotice::Kind::BookChanged, {}});
+}
+
 // 增量带区间 [first_sequence, last_sequence]，sequence_ 是本地已应用到的序号。
 // 能衔接的条件是 first <= sequence_ + 1 <= last。区间与已应用部分重叠是
 // 安全的，因为每个价位给的是绝对数量，重复应用结果不变。
@@ -141,6 +198,8 @@ void Market::OnDiff(const BookDiff& input, MonoTime now) {
       return;
     }
     sequence_ = input.last_sequence;
+    ++applied_depth_events_;
+    depth_digest_ = HashDiff(depth_digest_, input);
     view_.last_book_at = now;
     RefreshView();
     notify_(MarketNotice{MarketNotice::Kind::BookChanged, {}});
@@ -163,6 +222,9 @@ void Market::OnTrade(const PublicTrade& input) {
     return;
   }
   view_.last_trade = BookLevel{input.price_ticks, input.quantity_lots};
+  ++accepted_trades_;
+  last_trade_id_ = input.trade_id;
+  trade_digest_ = HashTrade(trade_digest_, input);
   notify_(MarketNotice{MarketNotice::Kind::PublicTrade, input});
 }
 
@@ -173,6 +235,10 @@ void Market::OnDisconnected(const FeedDisconnected& input) {
 
 void Market::HandleInput(const MarketInput& input, MonoTime now) {
   if (stopped_) return;
+  BenchPhaseTimer market_timer(
+      perf_ && perf_->bench_ack_fd >= 0
+          ? &perf_->live_handler_phases.market_total_ns
+          : nullptr);
   std::visit([this, now](const auto& value) {
     using T = std::decay_t<decltype(value)>;
     if constexpr (std::is_same_v<T, FeedConnected>) OnConnected(value);
@@ -184,6 +250,11 @@ void Market::HandleInput(const MarketInput& input, MonoTime now) {
 }
 
 void Market::OnReplayInput(const MarketInput& input, MonoTime now) {
+  if (stopped_) return;
+  if (const auto* snapshot = std::get_if<BookSnapshot>(&input)) {
+    OnReplaySnapshot(*snapshot, now);
+    return;
+  }
   HandleInput(input, now);
 }
 

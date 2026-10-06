@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>hquant 测试报告 · 2026-10-06</title>
+<style>
+:root{--ink:#172b3a;--muted:#536977;--line:#dce6eb;--bg:#f5f8fa;--blue:#12648a;--green:#116447;--red:#a53432}
+*{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.65 -apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif}
+header{background:#143349;color:#fff;padding:34px 24px 28px}header>div,main{max-width:1120px;margin:auto}h1{font-size:34px;line-height:1.2;margin:0 0 8px}header p{margin:0;color:#cfdee5}nav{display:flex;gap:20px;flex-wrap:wrap;margin-top:18px}nav a{color:#e8f7fb;font-weight:650}
+main{padding:25px 20px 55px}section{background:#fff;border:1px solid var(--line);border-radius:11px;padding:27px 30px;margin-bottom:18px}h2{font-size:25px;line-height:1.3;margin:0 0 17px;border-bottom:2px solid #d8e9ee;padding-bottom:10px}h3{font-size:17px;margin:24px 0 8px}p{margin:8px 0 14px}ul,ol{margin:8px 0 14px;padding-left:23px}li{margin:6px 0}.note{color:var(--muted);font-size:13px}.key{background:#edf6f6;border-left:4px solid #21858b;padding:12px 15px;margin:16px 0}.warn{background:#fff5e7;border-left:4px solid #bc8129;padding:12px 15px;margin:16px 0}
+a{color:var(--blue)}code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.91em;background:#eef3f5;padding:1px 4px;border-radius:3px}.table-wrap{overflow-x:auto;border:1px solid var(--line);border-radius:7px;margin:14px 0}table{border-collapse:collapse;width:100%;min-width:740px;font-size:13px}th,td{padding:9px 10px;text-align:left;border-bottom:1px solid #e5edf1;vertical-align:top}th{background:#eaf1f5;color:#25485a;white-space:nowrap}tr:last-child td{border-bottom:0}tbody tr:nth-child(even){background:#fafcfd}.bad{background:#fff0ec!important}.control{background:#ecf6f2!important}.ok-text{color:var(--green);font-weight:700}.bad-text{color:var(--red);font-weight:700}.number{font-variant-numeric:tabular-nums;white-space:nowrap}details{border:1px solid var(--line);border-radius:7px;padding:11px 14px;margin:16px 0}summary{cursor:pointer;font-weight:700}.timepoints{display:flex;overflow-x:auto;gap:7px;padding:10px 0;margin:12px 0 6px}.timepoints span{flex:0 0 136px;padding:9px 10px;background:#edf6f6;border:1px solid #c5dfe1;border-radius:6px;font-size:12px;line-height:1.4}.timepoints span:not(:last-child):after{content:"→";float:right;color:#21858b;font-weight:800}footer{font-size:12px;color:var(--muted);margin-top:15px}
+@media(max-width:680px){header{padding:28px 18px}h1{font-size:27px}main{padding:16px 12px}section{padding:20px 16px}h2{font-size:22px}nav{gap:12px}}
+@media print{body{background:#fff;font-size:11px}header{background:#fff;color:#000;padding:0 0 15px;border-bottom:2px solid #000}header p,nav a{color:#000}main{padding:0}section{border:0;border-radius:0;padding:16px 0;margin:0;break-inside:avoid}.table-wrap{overflow:visible}table{min-width:0;font-size:9px}th,td{padding:5px}.bad,.control{background:#fff!important}}
+</style>
+</head>
+<body>
+<header><div>
+<h1>hquant 性能与正确性测试报告</h1>
+<p>2026-10-06 · Apple M2 MacBook Air（8 核、24 GB）· macOS 26.1 · Bazel Release · 本机 loopback</p>
+<nav aria-label="报告目录"><a href="#data">1. 测试数据</a><a href="#method">2. 测试方法</a><a href="#results">3. 测试结果</a><a href="#analysis">4. 测试分析</a></nav>
+</div></header>
+<main>
+<section id="data">
+<h2>1. 测试数据</h2>
+<p>全部是确定性合成行情，使用 <strong>1000 只股票</strong>。回放源的每条盘口消息含买 10 档和卖 10 档的完整价量；转换为 WebSocket <code>depthUpdate</code> 时，还可能附加零量删档。每笔成交是独立消息，含成交 ID、价格、数量和主动方向，不含盘口档位。</p>
+<p><strong>10k/s、20k/s、40k/s</strong> 表示全部 1000 只股票合计的目标行情消息数/秒；盘口消息和成交消息各算一条。三组均发送 <strong>30 秒</strong>。每只股票的盘口序号、成交 ID 连续，股票之间错峰发送。</p>
+<div class="table-wrap"><table><thead><tr><th>数据组</th><th>每股每秒<br>盘口 + 成交</th><th>全部股票每秒<br>盘口 + 成交</th><th>30 秒盘口总量</th><th>30 秒成交总量</th><th>生成消息总量</th><th>计时消息数</th></tr></thead><tbody>
+<tr><td>10k/s<br><span class="note">10,000 条/秒</span></td><td class="number">8 + 2</td><td class="number">8,000 + 2,000</td><td class="number">240,000</td><td class="number">60,000</td><td class="number">300,000</td><td class="number">299,000</td></tr>
+<tr><td>20k/s<br><span class="note">20,000 条/秒</span></td><td class="number">16 + 4</td><td class="number">16,000 + 4,000</td><td class="number">480,000</td><td class="number">120,000</td><td class="number">600,000</td><td class="number">599,000</td></tr>
+<tr><td>40k/s<br><span class="note">40,000 条/秒</span></td><td class="number">32 + 8</td><td class="number">32,000 + 8,000</td><td class="number">960,000</td><td class="number">240,000</td><td class="number">1,200,000</td><td class="number">1,199,000</td></tr>
+</tbody></table></div>
+<p><strong>为何计时消息数少 1000？</strong>每只股票的第一条盘口共 1000 条先用于建盘预热，不计入延迟和 QPS；其余消息按上表节奏计时发送。</p>
+<p>每只股票的盘口/成交消息间隔分别为：10k/s 为 125/500 ms，20k/s 为 62.5/250 ms，40k/s 为 31.25/125 ms；1000 只股票错开这些间隔发送。</p>
+<p class="note">这些是合成行情，不是录制的交易所数据。消息格式见 <a href="MARKET_CASES.md">测试数据定义</a>，生成逻辑见 <a href="../hquant/bench/make_market_cases.py">make_market_cases.py</a>。</p>
+</section>
+<section id="method">
+<h2>2. 测试方法</h2>
+<ol>
+<li><strong>链路：</strong>测试器按计划时间经本地 WebSocket 发送行情 → quantserver 收齐帧并解析 → Shard 同步处理 → 服务端发送一条 UDP 压测完成通知 → 测试器收到通知。每只股票的 REST 快照和首条盘口预热在计时前完成。</li>
+<li><strong>压测完成通知：</strong>报告旧数据字段名为 ACK。它是压测代码为每条行情额外发的 UDP 小包，里面有消息序号和时间戳，只表示同步行情处理走到了测量终点；它不是交易所接收订单、成交或撤单回报，也不是生产业务消息。</li>
+<li><strong>端到端延迟：</strong>测试器调用发送接口前 T0，到测试器从 UDP socket 取到对应完成通知 T9。10k/s 与 40k/s 的 T0 在原生 <code>send()</code> 前；20k/s 的 T0 在 Python <code>StreamWriter.write()</code> 前。包含本机传输、两侧调度和测量通知回程。</li>
+<li><strong>服务端延迟：</strong>Beast 读完完整 WebSocket 帧 T3，到同步行情处理完成 T6。包含 Feed 接收、JSON 解析以及 Market、Paper、账户、策略和执行；SQLite 写线程的提交不在此区间内。</li>
+<li><strong>吞吐：</strong>完成 QPS = 计时消息数 ÷ 服务端首条计时帧在 Feed 打点 T4 到末条处理完成 T6 的窗口。每组预热 1000 条盘口，因此计时帧数比生成总数少 1000。</li>
+<li><strong>正确性：</strong>逐条核对消息 ID 与唯一完成通知，并独立检查最终十档盘口、成交摘要、订单状态、余额、手续费、SQLite 行数与历史序号。</li>
+</ol>
+<p><strong>单条消息的打点顺序：</strong>端到端 T0→T9 包含三段：发出与收齐帧 T0→T3、服务端同步处理 T3→T6、压测完成通知回程 T6→T9。下方完整细分针对原生发送器的 10k/s 轮次；每个相邻区间只出现一次。kqueue 的额外打点只用于另一轮诊断，放在 T1 与 T2 之间。</p>
+<div class="timepoints" aria-label="单条行情和压测完成通知的时间轴"><span><strong>T0</strong><br>测试器调用发送接口前</span><span><strong>T1</strong><br>原生 TCP send 返回</span><span><strong>T2</strong><br>服务端底层 TCP 读取完成回调</span><span><strong>T3</strong><br>Beast 完整帧读完成</span><span><strong>T4</strong><br>Feed 取到帧</span><span><strong>T5</strong><br>JSON 解析完成</span><span><strong>T6</strong><br>同步行情处理完成</span><span><strong>T7</strong><br>完成通知发包前打点</span><span><strong>T8</strong><br>测试器内核收到通知</span><span><strong>T9</strong><br>测试器 recvmsg 返回</span></div>
+<div class="key"><strong>节奏合格条件：</strong>正确性通过；发送落后全程 p99 ≤ 1 ms；最差一秒的发送落后 p99 ≤ 10 ms；末条发送不晚于计划结束 10 ms。旧结果也按这套统一条件重判。</div>
+<p class="note">汇总表选用的 10k/s、40k/s 轮次使用原生发送器和完成通知接收器；20k/s 使用 Python 测试器。三组均按逐条完成通知计时。测试器实现不同，不用跨速率的端到端延迟差值推断服务端性能变化。下方 kqueue 分段来自另一轮有效 10k/s 诊断，只用于定位同一帧的事件边界，不能与主轮次的分段相加。</p>
+</section>
+<section id="results">
+<h2>3. 测试结果</h2>
+<p>只列消息与最终状态核对通过、发送节奏合格的轮次。10k/s 选用有完整分段打点的有效运行；20k/s、40k/s 选用此前的有效运行。Release 与 ASan/UBSan 的 7 项黑盒端到端用例也通过。</p>
+<h3>30 秒压力测试汇总</h3>
+<div class="table-wrap"><table><thead><tr><th>目标消息速率</th><th>计时消息</th><th>完成 QPS</th><th>端到端 T0→T9<br>p50 / p99，µs</th><th>服务端 T3→T6<br>p50 / p99，µs</th><th>发送落后 p99<br>全程 / 最差秒，µs</th><th>核对及节奏</th></tr></thead><tbody>
+<tr><td>10,000 条/s</td><td class="number">299,000</td><td class="number">9,967</td><td class="number">45 / 130</td><td class="number">6 / 21</td><td class="number">16 / 37</td><td class="ok-text">通过</td></tr>
+<tr><td>20,000 条/s</td><td class="number">599,000</td><td class="number">19,968</td><td class="number">47 / 98</td><td class="number">5 / 11</td><td class="number">73 / 102</td><td class="ok-text">通过</td></tr>
+<tr><td>40,000 条/s</td><td class="number">1,199,000</td><td class="number">39,967</td><td class="number">48 / 224</td><td class="number">5 / 22</td><td class="number">15 / 2,658</td><td class="ok-text">通过</td></tr>
+</tbody></table></div>
+<p class="note">服务端 T3→T6 由逐帧原始时间戳重算；完成 QPS 沿用实际计时窗口 T4→末条 T6。端到端含压测专用 UDP 完成通知的回程。各行是独立轮次，且 20k/s 的测试器实现不同。</p>
+<h3>10k/s：一条消息经过的相邻区间</h3>
+<p>本表来自同一轮有效的 299,000 条计时消息。端到端 T0→T9 的<strong>均值 50.159 µs、p99 130 µs</strong>；服务端 T3→T6 的<strong>均值 5.987 µs、p99 21 µs</strong>。下表每行只覆盖时间轴上一段，不重复计入前后阶段。</p>
+<div class="table-wrap"><table><thead><tr><th>区间</th><th>均值，µs</th><th>p99，µs</th><th>这段实际发生的事</th></tr></thead><tbody>
+<tr><td>T0→T1</td><td class="number">4.379</td><td class="number">22</td><td>测试器调用 TCP <code>send()</code> 到返回</td></tr>
+<tr><td>T1→T2</td><td class="number">19.014</td><td class="number">55</td><td><code>send()</code> 返回到服务端底层 TCP 读取完成回调开始；包含交付、可读事件和回调排队</td></tr>
+<tr><td>T2→T3</td><td class="number">0.616</td><td class="number">2</td><td>底层读取回调到 Beast 完整帧读取返回</td></tr>
+<tr><td>T3→T4</td><td class="number">0.720</td><td class="number">2</td><td>Beast 完帧到 Feed 取得帧</td></tr>
+<tr><td>T4→T5</td><td class="number">2.382</td><td class="number">8</td><td>解析行情 JSON</td></tr>
+<tr><td>T5→T6</td><td class="number">2.884</td><td class="number">9</td><td>Shard 同步处理；内部步骤见下表</td></tr>
+<tr><td>T6→T7</td><td class="number">1.340</td><td class="number">5</td><td>记录阶段样本、查找测试序号、编码完成通知，再取得发包前时间戳</td></tr>
+<tr><td>T7→T8</td><td class="number">11.966</td><td class="number">22.666</td><td>写入通知时间戳、调用 UDP <code>send()</code>，到测试器内核收到通知</td></tr>
+<tr><td>T8→T9</td><td class="number">6.913</td><td class="number">32.667</td><td>测试器接收线程取得通知，<code>recvmsg()</code> 返回并打点</td></tr>
+</tbody></table></div>
+<p class="note">T2 仅对 298,995 条发生底层 socket 读取的帧有值；另 5 条直接从 Beast 缓冲区完成。各行 p99 对应的消息不同，不能相加；T7→T8、T8→T9 与其他段使用不同的内核时间基准，均值之和与端到端均值约差 0.06 µs。</p>
+<h3>T5→T6：Shard 内部步骤</h3>
+<p>以下 8 行互不重叠，合起来构成上表的 T5→T6；单位均为 µs。</p>
+<div class="table-wrap"><table><thead><tr><th>步骤</th><th>均值</th><th>p99</th></tr></thead><tbody>
+<tr><td>Feed 分发到 Shard</td><td class="number">0.379</td><td class="number">2</td></tr>
+<tr><td>Market 更新盘口或成交</td><td class="number">0.962</td><td class="number">3</td></tr>
+<tr><td>PaperExchange 模拟撮合</td><td class="number">0.182</td><td class="number">1</td></tr>
+<tr><td>构建账户视图</td><td class="number">0.628</td><td class="number">2</td></tr>
+<tr><td>策略决策</td><td class="number">0.042</td><td class="number">1</td></tr>
+<tr><td>执行器分发动作</td><td class="number">0.062</td><td class="number">1</td></tr>
+<tr><td>命令历史异步入队</td><td class="number">0.051</td><td class="number">1</td></tr>
+<tr><td>Shard 其余代码</td><td class="number">0.575</td><td class="number">2</td></tr>
+</tbody></table></div>
+<p class="note">内部步骤统计包含 1,000 条建盘预热，共 300,000 条；主时间轴只统计 299,000 条计时消息。均值之和与 T5→T6 另有舍入差异。</p>
+<h3>T1→T2：可读事件进一步定位</h3>
+<p>另一轮正确性与节奏都合格的 10k/s、30 秒诊断，在同一帧的 T1 与 T2 之间记录 <strong>K：服务端 <code>kqueue</code> 返回该 socket 可读事件</strong>。该轮 T1→T2 的 p50 / p99 为 16 / 50 µs；其中 298,882 条能与同一 socket 的 K 配对，占有底层读取的帧的 99.96%。</p>
+<div class="table-wrap"><table><thead><tr><th>互不重叠的子区间</th><th>p50，µs</th><th>p99，µs</th><th>边界</th></tr></thead><tbody>
+<tr><td>T1→K</td><td class="number">11</td><td class="number">32</td><td>TCP <code>send()</code> 返回 → <code>kqueue</code> 返回该 socket 可读事件</td></tr>
+<tr><td>K→T2</td><td class="number">4</td><td class="number">27</td><td><code>kqueue</code> 返回 → Asio 的底层读取完成回调开始</td></tr>
+</tbody></table></div>
+<p class="note">K 诊断与上一张 10k/s 时间轴不是同一轮；这里只解释 T1→T2 的内部位置，不把两轮均值相加，也不替换上表端到端延迟。</p>
+<h3>异步历史提交</h3>
+<p>40k/s 有效轮次中，SQLite 历史从入队到提交的 p99 为 <strong>50.45 ms</strong>，其中队列等待 p99 为 50.13 ms。它是独立持久化指标；T3→T6 只包含入队，不等待提交。</p>
+</section>
+<section id="analysis">
+<h2>4. 测试分析</h2>
+<ol>
+<li><strong>吞吐与正确性：</strong>三组各持续 30 秒，最终消息、盘口、成交、账本和历史核对通过，实际完成约 1 万、2 万、4 万 QPS。40k/s 是一轮有效结果，尚不能据此给出最大稳定容量。</li>
+<li><strong>端到端主要耗时：</strong>在完整分段的 10k/s 轮次中，T1→T2 均值 19.014 µs；kqueue 诊断把这一段的常态位置分为 T1→K 的 p50 11 µs 和 K→T2 的 p50 4 µs。主要等待发生在 <code>kqueue</code> 报告可读之前；打点没有继续区分 TCP 内核交付、线程唤醒和系统调度，不能把整段归因于 Asio。</li>
+<li><strong>服务端同步处理：</strong>T3→T6 均值 5.987 µs、p99 21 µs；其中 JSON 解析均值 2.382 µs，T5→T6 均值 2.884 µs。完成通知仅为测试计时，T6→T9 不属于行情处理；T7 是发包前打点，不表示 UDP 包已经发出。</li>
+<li><strong>异步持久化：</strong>40k/s 的历史入队→提交 p99 为 50.45 ms，主要等待在 SQLite 队列。同步行情处理不等待写盘，持久化时效需单独评价。</li>
+</ol>
+<p class="note">测试环境是本机 loopback、无 TLS、合成行情和 PaperExchange。当前主机没有 Linux <code>perf</code> 或 Xcode <code>xctrace</code>；DTrace 初始化被系统权限拒绝。本报告据同帧 kqueue 打点定位事件边界，没有把尚未区分的内核与调度时间写成已确定原因。</p>
+</section>
+<footer>hquant · <a href="SELECTED_TEST_RESULTS_2026-10-06.json">三组汇总数据</a> · <a href="PHASE_TRACE_10K_2026-10-06.json">10k/s 分段原始汇总</a> · <a href="KEVENT_TRACE_10K_2026-10-06.json">kqueue 诊断原始汇总</a></footer>
+</main>
+</body>
+</html>

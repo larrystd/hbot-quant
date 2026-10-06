@@ -18,7 +18,7 @@ bool OrderBook::ValidLevels(std::span<const BookLevel> levels,
   return true;
 }
 
-void OrderBook::Apply(std::map<uint64_t, uint64_t>& side,
+void OrderBook::Apply(absl::btree_map<uint64_t, uint64_t>& side,
                       std::span<const BookLevel> levels) {
   for (const BookLevel& level : levels) {
     if (level.quantity_lots == 0) {
@@ -60,6 +60,24 @@ std::optional<BookLevel> OrderBook::BestAsk() const {
   if (asks_.empty()) return std::nullopt;
   const auto& [price, quantity] = *asks_.begin();
   return BookLevel{price, quantity};
+}
+
+std::vector<BookLevel> OrderBook::Bids() const {
+  std::vector<BookLevel> levels;
+  levels.reserve(bids_.size());
+  for (auto it = bids_.rbegin(); it != bids_.rend(); ++it) {
+    levels.push_back(BookLevel{it->first, it->second});
+  }
+  return levels;
+}
+
+std::vector<BookLevel> OrderBook::Asks() const {
+  std::vector<BookLevel> levels;
+  levels.reserve(asks_.size());
+  for (const auto& [price, quantity] : asks_) {
+    levels.push_back(BookLevel{price, quantity});
+  }
+  return levels;
 }
 
 }  // namespace hquant::v1

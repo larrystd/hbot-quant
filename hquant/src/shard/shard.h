@@ -6,7 +6,6 @@
 #include <functional>
 #include <optional>
 #include <string>
-#include <thread>
 #include <variant>
 #include <vector>
 
@@ -16,6 +15,7 @@
 #include "boost/asio/io_context.hpp"
 #include "boost/asio/steady_timer.hpp"
 #include "hquant/config.h"
+#include "hquant/perf_probe.h"
 #include "hquant/shard/executor.h"
 #include "hquant/shard/market.h"
 #include "hquant/shard/market_type.h"
@@ -30,8 +30,9 @@ template <typename S>
 concept DecisionStrategy =
     requires(S& strategy, const BookView& book, const ExecutionView& execution,
              MonoTime now) {
-      { strategy.Decide(book, execution, now) }
-          -> std::same_as<absl::StatusOr<StrategyDecision>>;
+      {
+        strategy.Decide(book, execution, now)
+      } -> std::same_as<absl::StatusOr<StrategyDecision>>;
     };
 
 // 运行一次决策并交给 executor 执行。决策一次只能表达一种动作，所以若第一次
@@ -42,27 +43,45 @@ template <DecisionStrategy S, typename Record>
   requires std::invocable<Record&, const std::vector<CommandResult>&>
 absl::StatusOr<uint64_t> RunDecisionCycle(S& strategy, Executor& executor,
                                           const BookView& book, MonoTime now,
-                                          Record&& record) {
-  auto decision = strategy.Decide(book, executor.View(), now);
+                                          Record&& record,
+                                          LiveHandlerPhases* phases = nullptr) {
+  auto account_view = [&]() {
+    BenchPhaseTimer timer(phases ? &phases->account_view_ns : nullptr);
+    return executor.View();
+  };
+  auto decide = [&]() {
+    auto view = account_view();
+    BenchPhaseTimer timer(phases ? &phases->strategy_ns : nullptr);
+    return strategy.Decide(book, view, now);
+  };
+  auto dispatch = [&](const StrategyDecision& decision) {
+    BenchPhaseTimer timer(phases ? &phases->executor_ns : nullptr);
+    return executor.Dispatch(decision, book);
+  };
+  auto record_commands = [&](const std::vector<CommandResult>& commands) {
+    BenchPhaseTimer timer(phases ? &phases->command_history_ns : nullptr);
+    record(commands);
+  };
+  auto decision = decide();
   if (!decision.ok()) return decision.status();
   const bool cancelled = std::holds_alternative<CancelOrders>(*decision);
-  auto first = executor.Dispatch(*decision, book);
+  auto first = dispatch(*decision);
   if (!first.ok()) return first.status();
-  record(*first);
+  record_commands(*first);
   const uint64_t first_count = first->size();
   if (!cancelled || book.state != BookState::Live) return first_count;
 
-  if (!executor.View().active_order_ids.empty()) {
+  if (!account_view().active_order_ids.empty()) {
     return absl::InternalError("cancel left active orders");
   }
-  auto second = strategy.Decide(book, executor.View(), now);
+  auto second = decide();
   if (!second.ok()) return second.status();
   if (std::holds_alternative<CancelOrders>(*second)) {
     return absl::InternalError("second decision requested another cancel");
   }
-  auto executed = executor.Dispatch(*second, book);
+  auto executed = dispatch(*second);
   if (!executed.ok()) return executed.status();
-  record(*executed);
+  record_commands(*executed);
   return first_count + executed->size();
 }
 
@@ -72,6 +91,7 @@ struct ReplayRecord {
   ShardId target;
   InputTime time;
   std::variant<MarketInput, TimerTick> body;
+  uint64_t perf_post_ns = 0;
 };
 
 struct StrategyPatch {
@@ -91,6 +111,15 @@ struct ShardStatus {
   bool stop_requested = false;
   bool worker_exited = false;
   BookState book_state = BookState::Syncing;
+  uint64_t connection_epoch = 0;
+  uint64_t last_book_sequence = 0;
+  uint64_t applied_depth_events = 0;
+  uint64_t accepted_trades = 0;
+  uint64_t last_trade_id = 0;
+  uint64_t depth_digest = 0;
+  uint64_t trade_digest = 0;
+  std::vector<BookLevel> bids;
+  std::vector<BookLevel> asks;
   uint64_t market_notices = 0;
   uint64_t strategy_timer_ticks = 0;
   uint64_t config_version = 1;
@@ -104,8 +133,9 @@ struct ShardStatus {
 
 class Shard {
  public:
-  Shard(const ShardConfig& config, const InputConfig& input,
-        SqliteHistory& history, std::string run_id);
+  Shard(boost::asio::io_context& io, const ShardConfig& config,
+        const InputConfig& input,
+        SqliteHistory& history, std::string run_id, ShardPerf* perf = nullptr);
   ~Shard();
   Shard(const Shard&) = delete;
   Shard& operator=(const Shard&) = delete;
@@ -113,8 +143,9 @@ class Shard {
   absl::Status Start();
   void PostReplay(ReplayRecord record, std::function<void(absl::Status)> done);
   void PostStatus(std::function<void(ShardStatus)> done);
-  void PostStrategyUpdate(uint64_t expected_version, StrategyPatch patch,
-                          std::function<void(absl::StatusOr<StrategyUpdateResult>)> done);
+  void PostStrategyUpdate(
+      uint64_t expected_version, StrategyPatch patch,
+      std::function<void(absl::StatusOr<StrategyUpdateResult>)> done);
   void RequestStop();
   void Join();
   ShardId Id() const { return config_.id; }
@@ -125,7 +156,8 @@ class Shard {
   void ScheduleStrategyTimer();
   void StopOnThread();
   void StopFromError(absl::Status error);
-  absl::StatusOr<uint64_t> RunStrategyDecision();
+  absl::StatusOr<uint64_t> RunStrategyDecision(
+      LiveHandlerPhases* phases = nullptr);
   void RecordCommands(const std::vector<CommandResult>& commands);
   void OnAccountEvent(const AccountEvent& event);
   void Record(HistoryRecord record);
@@ -136,7 +168,7 @@ class Shard {
   InputConfig input_;
   SqliteHistory& history_;
   std::string run_id_;
-  boost::asio::io_context io_;
+  boost::asio::io_context& io_;
   boost::asio::executor_work_guard<boost::asio::io_context::executor_type>
       work_guard_;
   Market market_;
@@ -144,7 +176,6 @@ class Shard {
   PaperExchange exchange_;  // must precede executor_, which references it
   Executor executor_;
   boost::asio::steady_timer strategy_timer_;
-  std::thread worker_;
   std::atomic<bool> started_{false};
   std::atomic<bool> stop_requested_{false};
   std::atomic<bool> worker_exited_{false};
@@ -156,6 +187,8 @@ class Shard {
   uint64_t history_sequence_ = 0;
   std::string last_error_;
   std::optional<absl::Status> fatal_status_;
+  ShardPerf* perf_ = nullptr;
+  uint64_t current_input_origin_ns_ = 0;
 };
 
 }  // namespace hquant::v1

@@ -17,6 +17,7 @@
 
 #include "absl/status/status.h"
 #include "hquant/base/fixed.h"
+#include "hquant/perf_probe.h"
 #include "simdjson.h"
 
 namespace hquant::v1 {
@@ -55,6 +56,16 @@ std::string Success(uint64_t request_id) {
 }
 
 std::string JsonUint(uint64_t value) { return JsonString(std::to_string(value)); }
+
+std::string JsonLevels(const std::vector<BookLevel>& levels) {
+  std::string result = "[";
+  for (const BookLevel& level : levels) {
+    if (result.size() != 1) result += ',';
+    result += '[' + std::to_string(level.price_ticks) + ',' +
+              std::to_string(level.quantity_lots) + ']';
+  }
+  return result + ']';
+}
 
 const char* BookStateName(BookState state) {
   switch (state) {
@@ -210,6 +221,11 @@ std::string ControlServer::HandleLine(std::string_view line) {
   }
   std::string_view op;
   if (request["op"].get(op)) return Error(request_id, "op is required");
+  if (op == "clock") {
+    return Success(request_id) +
+           ",\"steady_ns\":" + JsonUint(PerfNowNs()) +
+           ",\"bench_ns\":" + JsonUint(BenchClockNowNs()) + "}";
+  }
   if (op == "status") {
     auto shards = handlers_.status();
     auto response = Success(request_id) + ",\"shards\":[";
@@ -219,6 +235,15 @@ std::string ControlServer::HandleLine(std::string_view line) {
           ",\"stop_requested\":" + (shard.stop_requested ? "true" : "false") +
           ",\"worker_exited\":" + (shard.worker_exited ? "true" : "false") +
           ",\"book_state\":" + JsonString(BookStateName(shard.book_state)) +
+          ",\"connection_epoch\":" + std::to_string(shard.connection_epoch) +
+          ",\"last_book_sequence\":" + std::to_string(shard.last_book_sequence) +
+          ",\"applied_depth_events\":" + std::to_string(shard.applied_depth_events) +
+          ",\"accepted_trades\":" + std::to_string(shard.accepted_trades) +
+          ",\"last_trade_id\":" + std::to_string(shard.last_trade_id) +
+          ",\"depth_digest\":" + JsonUint(shard.depth_digest) +
+          ",\"trade_digest\":" + JsonUint(shard.trade_digest) +
+          ",\"bids\":" + JsonLevels(shard.bids) +
+          ",\"asks\":" + JsonLevels(shard.asks) +
           ",\"market_notices\":" + std::to_string(shard.market_notices) +
           ",\"strategy_timer_ticks\":" + std::to_string(shard.strategy_timer_ticks) +
           ",\"config_version\":" + std::to_string(shard.config_version) +
@@ -272,7 +297,7 @@ std::string ControlServer::HandleLine(std::string_view line) {
   }
   if (op == "set_strategy") {
     uint64_t shard_id = 0, expected_version = 0;
-    if (request["shard_id"].get(shard_id) || shard_id >= 8 ||
+    if (request["shard_id"].get(shard_id) || shard_id >= kMaxShards ||
         request["expected_version"].get(expected_version)) {
       return Error(request_id, "invalid shard_id or expected_version");
     }
@@ -308,7 +333,7 @@ std::string ControlServer::HandleLine(std::string_view line) {
     }
     if (!any) return Error(request_id, "empty strategy patch");
     auto result = handlers_.set_strategy(
-        ShardId{static_cast<uint8_t>(shard_id)}, expected_version,
+        ShardId{static_cast<uint16_t>(shard_id)}, expected_version,
         std::move(patch));
     if (!result.ok()) return Error(request_id, result.status().message());
     return Success(request_id) +

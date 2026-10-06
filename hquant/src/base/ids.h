@@ -6,8 +6,10 @@
 
 namespace hquant::v1 {
 
+inline constexpr uint16_t kMaxShards = 1000;
+
 struct ShardId {
-  uint8_t value = 0;
+  uint16_t value = 0;
   bool operator==(const ShardId&) const = default;
 };
 

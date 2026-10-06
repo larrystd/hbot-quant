@@ -13,8 +13,10 @@
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "hquant/base/ids.h"
+#include "hquant/perf_probe.h"
 
 struct sqlite3;
+struct sqlite3_stmt;
 
 namespace hquant::v1 {
 
@@ -48,6 +50,8 @@ struct HistoryRecord {
   std::string message;
   bool dispatched = false;
   bool buy = false;
+  uint64_t perf_input_origin_ns = 0;
+  uint64_t perf_enqueue_ns = 0;
 };
 
 struct HistoryPage {
@@ -63,7 +67,9 @@ struct HistoryHealth {
 
 class SqliteHistory {
  public:
-  explicit SqliteHistory(std::string path, size_t queue_capacity = 8192);
+  explicit SqliteHistory(std::string path, size_t queue_capacity = 8192,
+                         HistoryPerf* perf = nullptr,
+                         bool wait_for_space = false);
   ~SqliteHistory();
   SqliteHistory(const SqliteHistory&) = delete;
   SqliteHistory& operator=(const SqliteHistory&) = delete;
@@ -89,13 +95,18 @@ class SqliteHistory {
   void WriterLoop();
   void ReaderLoop();
   absl::Status WriteBatch(const std::vector<HistoryRecord>& records,
-                          const std::vector<Gap>& gaps);
+                          const std::vector<Gap>& gaps,
+                          sqlite3_stmt* record_statement,
+                          sqlite3_stmt* gap_statement);
   absl::StatusOr<HistoryPage> ReadPage(uint32_t limit, uint64_t cursor);
 
   std::string path_;
   size_t queue_capacity_;
+  HistoryPerf* perf_ = nullptr;
+  bool wait_for_space_ = false;
   mutable std::mutex mutex_;
   std::condition_variable writer_cv_;
+  std::condition_variable space_cv_;
   std::deque<HistoryRecord> writer_queue_;
   std::vector<Gap> gaps_;
   uint64_t dropped_ = 0;

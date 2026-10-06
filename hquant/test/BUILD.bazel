@@ -1,0 +1,12 @@
+load("@rules_cc//cc:defs.bzl", "cc_test")
+
+cc_test(
+    name = "end_to_end",
+    srcs = ["run_e2e.cc"],
+    data = [
+        "e2e_replay.py",
+        "//hquant/src:hquant_server",
+    ],
+    size = "small",
+    tags = ["local"],
+)

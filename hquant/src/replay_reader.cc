@@ -1,5 +1,6 @@
 #include "hquant/replay_reader.h"
 
+#include <array>
 #include <cstdint>
 #include <map>
 #include <optional>
@@ -14,6 +15,8 @@
 
 namespace hquant::v1 {
 namespace {
+
+using ShardIndex = std::array<const ShardConfig*, kMaxShards>;
 
 absl::Status Invalid(std::string_view message) {
   return absl::InvalidArgumentError(std::string("replay: ") + std::string(message));
@@ -60,11 +63,12 @@ absl::StatusOr<std::vector<BookLevel>> Levels(simdjson::dom::element object,
 }
 
 absl::StatusOr<ShardId> Target(simdjson::dom::element input,
-                                const AppConfig& config, bool timer) {
+                                const AppConfig& config,
+                                const ShardIndex& by_id, bool timer) {
   std::optional<uint64_t> id;
   uint64_t shard_number = 0;
   if (!input["shard"].error()) {
-    if (input["shard"].get(shard_number) || shard_number >= 8) {
+    if (input["shard"].get(shard_number) || shard_number >= kMaxShards) {
       return Invalid("invalid shard id");
     }
     id = shard_number;
@@ -77,9 +81,7 @@ absl::StatusOr<ShardId> Target(simdjson::dom::element input,
   }
   const ShardConfig* selected = nullptr;
   if (id) {
-    for (const ShardConfig& shard : config.shards) {
-      if (shard.id.value == *id) selected = &shard;
-    }
+    selected = by_id[*id];
   } else if (market) {
     for (const ShardConfig& shard : config.shards) {
       if (shard.market.id.symbol != *market) continue;
@@ -95,13 +97,6 @@ absl::StatusOr<ShardId> Target(simdjson::dom::element input,
   }
   if (!timer && market && market->empty()) return Invalid("empty market");
   return selected->id;
-}
-
-const ShardConfig& FindShard(const AppConfig& config, ShardId id) {
-  for (const ShardConfig& shard : config.shards) {
-    if (shard.id == id) return shard;
-  }
-  return config.shards.front();
 }
 
 }  // namespace
@@ -121,8 +116,12 @@ absl::Status ReadReplayFile(const std::string& path, const AppConfig& config,
   }
   simdjson::dom::array inputs;
   if (root["inputs"].get(inputs)) return Invalid("inputs array missing");
+  ShardIndex by_id{};
+  for (const ShardConfig& shard : config.shards) {
+    by_id[shard.id.value] = &shard;
+  }
   std::optional<InputTime> previous;
-  std::map<uint8_t, uint64_t> epochs;
+  std::map<uint16_t, uint64_t> epochs;
   for (auto input : inputs) {
     auto at = Signed(input, "at_us");
     auto ordinal = Unsigned(input, "ordinal");
@@ -144,9 +143,9 @@ absl::Status ReadReplayFile(const std::string& path, const AppConfig& config,
       }
       continue;
     }
-    auto target = Target(input, config, timer);
+    auto target = Target(input, config, by_id, timer);
     if (!target.ok()) return target.status();
-    const MarketId market = FindShard(config, *target).market.id;
+    const MarketId market = by_id[target->value]->market.id;
     ReplayRecord record;
     record.target = *target;
     record.time = *previous;

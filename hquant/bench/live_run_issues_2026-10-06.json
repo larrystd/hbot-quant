@@ -1,0 +1,98 @@
+{
+  "schema_version": 1,
+  "date": "2026-10-06",
+  "scope": "1000 synthetic symbols through hquant_server's live Binance-compatible WebSocket and REST inputs on local macOS",
+  "issues": [
+    {
+      "id": "serial_replay_not_live_performance",
+      "finding": "The former replay benchmark parses a file and waits for each shard completion before reading the next record. Its QPS includes this artificial round trip and does not measure the live feed.",
+      "action": "Added an independent paced WebSocket/REST sender. The old benchmark is labeled as a serial replay diagnostic."
+    },
+    {
+      "id": "fixture_symbol_rejected_by_live_config",
+      "finding": "Replay symbols such as STRESS_SIM_0001 contain underscores, while the live Binance input permits only uppercase letters and digits.",
+      "action": "The sender and live config map these to STRESSSIM0001 and equivalent names; fixture identities and per-symbol expectations remain paired."
+    },
+    {
+      "id": "cross_process_clock_epoch",
+      "finding": "Python monotonic_ns and C++ steady_clock exposed different epochs on this macOS host, making initial cross-process latency values invalid.",
+      "action": "The control clock endpoint calibrates the offset using the lowest-round-trip sample and checks drift after every run. Final run drift was within 6 microseconds."
+    },
+    {
+      "id": "sse_history_queue_overflow",
+      "finding": "The first 180-second SSE-pattern run filled the fixed 8192-record history queue: 180000 records attempted, 164676 written, 15324 dropped, 7645 gap rows, 402 shards affected. The benchmark failed correctness.",
+      "cause": "Synchronized refresh across 1000 shards produces short bursts of order commands, reports, and balance rows; the single SQLite writer cannot drain the fixed queue during the burst.",
+      "action": "History queue capacity now scales to max(8192, 64 * shard_count). The rerun wrote all 166000 records, had zero gaps, and reached a queue peak of 12810. This capacity handles the tested cases; a larger or sustained burst can still overflow the finite queue."
+    },
+    {
+      "id": "startup_sync_distorts_high_rate_latency",
+      "finding": "At 4x rate with 1000 simultaneous first depth updates and REST snapshots inside timing, sender schedule p99 was 28.166 ms and wire-to-market p99 was 61.440 ms; the final state was correct.",
+      "action": "Added a separate first-depth warmup option. At 4x after all 1000 books became Live, 299000 timed frames were sent in 7.500 seconds; sender schedule p99 was 0.051 ms and wire-to-market p99 was 0.050 ms."
+    },
+    {
+      "id": "stack_sampling_changes_latency",
+      "finding": "macOS sample collected CPU stacks during the stress run but raised wire-to-market p99 to 57.148 ms, versus 0.050 ms in the unprofiled 10k/s run.",
+      "action": "Use sampled runs only for stack attribution; report latency and QPS from separate unprofiled runs."
+    },
+    {
+      "id": "bazel_sandbox_teardown",
+      "finding": "Bazel printed Build completed successfully and produced hquant_server, then exited with code 37 because sysctl was denied during its own process teardown in the sandbox.",
+      "action": "Verified the linked binary exists and ran the seven existing end-to-end tests plus the live cases against it; this is a build-tool exit issue rather than a compile failure."
+    }
+  ],
+  "verified_runs": {
+    "nyse": {
+      "result": "/private/tmp/hquant-live-nyse-2/result.json",
+      "duration_seconds": 180,
+      "websocket_messages": 198000,
+      "websocket_qps": 1100,
+      "rest_snapshots": 1000,
+      "wire_to_market_p99_us": 450.729,
+      "sqlite_enqueue_to_commit_p99_ms": 90.972,
+      "sqlite_batch_write_p99_ms": 1.971,
+      "history_records": 166000,
+      "history_queue_peak": 5672,
+      "correct": true
+    },
+    "sse": {
+      "result": "/private/tmp/hquant-live-sse-2/result.json",
+      "duration_seconds": 180,
+      "websocket_messages": 66000,
+      "websocket_qps": 366.667,
+      "rest_snapshots": 1000,
+      "wire_to_market_p99_us": 458.833,
+      "sqlite_enqueue_to_commit_p99_ms": 161.029,
+      "sqlite_batch_write_p99_ms": 3.135,
+      "history_records": 166000,
+      "history_queue_peak": 12810,
+      "correct": true
+    },
+    "stress": {
+      "result": "/private/tmp/hquant-live-stress-2/result.json",
+      "duration_seconds": 30,
+      "websocket_messages": 300000,
+      "websocket_qps": 10000,
+      "rest_snapshots": 1000,
+      "wire_to_market_p99_us": 49.541,
+      "sqlite_enqueue_to_commit_p99_ms": 39.378,
+      "sqlite_batch_write_p99_ms": 0.581,
+      "history_records": 26000,
+      "history_queue_peak": 5218,
+      "correct": true
+    },
+    "stress_4x_after_warmup": {
+      "result": "/private/tmp/hquant-live-stress-4x-warm/result.json",
+      "timed_websocket_messages": 299000,
+      "timed_duration_seconds": 7.5,
+      "timed_websocket_qps": 39866.667,
+      "wire_to_market_p99_us": 50.353,
+      "sender_schedule_p99_us": 51.458,
+      "correct": true
+    }
+  },
+  "measurement_notes": [
+    "Latency distributions on the receiver sample one in ten WebSocket messages per shard; counters, final depth, per-message digests, history sequence, and ledger checks cover all events.",
+    "Wire-to-market ends when the market and paper strategy callbacks finish. SQLite persistence is asynchronous and is reported separately for history records.",
+    "NYSE and SSE are synthetic traffic patterns carried through the existing Binance-compatible feed, not native exchange protocols. Tests use local unencrypted sockets and do not include WAN or TLS costs."
+  ]
+}

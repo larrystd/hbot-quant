@@ -252,13 +252,13 @@ absl::Status ValidateConfig(const AppConfig& config) {
       (config.input.rest_host.empty() || config.input.websocket_host.empty())) {
     return Invalid("Binance hosts required");
   }
-  if (config.shards.empty() || config.shards.size() > 8) {
-    return Invalid("shards must contain one to eight entries");
+  if (config.shards.empty() || config.shards.size() > kMaxShards) {
+    return Invalid("shards must contain one to 1000 entries");
   }
-  std::set<uint8_t> ids;
+  std::set<uint16_t> ids;
   std::set<std::string> accounts;
   for (const ShardConfig& shard : config.shards) {
-    if (shard.id.value >= 8 || !ids.insert(shard.id.value).second) {
+    if (shard.id.value >= kMaxShards || !ids.insert(shard.id.value).second) {
       return Invalid("invalid or duplicate shard id");
     }
     const MarketConfig& market = shard.market;
@@ -333,7 +333,9 @@ absl::StatusOr<AppConfig> ParseConfig(std::string_view yaml_text,
       auto market_node = MapField(node, "market");
       auto strategy_node = MapField(node, "strategy");
       auto executor_node = MapField(node, "executor");
-      if (!id.ok() || *id >= 8) return Invalid("shard id must be in [0,7]");
+      if (!id.ok() || *id >= kMaxShards) {
+        return Invalid("shard id must be in [0,999]");
+      }
       if (!market_node.ok()) return market_node.status();
       if (!strategy_node.ok()) return strategy_node.status();
       if (!executor_node.ok()) return executor_node.status();
@@ -343,7 +345,7 @@ absl::StatusOr<AppConfig> ParseConfig(std::string_view yaml_text,
       if (!market.ok()) return market.status();
       if (!strategy.ok()) return strategy.status();
       if (!executor.ok()) return executor.status();
-      config.shards.push_back(ShardConfig{ShardId{static_cast<uint8_t>(*id)},
+      config.shards.push_back(ShardConfig{ShardId{static_cast<uint16_t>(*id)},
                                           std::move(*market), std::move(*strategy),
                                           std::move(*executor)});
     }

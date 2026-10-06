@@ -6,6 +6,7 @@ cc_library(
     hdrs = ["order_book.h"],
     strip_include_prefix = "/hquant/src",
     include_prefix = "hquant",
+    deps = ["@abseil-cpp//absl/container:btree"],
     visibility = ["//hquant/src:__subpackages__"],
 )
 
@@ -30,6 +31,7 @@ cc_library(
     deps = [
         ":market_type",
         "//hquant/src:config",
+        "//hquant/src:perf_probe",
         "//hquant/src/base:fixed",
         "//hquant/src/base:net",
         "@abseil-cpp//absl/status:status",
@@ -51,6 +53,7 @@ cc_library(
         ":market_type",
         ":order_book",
         "//hquant/src:config",
+        "//hquant/src:perf_probe",
         "@boost.asio//:boost.asio",
     ],
     visibility = ["//hquant/src:__subpackages__"],
@@ -123,6 +126,7 @@ cc_library(
         ":strategy",
         "//hquant/src:config",
         "//hquant/src:sqlite_history",
+        "//hquant/src:perf_probe",
         "@abseil-cpp//absl/status:status",
         "@abseil-cpp//absl/status:statusor",
         "@boost.asio//:boost.asio",

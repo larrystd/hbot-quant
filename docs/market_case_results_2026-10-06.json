@@ -1,0 +1,615 @@
+{
+  "date": "2026-10-06",
+  "runs": {
+    "nyse": {
+      "fixture": {
+        "stocks": 1000,
+        "levels_per_side": 10,
+        "duration_us": 180000000,
+        "book_interval_us": 1000000,
+        "trade_interval_us": 10000000,
+        "book_messages_including_initial_snapshots": 180000,
+        "public_trades": 18000,
+        "deliveries": 199000,
+        "level_rows": 3600000,
+        "scheduled_peak_1ms": 1011,
+        "scheduled_peak_100ms": 2010,
+        "scheduled_peak_1s": 2100
+      },
+      "unpaced": {
+        "parse_records": 199000,
+        "parse_only_seconds": 0.164,
+        "startup_seconds": 0.002,
+        "replay_seconds": 4.027,
+        "replay_qps": 49414.061,
+        "flush_stop_seconds": 0.181,
+        "total_runtime_seconds": 4.21,
+        "deliveries": 199000,
+        "shard_inputs": 199000,
+        "shard_input_dispatch_ms": 328.676,
+        "market_path_ms": 321.59,
+        "paper_match_ms": 16.909,
+        "decision_ms": 122.347,
+        "account_event_ms": 59.891,
+        "history_enqueue_ms": 74.153,
+        "account_events": 118000,
+        "history_records_attempted": 166000,
+        "history_records_written": 166000,
+        "history_queue_peak": 8192,
+        "history_batches": 2610,
+        "history_batch_write_ms": 818.584,
+        "roundtrip": {
+          "count": 199000,
+          "mean_us": 19.158,
+          "p50_us": 18.167,
+          "p95_us": 23.583,
+          "p99_us": 27.458,
+          "p999_us": 57.458,
+          "max_us": 3204.5
+        },
+        "post_to_shard": {
+          "count": 199000,
+          "mean_us": 2.756,
+          "p50_us": 2.541,
+          "p95_us": 4.583,
+          "p99_us": 6.209,
+          "p999_us": 10.333,
+          "max_us": 100.625
+        },
+        "input_handler": {
+          "count": 199000,
+          "mean_us": 1.652,
+          "p50_us": 1.5,
+          "p95_us": 3.667,
+          "p99_us": 4.584,
+          "p999_us": 10.875,
+          "max_us": 211.792
+        },
+        "handler_to_completion": {
+          "count": 199000,
+          "mean_us": 12.76,
+          "p50_us": 12.458,
+          "p95_us": 14.25,
+          "p99_us": 17.208,
+          "p999_us": 24.666,
+          "max_us": 3184.208
+        },
+        "callback_to_get": {
+          "count": 199000,
+          "mean_us": 1.964,
+          "p50_us": 1.75,
+          "p95_us": 3.0,
+          "p99_us": 4.917,
+          "p999_us": 8.875,
+          "max_us": 136.334
+        },
+        "paper_match": {
+          "count": 198000,
+          "mean_us": 0.085,
+          "p50_us": 0.083,
+          "p95_us": 0.208,
+          "p99_us": 0.333,
+          "p999_us": 0.542,
+          "max_us": 24.958
+        },
+        "decision": {
+          "count": 198000,
+          "mean_us": 0.618,
+          "p50_us": 0.417,
+          "p95_us": 2.75,
+          "p99_us": 3.333,
+          "p999_us": 6.75,
+          "max_us": 210.708
+        },
+        "account_event": {
+          "count": 118000,
+          "mean_us": 0.508,
+          "p50_us": 0.084,
+          "p95_us": 0.209,
+          "p99_us": 3.833,
+          "p999_us": 102.833,
+          "max_us": 3169.75
+        },
+        "history_enqueue": {
+          "count": 166000,
+          "mean_us": 0.447,
+          "p50_us": 0.042,
+          "p95_us": 0.166,
+          "p99_us": 4.25,
+          "p999_us": 98.583,
+          "max_us": 3169.625
+        },
+        "sqlite_batch_write": {
+          "count": 2610,
+          "mean_us": 313.634,
+          "p50_us": 236.625,
+          "p95_us": 466.667,
+          "p99_us": 3184.834,
+          "p999_us": 7182.042,
+          "max_us": 8274.542
+        },
+        "enqueue_to_commit": {
+          "count": 166000,
+          "mean_us": 20629.617,
+          "p50_us": 19097.042,
+          "p95_us": 43676.416,
+          "p99_us": 75698.333,
+          "p999_us": 98999.375,
+          "max_us": 99768.292
+        },
+        "input_to_commit": {
+          "count": 166000,
+          "mean_us": 20643.871,
+          "p50_us": 19111.792,
+          "p95_us": 43697.875,
+          "p99_us": 75702.208,
+          "p999_us": 98999.584,
+          "max_us": 99791.042
+        }
+      },
+      "unpaced_sqlite": {
+        "records": 166000,
+        "shards": 1000,
+        "max_shard": 999,
+        "gap_rows": 0,
+        "sequence_gaps": 0
+      }
+    },
+    "sse": {
+      "fixture": {
+        "stocks": 1000,
+        "levels_per_side": 10,
+        "duration_us": 180000000,
+        "book_interval_us": 3000000,
+        "trade_interval_us": 30000000,
+        "book_messages_including_initial_snapshots": 60000,
+        "public_trades": 6000,
+        "deliveries": 67000,
+        "level_rows": 1200000,
+        "scheduled_peak_1ms": 1011,
+        "scheduled_peak_100ms": 2004,
+        "scheduled_peak_1s": 2034
+      },
+      "unpaced": {
+        "parse_records": 67000,
+        "parse_only_seconds": 0.054,
+        "startup_seconds": 0.002,
+        "replay_seconds": 1.403,
+        "replay_qps": 47758.154,
+        "flush_stop_seconds": 0.202,
+        "total_runtime_seconds": 1.606,
+        "deliveries": 67000,
+        "shard_inputs": 67000,
+        "shard_input_dispatch_ms": 136.573,
+        "market_path_ms": 133.991,
+        "paper_match_ms": 6.503,
+        "decision_ms": 68.342,
+        "account_event_ms": 57.836,
+        "history_enqueue_ms": 76.667,
+        "account_events": 118000,
+        "history_records_attempted": 166000,
+        "history_records_written": 166000,
+        "history_queue_peak": 8192,
+        "history_batches": 2611,
+        "history_batch_write_ms": 831.171,
+        "roundtrip": {
+          "count": 67000,
+          "mean_us": 19.893,
+          "p50_us": 18.25,
+          "p95_us": 24.084,
+          "p99_us": 29.75,
+          "p999_us": 178.041,
+          "max_us": 3312.208
+        },
+        "post_to_shard": {
+          "count": 67000,
+          "mean_us": 2.806,
+          "p50_us": 2.625,
+          "p95_us": 4.041,
+          "p99_us": 6.0,
+          "p999_us": 14.5,
+          "max_us": 45.834
+        },
+        "input_handler": {
+          "count": 67000,
+          "mean_us": 2.038,
+          "p50_us": 1.5,
+          "p95_us": 4.042,
+          "p99_us": 5.208,
+          "p999_us": 21.25,
+          "max_us": 2770.083
+        },
+        "handler_to_completion": {
+          "count": 67000,
+          "mean_us": 12.898,
+          "p50_us": 12.25,
+          "p95_us": 14.459,
+          "p99_us": 18.083,
+          "p999_us": 156.583,
+          "max_us": 3302.834
+        },
+        "callback_to_get": {
+          "count": 67000,
+          "mean_us": 2.121,
+          "p50_us": 2.084,
+          "p95_us": 3.041,
+          "p99_us": 4.459,
+          "p999_us": 10.041,
+          "max_us": 62.833
+        },
+        "paper_match": {
+          "count": 66000,
+          "mean_us": 0.099,
+          "p50_us": 0.083,
+          "p95_us": 0.209,
+          "p99_us": 0.333,
+          "p999_us": 0.625,
+          "max_us": 20.708
+        },
+        "decision": {
+          "count": 66000,
+          "mean_us": 1.035,
+          "p50_us": 0.416,
+          "p95_us": 2.917,
+          "p99_us": 3.792,
+          "p999_us": 14.583,
+          "max_us": 2769.125
+        },
+        "account_event": {
+          "count": 118000,
+          "mean_us": 0.49,
+          "p50_us": 0.084,
+          "p95_us": 0.209,
+          "p99_us": 3.625,
+          "p999_us": 76.167,
+          "max_us": 3288.792
+        },
+        "history_enqueue": {
+          "count": 166000,
+          "mean_us": 0.462,
+          "p50_us": 0.042,
+          "p95_us": 0.125,
+          "p99_us": 3.792,
+          "p999_us": 79.25,
+          "max_us": 3288.458
+        },
+        "sqlite_batch_write": {
+          "count": 2611,
+          "mean_us": 318.334,
+          "p50_us": 238.709,
+          "p95_us": 465.666,
+          "p99_us": 3354.666,
+          "p999_us": 7872.375,
+          "max_us": 8667.958
+        },
+        "enqueue_to_commit": {
+          "count": 166000,
+          "mean_us": 20860.146,
+          "p50_us": 19394.875,
+          "p95_us": 44823.375,
+          "p99_us": 75957.916,
+          "p999_us": 102275.0,
+          "max_us": 103393.916
+        },
+        "input_to_commit": {
+          "count": 166000,
+          "mean_us": 20874.665,
+          "p50_us": 19406.917,
+          "p95_us": 44836.083,
+          "p99_us": 75958.458,
+          "p999_us": 102275.125,
+          "max_us": 103393.958
+        }
+      },
+      "unpaced_sqlite": {
+        "records": 166000,
+        "shards": 1000,
+        "max_shard": 999,
+        "gap_rows": 0,
+        "sequence_gaps": 0
+      }
+    },
+    "stress": {
+      "fixture": {
+        "stocks": 1000,
+        "levels_per_side": 10,
+        "duration_us": 30000000,
+        "book_interval_us": 125000,
+        "trade_interval_us": 500000,
+        "book_messages_including_initial_snapshots": 240000,
+        "public_trades": 60000,
+        "deliveries": 301000,
+        "level_rows": 4800000,
+        "scheduled_peak_1ms": 1012,
+        "scheduled_peak_100ms": 2200,
+        "scheduled_peak_1s": 11000
+      },
+      "unpaced": {
+        "parse_records": 301000,
+        "parse_only_seconds": 0.238,
+        "startup_seconds": 0.003,
+        "replay_seconds": 5.947,
+        "replay_qps": 50617.551,
+        "flush_stop_seconds": 0.058,
+        "total_runtime_seconds": 6.007,
+        "deliveries": 301000,
+        "shard_inputs": 301000,
+        "shard_input_dispatch_ms": 440.011,
+        "market_path_ms": 428.367,
+        "paper_match_ms": 21.799,
+        "decision_ms": 146.198,
+        "account_event_ms": 25.109,
+        "history_enqueue_ms": 34.558,
+        "account_events": 18000,
+        "history_records_attempted": 26000,
+        "history_records_written": 26000,
+        "history_queue_peak": 6338,
+        "history_batches": 436,
+        "history_batch_write_ms": 119.339,
+        "roundtrip": {
+          "count": 301000,
+          "mean_us": 18.686,
+          "p50_us": 18.125,
+          "p95_us": 22.666,
+          "p99_us": 26.625,
+          "p999_us": 38.5,
+          "max_us": 113.709
+        },
+        "post_to_shard": {
+          "count": 301000,
+          "mean_us": 2.729,
+          "p50_us": 2.458,
+          "p95_us": 4.75,
+          "p99_us": 6.292,
+          "p999_us": 10.333,
+          "max_us": 60.0
+        },
+        "input_handler": {
+          "count": 301000,
+          "mean_us": 1.462,
+          "p50_us": 1.542,
+          "p95_us": 2.0,
+          "p99_us": 3.083,
+          "p999_us": 6.5,
+          "max_us": 60.0
+        },
+        "handler_to_completion": {
+          "count": 301000,
+          "mean_us": 12.625,
+          "p50_us": 12.458,
+          "p95_us": 14.083,
+          "p99_us": 17.0,
+          "p999_us": 20.458,
+          "max_us": 85.584
+        },
+        "callback_to_get": {
+          "count": 301000,
+          "mean_us": 1.843,
+          "p50_us": 1.708,
+          "p95_us": 2.708,
+          "p99_us": 4.417,
+          "p999_us": 8.75,
+          "max_us": 56.166
+        },
+        "paper_match": {
+          "count": 300000,
+          "mean_us": 0.073,
+          "p50_us": 0.042,
+          "p95_us": 0.167,
+          "p99_us": 0.25,
+          "p999_us": 0.417,
+          "max_us": 21.208
+        },
+        "decision": {
+          "count": 300000,
+          "mean_us": 0.487,
+          "p50_us": 0.458,
+          "p95_us": 0.583,
+          "p99_us": 0.833,
+          "p999_us": 3.417,
+          "max_us": 30.042
+        },
+        "account_event": {
+          "count": 18000,
+          "mean_us": 1.395,
+          "p50_us": 0.125,
+          "p95_us": 5.625,
+          "p99_us": 33.958,
+          "p999_us": 83.125,
+          "max_us": 179.667
+        },
+        "history_enqueue": {
+          "count": 26000,
+          "mean_us": 1.329,
+          "p50_us": 0.083,
+          "p95_us": 5.25,
+          "p99_us": 33.667,
+          "p999_us": 87.25,
+          "max_us": 179.541
+        },
+        "sqlite_batch_write": {
+          "count": 436,
+          "mean_us": 273.713,
+          "p50_us": 214.875,
+          "p95_us": 448.584,
+          "p99_us": 1635.708,
+          "p999_us": 1713.167,
+          "max_us": 1720.167
+        },
+        "enqueue_to_commit": {
+          "count": 26000,
+          "mean_us": 11190.216,
+          "p50_us": 9329.542,
+          "p95_us": 32398.958,
+          "p99_us": 39000.042,
+          "p999_us": 40205.625,
+          "max_us": 40216.209
+        },
+        "input_to_commit": {
+          "count": 26000,
+          "mean_us": 11200.89,
+          "p50_us": 9349.959,
+          "p95_us": 32405.041,
+          "p99_us": 39000.25,
+          "p999_us": 40205.667,
+          "max_us": 40216.25
+        }
+      },
+      "unpaced_sqlite": {
+        "records": 26000,
+        "shards": 1000,
+        "max_shard": 999,
+        "gap_rows": 0,
+        "sequence_gaps": 0
+      },
+      "paced_sqlite": {
+        "records": 26000,
+        "shards": 1000,
+        "max_shard": 999,
+        "gap_rows": 0,
+        "sequence_gaps": 0
+      },
+      "paced": {
+        "paced": true,
+        "parse_records": 301000,
+        "parse_only_seconds": 0.239,
+        "startup_seconds": 0.003,
+        "replay_seconds": 30.14,
+        "replay_qps": 9986.834,
+        "flush_stop_seconds": 0.246,
+        "total_runtime_seconds": 30.388,
+        "deliveries": 301000,
+        "shard_inputs": 301000,
+        "shard_input_dispatch_ms": 625.189,
+        "market_path_ms": 609.982,
+        "paper_match_ms": 49.233,
+        "decision_ms": 213.806,
+        "account_event_ms": 24.504,
+        "history_enqueue_ms": 35.572,
+        "account_events": 18000,
+        "history_records_attempted": 26000,
+        "history_records_written": 26000,
+        "history_queue_peak": 5679,
+        "history_batches": 1955,
+        "history_batch_write_ms": 238.48,
+        "roundtrip": {
+          "count": 301000,
+          "mean_us": 21.128,
+          "p50_us": 20.0,
+          "p95_us": 28.542,
+          "p99_us": 44.708,
+          "p999_us": 61.417,
+          "max_us": 735.375
+        },
+        "schedule_lateness": {
+          "count": 301000,
+          "mean_us": 75.706,
+          "p50_us": 29.916,
+          "p95_us": 64.541,
+          "p99_us": 173.958,
+          "p999_us": 13804.541,
+          "max_us": 18029.166
+        },
+        "post_to_shard": {
+          "count": 301000,
+          "mean_us": 3.725,
+          "p50_us": 3.125,
+          "p95_us": 6.042,
+          "p99_us": 18.0,
+          "p999_us": 26.416,
+          "max_us": 88.0
+        },
+        "input_handler": {
+          "count": 301000,
+          "mean_us": 2.077,
+          "p50_us": 1.958,
+          "p95_us": 3.167,
+          "p99_us": 10.042,
+          "p999_us": 21.875,
+          "max_us": 128.958
+        },
+        "handler_to_completion": {
+          "count": 301000,
+          "mean_us": 13.046,
+          "p50_us": 12.75,
+          "p95_us": 15.125,
+          "p99_us": 19.292,
+          "p999_us": 28.25,
+          "max_us": 725.375
+        },
+        "callback_to_get": {
+          "count": 301000,
+          "mean_us": 2.245,
+          "p50_us": 1.875,
+          "p95_us": 3.833,
+          "p99_us": 8.75,
+          "p999_us": 21.25,
+          "max_us": 94.833
+        },
+        "paper_match": {
+          "count": 300000,
+          "mean_us": 0.164,
+          "p50_us": 0.166,
+          "p95_us": 0.292,
+          "p99_us": 0.542,
+          "p999_us": 2.125,
+          "max_us": 33.083
+        },
+        "decision": {
+          "count": 300000,
+          "mean_us": 0.713,
+          "p50_us": 0.625,
+          "p95_us": 1.041,
+          "p99_us": 2.375,
+          "p999_us": 10.333,
+          "max_us": 126.667
+        },
+        "account_event": {
+          "count": 18000,
+          "mean_us": 1.361,
+          "p50_us": 0.125,
+          "p95_us": 5.959,
+          "p99_us": 33.166,
+          "p999_us": 75.292,
+          "max_us": 105.25
+        },
+        "history_enqueue": {
+          "count": 26000,
+          "mean_us": 1.368,
+          "p50_us": 0.083,
+          "p95_us": 6.333,
+          "p99_us": 33.458,
+          "p999_us": 75.042,
+          "max_us": 110.75
+        },
+        "sqlite_batch_write": {
+          "count": 1955,
+          "mean_us": 121.985,
+          "p50_us": 85.583,
+          "p95_us": 356.208,
+          "p99_us": 752.833,
+          "p999_us": 3546.833,
+          "max_us": 4230.334
+        },
+        "enqueue_to_commit": {
+          "count": 26000,
+          "mean_us": 8227.934,
+          "p50_us": 185.375,
+          "p95_us": 48831.0,
+          "p99_us": 55226.75,
+          "p999_us": 56239.959,
+          "max_us": 56270.209
+        },
+        "input_to_commit": {
+          "count": 26000,
+          "mean_us": 8239.111,
+          "p50_us": 199.375,
+          "p95_us": 48831.792,
+          "p99_us": 55228.459,
+          "p999_us": 56240.0,
+          "max_us": 56285.167
+        }
+      }
+    }
+  }
+}
