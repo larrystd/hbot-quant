@@ -2,7 +2,7 @@
 
 运行路径：Binance 公开行情或文件回放 → Shard → SQLite 历史。Control 负责查询状态、历史、修改策略参数和停止。每个 Shard 固定一个市场、一个 Strategy 和一个模拟账户。
 
-本版只做模拟盘。`executor.mode` 是必填配置，取值 `paper` 或 `live`；`live` 为接入真实交易所预留，当前在配置校验时被拒绝。本文只描述架构与运行机制，构建、测试和性能验证见 [DEVELOPMENT.md](DEVELOPMENT.md)。
+本版只做模拟盘。`executor.mode` 是必填配置，取值 `paper` 或 `live`；`live` 为接入真实交易所预留，当前在配置校验时被拒绝。本文只描述架构与运行机制；构建与测试见 [README](../README.md)，压力测试结果见[测试报告](TEST_REPORT_2026-10-06.html)和[后续问题](CURRENT_ISSUES_2026-10-06.md)。
 
 ## 1. 组成与职责
 

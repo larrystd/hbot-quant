@@ -1,19 +1,21 @@
+#include <netinet/in.h>
+#include <sys/resource.h>
+#include <sys/socket.h>
+#include <unistd.h>
+
 #include <algorithm>
-#include <csignal>
 #include <chrono>
+#include <csignal>
 #include <cstdint>
 #include <filesystem>
 #include <fstream>
 #include <iomanip>
 #include <iostream>
-#include <memory>
 #include <map>
+#include <memory>
 #include <string>
 #include <thread>
 #include <vector>
-#include <netinet/in.h>
-#include <sys/socket.h>
-#include <unistd.h>
 
 #include "absl/status/status.h"
 #include "gflags/gflags.h"
@@ -29,8 +31,10 @@ DEFINE_string(order_amount, "", "Override order amount");
 DEFINE_string(bid_spread, "", "Override bid spread");
 DEFINE_string(ask_spread, "", "Override ask spread");
 DEFINE_int64(refresh_ms, 0, "Override refresh period in milliseconds");
-DEFINE_string(bench_output, "", "Write optional live timing probe JSON on exit");
-DEFINE_int32(bench_ack_port, 0, "Benchmark-only UDP completion port on loopback");
+DEFINE_string(bench_output, "",
+              "Write optional live timing probe JSON on exit");
+DEFINE_int32(bench_ack_port, 0,
+             "Benchmark-only UDP completion port on loopback");
 
 namespace {
 
@@ -57,8 +61,8 @@ absl::StatusOr<hquant::v1::StrategyOverrides> ReadOverrides() {
         FLAGS_strategy_shard >= hquant::v1::kMaxShards) {
       return absl::InvalidArgumentError("strategy_shard must be in [0,999]");
     }
-    overrides.shard = hquant::v1::ShardId{
-        static_cast<uint16_t>(FLAGS_strategy_shard)};
+    overrides.shard =
+        hquant::v1::ShardId{static_cast<uint16_t>(FLAGS_strategy_shard)};
   }
   if (Explicit("order_amount")) {
     auto value = hquant::v1::ParseFixed(FLAGS_order_amount);
@@ -97,8 +101,7 @@ void Distribution(std::ostream& output, const char* name,
          << ",\"p95_us\":" << percentile(0.95)
          << ",\"p99_us\":" << percentile(0.99)
          << ",\"p999_us\":" << percentile(0.999)
-         << ",\"max_us\":" << percentile(1.0) << '}'
-         << (comma ? ",\n" : "\n");
+         << ",\"max_us\":" << percentile(1.0) << '}' << (comma ? ",\n" : "\n");
 }
 
 bool WriteBenchOutput(const std::string& path,
@@ -129,13 +132,15 @@ bool WriteBenchOutput(const std::string& path,
     bench_ack_errors += perf.bench_ack_errors;
     bench_ack_bad_frame += perf.bench_ack_bad_frame;
     bench_ack_send_errors += perf.bench_ack_send_errors;
-    if (perf.bench_ack_last_errno) bench_ack_last_errno = perf.bench_ack_last_errno;
+    if (perf.bench_ack_last_errno)
+      bench_ack_last_errno = perf.bench_ack_last_errno;
     account_events += perf.account_events;
     history_attempted += perf.history_records;
     live_phase_invalid += perf.live_phase_invalid;
     append(wire_to_read, perf.wire_to_read_samples_ns);
     for (size_t i = 0; i < perf.wire_to_read_samples_ns.size() &&
-                       i < perf.live_schedule_seconds.size(); ++i) {
+                       i < perf.live_schedule_seconds.size();
+         ++i) {
       wire_by_second[perf.live_schedule_seconds[i]].push_back(
           perf.wire_to_read_samples_ns[i]);
     }
@@ -154,6 +159,24 @@ bool WriteBenchOutput(const std::string& path,
     append(live_command_history, perf.live_command_history_samples_ns);
     append(live_shard_other, perf.live_shard_other_samples_ns);
   }
+  if (probe.history.after_stop_flags.size() != probe.history.records_written ||
+      probe.history.after_stop_flags.size() !=
+          probe.history.queue_wait_ns.size() ||
+      probe.history.after_stop_flags.size() !=
+          probe.history.enqueue_to_commit_ns.size()) {
+    return false;
+  }
+  std::vector<uint64_t> queue_wait_before_stop, queue_wait_after_stop;
+  std::vector<uint64_t> commit_before_stop, commit_after_stop;
+  for (size_t i = 0; i < probe.history.after_stop_flags.size(); ++i) {
+    if (probe.history.after_stop_flags[i]) {
+      queue_wait_after_stop.push_back(probe.history.queue_wait_ns[i]);
+      commit_after_stop.push_back(probe.history.enqueue_to_commit_ns[i]);
+    } else {
+      queue_wait_before_stop.push_back(probe.history.queue_wait_ns[i]);
+      commit_before_stop.push_back(probe.history.enqueue_to_commit_ns[i]);
+    }
+  }
   std::ofstream output(path);
   if (!output) return false;
   output << std::fixed << std::setprecision(3)
@@ -168,11 +191,17 @@ bool WriteBenchOutput(const std::string& path,
          << ",\n  \"history_records_attempted\":" << history_attempted
          << ",\n  \"live_phase_invalid\":" << live_phase_invalid
          << ",\n  \"history_records_written\":" << probe.history.records_written
-         << ",\n  \"history_queue_peak\":" << probe.history.queue_peak
+         << ",\n  \"history_records_before_stop\":"
+         << queue_wait_before_stop.size()
+         << ",\n  \"history_records_after_stop\":"
+         << queue_wait_after_stop.size() << ",\n  \"history_queue_peak\":"
+         << probe.history.queue_peak_before_stop
+         << ",\n  \"history_queue_peak_after_stop\":"
+         << probe.history.queue_peak_after_stop
+         << ",\n  \"history_queue_peak_all\":" << probe.history.queue_peak
          << ",\n  \"sqlite_transactions\":" << probe.history.batches
          << ",\n  \"sqlite_writer_busy_ms\":"
-         << probe.history.batch_write_ns / 1e6
-         << ",\n";
+         << probe.history.batch_write_ns / 1e6 << ",\n";
   struct SecondPeak {
     uint32_t second;
     size_t count;
@@ -181,13 +210,38 @@ bool WriteBenchOutput(const std::string& path,
   std::vector<SecondPeak> peaks;
   for (auto& [second, samples] : wire_by_second) {
     std::sort(samples.begin(), samples.end());
-    peaks.push_back(SecondPeak{
-        second, samples.size(),
-        samples[static_cast<size_t>(0.99 * (samples.size() - 1))]});
+    peaks.push_back(
+        SecondPeak{second, samples.size(),
+                   samples[static_cast<size_t>(0.99 * (samples.size() - 1))]});
   }
-  std::sort(peaks.begin(), peaks.end(), [](const auto& left, const auto& right) {
-    return left.p99_ns > right.p99_ns;
-  });
+  std::sort(peaks.begin(), peaks.end(),
+            [](const auto& left, const auto& right) {
+              return left.p99_ns > right.p99_ns;
+            });
+  rusage usage{};
+  if (::getrusage(RUSAGE_SELF, &usage) != 0) return false;
+  const double server_cpu_seconds =
+      usage.ru_utime.tv_sec + usage.ru_utime.tv_usec / 1e6 +
+      usage.ru_stime.tv_sec + usage.ru_stime.tv_usec / 1e6;
+  output << "  \"performance_qos_requested\":"
+         << (probe.performance_qos_requested ? "true" : "false")
+         << ",\n  \"server_cpu_seconds\":" << server_cpu_seconds
+         << ",\n  \"io_worker_cpu_seconds\":[";
+  for (size_t i = 0; i < probe.io_worker_count; ++i) {
+    if (i) output << ',';
+    output << probe.io_worker_cpu_ns[i] / 1e9;
+  }
+  output << "],\n  \"io_worker_wall_seconds\":[";
+  for (size_t i = 0; i < probe.io_worker_count; ++i) {
+    if (i) output << ',';
+    output << probe.io_worker_wall_ns[i] / 1e9;
+  }
+  output << "],\n  \"io_worker_qos_status\":[";
+  for (size_t i = 0; i < probe.io_worker_count; ++i) {
+    if (i) output << ',';
+    output << probe.io_worker_qos_status[i];
+  }
+  output << "],\n";
   output << "  \"worst_wire_seconds\":[";
   for (size_t i = 0; i < std::min<size_t>(10, peaks.size()); ++i) {
     if (i) output << ',';
@@ -211,8 +265,16 @@ bool WriteBenchOutput(const std::string& path,
   Distribution(output, "live_executor", std::move(live_executor));
   Distribution(output, "live_command_history", std::move(live_command_history));
   Distribution(output, "live_shard_other", std::move(live_shard_other));
-  Distribution(output, "sqlite_queue_wait", probe.history.queue_wait_ns);
+  // The primary SQLite latency excludes records enqueued after RequestStop.
+  Distribution(output, "sqlite_queue_wait", std::move(queue_wait_before_stop));
   Distribution(output, "sqlite_enqueue_to_commit",
+               std::move(commit_before_stop));
+  Distribution(output, "sqlite_queue_wait_after_stop",
+               std::move(queue_wait_after_stop));
+  Distribution(output, "sqlite_enqueue_to_commit_after_stop",
+               std::move(commit_after_stop));
+  Distribution(output, "sqlite_queue_wait_all", probe.history.queue_wait_ns);
+  Distribution(output, "sqlite_enqueue_to_commit_all",
                probe.history.enqueue_to_commit_ns);
   Distribution(output, "sqlite_batch_write",
                probe.history.batch_write_samples_ns, false);
@@ -247,7 +309,8 @@ int main(int argc, char** argv) {
   std::error_code filesystem_error;
   std::filesystem::create_directories(FLAGS_state_dir, filesystem_error);
   if (filesystem_error) {
-    std::cerr << "cannot create state_dir: " << filesystem_error.message() << '\n';
+    std::cerr << "cannot create state_dir: " << filesystem_error.message()
+              << '\n';
     return 2;
   }
   std::signal(SIGINT, SignalStop);
@@ -259,7 +322,8 @@ int main(int argc, char** argv) {
   BenchAckSockets bench_ack_sockets;
   if (FLAGS_bench_ack_port != 0) {
     if (!probe || FLAGS_bench_ack_port < 1 || FLAGS_bench_ack_port > 65535) {
-      std::cerr << "--bench_ack_port requires --bench_output and a valid port\n";
+      std::cerr
+          << "--bench_ack_port requires --bench_output and a valid port\n";
       return 2;
     }
     sockaddr_in address{};

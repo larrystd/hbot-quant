@@ -1,12 +1,20 @@
 #include "hquant/runtime.h"
 
+#include <time.h>
+
 #include <algorithm>
 #include <chrono>
+#include <cstdlib>
+#include <cstring>
 #include <exception>
 #include <future>
 #include <memory>
 #include <string>
 #include <utility>
+
+#ifdef __APPLE__
+#include <pthread/qos.h>
+#endif
 
 #include "absl/status/status.h"
 #include "hquant/replay_reader.h"
@@ -18,6 +26,12 @@ std::string NewRunId() {
   return std::to_string(std::chrono::duration_cast<std::chrono::nanoseconds>(
                             std::chrono::system_clock::now().time_since_epoch())
                             .count());
+}
+
+uint64_t ThreadCpuNs() {
+  timespec now{};
+  if (::clock_gettime(CLOCK_THREAD_CPUTIME_ID, &now) != 0) return 0;
+  return static_cast<uint64_t>(now.tv_sec) * 1'000'000'000ULL + now.tv_nsec;
 }
 
 }  // namespace
@@ -52,8 +66,8 @@ Runtime::Runtime(const AppConfig& config, PerfProbe* perf)
   for (size_t i = 0; i < config_.shards.size(); ++i) {
     const ShardConfig& shard = config_.shards[i];
     shards_.push_back(std::make_unique<Shard>(
-        *io_contexts_[i % worker_count], shard, config_.input, history_, run_id_,
-        perf_ ? &perf_->shards[shard.id.value] : nullptr));
+        *io_contexts_[i % worker_count], shard, config_.input, history_,
+        run_id_, perf_ ? &perf_->shards[shard.id.value] : nullptr));
     shard_by_id_[shard.id.value] = shards_.back().get();
   }
 }
@@ -67,9 +81,35 @@ absl::Status Runtime::Start() {
   if (started_) return absl::FailedPreconditionError("runtime already started");
   if (auto status = history_.Start(); !status.ok()) return status;
   started_ = true;
+  const char* qos_env = std::getenv("HQUANT_BENCH_PERFORMANCE_QOS");
+  const bool prefer_performance_qos =
+      perf_ && qos_env && std::strcmp(qos_env, "1") == 0;
+  if (perf_) {
+    perf_->io_worker_count = io_contexts_.size();
+    perf_->performance_qos_requested = prefer_performance_qos;
+  }
   try {
-    for (const auto& io : io_contexts_) {
-      workers_.emplace_back([context = io.get()] { context->run(); });
+    for (size_t index = 0; index < io_contexts_.size(); ++index) {
+      workers_.emplace_back([context = io_contexts_[index].get(), perf = perf_,
+                             index, prefer_performance_qos] {
+        const uint64_t wall_start_ns = BenchClockNowNs();
+        const uint64_t cpu_start_ns = ThreadCpuNs();
+        int qos_status = 0;
+        if (prefer_performance_qos) {
+#ifdef __APPLE__
+          qos_status =
+              ::pthread_set_qos_class_self_np(QOS_CLASS_USER_INTERACTIVE, 0);
+#else
+          qos_status = -1;
+#endif
+        }
+        if (perf) perf->io_worker_qos_status[index] = qos_status;
+        context->run();
+        if (perf) {
+          perf->io_worker_cpu_ns[index] = ThreadCpuNs() - cpu_start_ns;
+          perf->io_worker_wall_ns[index] = BenchClockNowNs() - wall_start_ns;
+        }
+      });
     }
   } catch (const std::exception& error) {
     RequestStop();
@@ -113,6 +153,7 @@ absl::Status Runtime::RunReplay(const std::function<bool()>& interrupted) {
 
 void Runtime::RequestStop() {
   if (stop_requested_.exchange(true)) return;
+  if (perf_) perf_->history.stop_started.store(true, std::memory_order_release);
   for (const auto& shard : shards_) shard->RequestStop();
 }
 
@@ -131,10 +172,9 @@ absl::Status Runtime::Wait() {
 
 bool Runtime::PostReplay(ReplayRecord record,
                          std::function<void(absl::Status)> done) {
-  if (record.target.value < kMaxShards &&
-      shard_by_id_[record.target.value]) {
+  if (record.target.value < kMaxShards && shard_by_id_[record.target.value]) {
     shard_by_id_[record.target.value]->PostReplay(std::move(record),
-                                                   std::move(done));
+                                                  std::move(done));
     return true;
   }
   done(absl::NotFoundError("replay target shard not found"));

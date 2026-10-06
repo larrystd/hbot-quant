@@ -116,10 +116,11 @@ void BindText(sqlite3_stmt* statement, int index, const std::string& text) {
 
 void BindUint(sqlite3_stmt* statement, int index, uint64_t value) {
   char digits[20];
-  const auto [end, error] = std::to_chars(digits, digits + sizeof(digits), value);
+  const auto [end, error] =
+      std::to_chars(digits, digits + sizeof(digits), value);
   (void)error;  // 20 decimal digits fit every uint64_t value.
-  sqlite3_bind_text(statement, index, digits,
-                    static_cast<int>(end - digits), SQLITE_TRANSIENT);
+  sqlite3_bind_text(statement, index, digits, static_cast<int>(end - digits),
+                    SQLITE_TRANSIENT);
 }
 
 absl::StatusOr<uint64_t> ReadUint(sqlite3_stmt* statement, int index) {
@@ -178,8 +179,8 @@ absl::Status SqliteHistory::Start() {
   }
   // The UNIQUE constraint already creates the same index. Older databases
   // may still have the redundant explicit copy.
-  if (auto status = Exec(writer_db_,
-                         "DROP INDEX IF EXISTS history_records_run_shard");
+  if (auto status =
+          Exec(writer_db_, "DROP INDEX IF EXISTS history_records_run_shard");
       !status.ok()) {
     sqlite3_close(writer_db_);
     writer_db_ = nullptr;
@@ -245,10 +246,19 @@ bool SqliteHistory::TryPush(HistoryRecord record) {
     if (wake_writer) writer_cv_.notify_one();
     return false;
   }
-  if (perf_) record.perf_enqueue_ns = PerfNowNs();
+  if (perf_) {
+    record.perf_enqueue_ns = PerfNowNs();
+    record.perf_after_stop =
+        perf_->stop_started.load(std::memory_order_acquire);
+  }
+  const bool after_stop = record.perf_after_stop;
   writer_queue_.push_back(std::move(record));
-  if (perf_)
+  if (perf_) {
     perf_->queue_peak = std::max(perf_->queue_peak, writer_queue_.size());
+    size_t& phase_peak = after_stop ? perf_->queue_peak_after_stop
+                                    : perf_->queue_peak_before_stop;
+    phase_peak = std::max(phase_peak, writer_queue_.size());
+  }
   lock.unlock();
   if (wake_writer) writer_cv_.notify_one();
   return true;
@@ -314,8 +324,8 @@ void SqliteHistory::WriterLoop() {
   sqlite3_stmt* gap_statement = nullptr;
   if (sqlite3_prepare_v2(writer_db_, kInsertRecord, -1, &record_statement,
                          nullptr) != SQLITE_OK ||
-      sqlite3_prepare_v2(writer_db_, kInsertGap, -1, &gap_statement,
-                         nullptr) != SQLITE_OK) {
+      sqlite3_prepare_v2(writer_db_, kInsertGap, -1, &gap_statement, nullptr) !=
+          SQLITE_OK) {
     const auto error = SqliteError(writer_db_, "prepare history writer");
     sqlite3_finalize(record_statement);
     sqlite3_finalize(gap_statement);
@@ -346,7 +356,8 @@ void SqliteHistory::WriterLoop() {
     }
     if (wait_for_space_) space_cv_.notify_all();
     const uint64_t write_begin = perf_ ? PerfNowNs() : 0;
-    if (auto status = WriteBatch(records, gaps, record_statement, gap_statement);
+    if (auto status =
+            WriteBatch(records, gaps, record_statement, gap_statement);
         !status.ok()) {
       std::lock_guard lock(mutex_);
       error_ = std::string(status.message());
@@ -364,9 +375,11 @@ void SqliteHistory::WriterLoop() {
       perf_->batch_write_ns += elapsed;
       perf_->batch_write_samples_ns.push_back(elapsed);
       for (const HistoryRecord& record : records) {
-        perf_->queue_wait_ns.push_back(write_begin - record.perf_enqueue_ns);
-        perf_->enqueue_to_commit_ns.push_back(committed_at -
-                                              record.perf_enqueue_ns);
+        const uint64_t queue_wait = write_begin - record.perf_enqueue_ns;
+        const uint64_t to_commit = committed_at - record.perf_enqueue_ns;
+        perf_->queue_wait_ns.push_back(queue_wait);
+        perf_->enqueue_to_commit_ns.push_back(to_commit);
+        perf_->after_stop_flags.push_back(record.perf_after_stop);
         perf_->input_to_commit_ns.push_back(committed_at -
                                             record.perf_input_origin_ns);
       }
@@ -408,7 +421,8 @@ FROM history_records WHERE id > ? ORDER BY id LIMIT ?
     page.next_cursor =
         static_cast<uint64_t>(sqlite3_column_int64(statement, 0));
     record.run_id = ReadText(statement, 1);
-    record.shard.value = static_cast<uint16_t>(sqlite3_column_int(statement, 2));
+    record.shard.value =
+        static_cast<uint16_t>(sqlite3_column_int(statement, 2));
     record.sequence = static_cast<uint64_t>(sqlite3_column_int64(statement, 3));
     record.at_us = sqlite3_column_int64(statement, 4);
     record.kind = static_cast<HistoryKind>(sqlite3_column_int(statement, 5));

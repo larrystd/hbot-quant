@@ -2,6 +2,8 @@
 
 本文件说明如何把 [设计](DESIGN.md) 落成代码。目标是 C++20、Shard 共用最多 8 个 Asio 工作线程并在所属线程串行处理事件；1.0 只做 Binance 公开行情、文件回放和本地模拟交易。
 
+第 4 节保留原实现顺序作历史记录。当前实现已通过 Release 端到端测试；压力测试结果和未完成事项见 [README](../README.md#性能)与[问题清单](CURRENT_ISSUES_2026-10-06.md)。
+
 ## 1. 代码边界
 
 主干保持 `hquant/src/main.cc`、`config.{h,cc}`、`runtime.{h,cc}`、`replay_reader.{h,cc}`、`sqlite_history.{h,cc}`、`control_server.{h,cc}`，以及 `base/` 和 `shard/`。`shard/` 内只有 Market、Strategy、Executor、PaperExchange 和盘口实现；具体文件见设计文档第 2 节。入口是 `//hquant/src:hquant_server`。
@@ -15,7 +17,7 @@
 | Executor | PaperExchange、交易规则、静态资金上限 | `OnMarket`、`Execute`、`View` |
 | PaperExchange | 活动订单与模拟账户余额 | `Place`、`Cancel`、`OnBookBbo`、`OnPublicTrade` |
 
-Market 更新盘口后同步通知 Shard。Shard 同步调用 Executor、Strategy、Executor；这些调用中不 `co_await`。跨线程请求只用 `asio::post` 进入所属 Shard。单个输入处理完成前，不处理该 Shard 的下一条输入。
+Market 更新盘口后同步通知 Shard。Shard 依次调用 PaperExchange 模拟撮合、Strategy 决策、Executor 派发；这些调用中不 `co_await`。跨线程请求只用 `asio::post` 进入所属 Shard。单个输入处理完成前，不处理该 Shard 的下一条输入。
 
 ## 2. gflags 与配置生效
 
@@ -65,7 +67,7 @@ Runtime 不用 `gflags::SetCommandLineOption` 向工作线程传播配置；这�
 5. **回放、历史、Control**：回放按输入时间逐条投递并等待完成；SQLite 异步写入；Control 提供 `status`、`history`、`set_strategy`、`stop`，动态配置只在 Shard 线程提交。
 6. **收口构建图**：新二进制只链接 1.0 所需模块；旧架构文件退出新入口的依赖图，文档和示例指向新入口。
 
-本轮先完成代码和必要的开发文档；测试与验收工作后置。
+上述为原定实现顺序；当前阶段的端到端测试和带模拟成交压力测试已经完成，未关闭的问题单独列在问题清单中。
 
 ## 5. 分模块开发 prompt
 

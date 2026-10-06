@@ -1,5 +1,7 @@
 # 三组 1000 股票行情回放：正确性与性能摸底（2026-10-06）
 
+> 历史报告：本次执行使用逐条等待完成的文件回放。旧基准入口已清理；当前 WebSocket 链路的测试见 [TEST_REPORT_2026-10-06.html](TEST_REPORT_2026-10-06.html)。
+
 数据定义见 [MARKET_CASES.md](MARKET_CASES.md)，本次原始探针结果及 SQLite 核对见 [market_case_results_2026-10-06.json](market_case_results_2026-10-06.json)。运行环境沿用 [此前性能报告](PERFORMANCE_2026-10-06.md) 的 Apple M2 MacBook Air、24 GB 内存和 macOS 26.1；Bazel 使用 `--config=release`。以下性能数据每组只有 **1 次测量**。
 
 ## 数据与端到端正确性
@@ -44,9 +46,6 @@ python3 hquant/bench/make_market_cases.py /tmp/hquant-market-cases --case all
 python3 hquant/bench/validate_market_cases.py /tmp/hquant-market-cases/nyse
 python3 hquant/bench/validate_market_cases.py /tmp/hquant-market-cases/sse
 python3 hquant/bench/validate_market_cases.py /tmp/hquant-market-cases/stress
-bazelisk --batch build --config=release //hquant/src:hquant_server //hquant/bench:replay_bench
-mkdir -p /tmp/hquant-market-cases/stress/state
-bazel-bin/hquant/bench/replay_bench /tmp/hquant-market-cases/stress/config.yaml /tmp/hquant-market-cases/stress/state --pace
 ```
 
 数据是确定性合成盘口和公开成交，没有交易所网络协议、私有订单回报或真实下单。市场 case 只跑了未限速回放；它们的计划输入速率低于已按时间戳跑通的压力 case，但不能据此把本地测量当作生产容量保证。macOS 没有 Linux `perf`，本次用逐阶段计时探针定位瓶颈；本报告没有新的调用栈采样。在当前受限 shell 中，Bazel 已输出 `Build completed successfully` 后会在退出阶段因 `sysctl` 被沙箱拒绝而返回 37；生成的二进制已直接运行并完成上述测试。

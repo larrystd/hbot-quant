@@ -1,10 +1,12 @@
 #pragma once
 
+#include <time.h>
+
 #include <array>
+#include <atomic>
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
-#include <time.h>
 #include <vector>
 
 #include "hquant/base/ids.h"
@@ -56,7 +58,8 @@ struct LiveHandlerPhases {
 class BenchPhaseTimer {
  public:
   explicit BenchPhaseTimer(uint64_t* elapsed_ns)
-      : elapsed_ns_(elapsed_ns), begin_ns_(elapsed_ns ? BenchClockNowNs() : 0) {}
+      : elapsed_ns_(elapsed_ns),
+        begin_ns_(elapsed_ns ? BenchClockNowNs() : 0) {}
   BenchPhaseTimer(const BenchPhaseTimer&) = delete;
   BenchPhaseTimer& operator=(const BenchPhaseTimer&) = delete;
   ~BenchPhaseTimer() {
@@ -69,7 +72,8 @@ class BenchPhaseTimer {
 };
 
 struct ShardPerf {
-  // Benchmark-only connected UDP socket, one per Shard. Normal feed disables it.
+  // Benchmark-only connected UDP socket, one per Shard. Normal feed disables
+  // it.
   int bench_ack_fd = -1;
   uint64_t bench_ack_sent = 0;
   uint64_t bench_ack_errors = 0;
@@ -113,19 +117,31 @@ struct ShardPerf {
 };
 
 struct HistoryPerf {
+  // Records are assigned a phase when they enter the writer queue.
+  std::atomic<bool> stop_started{false};
   size_t queue_peak = 0;
+  size_t queue_peak_before_stop = 0;
+  size_t queue_peak_after_stop = 0;
   uint64_t batches = 0;
   uint64_t records_written = 0;
   uint64_t batch_write_ns = 0;
   std::vector<uint64_t> batch_write_samples_ns;
   std::vector<uint64_t> queue_wait_ns;
   std::vector<uint64_t> enqueue_to_commit_ns;
+  // Same writer order as the two latency vectors; split distributions on exit.
+  std::vector<uint8_t> after_stop_flags;
   std::vector<uint64_t> input_to_commit_ns;
 };
 
 struct PerfProbe {
   std::array<ShardPerf, kMaxShards> shards;
   HistoryPerf history;
+  // Benchmark-only CPU accounting for the Runtime io_context workers.
+  size_t io_worker_count = 0;
+  bool performance_qos_requested = false;
+  std::array<int, 8> io_worker_qos_status{};
+  std::array<uint64_t, 8> io_worker_cpu_ns{};
+  std::array<uint64_t, 8> io_worker_wall_ns{};
 };
 
 }  // namespace hquant::v1

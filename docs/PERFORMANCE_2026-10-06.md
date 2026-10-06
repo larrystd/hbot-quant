@@ -1,5 +1,7 @@
 # hquant 端到端正确性与性能摸底（2026-10-06）
 
+> 历史报告：这里的性能数据来自逐条等待完成的文件回放。该旧基准入口已清理；当前 WebSocket 链路的测试见 [TEST_REPORT_2026-10-06.html](TEST_REPORT_2026-10-06.html)。
+
 ## 范围与环境
 
 本次测量覆盖 `ReadReplayFile → Runtime → Shard → Market → PaperExchange → Strategy → Executor → SqliteHistory`，并用本地 Binance REST/WebSocket 模拟服务覆盖公开行情接入、Control 和 SQLite 历史。构建为 Bazel 9.2.0 的 `--config=release`（`-c opt -g1`）；机器为 Apple M2 MacBook Air（8 核、24 GB 内存），macOS 26.1。每个性能场景各运行 3 次带计时探针的基准进程和 3 次正式 `hquant_server` 进程，表中为各指标的中位数。完整原始结果见 [perf_results_2026-10-06.json](perf_results_2026-10-06.json)。
@@ -80,26 +82,8 @@ macOS 无 Linux `perf`，使用系统 `/usr/bin/sample` 以 1 ms 间隔采样。
 2. 报价频繁撤挂时，每次刷新会产生 14 条历史记录。SQLite 使用 64 条一批的事务写入；高写入量已使队列触顶。当前 `history_records` 同时定义了 `UNIQUE(run_id, shard, shard_sequence)` 和相同列顺序的显式索引，写入时需维护两棵等价索引，这是可确认的写放大。应先对移除重复索引、复用 prepared statement、批次大小分别做 A/B 测量；任何 WAL/同步策略变化都要同时验证崩溃后的持久性语义。
 3. 文件回放现可在写队列满时背压并保持历史完整。实时公开行情目前优先保持 Shard 响应，满队列会落 `history_gaps`；高压下实时路径的“全量历史可追溯”尚无保证。实盘级要求需要单独设计持久化缓冲/背压与重连恢复，并用真实交易所私有订单回报测试。当前代码没有真实下单路径。
 
-## 复现
+## 历史数据
 
-在仓库根目录运行：
-
-```sh
-bazelisk --batch test --config=release //...
-bazelisk --batch test --config=asan //hquant/test:end_to_end
-bazelisk --batch build --config=release //hquant/bench:replay_bench //hquant/src:hquant_server
-python3 hquant/bench/run_matrix.py --fixtures-root /tmp --output /tmp/hquant-perf.json --repeats 3
-```
-
-在 macOS 上复现调用栈采样（先生成足够长的回放文件）：
-
-```sh
-python3 hquant/bench/make_replay.py /tmp/hquant-profile --workload refresh --events 100000 --shards 1
-mkdir -p /tmp/hquant-profile/state
-bazel-bin/hquant/bench/replay_bench /tmp/hquant-profile/config.yaml /tmp/hquant-profile/state > /tmp/hquant-profile/result.json &
-bench_pid=$!
-/usr/bin/sample "$bench_pid" 3 -file /tmp/hquant-profile/sample.txt
-wait "$bench_pid"
-```
+原始测量保留在 [perf_results_2026-10-06.json](perf_results_2026-10-06.json)。旧的串行回放基准工具已移除；新的吞吐和延迟测量使用 WebSocket 发送器与服务端完成通知。
 
 原始数据的 `benchmark_runs` 和 `production_runs` 含每次运行的分布、阶段计时、CPU 时间、最大 RSS、SQLite 行数/类型数及各 Shard 序号。吞吐与延迟是这台机器在这些确定性回放负载上的摸底值；真实网络、交易所响应和行情突发分布需要另测。

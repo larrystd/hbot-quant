@@ -146,20 +146,24 @@ bazelisk --batch test --config=release //hquant/test:end_to_end  # 端到端测�
 
 ### 性能
 
-2026-10-06 的压测结果（[完整报告](docs/TEST_REPORT_2026-10-06.html)，[原始数据](docs/TEST_REPORT_DATA_2026-10-06.json)）：
+当前已验证的带模拟成交压力轮次：1000 只合成股票，每只每秒 8 条盘口更新和 2 笔公开逐笔成交，持续 30 秒；先用 1000 条盘口预热，再通过本机 WebSocket 计时发送 299,000 条行情。买卖各 10 档，执行端为 PaperExchange。
 
-| 目标速率 | 计时消息 | 完成 QPS | 端到端 p50 / p99 | 服务端处理 p50 / p99 | 核对 |
-| --- | ---: | ---: | ---: | ---: | --- |
-| 10,000 条/s | 299,000 | 9,967 | 45 / 130 µs | 6 / 21 µs | 通过 |
-| 20,000 条/s | 599,000 | 19,968 | 47 / 98 µs | 5 / 11 µs | 通过 |
-| 40,000 条/s | 1,199,000 | 39,967 | 48 / 224 µs | 5 / 22 µs | 通过 |
+| 完成 QPS | 端到端 p50 / p99 | 服务端接收→处理完成 p50 / p99 | Paper 成交 | 核对 |
+| ---: | ---: | ---: | ---: | --- |
+| 9,967 条/s | 34 / 117 µs | 4 / 18 µs | 400 笔 | 消息、订单、余额和历史均通过 |
 
-- 测试条件：Apple M2 MacBook Air（8 核、24 GB），macOS 26.1，Release 构建，本机 loopback，无 TLS，PaperExchange。
-- 数据：1000 只股票的确定性合成行情，每组发送 30 秒；盘口消息含买卖各 10 档。不是录制的交易所数据。
-- 端到端：测试器发出行情到收到压测专用的 UDP 完成通知；服务端处理：收齐 WebSocket 帧到同步处理完成，包括 JSON 解析、盘口更新、撮合、策略和执行，不含 SQLite 提交。
-- 核对：逐条核对消息，并检查最终十档盘口、成交、订单、余额、手续费和历史记录。
-- 40k/s 是一轮有效结果，不代表最大稳定容量。20k/s 使用的是 Python 测试器，与另外两组的端到端延迟不能直接比较。
-- 历史写入是异步的：40k/s 时从入队到提交的 p99 为 50.45 ms，不计入上面的处理延迟。
+端到端时间从测试器发送行情到收到压测专用完成通知；服务端时间从收齐 WebSocket 帧到同步行情处理完成，不含 SQLite 提交。历史记录共 38,200 条且无序号缺口。停机前入队→提交 p99 为 0.923 ms，停机后为 24.788 ms；“停机前”还包含预热记录。测试在 Apple M2 MacBook Air、macOS 26.1、Release、本机 loopback、无 TLS 下完成。[原始结果](docs/STRESS_FILL_RUN_2026-10-06.json)和[问题与边界](docs/CURRENT_ISSUES_2026-10-06.html)保留了完整证据。
+
+[早期 10k/20k/40k 报告](docs/TEST_REPORT_2026-10-06.html)使用未触发模拟成交的旧数据；20k/s 的发送器实现也不同，不能与上表直接比较。当前系统只实现 Paper 模拟执行，不发送真实订单。
+
+复现当前压力 case：
+
+```sh
+python3 hquant/bench/make_market_cases.py /tmp/hquant-market-cases/stress --case stress
+bazelisk --batch build --config=release //hquant/src:hquant_server
+python3 hquant/bench/live_ws_bench.py /tmp/hquant-market-cases/stress \
+  --prewarm-first-depth --completion-acks --native-ws-sender --native-ack-receiver
+```
 
 ## 开发
 

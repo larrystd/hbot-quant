@@ -705,7 +705,8 @@ async def send_paced(data, wire, speed, clock_offset_ns, events=None,
     return metrics, sent_ns, kinds
 
 
-async def send_native(data, wire, speed, state, events):
+async def send_native(data, wire, speed, state, events,
+                      prefer_performance_cores=False):
     """Send the same WS frames from inherited sockets outside Python's loop."""
     binary = state / "ws_sender"
     subprocess.run(
@@ -731,11 +732,14 @@ async def send_native(data, wire, speed, state, events):
     sockets = [wire.clients[symbol].get_extra_info("socket").fileno()
                for symbol in data["symbols"]]
     prefix = state / "ws_sender"
+    sender_env = os.environ.copy() if prefer_performance_cores else None
+    if sender_env is not None:
+        sender_env["HQUANT_BENCH_PERFORMANCE_QOS"] = "1"
     with (state / "ws_sender.stderr").open("w") as errors:
         process = subprocess.Popen(
             [str(binary), str(input_path), str(prefix),
              *(str(fd) for fd in sockets)],
-            pass_fds=tuple(sockets), stderr=errors)
+            pass_fds=tuple(sockets), stderr=errors, env=sender_env)
         exit_code = await asyncio.to_thread(process.wait)
     if exit_code != 0:
         raise RuntimeError("native WS sender failed")
@@ -850,11 +854,13 @@ def check_status(data, response):
 def validate_history(database, data):
     """Check durable sequence, order transitions, funds, fees, and holds."""
     quote = data["manifest"]["case"] == "sse" and "CNY" or "USD"
+    paper_expected = data["manifest"].get("paper_expected")
     base_increment = (100 if quote == "CNY" else 1) * SCALE
     fee_rate = SCALE // 1000
     checked = 0
     seen_shards = 0
     balances = Counter()
+    fill_totals = Counter()
     with sqlite3.connect(database) as db:
         db.row_factory = sqlite3.Row
         if db.execute("SELECT COUNT(*) FROM history_gaps").fetchone()[0]:
@@ -869,6 +875,7 @@ def validate_history(database, data):
         totals = {}
         next_seq = 1
         seen_balances = set()
+        shard_fills = Counter()
 
         def finish(shard):
             if shard < 0:
@@ -877,6 +884,17 @@ def validate_history(database, data):
                 raise AssertionError(f"shard {shard} has unfinished orders/fills")
             if seen_balances != {data["symbols"][shard], quote}:
                 raise AssertionError(f"shard {shard} missing balance rows")
+            expected_count = (min(4, data["trade_ids"][shard])
+                              if paper_expected and
+                              shard % paper_expected["fill_shard_step"] == 0
+                              else 0)
+            expected = {"fill": expected_count,
+                        "partial": min(2, expected_count),
+                        "filled": max(0, expected_count - 2)}
+            for kind, count in expected.items():
+                if shard_fills[kind] != count:
+                    raise AssertionError(
+                        f"shard {shard} {kind}: got {shard_fills[kind]}, expected {count}")
 
         for raw in cursor:
             row = dict(raw)
@@ -891,6 +909,7 @@ def validate_history(database, data):
                 totals = {data["symbols"][shard]: 1000 * SCALE,
                           quote: 1_000_000 * SCALE}
                 seen_balances = set()
+                shard_fills = Counter()
             if row["shard_sequence"] != next_seq:
                 raise AssertionError(f"shard {shard} history sequence gap")
             next_seq += 1
@@ -927,6 +946,16 @@ def validate_history(database, data):
                 if oid not in active or quantity <= 0 or quantity > active[oid][2]:
                     raise AssertionError("invalid fill")
                 buy = active[oid][0]
+                if paper_expected:
+                    expected_buy = shard_fills["fill"] % 2 == 1
+                    expected_ticks = 10_000 + 5 * shard + (1 if not buy else -1)
+                    if (row["buy"] != int(buy) or buy != expected_buy or
+                            quantity != paper_expected["fill_trade_quantity_lots"] * SCALE or
+                            price_nanos != expected_ticks * 10_000_000 or
+                            int(row["trade_id"]) != shard_fills["fill"] + 1):
+                        raise AssertionError(f"shard {shard} unexpected paper fill")
+                shard_fills["fill"] += 1
+                fill_totals["fill"] += 1
                 gross = price_nanos * quantity // SCALE
                 fee = (gross * fee_rate + SCALE - 1) // SCALE
                 if int(row["fee_nanos"]) != fee:
@@ -941,6 +970,9 @@ def validate_history(database, data):
                 active[oid][2] -= fill_pending.pop(oid)
                 if remaining != active[oid][2] or (kind == 4) != (remaining == 0):
                     raise AssertionError("fill report remaining mismatch")
+                report_kind = "filled" if kind == 4 else "partial"
+                shard_fills[report_kind] += 1
+                fill_totals[report_kind] += 1
                 if kind == 4:
                     del active[oid]
             elif kind == 7:  # balance
@@ -966,8 +998,17 @@ def validate_history(database, data):
         finish(current)
         if seen_shards != len(data["symbols"]):
             raise AssertionError("history missing a shard")
+    if paper_expected and len(data["symbols"]) == data["manifest"]["stocks"]:
+        for kind, manifest_key in (("fill", "fill_records"),
+                                   ("partial", "partial_reports"),
+                                   ("filled", "filled_reports")):
+            if fill_totals[kind] != paper_expected[manifest_key]:
+                raise AssertionError(f"paper {kind} total differs from fixture")
     return {"records": checked, "balance_rows": sum(balances.values()),
-            "shards_with_records": seen_shards}
+            "shards_with_records": seen_shards,
+            "paper_fills": fill_totals["fill"],
+            "paper_partial_reports": fill_totals["partial"],
+            "paper_filled_reports": fill_totals["filled"]}
 
 
 async def run(args):
@@ -1001,7 +1042,18 @@ async def run(args):
               "state_dir": str(state), "expected_depth":
               sum(c["depth"] for c in data["counts"]), "expected_trades":
               sum(c["trade"] for c in data["counts"]),
-              "kevent_probe": args.kevent_probe}
+              "kevent_probe": args.kevent_probe,
+              "prefer_performance_cores": args.prefer_performance_cores}
+    paper_rule = data["manifest"].get("paper_expected")
+    if paper_rule:
+        per_shard = [min(4, data["trade_ids"][shard])
+                     for shard in range(args.symbols)
+                     if shard % paper_rule["fill_shard_step"] == 0]
+        result["paper_expected"] = {
+            "fills": sum(per_shard),
+            "partial_reports": sum(min(2, count) for count in per_shard),
+            "filled_reports": sum(max(0, count - 2) for count in per_shard),
+        }
     stdout = (state / "server.stdout").open("w")
     stderr = (state / "server.stderr").open("w")
     process = None
@@ -1009,7 +1061,10 @@ async def run(args):
     native_receiver = native_receiver_stderr = None
     ack_started = False
     try:
-        server_env = None
+        server_env = os.environ.copy() if (
+            args.kevent_probe or args.prefer_performance_cores) else None
+        if args.prefer_performance_cores:
+            server_env["HQUANT_BENCH_PERFORMANCE_QOS"] = "1"
         if args.kevent_probe:
             probe_library = state / "libkevent_probe.dylib"
             subprocess.run(
@@ -1018,7 +1073,6 @@ async def run(args):
                  str(ROOT / "hquant/bench/kevent_probe_darwin.cc"),
                  "-o", str(probe_library)],
                 check=True, capture_output=True)
-            server_env = os.environ.copy()
             inserted = server_env.get("DYLD_INSERT_LIBRARIES", "")
             server_env["DYLD_INSERT_LIBRARIES"] = (
                 str(probe_library) + (":" + inserted if inserted else ""))
@@ -1093,7 +1147,8 @@ async def run(args):
         if args.native_ws_sender:
             result["sender"], sent_ns, kinds = await send_native(
                 data, wire, args.speed, state,
-                timed_events if timed_events is not None else data["events"])
+                timed_events if timed_events is not None else data["events"],
+                args.prefer_performance_cores)
         else:
             gc_was_enabled = gc.isenabled()
             if args.disable_gc_during_send:
@@ -1197,6 +1252,12 @@ async def run(args):
                                abs(result["bench_clock_drift_us"]) < 100)) and
                            result["probe"]["history_records_attempted"] ==
                            result["probe"]["history_records_written"] and
+                           (not args.prefer_performance_cores or (
+                               result["sender"]["performance_qos_requested"] and
+                               result["sender"]["performance_qos_status"] == 0 and
+                               result["probe"]["performance_qos_requested"] and
+                               all(status == 0 for status in
+                                   result["probe"]["io_worker_qos_status"]))) and
                            result["server_exit"] == 0)
         result["correctness_valid"] = result["valid"]
         # A complete run can still be a bad load test when the sender falls
@@ -1262,6 +1323,8 @@ if __name__ == "__main__":
     parser.add_argument("--native-ack-receiver", action="store_true")
     parser.add_argument("--native-ws-sender", action="store_true")
     parser.add_argument("--kevent-probe", action="store_true")
+    parser.add_argument("--prefer-performance-cores", action="store_true",
+                        help="request USER_INTERACTIVE QoS for the native sender and server I/O workers on macOS")
     parser.add_argument("--strategy-refresh-ms", type=int)
     ack_mode = parser.add_mutually_exclusive_group()
     ack_mode.add_argument("--completion-acks", action="store_true")
@@ -1279,6 +1342,9 @@ if __name__ == "__main__":
                                        arguments.completion_acks and
                                        sys.platform == "darwin"):
         parser.error("--kevent-probe requires macOS, --native-ws-sender and --completion-acks")
+    if arguments.prefer_performance_cores and not (
+            arguments.native_ws_sender and sys.platform == "darwin"):
+        parser.error("--prefer-performance-cores requires macOS and --native-ws-sender")
     if arguments.strategy_refresh_ms is not None and \
             arguments.strategy_refresh_ms <= 0:
         parser.error("--strategy-refresh-ms must be positive")

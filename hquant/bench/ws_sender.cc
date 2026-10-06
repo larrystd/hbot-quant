@@ -19,6 +19,10 @@
 #include <string>
 #include <vector>
 
+#ifdef __APPLE__
+#include <pthread/qos.h>
+#endif
+
 namespace {
 
 uint64_t ClockNs(clockid_t clock_id) {
@@ -61,6 +65,21 @@ int main(int argc, char** argv) {
     std::fprintf(stderr, "usage: ws_sender EVENTS OUTPUT_PREFIX FD...\n");
     return 2;
   }
+  const char* qos_env = std::getenv("HQUANT_BENCH_PERFORMANCE_QOS");
+  const bool prefer_performance_qos = qos_env && std::strcmp(qos_env, "1") == 0;
+  int qos_status = 0;
+  if (prefer_performance_qos) {
+#ifdef __APPLE__
+    qos_status = ::pthread_set_qos_class_self_np(QOS_CLASS_USER_INTERACTIVE, 0);
+#else
+    qos_status = -1;
+#endif
+    if (qos_status != 0) {
+      std::fprintf(stderr, "cannot set sender performance QoS: %d\n",
+                   qos_status);
+      return 2;
+    }
+  }
   const int input = open(argv[1], O_RDONLY);
   if (input < 0) return Fail("open events");
   struct stat file_status{};
@@ -89,8 +108,7 @@ int main(int argc, char** argv) {
     Event event{};
     if (!ReadValue(cursor, end, event.offset_ns) ||
         !ReadValue(cursor, end, event.shard) ||
-        !ReadValue(cursor, end, event.size) ||
-        event.shard >= sockets.size() ||
+        !ReadValue(cursor, end, event.size) || event.shard >= sockets.size() ||
         end - cursor < event.size) {
       std::fprintf(stderr, "bad event file at record %llu\n",
                    static_cast<unsigned long long>(i));
@@ -121,8 +139,7 @@ int main(int argc, char** argv) {
   uint64_t partial_count = 0;
   const uint64_t cpu_start = ClockNs(CLOCK_PROCESS_CPUTIME_ID);
   const uint64_t scheduled_start = ClockNs(CLOCK_MONOTONIC) + 100'000'000;
-  cpu_samples.push_back({0, scheduled_start,
-                         ClockNs(CLOCK_THREAD_CPUTIME_ID)});
+  cpu_samples.push_back({0, scheduled_start, ClockNs(CLOCK_THREAD_CPUTIME_ID)});
   uint64_t last_write_ns = scheduled_start;
   uint64_t sequence = 0;
   for (const Event& event : events) {
@@ -137,8 +154,8 @@ int main(int argc, char** argv) {
     const int fd = sockets[event.shard];
     size_t offset = 0;
     while (offset < event.size) {
-      const ssize_t written = send(fd, event.frame + offset,
-                                   event.size - offset, 0);
+      const ssize_t written =
+          send(fd, event.frame + offset, event.size - offset, 0);
       if (written > 0) {
         offset += size_t(written);
         if (offset < event.size) ++partial_count;
@@ -158,8 +175,8 @@ int main(int argc, char** argv) {
     write_ns.push_back(last_write_ns - sent_at);
     ++sequence;
     if (sequence % 1000 == 0 || sequence == count) {
-      cpu_samples.push_back({sequence, last_write_ns,
-                             ClockNs(CLOCK_THREAD_CPUTIME_ID)});
+      cpu_samples.push_back(
+          {sequence, last_write_ns, ClockNs(CLOCK_THREAD_CPUTIME_ID)});
     }
   }
   const uint64_t cpu_end = ClockNs(CLOCK_PROCESS_CPUTIME_ID);
@@ -174,9 +191,10 @@ int main(int argc, char** argv) {
                    cpu_samples.size() * sizeof(cpu_samples[0]));
   if (!cpu_output) return Fail("write sender CPU samples");
   std::ofstream status(prefix + ".json");
-  status << "{\"sent\":" << count
-         << ",\"send_seconds\":"
-         << (last_write_ns - scheduled_start) / 1e9
+  status << "{\"sent\":" << count << ",\"performance_qos_requested\":"
+         << (prefer_performance_qos ? "true" : "false")
+         << ",\"performance_qos_status\":" << qos_status
+         << ",\"send_seconds\":" << (last_write_ns - scheduled_start) / 1e9
          << ",\"sender_cpu_seconds\":" << (cpu_end - cpu_start) / 1e9
          << ",\"eagain_count\":" << eagain_count
          << ",\"partial_count\":" << partial_count << "}\n";

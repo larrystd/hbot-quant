@@ -21,6 +21,7 @@ a{color:var(--blue)}code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace
 <nav aria-label="报告目录"><a href="#data">1. 测试数据</a><a href="#method">2. 测试方法</a><a href="#results">3. 测试结果</a><a href="#analysis">4. 测试分析</a></nav>
 </div></header>
 <main>
+<div class="warn"><strong>结果口径更新：</strong>本页原有的 10k/20k/40k 三档表来自未触发 Paper 成交的旧压力数据。后续已完成带模拟成交的 10k/s 轮次：1000 只股票、30 秒、299,000 条计时行情、400 笔 Paper 成交，消息和历史均核对通过。新旧负载不能直接比较。见 <a href="STRESS_FILL_RUN_2026-10-06.json">新轮次原始结果</a>和<a href="CURRENT_ISSUES_2026-10-06.html">问题定位与剩余事项</a>。</div>
 <section id="data">
 <h2>1. 测试数据</h2>
 <p>全部是确定性合成行情，使用 <strong>1000 只股票</strong>。回放源的每条盘口消息含买 10 档和卖 10 档的完整价量；转换为 WebSocket <code>depthUpdate</code> 时，还可能附加零量删档。每笔成交是独立消息，含成交 ID、价格、数量和主动方向，不含盘口档位。</p>
@@ -51,8 +52,12 @@ a{color:var(--blue)}code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace
 </section>
 <section id="results">
 <h2>3. 测试结果</h2>
-<p>只列消息与最终状态核对通过、发送节奏合格的轮次。10k/s 选用有完整分段打点的有效运行；20k/s、40k/s 选用此前的有效运行。Release 与 ASan/UBSan 的 7 项黑盒端到端用例也通过。</p>
-<h3>30 秒压力测试汇总</h3>
+<h3>最新 10k/s 带 Paper 成交轮次</h3>
+<p>1000 只股票，首条盘口各预热 1 条；30 秒内发送并完成 299,000 条计时消息，发送节奏迟到 p99 为 10 µs。实际有 400 笔 Paper 成交，其中 200 次部分成交、200 次全部成交；SQLite 38,200 条历史记录无缺口。</p>
+<div class="table-wrap"><table><thead><tr><th>完成 QPS</th><th>端到端 p50 / p99</th><th>服务端接收→完成 p50 / p99</th><th>SQLite 入队→提交 p99：停机前 / 停机后</th><th>结果</th></tr></thead><tbody><tr><td class="number">9,967 条/s</td><td class="number">34 / 117 µs</td><td class="number">4 / 18 µs</td><td class="number">0.923 / 24.788 ms</td><td class="ok-text">正确性与发送节奏通过</td></tr></tbody></table></div>
+<p class="note">“停机前”包含预热记录；端到端含压测完成通知回程，服务端同步处理不含 SQLite 提交。完整原始结果见 <a href="STRESS_FILL_RUN_2026-10-06.json">STRESS_FILL_RUN_2026-10-06.json</a>。</p>
+<h3>历史三档压力测试汇总（无 Paper 成交）</h3>
+<p>下方三档为原始历史轮次，消息与最终状态核对、发送节奏均通过，但没有触发模拟成交。10k/s 选用当时有完整分段打点的运行；20k/s、40k/s 选用此前的有效运行。Release 与 ASan/UBSan 的 7 项黑盒端到端用例也通过。</p>
 <div class="table-wrap"><table><thead><tr><th>目标消息速率</th><th>计时消息</th><th>完成 QPS</th><th>端到端 T0→T9<br>p50 / p99，µs</th><th>服务端 T3→T6<br>p50 / p99，µs</th><th>发送落后 p99<br>全程 / 最差秒，µs</th><th>核对及节奏</th></tr></thead><tbody>
 <tr><td>10,000 条/s</td><td class="number">299,000</td><td class="number">9,967</td><td class="number">45 / 130</td><td class="number">6 / 21</td><td class="number">16 / 37</td><td class="ok-text">通过</td></tr>
 <tr><td>20,000 条/s</td><td class="number">599,000</td><td class="number">19,968</td><td class="number">47 / 98</td><td class="number">5 / 11</td><td class="number">73 / 102</td><td class="ok-text">通过</td></tr>
@@ -99,12 +104,12 @@ a{color:var(--blue)}code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace
 <section id="analysis">
 <h2>4. 测试分析</h2>
 <ol>
-<li><strong>吞吐与正确性：</strong>三组各持续 30 秒，最终消息、盘口、成交、账本和历史核对通过，实际完成约 1 万、2 万、4 万 QPS。40k/s 是一轮有效结果，尚不能据此给出最大稳定容量。</li>
+<li><strong>历史三档吞吐：</strong>三组各持续 30 秒，最终消息、盘口和历史核对通过，实际完成约 1 万、2 万、4 万 QPS；当时的测试数据没有触发 Paper 成交。40k/s 是一轮有效结果，尚不能据此给出最大稳定容量。</li>
 <li><strong>端到端主要耗时：</strong>在完整分段的 10k/s 轮次中，T1→T2 均值 19.014 µs；kqueue 诊断把这一段的常态位置分为 T1→K 的 p50 11 µs 和 K→T2 的 p50 4 µs。主要等待发生在 <code>kqueue</code> 报告可读之前；打点没有继续区分 TCP 内核交付、线程唤醒和系统调度，不能把整段归因于 Asio。</li>
 <li><strong>服务端同步处理：</strong>T3→T6 均值 5.987 µs、p99 21 µs；其中 JSON 解析均值 2.382 µs，T5→T6 均值 2.884 µs。完成通知仅为测试计时，T6→T9 不属于行情处理；T7 是发包前打点，不表示 UDP 包已经发出。</li>
 <li><strong>异步持久化：</strong>40k/s 的历史入队→提交 p99 为 50.45 ms，主要等待在 SQLite 队列。同步行情处理不等待写盘，持久化时效需单独评价。</li>
 </ol>
-<p class="note">测试环境是本机 loopback、无 TLS、合成行情和 PaperExchange。当前主机没有 Linux <code>perf</code> 或 Xcode <code>xctrace</code>；DTrace 初始化被系统权限拒绝。本报告据同帧 kqueue 打点定位事件边界，没有把尚未区分的内核与调度时间写成已确定原因。</p>
+<p class="note">测试环境是本机 loopback、无 TLS、合成行情和 PaperExchange。本报告的早期分段使用同帧 kqueue 打点；后续真实服务的 macOS 内核事件跟踪和剩余边界见<a href="CURRENT_ISSUES_2026-10-06.html">问题定位文档</a>。</p>
 </section>
 <footer>hquant · <a href="SELECTED_TEST_RESULTS_2026-10-06.json">三组汇总数据</a> · <a href="PHASE_TRACE_10K_2026-10-06.json">10k/s 分段原始汇总</a> · <a href="KEVENT_TRACE_10K_2026-10-06.json">kqueue 诊断原始汇总</a></footer>
 </main>

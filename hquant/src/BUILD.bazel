@@ -6,7 +6,7 @@ cc_library(
     strip_include_prefix = "/hquant/src",
     include_prefix = "hquant",
     deps = ["//hquant/src/base:ids"],
-    visibility = ["//hquant/src:__subpackages__", "//hquant/bench:__pkg__"],
+    visibility = ["//hquant/src:__subpackages__"],
 )
 
 cc_library(
@@ -22,7 +22,7 @@ cc_library(
         "@abseil-cpp//absl/status:statusor",
         "@yaml-cpp//:yaml-cpp",
     ],
-    visibility = ["//hquant/src:__subpackages__", "//hquant/bench:__pkg__"],
+    visibility = ["//hquant/src:__subpackages__"],
 )
 
 cc_library(
@@ -57,7 +57,7 @@ cc_library(
         "@abseil-cpp//absl/status:statusor",
         "@simdjson//:simdjson",
     ],
-    visibility = ["//hquant/src:__subpackages__", "//hquant/bench:__pkg__"],
+    visibility = ["//hquant/src:__subpackages__"],
 )
 
 cc_library(

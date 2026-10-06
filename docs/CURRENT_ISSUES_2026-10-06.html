@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>hquant 当前问题、定位证据与建议方案 · 2026-10-06</title>
+<style>
+:root{--ink:#172b3a;--muted:#536977;--line:#dce6eb;--bg:#f5f8fa;--blue:#12648a;--green:#116447;--amber:#8f6016}
+*{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.7 -apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif}
+header{background:#143349;color:#fff;padding:36px 24px 30px}header>div,main{max-width:1120px;margin:auto}h1{font-size:32px;line-height:1.25;margin:0 0 10px}header p{margin:0;color:#cfdee5}nav{display:flex;gap:10px 18px;flex-wrap:wrap;margin-top:20px}nav a{color:#e8f7fb;font-weight:650}
+main{padding:25px 20px 55px}section{background:#fff;border:1px solid var(--line);border-radius:11px;padding:27px 30px;margin-bottom:18px}h2{font-size:24px;line-height:1.35;margin:0 0 16px;border-bottom:2px solid #d8e9ee;padding-bottom:10px}h3{font-size:16px;margin:0 0 7px}p{margin:8px 0 14px}ul,ol{margin:8px 0 14px;padding-left:23px}li{margin:6px 0}.note{color:var(--muted);font-size:13px}.key{background:#edf6f6;border-left:4px solid #21858b;padding:12px 15px;margin:16px 0}.warn{background:#fff5e7;border-left:4px solid #bc8129;padding:12px 15px;margin:16px 0}details{border:1px solid var(--line);border-radius:7px;padding:10px 14px;margin:12px 0;background:#fafcfd}details summary{cursor:pointer;font-weight:650}
+a{color:var(--blue)}code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.91em;background:#eef3f5;padding:1px 4px;border-radius:3px;overflow-wrap:anywhere}.table-wrap{overflow-x:auto;border:1px solid var(--line);border-radius:7px;margin:14px 0}table{border-collapse:collapse;width:100%;min-width:760px;font-size:13px}th,td{padding:9px 10px;text-align:left;border-bottom:1px solid #e5edf1;vertical-align:top}th{background:#eaf1f5;color:#25485a;white-space:nowrap}tr:last-child td{border-bottom:0}tbody tr:nth-child(even){background:#fafcfd}.status{font-weight:650;color:var(--amber)}.number{font-variant-numeric:tabular-nums;white-space:nowrap}
+.issue-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:13px}.issue-grid article{border:1px solid var(--line);border-radius:8px;padding:15px 17px;background:#fcfefe}.issue-grid article p{margin:0}.issue-grid .label{color:var(--blue);font-size:12px;font-weight:750;letter-spacing:.03em;text-transform:uppercase}.evidence{border-top:1px solid var(--line);padding-top:12px;margin-top:18px}.evidence code{white-space:normal}footer{font-size:12px;color:var(--muted);margin-top:15px}
+@media(max-width:700px){header{padding:28px 18px}h1{font-size:27px}main{padding:16px 12px}section{padding:20px 16px}h2{font-size:21px}.issue-grid{grid-template-columns:1fr}}
+@media print{body{background:#fff;font-size:11px}header{background:#fff;color:#000;padding:0 0 15px;border-bottom:2px solid #000}header p,nav a{color:#000}main{padding:0}section{border:0;border-radius:0;padding:16px 0;margin:0;break-inside:avoid}.issue-grid article{break-inside:avoid}.table-wrap{overflow:visible}table{min-width:0;font-size:9px}th,td{padding:5px}}
+</style>
+</head>
+<body>
+<header><div>
+<h1>hquant 当前问题、定位证据与建议方案</h1>
+<p>2026-10-06 · 以 10k/s 压力测试为重点 · 区分正式结果、同负载复跑和内核跟踪</p>
+<nav aria-label="页面目录"><a href="#scope">范围</a><a href="#overview">问题总览</a><a href="#issue-1">1. T1→T2</a><a href="#issue-2">2. 测量扰动</a><a href="#issue-3">3. I/O 排队</a><a href="#issue-4">4. 模拟成交</a><a href="#issue-5">5. SQLite</a><a href="#issue-6">6. 市场 case</a><a href="#issue-7">7. 测试器</a></nav>
+</div></header>
+<main>
+<section id="scope">
+<h2>范围与结论口径</h2>
+<p>本文记录测试中发现的问题、定位证据与处理状态。重点是 1000 只股票、每只每秒 8 条十档盘口更新和 2 笔公开成交、持续 30 秒的压力 case。初始化时每只股票先发一条深度消息；正式计时的 299,000 条消息通过本机 WebSocket 进入 <code>hquant_server</code>，发送器不等待逐条完成通知。当前交易执行端是 PaperExchange；本机 loopback 测量不包含交易所网络、TLS 或真实订单回报。</p>
+<div class="key"><strong>阶段性收尾：</strong>带成交的 10k/s 压力轮次已通过消息、订单、余额、SQLite 历史和发送节奏核对；<a href="STRESS_FILL_RUN_2026-10-06.json">原始结果</a>随仓库保存。问题 4、5 已修复或修正统计口径；其余问题留作下一阶段，本机 Paper 测量不代表实盘容量。</div>
+<div class="key"><strong>证据口径：</strong>正式结果用于报告延迟和 QPS；同负载复跑用于分段定位；内核跟踪只用于解释特定样本的事件顺序。不同轮次的均值和 p99 不相加，也不把受跟踪影响的延迟当作正式结果。</div>
+<p class="note">主报告见 <a href="TEST_REPORT_2026-10-06.html">性能与正确性测试报告</a>；本页的 Markdown 版本见 <a href="CURRENT_ISSUES_2026-10-06.md">当前问题清单</a>。</p>
+</section>
+<section id="overview">
+<h2>问题与状态</h2>
+<div class="table-wrap"><table><thead><tr><th>编号</th><th>问题</th><th>状态</th></tr></thead><tbody>
+<tr><td>1</td><td><a href="#issue-1">本机 WebSocket 从发送返回到服务端底层读回调，平均耗时 19.014 µs</a></td><td class="status">真实服务短窗已逐段定量；内核执行段待细分</td></tr>
+<tr><td>2</td><td><a href="#issue-2">诊断工具和发送器改变延迟长尾，测试均值不稳定</a></td><td class="status">已观察；原因待隔离</td></tr>
+<tr><td>3</td><td><a href="#issue-3">同一 I/O 线程上出现第二条消息等待前一条处理</a></td><td class="status">跟踪窗口已证实；正式轮次占比待验证</td></tr>
+<tr><td>4</td><td><a href="#issue-4">压力 case 没有模拟成交，无法测成交路径</a></td><td class="status">已修复；完整复测有 400 笔 Paper 成交</td></tr>
+<tr><td>5</td><td><a href="#issue-5">SQLite 停机撤单突发混入运行期落盘统计</a></td><td class="status">已修正统计口径；停机前后分列</td></tr>
+<tr><td>6</td><td><a href="#issue-6">NYSE、SSE 行情 case 的现有网络轮次未通过发送节奏门槛</a></td><td class="status">正确性通过；性能结果待重跑</td></tr>
+<tr><td>7</td><td><a href="#issue-7">20k/s 与 10k/s、40k/s 使用不同发送实现</a></td><td class="status">跨速率端到端比较不可用</td></tr>
+</tbody></table></div>
+</section>
+<section id="issue-1">
+<h2>1. T1→T2：发送返回到服务端读回调</h2>
+<div class="warn"><strong>一句话问题：</strong>10k/s 本机 WebSocket 压力测试中，客户端 <code>send()</code> 返回到服务端底层读回调开始，平均耗时 <strong>19.014 µs</strong>，是端到端路径中均值最大的相邻阶段。</div>
+<div class="key"><strong>一句话根因：</strong>本机发送之后，<code>kernel_task</code> 线程取得 CPU 并唤醒 QuantServer 的 I/O 线程；两次等待 CPU 和这段内核处理构成常态耗时的主要部分，同轮第二条消息还会等待前一条处理。</div>
+<p><strong>T1</strong> = 客户端 <code>send()</code> 返回；<strong>K</strong> = 服务端 <code>kevent</code> 返回该 socket 的可读事件；<strong>T2</strong> = 服务端底层 socket 读完成回调开始。这段结束时还没有进行 JSON 解析或策略处理。</p>
+<h3>三层证据</h3>
+<div class="table-wrap"><table><thead><tr><th>证据</th><th>使用的工具与定位方法</th><th>测到的结果</th></tr></thead><tbody>
+<tr><td>正式 10k/s、30 秒轮次</td><td>原生发送器在 <code>send()</code> 返回后记 T1，<code>TimedTcpStream</code> 在底层读取完成回调入口记 T2；按帧序号配对。</td><td>298,995 帧；T1→T2 均值 <strong>19.014 µs</strong>、p50 <strong>16 µs</strong>、p99 <strong>55 µs</strong>。这是正式延迟口径。</td></tr>
+<tr><td>两次同负载 K 探针复跑</td><td>仅在 QuantServer 中用 <code>DYLD_INSERT_LIBRARIES</code> 加载 <code>kevent_probe_darwin.cc</code>，在 <code>kevent</code> 返回 <code>EVFILT_READ</code> 后记录 K，按同一帧拆 T1→K、K→T2。</td><td>两轮有效配对 298,866/298,882 帧；T1→K p50 均为 <strong>11 µs</strong>，K→T2 p50 均为 <strong>4 µs</strong>。常态耗时主要位于 K 之前。</td></tr>
+<tr><td>真实 QuantServer 内核跟踪</td><td>macOS <code>ktrace</code> 在一轮真实 10k/s 运行中捕获 0.264 秒、335,269 条系统调用和调度事件；用原始 CSV、消息序号和服务端线程关联。</td><td>2687 条候选帧，2646 条与同线程 <code>kevent</code> 退出配对，<strong>2619 条</strong>具有完整的内核线程、I/O 线程和 <code>recvmsg</code> 事件。下表只使用这 2619 条。</td></tr>
+</tbody></table></div>
+<h3>这张表是怎么量出来的</h3>
+<ol>
+<li><strong>先量总时间：</strong>测试工具给每条消息编号；本机 <code>send()</code> 返回时记 T1。QuantServer 开始执行底层读回调时记 T2，并把编号和 T2 回给测试工具。同一编号的 T2 减 T1，就是这条消息的总耗时。</li>
+<li><strong>再看中间发生了什么：</strong>macOS 自带的 <code>ktrace</code> 像一台事件记录器：它记下唤醒服务端的内核线程何时获得 CPU、它何时叫醒 QuantServer 的 I/O 线程、I/O 线程何时获得 CPU，以及服务端何时开始和结束从 socket 取数据。不需要往内核里加日志。</li>
+<li><strong>找到同一条消息：</strong>消息编号能查到它走哪个连接、交给哪个 I/O 线程。只用该线程上先后顺序合理、读取字节数也吻合的内核记录；对不上的丢掉。这段 0.264 秒的记录中，2687 条候选消息最终有 2619 条能完整拆分。</li>
+<li><strong>对齐两套时钟，再相减：</strong>程序打点和系统记录的计时起点不同。我们额外记录“系统告诉服务端 socket 可读”的时刻 K，用它把两套时间对齐。K 只用来对时，<strong>不代表数据刚进入接收队列</strong>。对齐后，沿同一条消息的时间线，把相邻两个时刻相减，就得到下表七段耗时。</li>
+</ol>
+<details><summary>复算用的文件、事件字段和公式（展开）</summary>
+<p>用户态：<code>T1 = sent_ns[seq] + write_ns[seq−1]</code>，T2 由 <a href="../hquant/src/base/net.h"><code>TimedTcpStream::async_read_some</code></a> 保存到含序号的 <code>acks.bin</code>，均用 <code>CLOCK_MONOTONIC</code>。<a href="../hquant/bench/kevent_probe_darwin.cc">kevent_probe_darwin.cc</a> 用 <code>DYLD_INSERT_LIBRARIES</code> 拦截 QuantServer 的 <code>kevent</code>，在返回 <code>EVFILT_READ</code> 后按线程和 fd 保存 K；读回调调用 <code>BenchKeventReadReadyNs(fd)</code> 读取。K 是用户态探针时间。</p>
+<p>内核态：<code>ktrace</code> 原始文件为 <code>hquant-t1t2-kernel-final.ktrace</code>；CSV 列包括 <code>timestampns</code>、<code>eventname</code>、<code>debugid</code>、<code>arg1</code>、<code>threadid</code>、<code>pid</code>。本轮记录 <code>BSC_sendto</code>、<code>BSC_kevent</code>、<code>BSC_recvmsg</code>、<code>MACH_MKRUNNABLE</code>、<code>MACH_DISPATCH</code> 等事件。<code>MACH_MKRUNNABLE.arg1</code> 是被唤醒线程，<code>threadid</code> 是执行唤醒的线程；<code>MACH_DISPATCH.threadid</code> 是获得 CPU 的线程。本轮 <code>BSC_kevent</code> 进入/退出 debugid 为 67896749/67896750，<code>BSC_recvmsg</code> 为 67895405/67895406。消息序号查 <code>ws_sender.events</code> 的 shard，映射到 8 个 I/O 线程；以 K 位于同线程 <code>kevent</code> 退出与下一次 <code>recvmsg</code> 进入之间校准时间轴，再用单次 <code>recvmsg</code> 返回字节数核对帧大小。</p>
+<p>七段取点：<code>I</code> = 唤醒 I/O 线程之前，<code>kernel_task</code> 线程 578 最后一次获得 CPU；<code>W</code> = I/O 线程被唤醒；<code>R</code> = I/O 线程获得 CPU；<code>E</code> = <code>kevent</code> 系统调用退出；<code>B/C</code> = <code>recvmsg</code> 进入/退出。逐帧计算 <code>max(0, I−T1)</code>、<code>W−max(T1,I)</code>、<code>R−W</code>、<code>E−R</code>、<code>B−E</code>、<code>C−B</code>、<code>T2−C</code>。内核线程在 T1 时已运行的 415 帧，第一段记为 0；另外 2204 帧在 T1 后获得 CPU。七段逐帧相加等于 <code>T2−T1</code>。最终分段采用内核系统调用退出点而不是 K；含 T1/T2 的亚微秒数字仍受跨时钟对齐误差影响。</p>
+</details>
+<h3>同一批 2619 条消息的延迟分账</h3>
+<div class="table-wrap"><table><thead><tr><th>相邻阶段</th><th>均值 µs</th><th>p50 µs</th><th>p99 µs</th><th>时间点依据</th></tr></thead><tbody>
+<tr><td>T1 → 内核线程获得 CPU</td><td class="number">1.805</td><td class="number">1.421</td><td class="number">5.713</td><td>T1、<code>kernel_task</code> 线程 578 的 <code>MACH_DISPATCH</code></td></tr>
+<tr><td>内核线程在 T1 后运行 → 唤醒 I/O 线程</td><td class="number">2.960</td><td class="number">2.750</td><td class="number">6.713</td><td>线程 578 的运行时间、目标 I/O 线程的 <code>MACH_MKRUNNABLE</code></td></tr>
+<tr><td>I/O 线程可运行 → 获得 CPU</td><td class="number"><strong>4.777</strong></td><td class="number"><strong>3.041</strong></td><td class="number">37.750</td><td>同一 I/O 线程的 <code>MACH_MKRUNNABLE</code> → <code>MACH_DISPATCH</code></td></tr>
+<tr><td>I/O 线程获得 CPU → <code>kevent</code> 系统调用退出</td><td class="number">0.589</td><td class="number">0.459</td><td class="number">2.042</td><td><code>MACH_DISPATCH</code> → <code>BSC_kevent</code> 退出</td></tr>
+<tr><td><code>kevent</code> 退出 → <code>recvmsg</code> 进入</td><td class="number">0.748</td><td class="number">0.625</td><td class="number">2.458</td><td>两个系统调用的内核时间戳</td></tr>
+<tr><td><code>recvmsg</code> 进入 → 退出</td><td class="number">0.878</td><td class="number">0.792</td><td class="number">2.916</td><td><code>BSC_recvmsg</code> 进入/退出</td></tr>
+<tr><td><code>recvmsg</code> 退出 → 底层读回调 T2</td><td class="number">5.267</td><td class="number">2.204</td><td class="number">81.162</td><td><code>BSC_recvmsg</code> 退出、T2</td></tr>
+<tr><td><strong>T1 → T2</strong></td><td class="number"><strong>17.024</strong></td><td class="number"><strong>12.000</strong></td><td class="number"><strong>100.000</strong></td><td>上述 7 段均值来自同一批 2619 帧，逐段均值相加为 17.024 µs</td></tr>
+</tbody></table></div>
+<p>这 2619 条消息的 I/O 线程唤醒事件都由 <code>kernel_task</code> 线程 578 执行。回看线程 578 最近一次变为可运行的事件，其中 2471 次由 <code>ws_sender</code> 触发、147 次由 <code>hquant_server</code> 触发、1 次由 <code>kernel_task</code> 触发；“最近一次唤醒来源”仅用于确认线程路径，不能当成每个 TCP 包的内核函数栈。</p>
+<p><strong>单帧核对：</strong>序号 <strong>9442</strong> 以 T1 为 0，内核线程获 CPU 为 +1.421 µs，唤醒 I/O 线程 +4.004 µs，I/O 线程获 CPU +6.921 µs，<code>kevent</code> 退出 +7.379 µs，<code>recvmsg</code> 进入 +8.004 µs、退出 +8.796 µs，T2 为 +11.000 µs。这个例子只展示事件如何相减，汇总数来自上表全部 2619 条。</p>
+<p>上表两次等待 CPU 合计均值 <strong>6.582 µs</strong>；“可运行→获得 CPU”是等待调度，不是上下文切换代码执行了 4.777 µs。对 2510 条还能配到选择 CPU 事件的消息，唤醒→<code>MACH_SCHED_CHOOSE_PROCESSOR</code> 均值 0.125 µs，随后至实际获得 CPU 均值 4.496 µs。<code>recvmsg</code> 退出→T2 的 5.267 µs 均值包含同轮第二条消息：2521 条首个读回调这一段均值 2.311 µs，98 条第二个读回调均值 81.317 µs，后者在同一 I/O 线程上等待前一条处理。详见<a href="#issue-3">问题 3</a>。</p>
+<p class="note"><strong>结论与边界：</strong>正式 30 秒轮次的 19.014 µs 和短跟踪窗口的 17.024 µs 来自不同测量条件，不能互相作精确分账。真实进程的短窗已经直接显示：内核线程执行事件交付、唤醒 I/O 线程及 I/O 线程等待调度，是常态耗时的主要位置；这不能单独证明 CPU 核数不足。当前 <code>ktrace</code> 没有 TCP 数据进入服务端接收队列和 <code>kqueue</code> 内部通知的时间点，因此还不能把 2.960 µs 内核执行段分成 TCP 处理与可读事件通知。要再拆这一段，必须在真实服务对应 socket 的这两个内核点打时间戳并按连接/序号关联，不能用 loopback <code>tcpdump</code> 时间代替接收队列入队时间。</p>
+<p><strong>建议解决方案：</strong>先对真实服务 A/B 测试发送器忙等与 I/O 线程 CPU 资源安排，比较内核线程和 I/O 线程两次“可运行→获得 CPU”以及 T1→T2。若仍需要定位 2.960 µs 的内部组成，再使用能看到 TCP 接收队列入队和 <code>kqueue</code> 通知的内核探针。</p>
+<p class="note evidence">证据文件：<code>/private/tmp/hquant-phase-10k-20261006/result.json</code>（正式轮次）；<code>/private/tmp/hquant-kevent-10k-20261006-r2/result.json</code>、<code>/private/tmp/hquant-kevent-10k-20261006-r3/result.json</code>（K 复跑）；<code>/private/tmp/hquant-t1t2-kernel30/result.json</code>、<code>acks.bin</code>、<code>ws_sender.events</code>、<code>ws_sender.sent_ns.bin</code>、<code>ws_sender.write_ns.bin</code>（同一内核诊断运行）；<code>/private/tmp/hquant-t1t2-kernel-final.ktrace</code> 及导出的 <code>.csv</code>；<code>/private/tmp/hquant_t1t2_kernel_correlate.py</code>（原有相关脚本，七段表补充了线程 578 的调度配对）。打点代码：<a href="../hquant/bench/ws_sender.cc">ws_sender.cc</a>、<a href="../hquant/bench/kevent_probe_darwin.cc">kevent_probe_darwin.cc</a>、<a href="../hquant/src/base/net.h">net.h</a>、<a href="../hquant/bench/live_ws_bench.py">live_ws_bench.py</a>。</p>
+</section>
+<section id="issue-2">
+<h2>2. 测量扰动与毫秒级异常长尾</h2>
+<div class="issue-grid">
+<article><h3 class="label">现象</h3><p>两次带 K 探针的有效复跑 p99 为 52/50 µs，但全量平均为 30.62/51.35 µs，p999 为 6.33/9.40 ms；少量毫秒级事件显著抬高平均值。原始无 K 轮次平均 19.014 µs。内核跟踪在 0.264 秒内产生约 33.7 万条事件；带跟踪的 30 秒运行 T1→T2 p99 升至 354 µs。</p></article>
+<article><h3 class="label">定位</h3><p>高频全局跟踪会扰动要测的调度。原生发送器在 30 秒运行中使用约 29.7–29.8 CPU 秒，近乎占满一个逻辑核；模拟 WebSocket 服务和 QuantServer 同机运行。尚不能把毫秒级长尾统一归因于任一方。内核 <code>MACH_DISPATCH</code> 的运行线程在 <code>threadid</code> 字段；早期按 <code>arg1</code> 配对的调度统计不能使用。</p></article>
+<article><h3 class="label">建议方案</h3><p>正式延迟采集与内核跟踪分开。逐轮保存 sender、mock server、QuantServer、SQLite writer 的 CPU 使用率，以及每秒发送迟到、T1→K、K→T2 和超过 1 ms 的消息序号。减少发送器长时间忙等后，以相同节奏门槛做 A/B；必要时用独立环境复核。内核跟踪只保留最小事件过滤器和短窗口，受扰动窗口不进入正式汇总。</p></article>
+<article><h3 class="label">关闭标准</h3><p>至少 3 次相同配置的正式运行能复现均值和 p99/p999；每个毫秒级离群样本能定位到发送迟到、接收调度、同线程排队或其他明确阶段。</p></article>
+</div>
+</section>
+<section id="issue-3">
+<h2>3. 同一 I/O 线程的短时队头等待</h2>
+<div class="issue-grid">
+<article><h3 class="label">现象</h3><p>短内核跟踪中有 100 条消息的 K→T2 超过 50 µs。这 100 条全部对应一次 <code>kevent</code> 返回两个可读事件；同一工作线程执行两次有效 <code>recvmsg</code>，并在第二条读回调前发送了前一条的完成 ACK。典型样本中，第二条数据已读出，读回调仍等待约 80 µs。</p></article>
+<article><h3 class="label">定位</h3><p>1000 个 Shard 分配给 8 个 <code>io_context</code> 工作线程，每线程约负责 125 只股票。同一线程的回调串行运行；在上述诊断样本里，第二个回调排在前一个消息处理之后。这<strong>不等于</strong>线程持续处理不过来：30 秒 299,000 条计时消息全部完成，也未证明正式轮次的 19.014 µs 主要来自此处。</p></article>
+<article><h3 class="label">建议方案</h3><p>先在无内核跟踪的正式轮次记录每个工作线程的就绪事件数、回调排队时间和上一条处理区间，确认频率与 p99 贡献。若确认超出目标，再 A/B 比较工作线程数、连接分配，以及将较长的行情处理从 I/O 回调移到有界队列；保留每只股票的顺序和正确性。</p></article>
+<article><h3 class="label">关闭标准</h3><p>明确正式压力轮次中受队头等待影响的消息数、等待分布及优化前后端到端延迟，不能只引用受跟踪影响的 100 条样本。</p></article>
+</div>
+<p class="note evidence">原始跟踪：<code>/private/tmp/hquant-t1t2-kernel-final.ktrace</code>；对应运行：<code>/private/tmp/hquant-t1t2-kernel30/result.json</code>。</p>
+</section>
+<section id="issue-4">
+<h2>4. 压力 case 未覆盖模拟成交（已修复）</h2>
+<div class="issue-grid">
+<article><h3 class="label">原问题与根因</h3><p>旧压力数据的公开成交始终发生在买一或卖一，策略报价距对应成交价 9–14 个 tick。旧轮次虽收到 60,000 笔公开成交，Paper 成交记录却为 0；测试数据没有触发撮合。</p></article>
+<article><h3 class="label">改动</h3><p>固定 100 只股票挂 2 股买单和卖单，报价位于买一、卖一，每笔公开成交 1 股；每只股票前 4 笔成交依次触发 2 次部分成交和 2 次完全成交。其他 900 只维持原负载。历史校验逐只核对预期成交笔数、方向、价量、费用、剩余量和整数账本，0 成交现在会失败。</p></article>
+<article><h3 class="label">验证</h3><p>最终 1000 只、30 秒 WebSocket 轮次发送 299,000 条计时消息并收到全部完成通知，实际 <strong>400 条 Paper 成交、200 次部分成交、200 次完全成交</strong>，与 fixture 预期一致；38,200 条历史记录无缺口，发送节奏和正确性门槛均通过。</p></article>
+</div>
+<p class="note evidence">证据：旧轮次 <code>/private/tmp/hquant-phase-10k-20261006/history.sqlite</code>；新轮次的<a href="STRESS_FILL_RUN_2026-10-06.json">原始结果</a>和本机 <code>/private/tmp/hquant-fill-final.45iiIC/history.sqlite</code>。新负载的延迟不能与旧无成交负载直接相减。</p>
+</section>
+<section id="issue-5">
+<h2>5. SQLite 停机记录混入运行期统计（已修正）</h2>
+<div class="issue-grid">
+<article><h3 class="label">原问题与根因</h3><p>旧轮次把停机撤单纳入 40,000 条记录的统一分位数，得到入队→提交 p99 <strong>37.41 ms</strong>、入队→写线程开始 p99 <strong>37.07 ms</strong>。两次 15 秒刷新各产生 14,000 条记录、分散在约 1.2 秒；停机时 6,000 条撤单及余额记录在 <strong>7.63 ms</strong> 内入队，与队列峰值 5036 和数十毫秒等待吻合。旧文档把主因归为同步刷新不准确。</p></article>
+<article><h3 class="label">改动</h3><p>记录每条历史入队时的阶段。默认 <code>sqlite_queue_wait</code> 和 <code>sqlite_enqueue_to_commit</code> 只统计停机前入队的记录，另列 <code>*_after_stop</code> 与 <code>*_all</code>；队列峰值也按阶段分列。写线程仍按最多 64 条一批异步提交，停机时完整排空。</p></article>
+<article><h3 class="label">验证</h3><p>最终 30 秒轮次，停机前 <strong>32,800</strong> 条、停机后 <strong>5,400</strong> 条；入队→写线程开始 p99 分别为 <strong>0.640 / 24.546 ms</strong>，入队→提交 p99 分别为 <strong>0.923 / 24.788 ms</strong>，队列峰值分别为 <strong>142 / 4093</strong>，历史无缺口。“停机前”还包含初始化记录，并非严格的计时发送窗口。</p></article>
+</div>
+<p class="note evidence">证据：<a href="STRESS_FILL_RUN_2026-10-06.json">新轮次原始结果</a>的 <code>probe</code>；运行期间与停机期间的持久化时效应分别设目标。</p>
+</section>
+<section id="issue-6">
+<h2>6. NYSE、SSE 网络行情 case 尚无合格的性能轮次</h2>
+<div class="issue-grid">
+<article><h3 class="label">现象</h3><p>已存档的 3 分钟 NYSE、SSE 本机 WebSocket 轮次最终状态正确，但现行门槛要求全局发送迟到 p99≤1 ms；两轮分别为 <strong>2.254 ms</strong> 和 <strong>4.774 ms</strong>，最差一秒的 p99 分别为 6.449 ms 和 31.169 ms。现有结果可用于正确性，不宜作为市场 case 的可靠延迟或 QPS 结论。</p></article>
+<article><h3 class="label">定位</h3><p>两轮发送节奏失真；原始脚本的发送实现、启动和预热路径也与后续压力正式轮次不同。平均消息率较低不能证明性能测量合格。</p></article>
+<article><h3 class="label">建议方案</h3><p>使用与当前压力测试相同的原生发送器、完成通知和预热口径，按各自 3 分钟节奏重新跑，每组至少 3 次。每次先检查逐秒发送节奏和消息/历史正确性，再汇总延迟。</p></article>
+<article><h3 class="label">关闭标准</h3><p>每个 case 都有通过节奏与正确性门槛的重复运行，并公布原始轮次。</p></article>
+</div>
+<p class="note evidence">证据：<a href="TEST_REPORT_DATA_2026-10-06.json">TEST_REPORT_DATA_2026-10-06.json</a> 的 <code>report_paced_valid</code> 和 <code>report_worst_second_p99_us</code>。</p>
+</section>
+<section id="issue-7">
+<h2>7. 10k/s、20k/s、40k/s 的测试器未完全统一</h2>
+<div class="issue-grid">
+<article><h3 class="label">现象</h3><p>现有汇总中，10k/s、40k/s 使用原生发送器和完成通知接收器；20k/s 使用 Python 测试器。三组 T0 边界和发送开销不同，跨速率端到端延迟差值不能直接解释为 QuantServer 的扩展性。</p></article>
+<article><h3 class="label">定位</h3><p>这是测试工具口径差异，不是已经证明的 QuantServer 性能退化。<a href="TEST_REPORT_2026-10-06.html">现有报告</a>已说明该限制。</p></article>
+<article><h3 class="label">建议方案</h3><p>三档负载统一使用同一原生发送器、相同预热、ACK、探针开关和发送节奏门槛；分别报告测试器 CPU、发送迟到及 QuantServer 的服务端处理延迟。</p></article>
+<article><h3 class="label">关闭标准</h3><p>三档各有多次同口径有效运行，才能用 QPS 与延迟曲线判断容量拐点。</p></article>
+</div>
+</section>
+<section id="resolved">
+<h2>不列为当前未修复问题</h2>
+<p>旧的逐条等待文件回放基准入口已删除；跨进程时钟纪元不一致、已测试负载下的 SSE 历史队列溢出、SQLite 重复索引和每批反复 prepare 已分别处理。旧报告保留作历史证据，相关经过见 <a href="../hquant/bench/live_run_issues_2026-10-06.json">运行问题记录</a>和 <a href="PERFORMANCE_2026-10-06.md">性能分析记录</a>。</p>
+</section>
+<footer>hquant · <a href="CURRENT_ISSUES_2026-10-06.md">Markdown 原文</a> · <a href="TEST_REPORT_2026-10-06.html">测试报告</a></footer>
+</main>
+</body>
+</html>

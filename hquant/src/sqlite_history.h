@@ -52,6 +52,7 @@ struct HistoryRecord {
   bool buy = false;
   uint64_t perf_input_origin_ns = 0;
   uint64_t perf_enqueue_ns = 0;
+  bool perf_after_stop = false;
 };
 
 struct HistoryPage {

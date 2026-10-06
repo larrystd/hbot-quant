@@ -9,6 +9,10 @@ from pathlib import Path
 
 STOCKS = 1000
 LEVELS_PER_SIDE = 10
+# One in ten stress symbols quotes at the BBO; four one-lot public trades
+# partially and then fully fill its two-lot buy and sell orders.
+STRESS_FILL_SHARD_STEP = 10
+STRESS_FILL_TRADE_LOTS = 1
 CASES = {
     "nyse": {"duration_seconds": 180, "book_interval_us": 1_000_000,
              "trade_interval_us": 10_000_000, "quote": "USD",
@@ -119,9 +123,12 @@ def generate_inputs(writer, name, case):
             side = "buy" if trade_ids[shard] % 2 else "sell"
             price = (books[shard][1][0][0] if side == "buy"
                      else books[shard][0][0][0])
+            quantity = (STRESS_FILL_TRADE_LOTS
+                        if name == "stress" and shard % STRESS_FILL_SHARD_STEP == 0
+                        else 100)
             writer.add(at_us, "public_trade", shard, market=market,
                        connection_id=1, trade_id=trade_ids[shard],
-                       price_ticks=price, quantity_lots=100, side=side)
+                       price_ticks=price, quantity_lots=quantity, side=side)
     return books, sequences, trade_ids
 
 
@@ -130,6 +137,9 @@ def write_config(output, name, case):
              f"  replay_file: {output / 'replay.json'}", "shards:"]
     for shard in range(STOCKS):
         market = symbol(name, shard)
+        fill_shard = name == "stress" and shard % STRESS_FILL_SHARD_STEP == 0
+        order_amount = "2" if fill_shard else case["order_amount"]
+        spread = "0.00005" if fill_shard else "0.001"
         lines.extend([
             f"  - id: {shard}", "    market:", f"      symbol: {market}",
             f"      base_asset: {market}", f"      quote_asset: {case['quote']}",
@@ -139,9 +149,11 @@ def write_config(output, name, case):
             f'        base_increment: "{case["base_increment"]}"',
             f'        min_base_amount: "{case["base_increment"]}"',
             '        min_order_value: "1"', "    strategy:",
-            f'      order_amount: "{case["order_amount"]}"',
-            '      bid_spread: "0.001"', '      ask_spread: "0.001"',
-            "      refresh_ms: 15000", "    executor:", "      mode: paper",
+            f'      order_amount: "{order_amount}"',
+            f'      bid_spread: "{spread}"',
+            f'      ask_spread: "{spread}"',
+            f"      refresh_ms: {60000 if fill_shard else 15000}",
+            "    executor:", "      mode: paper",
             f"      account: paper-{name}-{shard}", "      initial_balances:",
             f'        {market}: "1000"', f'        {case["quote"]}: "1000000"',
             "      hard_limits:", f'        {market}: "1000"',
@@ -181,6 +193,16 @@ def make_case(output, name, book_interval_us=None, trade_interval_us=None):
         ],
         **metrics,
     }
+    if name == "stress":
+        fill_shards = range(0, STOCKS, STRESS_FILL_SHARD_STEP)
+        manifest["paper_expected"] = {
+            "fill_shard_step": STRESS_FILL_SHARD_STEP,
+            "fill_trade_quantity_lots": STRESS_FILL_TRADE_LOTS,
+            "fill_records": sum(min(4, trade_ids[shard]) for shard in fill_shards),
+            "partial_reports": sum(min(2, trade_ids[shard]) for shard in fill_shards),
+            "filled_reports": sum(max(0, min(4, trade_ids[shard]) - 2)
+                                  for shard in fill_shards),
+        }
     (output / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
     return manifest
 

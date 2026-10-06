@@ -17,6 +17,8 @@ def validate(directory):
     trade_interval = manifest["trade_interval_us"]
     duration = manifest["duration_us"]
     name = manifest["case"].upper()
+    paper_expected = manifest.get("paper_expected", {})
+    fill_step = paper_expected.get("fill_shard_step")
     connected = [False] * stocks
     books = [None] * stocks
     sequences = [None] * stocks
@@ -69,7 +71,9 @@ def validate(directory):
             assert at_us == (index * trade_interval +
                              shard * trade_interval // stocks)
             assert event["trade_id"] == index + 1
-            assert event["quantity_lots"] == 100
+            expected_lots = (paper_expected["fill_trade_quantity_lots"]
+                             if fill_step and shard % fill_step == 0 else 100)
+            assert event["quantity_lots"] == expected_lots
             side = "buy" if index % 2 == 0 else "sell"
             assert event["side"] == side
             assert event["price_ticks"] == (
@@ -95,6 +99,14 @@ def validate(directory):
     assert level_rows == manifest["level_rows"] == 2 * depth * counts["snapshot"]
     assert sequences == manifest["final_sequences"]
     assert trade_ids == manifest["final_trade_ids"]
+    if fill_step:
+        fill_shards = range(0, stocks, fill_step)
+        assert paper_expected["fill_records"] == sum(
+            min(4, trade_ids[shard]) for shard in fill_shards)
+        assert paper_expected["partial_reports"] == sum(
+            min(2, trade_ids[shard]) for shard in fill_shards)
+        assert paper_expected["filled_reports"] == sum(
+            max(0, min(4, trade_ids[shard]) - 2) for shard in fill_shards)
     for span, key in ((1_000, "scheduled_peak_1ms"),
                       (100_000, "scheduled_peak_100ms"),
                       (1_000_000, "scheduled_peak_1s")):
