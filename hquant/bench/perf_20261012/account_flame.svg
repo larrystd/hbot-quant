@@ -1,0 +1,1457 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="2200" height="449" viewBox="0 0 2200 449">
+<style>text{font:12px system-ui,sans-serif;fill:#182332} .head{font-size:18px;font-weight:600} .sub{font-size:12px;fill:#506070} rect{stroke:#fff;stroke-width:.5}</style>
+<rect width="100%" height="100%" fill="#fff" stroke="none"/>
+<text class="head" x="20" y="28">量化账户线程</text>
+<text class="sub" x="20" y="48">macOS sample：回放期活跃栈 208 个采样；已排除睡眠／阻塞栈；公共线程入口已折叠。宽度表示活跃采样占比，非逐单延迟。</text>
+<g><title>量化账户线程 — 208 samples (100.0%)</title>
+<rect x="20.00" y="414.00" width="2160.00" height="20" fill="#bed1c2"/>
+<text x="23.00" y="428.00">量化账户线程</text>
+</g>
+<g><title>boost::asio::io_context::poll_one() — 185 samples (88.9%)</title>
+<rect x="20.00" y="392.00" width="1921.15" height="20" fill="#b3a0cd"/>
+<text x="23.00" y="406.00">boost::asio::io_context::poll_one()</text>
+</g>
+<g><title>boost::asio::detail::scheduler::poll_one(boost::system::error_code&amp;) — 185 samples (88.9%)</title>
+<rect x="20.00" y="370.00" width="1921.15" height="20" fill="#b3a0cd"/>
+<text x="23.00" y="384.00">boost::asio::detail::scheduler::poll_one(boost::system::error_code&amp;)</text>
+</g>
+<g><title>boost::asio::detail::scheduler::do_poll_one(boost::asio::detail::conditionally_enabled_mutex::scoped_lock&amp;, boost::asio::detail::scheduler_thread_info&amp;, boost::system::error_code const&amp;) — 180 samples (86.5%)</title>
+<rect x="20.00" y="348.00" width="1869.23" height="20" fill="#b3a0cd"/>
+<text x="23.00" y="362.00">boost::asio::detail::scheduler::do_poll_one(boost::asio::detail::conditionally_enabled_mutex::scoped_lock&amp;, boost::asio::detail::scheduler_thread_info&amp;, boos…</text>
+</g>
+<g><title>boost::asio::detail::executor_op&lt;boost::asio::detail::binder0&lt;hquant::v1::OrderJournal::WriterLoop()::$_2&gt;, boost::asio::detail::scheduler_operation&gt;::do_complete(void*, boost::asio::detail::scheduler_operation*, boost::system::error_code const&amp;, unsigned long) — 92 samples (44.2%)</title>
+<rect x="20.00" y="326.00" width="955.38" height="20" fill="#b3a0cd"/>
+<text x="23.00" y="340.00">boost::asio::detail::executor_op&lt;…&gt;::do_complete(void*, boost::asio::detail::scheduler_operation*, boost::system::error_code const&amp;, unsig…</text>
+</g>
+<g><title>std::__function::__func&lt;hquant::v1::TradingAccount::Persist(hquant::v1::JournalEntry, std::function&lt;void (absl::lts_20260817::Status)&gt;)::$_0, void (absl::lts_20260817::Status)&gt;::operator()(absl::lts_20260817::Status&amp;&amp;) — 89 samples (42.8%)</title>
+<rect x="20.00" y="304.00" width="924.23" height="20" fill="#2b87bd"/>
+<text x="23.00" y="318.00">std::__function::__func&lt;…&gt;::operator()(absl::lts_20260817::Status&amp;&amp;)</text>
+</g>
+<g><title>std::__function::__func&lt;hquant::v1::TradingAccount::PersistAndApply(std::variant&lt;hquant::v1::OrderReport, hquant::v1::Fill, hquant::v1::BalanceUpdate, hquant::v1::BalanceDelta&gt;, bool, std::function&lt;void (absl::lts_20260817::Status)&gt;)::$_0, void (absl::lts_20260817::Status)&gt;::operator()(absl::lts_20260817::Status&amp;&amp;) — 48 samples (23.1%)</title>
+<rect x="20.00" y="282.00" width="498.46" height="20" fill="#2b87bd"/>
+<text x="23.00" y="296.00">std::__function::__func&lt;…&gt;::operator()(absl::lts_20260817::Status&amp;&amp;)</text>
+</g>
+<g><title>hquant::v1::AccountViewPublisher::Flush() — 23 samples (11.1%)</title>
+<rect x="20.00" y="260.00" width="238.85" height="20" fill="#7dbb9d"/>
+<text x="23.00" y="274.00">hquant::v1::AccountViewPublisher:…</text>
+</g>
+<g><title>hquant::v1::AccountViewPublisher::View(hquant::v1::ShardId) const — 11 samples (5.3%)</title>
+<rect x="20.00" y="238.00" width="114.23" height="20" fill="#7dbb9d"/>
+<text x="23.00" y="252.00">hquant::v1::Ac…</text>
+</g>
+<g><title>hquant::v1::FundsState::Asset(std::basic_string&lt;char&gt; const&amp;) const — 4 samples (1.9%)</title>
+<rect x="20.00" y="216.00" width="41.54" height="20" fill="#7dbb9d"/>
+<text x="23.00" y="230.00">hqua…</text>
+</g>
+<g><title>std::__tree&lt;std::__value_type&lt;std::basic_string&lt;char&gt;, hquant::v1::FundsState::VenueAsset&gt;, std::__map_value_compare&lt;std::basic_string&lt;char&gt;, std::__value_type&lt;std::basic_string&lt;char&gt;, hquant::v1::FundsState::VenueAsset&gt;, true&gt;&gt;::find&lt;std::basic_string&lt;char&gt;&gt;(std::basic_string&lt;char&gt; const&amp;) const — 4 samples (1.9%)</title>
+<rect x="20.00" y="194.00" width="41.54" height="20" fill="#adc5d4"/>
+<text x="23.00" y="208.00">std:…</text>
+</g>
+<g><title>_platform_memcmp — 2 samples (1.0%)</title>
+<rect x="20.00" y="172.00" width="20.77" height="20" fill="#d7c6b8"/>
+</g>
+<g><title>DYLD-STUB$$memcmp — 1 samples (0.5%)</title>
+<rect x="40.77" y="172.00" width="10.38" height="20" fill="#d4c5cc"/>
+</g>
+<g><title>hquant::v1::TradingAccount::Budget(std::basic_string&lt;char&gt; const&amp;) const — 3 samples (1.4%)</title>
+<rect x="61.54" y="216.00" width="31.15" height="20" fill="#2b87bd"/>
+</g>
+<g><title>hquant::v1::FundsState::Available(std::basic_string&lt;char&gt; const&amp;) const — 2 samples (1.0%)</title>
+<rect x="61.54" y="194.00" width="20.77" height="20" fill="#7dbb9d"/>
+</g>
+<g><title>std::__tree&lt;std::__value_type&lt;std::basic_string&lt;char&gt;, hquant::v1::FundsState::AssetTracking&gt;, std::__map_value_compare&lt;std::basic_string&lt;char&gt;, std::__value_type&lt;std::basic_string&lt;char&gt;, hquant::v1::FundsState::AssetTracking&gt;, true&gt;&gt;::find&lt;std::basic_string&lt;char&gt;&gt;(std::basic_string&lt;char&gt; const&amp;) const — 1 samples (0.5%)</title>
+<rect x="61.54" y="172.00" width="10.38" height="20" fill="#adc5d4"/>
+</g>
+<g><title>_platform_memcmp — 1 samples (0.5%)</title>
+<rect x="61.54" y="150.00" width="10.38" height="20" fill="#d7c6b8"/>
+</g>
+<g><title>std::__tree&lt;std::__value_type&lt;std::basic_string&lt;char&gt;, hquant::v1::FundsState::VenueAsset&gt;, std::__map_value_compare&lt;std::basic_string&lt;char&gt;, std::__value_type&lt;std::basic_string&lt;char&gt;, hquant::v1::FundsState::VenueAsset&gt;, true&gt;&gt;::find&lt;std::basic_string&lt;char&gt;&gt;(std::basic_string&lt;char&gt; const&amp;) const — 1 samples (0.5%)</title>
+<rect x="71.92" y="172.00" width="10.38" height="20" fill="#adc5d4"/>
+</g>
+<g><title>_platform_memcmp — 1 samples (0.5%)</title>
+<rect x="71.92" y="150.00" width="10.38" height="20" fill="#d7c6b8"/>
+</g>
+<g><title>std::__tree&lt;std::__value_type&lt;std::basic_string&lt;char&gt;, unsigned long long&gt;, std::__map_value_compare&lt;std::basic_string&lt;char&gt;, std::__value_type&lt;std::basic_string&lt;char&gt;, unsigned long long&gt;, true&gt;&gt;::find&lt;std::basic_string&lt;char&gt;&gt;(std::basic_string&lt;char&gt; const&amp;) const — 1 samples (0.5%)</title>
+<rect x="82.31" y="194.00" width="10.38" height="20" fill="#adc5d4"/>
+</g>
+<g><title>_platform_memcmp — 1 samples (0.5%)</title>
+<rect x="82.31" y="172.00" width="10.38" height="20" fill="#d7c6b8"/>
+</g>
+<g><title>hquant::v1::FundsState::Available(std::basic_string&lt;char&gt; const&amp;) const — 1 samples (0.5%)</title>
+<rect x="92.69" y="216.00" width="10.38" height="20" fill="#7dbb9d"/>
+</g>
+<g><title>std::__tree&lt;std::__value_type&lt;std::basic_string&lt;char&gt;, hquant::v1::FundsState::VenueAsset&gt;, std::__map_value_compare&lt;std::basic_string&lt;char&gt;, std::__value_type&lt;std::basic_string&lt;char&gt;, hquant::v1::FundsState::VenueAsset&gt;, true&gt;&gt;::find&lt;std::basic_string&lt;char&gt;&gt;(std::basic_string&lt;char&gt; const&amp;) const — 1 samples (0.5%)</title>
+<rect x="92.69" y="194.00" width="10.38" height="20" fill="#adc5d4"/>
+</g>
+<g><title>DYLD-STUB$$memcmp — 1 samples (0.5%)</title>
+<rect x="92.69" y="172.00" width="10.38" height="20" fill="#d4c5cc"/>
+</g>
+<g><title>hquant::v1::OrderManager::OpenFor(hquant::v1::ShardId) const — 1 samples (0.5%)</title>
+<rect x="103.08" y="216.00" width="10.38" height="20" fill="#7dbb9d"/>
+</g>
+<g><title>hquant::v1::OrderState::Find(hquant::v1::ClientOrderId const&amp;) const — 1 samples (0.5%)</title>
+<rect x="103.08" y="194.00" width="10.38" height="20" fill="#7dbb9d"/>
+</g>
+<g><title>std::__tree&lt;std::__value_type&lt;std::basic_string&lt;char&gt;, hquant::v1::TrackedOrder&gt;, std::__map_value_compare&lt;std::basic_string&lt;char&gt;, std::__value_type&lt;std::basic_string&lt;char&gt;, hquant::v1::TrackedOrder&gt;, true&gt;&gt;::find&lt;std::basic_string&lt;char&gt;&gt;(std::basic_string&lt;char&gt; const&amp;) const — 1 samples (0.5%)</title>
+<rect x="103.08" y="172.00" width="10.38" height="20" fill="#adc5d4"/>
+</g>
+<g><title>_platform_memcmp — 1 samples (0.5%)</title>
+<rect x="103.08" y="150.00" width="10.38" height="20" fill="#d7c6b8"/>
+</g>
+<g><title>hquant::v1::OrderState::Find(hquant::v1::ClientOrderId const&amp;) const — 1 samples (0.5%)</title>
+<rect x="113.46" y="216.00" width="10.38" height="20" fill="#7dbb9d"/>
+</g>
+<g><title>std::__tree&lt;std::__value_type&lt;std::basic_string&lt;char&gt;, hquant::v1::TrackedOrder&gt;, std::__map_value_compare&lt;std::basic_string&lt;char&gt;, std::__value_type&lt;std::basic_string&lt;char&gt;, hquant::v1::TrackedOrder&gt;, true&gt;&gt;::find&lt;std::basic_string&lt;char&gt;&gt;(std::basic_string&lt;char&gt; const&amp;) const — 1 samples (0.5%)</title>
+<rect x="113.46" y="194.00" width="10.38" height="20" fill="#adc5d4"/>
+</g>
+<g><title>std::__tree&lt;std::__value_type&lt;std::basic_string&lt;char&gt;, hquant::v1::VenueRule&gt;, std::__map_value_compare&lt;std::basic_string&lt;char&gt;, std::__value_type&lt;std::basic_string&lt;char&gt;, hquant::v1::VenueRule&gt;, true&gt;&gt;::find&lt;std::basic_string&lt;char&gt;&gt;(std::basic_string&lt;char&gt; const&amp;) const — 1 samples (0.5%)</title>
+<rect x="123.85" y="216.00" width="10.38" height="20" fill="#adc5d4"/>
+</g>
+<g><title>DYLD-STUB$$memcmp — 1 samples (0.5%)</title>
+<rect x="123.85" y="194.00" width="10.38" height="20" fill="#d4c5cc"/>
+</g>
+<g><title>std::__function::__func&lt;hquant::v1::Runtime::Runtime(hquant::v1::AppConfig const&amp;, hquant::v1::PerfProbe*)::$_8, void (hquant::v1::AccountView)&gt;::operator()(hquant::v1::AccountView&amp;&amp;) — 8 samples (3.8%)</title>
+<rect x="134.23" y="238.00" width="83.08" height="20" fill="#adc5d4"/>
+<text x="137.23" y="252.00">std::__fun…</text>
+</g>
+<g><title>hquant::v1::Shard::PostAccountView(hquant::v1::AccountView) — 7 samples (3.4%)</title>
+<rect x="134.23" y="216.00" width="72.69" height="20" fill="#7dbb9d"/>
+<text x="137.23" y="230.00">hquant::…</text>
+</g>
+<g><title>boost::asio::detail::scheduler::post_immediate_completion(boost::asio::detail::scheduler_operation*, bool) — 7 samples (3.4%)</title>
+<rect x="134.23" y="194.00" width="72.69" height="20" fill="#b3a0cd"/>
+<text x="137.23" y="208.00">boost::a…</text>
+</g>
+<g><title>boost::asio::detail::kqueue_reactor::interrupt() — 7 samples (3.4%)</title>
+<rect x="134.23" y="172.00" width="72.69" height="20" fill="#b3a0cd"/>
+<text x="137.23" y="186.00">boost::a…</text>
+</g>
+<g><title>write — 7 samples (3.4%)</title>
+<rect x="134.23" y="150.00" width="72.69" height="20" fill="#d7c6b8"/>
+<text x="137.23" y="164.00">write</text>
+</g>
+<g><title>hquant::v1::TradingAccount::Budget(std::basic_string&lt;char&gt; const&amp;) const — 2 samples (1.0%)</title>
+<rect x="217.31" y="238.00" width="20.77" height="20" fill="#2b87bd"/>
+</g>
+<g><title>hquant::v1::FundsState::Available(std::basic_string&lt;char&gt; const&amp;) const — 1 samples (0.5%)</title>
+<rect x="217.31" y="216.00" width="10.38" height="20" fill="#7dbb9d"/>
+</g>
+<g><title>std::__tree&lt;std::__value_type&lt;std::basic_string&lt;char&gt;, hquant::v1::FundsState::AssetTracking&gt;, std::__map_value_compare&lt;std::basic_string&lt;char&gt;, std::__value_type&lt;std::basic_string&lt;char&gt;, hquant::v1::FundsState::AssetTracking&gt;, true&gt;&gt;::find&lt;std::basic_string&lt;char&gt;&gt;(std::basic_string&lt;char&gt; const&amp;) const — 1 samples (0.5%)</title>
+<rect x="217.31" y="194.00" width="10.38" height="20" fill="#adc5d4"/>
+</g>
+<g><title>_platform_memcmp — 1 samples (0.5%)</title>
+<rect x="217.31" y="172.00" width="10.38" height="20" fill="#d7c6b8"/>
+</g>
+<g><title>hquant::v1::FundsState::Reserved(std::basic_string&lt;char&gt; const&amp;) const — 1 samples (0.5%)</title>
+<rect x="227.69" y="216.00" width="10.38" height="20" fill="#7dbb9d"/>
+</g>
+<g><title>std::__tree&lt;std::__value_type&lt;std::basic_string&lt;char&gt;, hquant::v1::FundsState::AssetTracking&gt;, std::__map_value_compare&lt;std::basic_string&lt;char&gt;, std::__value_type&lt;std::basic_string&lt;char&gt;, hquant::v1::FundsState::AssetTracking&gt;, true&gt;&gt;::find&lt;std::basic_string&lt;char&gt;&gt;(std::basic_string&lt;char&gt; const&amp;) const — 1 samples (0.5%)</title>
+<rect x="227.69" y="194.00" width="10.38" height="20" fill="#adc5d4"/>
+</g>
+<g><title>_platform_memcmp — 1 samples (0.5%)</title>
+<rect x="227.69" y="172.00" width="10.38" height="20" fill="#d7c6b8"/>
+</g>
+<g><title>std::map&lt;std::basic_string&lt;char&gt;, std::shared_ptr&lt;hquant::v1::PublishedAssetView&gt;&gt;::at(std::basic_string&lt;char&gt; const&amp;) — 1 samples (0.5%)</title>
+<rect x="238.08" y="238.00" width="10.38" height="20" fill="#adc5d4"/>
+</g>
+<g><title>_platform_memcmp — 1 samples (0.5%)</title>
+<rect x="238.08" y="216.00" width="10.38" height="20" fill="#d7c6b8"/>
+</g>
+<g><title>hquant::v1::TradingAccount::ApplyEvent(std::variant&lt;hquant::v1::OrderReport, hquant::v1::Fill, hquant::v1::BalanceUpdate, hquant::v1::BalanceDelta&gt; const&amp;, bool) — 22 samples (10.6%)</title>
+<rect x="258.85" y="260.00" width="228.46" height="20" fill="#2b87bd"/>
+<text x="261.85" y="274.00">hquant::v1::TradingAccount::App…</text>
+</g>
+<g><title>hquant::v1::OrderManager::ApplyReport(hquant::v1::OrderReport const&amp;) — 7 samples (3.4%)</title>
+<rect x="258.85" y="238.00" width="72.69" height="20" fill="#7dbb9d"/>
+<text x="261.85" y="252.00">hquant::…</text>
+</g>
+<g><title>hquant::v1::OrderState::Find(hquant::v1::ClientOrderId const&amp;) const — 3 samples (1.4%)</title>
+<rect x="258.85" y="216.00" width="31.15" height="20" fill="#7dbb9d"/>
+</g>
+<g><title>std::__tree&lt;std::__value_type&lt;std::basic_string&lt;char&gt;, hquant::v1::TrackedOrder&gt;, std::__map_value_compare&lt;std::basic_string&lt;char&gt;, std::__value_type&lt;std::basic_string&lt;char&gt;, hquant::v1::TrackedOrder&gt;, true&gt;&gt;::find&lt;std::basic_string&lt;char&gt;&gt;(std::basic_string&lt;char&gt; const&amp;) const — 3 samples (1.4%)</title>
+<rect x="258.85" y="194.00" width="31.15" height="20" fill="#adc5d4"/>
+</g>
+<g><title>hquant::v1::OrderState::ApplyReport(hquant::v1::OrderReport const&amp;) — 2 samples (1.0%)</title>
+<rect x="290.00" y="216.00" width="20.77" height="20" fill="#7dbb9d"/>
+</g>
+<g><title>std::__tree&lt;std::__value_type&lt;std::basic_string&lt;char&gt;, hquant::v1::TrackedOrder&gt;, std::__map_value_compare&lt;std::basic_string&lt;char&gt;, std::__value_type&lt;std::basic_string&lt;char&gt;, hquant::v1::TrackedOrder&gt;, true&gt;&gt;::find&lt;std::basic_string&lt;char&gt;&gt;(std::basic_string&lt;char&gt; const&amp;) — 2 samples (1.0%)</title>
+<rect x="290.00" y="194.00" width="20.77" height="20" fill="#adc5d4"/>
+</g>
+<g><title>hquant::v1::OrderManager::ErasePlan(hquant::v1::ClientOrderId const&amp;) — 1 samples (0.5%)</title>
+<rect x="310.77" y="216.00" width="10.38" height="20" fill="#7dbb9d"/>
+</g>
+<g><title>std::basic_string&lt;char&gt;::__init_copy_ctor_external(char const*, unsigned long) — 1 samples (0.5%)</title>
+<rect x="321.15" y="216.00" width="10.38" height="20" fill="#adc5d4"/>
+</g>
+<g><title>hquant::v1::FundsState::ApplyBalance(hquant::v1::BalanceUpdate const&amp;) — 6 samples (2.9%)</title>
+<rect x="331.54" y="238.00" width="62.31" height="20" fill="#7dbb9d"/>
+<text x="334.54" y="252.00">hquant:…</text>
+</g>
+<g><title>hquant::v1::FundsState::ReconcileLocked(std::basic_string&lt;char&gt; const&amp;, unsigned long long) — 4 samples (1.9%)</title>
+<rect x="331.54" y="216.00" width="41.54" height="20" fill="#7dbb9d"/>
+<text x="334.54" y="230.00">hqua…</text>
+</g>
+<g><title>std::__tree&lt;std::__value_type&lt;std::basic_string&lt;char&gt;, hquant::v1::FundsState::AssetTracking&gt;, std::__map_value_compare&lt;std::basic_string&lt;char&gt;, std::__value_type&lt;std::basic_string&lt;char&gt;, hquant::v1::FundsState::AssetTracking&gt;, true&gt;&gt;::find&lt;std::basic_string&lt;char&gt;&gt;(std::basic_string&lt;char&gt; const&amp;) — 2 samples (1.0%)</title>
+<rect x="331.54" y="194.00" width="20.77" height="20" fill="#adc5d4"/>
+</g>
+<g><title>_platform_memcmp — 2 samples (1.0%)</title>
+<rect x="331.54" y="172.00" width="20.77" height="20" fill="#d7c6b8"/>
+</g>
+<g><title>std::__tree&lt;std::basic_string&lt;char&gt;&gt;::__emplace_unique_key_args&lt;std::basic_string&lt;char&gt;, std::basic_string&lt;char&gt; const&amp;&gt;(std::basic_string&lt;char&gt; const&amp;, std::basic_string&lt;char&gt; const&amp;) — 1 samples (0.5%)</title>
+<rect x="352.31" y="194.00" width="10.38" height="20" fill="#adc5d4"/>
+</g>
+<g><title>operator new(unsigned long) — 1 samples (0.5%)</title>
+<rect x="352.31" y="172.00" width="10.38" height="20" fill="#d4c5cc"/>
+</g>
+<g><title>_xzm_xzone_malloc_tiny — 1 samples (0.5%)</title>
+<rect x="352.31" y="150.00" width="10.38" height="20" fill="#d7c6b8"/>
+</g>
+<g><title>std::map&lt;std::basic_string&lt;char&gt;, hquant::v1::FundsHold&gt;::at(std::basic_string&lt;char&gt; const&amp;) — 1 samples (0.5%)</title>
+<rect x="362.69" y="194.00" width="10.38" height="20" fill="#adc5d4"/>
+</g>
+<g><title>std::__tree&lt;std::__value_type&lt;std::basic_string&lt;char&gt;, hquant::v1::FundsState::VenueAsset&gt;, std::__map_value_compare&lt;std::basic_string&lt;char&gt;, std::__value_type&lt;std::basic_string&lt;char&gt;, hquant::v1::FundsState::VenueAsset&gt;, true&gt;&gt;::__emplace_unique_key_args&lt;std::basic_string&lt;char&gt;, std::piecewise_construct_t const&amp;, std::tuple&lt;std::basic_string&lt;char&gt; const&amp;&gt;, std::tuple&lt;&gt;&gt;(std::basic_string&lt;char&gt; const&amp;, std::piecewise_construct_t const&amp;, std::tuple&lt;std::basic_string&lt;char&gt; const&amp;&gt;&amp;&amp;, std::tuple&lt;&gt;&amp;&amp;) — 2 samples (1.0%)</title>
+<rect x="373.08" y="216.00" width="20.77" height="20" fill="#adc5d4"/>
+</g>
+<g><title>_platform_memcmp — 1 samples (0.5%)</title>
+<rect x="373.08" y="194.00" width="10.38" height="20" fill="#d7c6b8"/>
+</g>
+<g><title>hquant::v1::FundsState::Hold(hquant::v1::ClientOrderId const&amp;) const — 3 samples (1.4%)</title>
+<rect x="393.85" y="238.00" width="31.15" height="20" fill="#7dbb9d"/>
+</g>
+<g><title>std::__tree&lt;std::__value_type&lt;std::basic_string&lt;char&gt;, hquant::v1::FundsHold&gt;, std::__map_value_compare&lt;std::basic_string&lt;char&gt;, std::__value_type&lt;std::basic_string&lt;char&gt;, hquant::v1::FundsHold&gt;, true&gt;&gt;::find&lt;std::basic_string&lt;char&gt;&gt;(std::basic_string&lt;char&gt; const&amp;) const — 3 samples (1.4%)</title>
+<rect x="393.85" y="216.00" width="31.15" height="20" fill="#adc5d4"/>
+</g>
+<g><title>_platform_memcmp — 1 samples (0.5%)</title>
+<rect x="393.85" y="194.00" width="10.38" height="20" fill="#d7c6b8"/>
+</g>
+<g><title>hquant::v1::OrderState::Find(hquant::v1::ClientOrderId const&amp;) const — 3 samples (1.4%)</title>
+<rect x="425.00" y="238.00" width="31.15" height="20" fill="#7dbb9d"/>
+</g>
+<g><title>std::__tree&lt;std::__value_type&lt;std::basic_string&lt;char&gt;, hquant::v1::TrackedOrder&gt;, std::__map_value_compare&lt;std::basic_string&lt;char&gt;, std::__value_type&lt;std::basic_string&lt;char&gt;, hquant::v1::TrackedOrder&gt;, true&gt;&gt;::find&lt;std::basic_string&lt;char&gt;&gt;(std::basic_string&lt;char&gt; const&amp;) const — 3 samples (1.4%)</title>
+<rect x="425.00" y="216.00" width="31.15" height="20" fill="#adc5d4"/>
+</g>
+<g><title>DYLD-STUB$$memcmp — 1 samples (0.5%)</title>
+<rect x="425.00" y="194.00" width="10.38" height="20" fill="#d4c5cc"/>
+</g>
+<g><title>_platform_memcmp — 1 samples (0.5%)</title>
+<rect x="435.38" y="194.00" width="10.38" height="20" fill="#d7c6b8"/>
+</g>
+<g><title>hquant::v1::FundsState::MarkVenueAccepted(hquant::v1::ClientOrderId const&amp;) — 1 samples (0.5%)</title>
+<rect x="456.15" y="238.00" width="10.38" height="20" fill="#7dbb9d"/>
+</g>
+<g><title>std::__tree&lt;std::__value_type&lt;std::basic_string&lt;char&gt;, hquant::v1::FundsHold&gt;, std::__map_value_compare&lt;std::basic_string&lt;char&gt;, std::__value_type&lt;std::basic_string&lt;char&gt;, hquant::v1::FundsHold&gt;, true&gt;&gt;::find&lt;std::basic_string&lt;char&gt;&gt;(std::basic_string&lt;char&gt; const&amp;) — 1 samples (0.5%)</title>
+<rect x="456.15" y="216.00" width="10.38" height="20" fill="#adc5d4"/>
+</g>
+<g><title>DYLD-STUB$$memcmp — 1 samples (0.5%)</title>
+<rect x="456.15" y="194.00" width="10.38" height="20" fill="#d4c5cc"/>
+</g>
+<g><title>hquant::v1::FundsState::MatchesProjectedAt(hquant::v1::BalanceUpdate const&amp;) const — 1 samples (0.5%)</title>
+<rect x="466.54" y="238.00" width="10.38" height="20" fill="#7dbb9d"/>
+</g>
+<g><title>std::__tree&lt;std::__value_type&lt;std::basic_string&lt;char&gt;, hquant::v1::FundsState::AssetTracking&gt;, std::__map_value_compare&lt;std::basic_string&lt;char&gt;, std::__value_type&lt;std::basic_string&lt;char&gt;, hquant::v1::FundsState::AssetTracking&gt;, true&gt;&gt;::find&lt;std::basic_string&lt;char&gt;&gt;(std::basic_string&lt;char&gt; const&amp;) const — 1 samples (0.5%)</title>
+<rect x="466.54" y="216.00" width="10.38" height="20" fill="#adc5d4"/>
+</g>
+<g><title>DYLD-STUB$$memcmp — 1 samples (0.5%)</title>
+<rect x="466.54" y="194.00" width="10.38" height="20" fill="#d4c5cc"/>
+</g>
+<g><title>hquant::v1::TradingAccount::Record(hquant::v1::AccountHistoryRecord) — 1 samples (0.5%)</title>
+<rect x="476.92" y="238.00" width="10.38" height="20" fill="#2b87bd"/>
+</g>
+<g><title>clock_gettime — 1 samples (0.5%)</title>
+<rect x="476.92" y="216.00" width="10.38" height="20" fill="#b9ccd5"/>
+</g>
+<g><title>hquant::v1::TradingAccount::ScheduleOrderQuery() — 3 samples (1.4%)</title>
+<rect x="487.31" y="260.00" width="31.15" height="20" fill="#2b87bd"/>
+</g>
+<g><title>decltype(async_initiate&lt;hquant::v1::TradingAccount::ScheduleOrderQuery()::$_0, void (boost::system::error_code)&gt;(decltype(std::__declval&lt;hquant::v1::TradingAccount::ScheduleOrderQuery()::$_0&gt;(0)) std::declval[abi:ne200100]&lt;boost::asio::basic_waitable_timer&lt;std::chrono::steady_clock, boost::asio::wait_traits&lt;std::chrono::steady_clock&gt;, boost::asio::any_io_executor&gt;::initiate_async_wait&gt;()(), fp)) boost::asio::basic_waitable_timer&lt;std::chrono::steady_clock, boost::asio::wait_traits&lt;std::chrono::steady_clock&gt;, boost::asio::any_io_executor&gt;::async_wait&lt;hquant::v1::TradingAccount::ScheduleOrderQuery()::$_0&gt;(hquant::v1::TradingAccount::ScheduleOrderQuery()::$_0&amp;&amp;) — 3 samples (1.4%)</title>
+<rect x="487.31" y="238.00" width="31.15" height="20" fill="#2b87bd"/>
+</g>
+<g><title>boost::asio::detail::kqueue_reactor::schedule_timer&lt;boost::asio::detail::chrono_time_traits&lt;std::chrono::steady_clock, boost::asio::wait_traits&lt;std::chrono::steady_clock&gt;&gt;, boost::asio::execution_context::allocator&lt;void&gt;&gt;(boost::asio::detail::timer_queue&lt;boost::asio::detail::chrono_time_traits&lt;std::chrono::steady_clock, boost::asio::wait_traits&lt;std::chrono::steady_clock&gt;&gt;, boost::asio::execution_context::allocator&lt;void&gt;&gt;&amp;, boost::asio::detail::chrono_time_traits&lt;std::chrono::steady_clock, boost::asio::wait_traits&lt;std::chrono::steady_clock&gt;&gt;::time_type const&amp;, boost::asio::detail::timer_queue&lt;boost::asio::detail::chrono_time_traits&lt;std::chrono::steady_clock, boost::asio::wait_traits&lt;std::chrono::steady_clock&gt;&gt;, boost::asio::execution_context::allocator&lt;void&gt;&gt;::per_timer_data&amp;, boost::asio::detail::wait_op*) — 2 samples (1.0%)</title>
+<rect x="487.31" y="216.00" width="20.77" height="20" fill="#b3a0cd"/>
+</g>
+<g><title>boost::asio::detail::kqueue_reactor::interrupt() — 2 samples (1.0%)</title>
+<rect x="487.31" y="194.00" width="20.77" height="20" fill="#b3a0cd"/>
+</g>
+<g><title>write — 2 samples (1.0%)</title>
+<rect x="487.31" y="172.00" width="20.77" height="20" fill="#d7c6b8"/>
+</g>
+<g><title>boost::asio::detail::thread_info_base::allocate&lt;boost::asio::detail::thread_info_base::default_tag&gt;(boost::asio::detail::thread_info_base::default_tag, boost::asio::detail::thread_info_base*, unsigned long, unsigned long) — 1 samples (0.5%)</title>
+<rect x="508.08" y="216.00" width="10.38" height="20" fill="#b3a0cd"/>
+</g>
+<g><title>_malloc_zone_memalign — 1 samples (0.5%)</title>
+<rect x="508.08" y="194.00" width="10.38" height="20" fill="#d4c5cc"/>
+</g>
+<g><title>std::__function::__func&lt;hquant::v1::TradingAccount::PersistCancelResponse(hquant::v1::ClientOrderId, hquant::v1::TradeResponse)::$_0, void (absl::lts_20260817::Status)&gt;::operator()(absl::lts_20260817::Status&amp;&amp;) — 21 samples (10.1%)</title>
+<rect x="518.46" y="282.00" width="218.08" height="20" fill="#2b87bd"/>
+<text x="521.46" y="296.00">std::__function::__func&lt;…&gt;::op…</text>
+</g>
+<g><title>hquant::v1::TradingAccount::CancelResponse(hquant::v1::ClientOrderId, hquant::v1::TradeResponse) — 21 samples (10.1%)</title>
+<rect x="518.46" y="260.00" width="218.08" height="20" fill="#2b87bd"/>
+<text x="521.46" y="274.00">hquant::v1::TradingAccount::Ca…</text>
+</g>
+<g><title>hquant::v1::AccountViewPublisher::Flush() — 8 samples (3.8%)</title>
+<rect x="518.46" y="238.00" width="83.08" height="20" fill="#7dbb9d"/>
+<text x="521.46" y="252.00">hquant::v1…</text>
+</g>
+<g><title>hquant::v1::AccountViewPublisher::View(hquant::v1::ShardId) const — 3 samples (1.4%)</title>
+<rect x="518.46" y="216.00" width="31.15" height="20" fill="#7dbb9d"/>
+</g>
+<g><title>hquant::v1::TradingAccount::Budget(std::basic_string&lt;char&gt; const&amp;) const — 3 samples (1.4%)</title>
+<rect x="518.46" y="194.00" width="31.15" height="20" fill="#2b87bd"/>
+</g>
+<g><title>hquant::v1::FundsState::Asset(std::basic_string&lt;char&gt; const&amp;) const — 1 samples (0.5%)</title>
+<rect x="518.46" y="172.00" width="10.38" height="20" fill="#7dbb9d"/>
+</g>
+<g><title>std::__tree&lt;std::__value_type&lt;std::basic_string&lt;char&gt;, hquant::v1::FundsState::VenueAsset&gt;, std::__map_value_compare&lt;std::basic_string&lt;char&gt;, std::__value_type&lt;std::basic_string&lt;char&gt;, hquant::v1::FundsState::VenueAsset&gt;, true&gt;&gt;::find&lt;std::basic_string&lt;char&gt;&gt;(std::basic_string&lt;char&gt; const&amp;) const — 1 samples (0.5%)</title>
+<rect x="518.46" y="150.00" width="10.38" height="20" fill="#adc5d4"/>
+</g>
+<g><title>DYLD-STUB$$memcmp — 1 samples (0.5%)</title>
+<rect x="518.46" y="128.00" width="10.38" height="20" fill="#d4c5cc"/>
+</g>
+<g><title>hquant::v1::FundsState::Available(std::basic_string&lt;char&gt; const&amp;) const — 1 samples (0.5%)</title>
+<rect x="528.85" y="172.00" width="10.38" height="20" fill="#7dbb9d"/>
+</g>
+<g><title>std::__tree&lt;std::__value_type&lt;std::basic_string&lt;char&gt;, hquant::v1::FundsState::VenueAsset&gt;, std::__map_value_compare&lt;std::basic_string&lt;char&gt;, std::__value_type&lt;std::basic_string&lt;char&gt;, hquant::v1::FundsState::VenueAsset&gt;, true&gt;&gt;::find&lt;std::basic_string&lt;char&gt;&gt;(std::basic_string&lt;char&gt; const&amp;) const — 1 samples (0.5%)</title>
+<rect x="528.85" y="150.00" width="10.38" height="20" fill="#adc5d4"/>
+</g>
+<g><title>_platform_memcmp — 1 samples (0.5%)</title>
+<rect x="528.85" y="128.00" width="10.38" height="20" fill="#d7c6b8"/>
+</g>
+<g><title>std::__tree&lt;std::__value_type&lt;std::basic_string&lt;char&gt;, unsigned long long&gt;, std::__map_value_compare&lt;std::basic_string&lt;char&gt;, std::__value_type&lt;std::basic_string&lt;char&gt;, unsigned long long&gt;, true&gt;&gt;::find&lt;std::basic_string&lt;char&gt;&gt;(std::basic_string&lt;char&gt; const&amp;) const — 1 samples (0.5%)</title>
+<rect x="539.23" y="172.00" width="10.38" height="20" fill="#adc5d4"/>
+</g>
+<g><title>std::__function::__func&lt;hquant::v1::Runtime::Runtime(hquant::v1::AppConfig const&amp;, hquant::v1::PerfProbe*)::$_8, void (hquant::v1::AccountView)&gt;::operator()(hquant::v1::AccountView&amp;&amp;) — 3 samples (1.4%)</title>
+<rect x="549.62" y="216.00" width="31.15" height="20" fill="#adc5d4"/>
+</g>
+<g><title>hquant::v1::Shard::PostAccountView(hquant::v1::AccountView) — 3 samples (1.4%)</title>
+<rect x="549.62" y="194.00" width="31.15" height="20" fill="#7dbb9d"/>
+</g>
+<g><title>boost::asio::detail::scheduler::post_immediate_completion(boost::asio::detail::scheduler_operation*, bool) — 3 samples (1.4%)</title>
+<rect x="549.62" y="172.00" width="31.15" height="20" fill="#b3a0cd"/>
+</g>
+<g><title>boost::asio::detail::kqueue_reactor::interrupt() — 3 samples (1.4%)</title>
+<rect x="549.62" y="150.00" width="31.15" height="20" fill="#b3a0cd"/>
+</g>
+<g><title>write — 3 samples (1.4%)</title>
+<rect x="549.62" y="128.00" width="31.15" height="20" fill="#d7c6b8"/>
+</g>
+<g><title>hquant::v1::FundsState::Available(std::basic_string&lt;char&gt; const&amp;) const — 1 samples (0.5%)</title>
+<rect x="580.77" y="216.00" width="10.38" height="20" fill="#7dbb9d"/>
+</g>
+<g><title>std::__tree&lt;std::__value_type&lt;std::basic_string&lt;char&gt;, hquant::v1::FundsState::AssetTracking&gt;, std::__map_value_compare&lt;std::basic_string&lt;char&gt;, std::__value_type&lt;std::basic_string&lt;char&gt;, hquant::v1::FundsState::AssetTracking&gt;, true&gt;&gt;::find&lt;std::basic_string&lt;char&gt;&gt;(std::basic_string&lt;char&gt; const&amp;) const — 1 samples (0.5%)</title>
+<rect x="580.77" y="194.00" width="10.38" height="20" fill="#adc5d4"/>
+</g>
+<g><title>_platform_memcmp — 1 samples (0.5%)</title>
+<rect x="580.77" y="172.00" width="10.38" height="20" fill="#d7c6b8"/>
+</g>
+<g><title>hquant::v1::TradingAccount::Budget(std::basic_string&lt;char&gt; const&amp;) const — 1 samples (0.5%)</title>
+<rect x="591.15" y="216.00" width="10.38" height="20" fill="#2b87bd"/>
+</g>
+<g><title>std::__tree&lt;std::__value_type&lt;std::basic_string&lt;char&gt;, unsigned long long&gt;, std::__map_value_compare&lt;std::basic_string&lt;char&gt;, std::__value_type&lt;std::basic_string&lt;char&gt;, unsigned long long&gt;, true&gt;&gt;::find&lt;std::basic_string&lt;char&gt;&gt;(std::basic_string&lt;char&gt; const&amp;) const — 1 samples (0.5%)</title>
+<rect x="591.15" y="194.00" width="10.38" height="20" fill="#adc5d4"/>
+</g>
+<g><title>_platform_memcmp — 1 samples (0.5%)</title>
+<rect x="591.15" y="172.00" width="10.38" height="20" fill="#d7c6b8"/>
+</g>
+<g><title>hquant::v1::TradingAccount::ApplyEvent(std::variant&lt;hquant::v1::OrderReport, hquant::v1::Fill, hquant::v1::BalanceUpdate, hquant::v1::BalanceDelta&gt; const&amp;, bool) — 7 samples (3.4%)</title>
+<rect x="601.54" y="238.00" width="72.69" height="20" fill="#2b87bd"/>
+<text x="604.54" y="252.00">hquant::…</text>
+</g>
+<g><title>hquant::v1::FundsState::Release(hquant::v1::ClientOrderId const&amp;) — 4 samples (1.9%)</title>
+<rect x="601.54" y="216.00" width="41.54" height="20" fill="#7dbb9d"/>
+<text x="604.54" y="230.00">hqua…</text>
+</g>
+<g><title>std::__tree&lt;std::basic_string&lt;char&gt;&gt;::__erase_unique&lt;std::basic_string&lt;char&gt;&gt;(std::basic_string&lt;char&gt; const&amp;) — 4 samples (1.9%)</title>
+<rect x="601.54" y="194.00" width="41.54" height="20" fill="#adc5d4"/>
+<text x="604.54" y="208.00">std:…</text>
+</g>
+<g><title>std::__tree&lt;std::basic_string&lt;char&gt;&gt;::find&lt;std::basic_string&lt;char&gt;&gt;(std::basic_string&lt;char&gt; const&amp;) — 3 samples (1.4%)</title>
+<rect x="601.54" y="172.00" width="31.15" height="20" fill="#adc5d4"/>
+</g>
+<g><title>_xzm_free — 1 samples (0.5%)</title>
+<rect x="632.69" y="172.00" width="10.38" height="20" fill="#bed1c2"/>
+</g>
+<g><title>hquant::v1::OrderManager::ApplyReport(hquant::v1::OrderReport const&amp;) — 2 samples (1.0%)</title>
+<rect x="643.08" y="216.00" width="20.77" height="20" fill="#7dbb9d"/>
+</g>
+<g><title>hquant::v1::OrderManager::ErasePlan(hquant::v1::ClientOrderId const&amp;) — 1 samples (0.5%)</title>
+<rect x="643.08" y="194.00" width="10.38" height="20" fill="#7dbb9d"/>
+</g>
+<g><title>_xzm_free — 1 samples (0.5%)</title>
+<rect x="643.08" y="172.00" width="10.38" height="20" fill="#bed1c2"/>
+</g>
+<g><title>std::__tree&lt;std::basic_string&lt;char&gt;&gt;::__erase_unique&lt;std::basic_string&lt;char&gt;&gt;(std::basic_string&lt;char&gt; const&amp;) — 1 samples (0.5%)</title>
+<rect x="653.46" y="194.00" width="10.38" height="20" fill="#adc5d4"/>
+</g>
+<g><title>std::__tree&lt;std::basic_string&lt;char&gt;&gt;::find&lt;std::basic_string&lt;char&gt;&gt;(std::basic_string&lt;char&gt; const&amp;) — 1 samples (0.5%)</title>
+<rect x="653.46" y="172.00" width="10.38" height="20" fill="#adc5d4"/>
+</g>
+<g><title>_platform_memcmp — 1 samples (0.5%)</title>
+<rect x="653.46" y="150.00" width="10.38" height="20" fill="#d7c6b8"/>
+</g>
+<g><title>hquant::v1::OrderState::Find(hquant::v1::ClientOrderId const&amp;) const — 1 samples (0.5%)</title>
+<rect x="663.85" y="216.00" width="10.38" height="20" fill="#7dbb9d"/>
+</g>
+<g><title>std::__tree&lt;std::__value_type&lt;std::basic_string&lt;char&gt;, hquant::v1::TrackedOrder&gt;, std::__map_value_compare&lt;std::basic_string&lt;char&gt;, std::__value_type&lt;std::basic_string&lt;char&gt;, hquant::v1::TrackedOrder&gt;, true&gt;&gt;::find&lt;std::basic_string&lt;char&gt;&gt;(std::basic_string&lt;char&gt; const&amp;) const — 1 samples (0.5%)</title>
+<rect x="663.85" y="194.00" width="10.38" height="20" fill="#adc5d4"/>
+</g>
+<g><title>_platform_memcmp — 1 samples (0.5%)</title>
+<rect x="663.85" y="172.00" width="10.38" height="20" fill="#d7c6b8"/>
+</g>
+<g><title>hquant::v1::TradingAccount::ScheduleOrderQuery() — 4 samples (1.9%)</title>
+<rect x="674.23" y="238.00" width="41.54" height="20" fill="#2b87bd"/>
+<text x="677.23" y="252.00">hqua…</text>
+</g>
+<g><title>decltype(async_initiate&lt;hquant::v1::TradingAccount::ScheduleOrderQuery()::$_0, void (boost::system::error_code)&gt;(decltype(std::__declval&lt;hquant::v1::TradingAccount::ScheduleOrderQuery()::$_0&gt;(0)) std::declval[abi:ne200100]&lt;boost::asio::basic_waitable_timer&lt;std::chrono::steady_clock, boost::asio::wait_traits&lt;std::chrono::steady_clock&gt;, boost::asio::any_io_executor&gt;::initiate_async_wait&gt;()(), fp)) boost::asio::basic_waitable_timer&lt;std::chrono::steady_clock, boost::asio::wait_traits&lt;std::chrono::steady_clock&gt;, boost::asio::any_io_executor&gt;::async_wait&lt;hquant::v1::TradingAccount::ScheduleOrderQuery()::$_0&gt;(hquant::v1::TradingAccount::ScheduleOrderQuery()::$_0&amp;&amp;) — 4 samples (1.9%)</title>
+<rect x="674.23" y="216.00" width="41.54" height="20" fill="#2b87bd"/>
+<text x="677.23" y="230.00">decl…</text>
+</g>
+<g><title>boost::asio::detail::kqueue_reactor::schedule_timer&lt;boost::asio::detail::chrono_time_traits&lt;std::chrono::steady_clock, boost::asio::wait_traits&lt;std::chrono::steady_clock&gt;&gt;, boost::asio::execution_context::allocator&lt;void&gt;&gt;(boost::asio::detail::timer_queue&lt;boost::asio::detail::chrono_time_traits&lt;std::chrono::steady_clock, boost::asio::wait_traits&lt;std::chrono::steady_clock&gt;&gt;, boost::asio::execution_context::allocator&lt;void&gt;&gt;&amp;, boost::asio::detail::chrono_time_traits&lt;std::chrono::steady_clock, boost::asio::wait_traits&lt;std::chrono::steady_clock&gt;&gt;::time_type const&amp;, boost::asio::detail::timer_queue&lt;boost::asio::detail::chrono_time_traits&lt;std::chrono::steady_clock, boost::asio::wait_traits&lt;std::chrono::steady_clock&gt;&gt;, boost::asio::execution_context::allocator&lt;void&gt;&gt;::per_timer_data&amp;, boost::asio::detail::wait_op*) — 4 samples (1.9%)</title>
+<rect x="674.23" y="194.00" width="41.54" height="20" fill="#b3a0cd"/>
+<text x="677.23" y="208.00">boos…</text>
+</g>
+<g><title>boost::asio::detail::kqueue_reactor::interrupt() — 4 samples (1.9%)</title>
+<rect x="674.23" y="172.00" width="41.54" height="20" fill="#b3a0cd"/>
+<text x="677.23" y="186.00">boos…</text>
+</g>
+<g><title>write — 4 samples (1.9%)</title>
+<rect x="674.23" y="150.00" width="41.54" height="20" fill="#d7c6b8"/>
+<text x="677.23" y="164.00">write</text>
+</g>
+<g><title>decltype(auto) std::__variant_detail::__visitation::__base::__dispatcher&lt;0ul&gt;::__dispatch[abi:ne200100]&lt;std::__variant_detail::__dtor&lt;std::__variant_detail::__traits&lt;hquant::v1::OrderReport, hquant::v1::Fill, hquant::v1::BalanceUpdate, hquant::v1::BalanceDelta&gt;, (std::__variant_detail::_Trait)1&gt;::__destroy[abi:ne200100]()::&#x27;lambda&#x27;(auto&amp;)&amp;&amp;, std::__variant_detail::__base&lt;(std::__variant_detail::_Trait)1, hquant::v1::OrderReport, hquant::v1::Fill, hquant::v1::BalanceUpdate, hquant::v1::BalanceDelta&gt;&amp;&gt;(auto, std::__variant_detail::__base&lt;(std::__variant_detail::_Trait)1, hquant::v1::OrderReport, hquant::v1::Fill, hquant::v1::BalanceUpdate, hquant::v1::BalanceDelta&gt;&amp;) — 1 samples (0.5%)</title>
+<rect x="715.77" y="238.00" width="10.38" height="20" fill="#d4c5cc"/>
+</g>
+<g><title>_xzm_free — 1 samples (0.5%)</title>
+<rect x="715.77" y="216.00" width="10.38" height="20" fill="#bed1c2"/>
+</g>
+<g><title>_platform_memset — 1 samples (0.5%)</title>
+<rect x="715.77" y="194.00" width="10.38" height="20" fill="#b9ccd5"/>
+</g>
+<g><title>std::__function::__func&lt;hquant::v1::TradingAccount::PersistSubmitResponse(hquant::v1::ClientOrderId, hquant::v1::TradeResponse)::$_0, void (absl::lts_20260817::Status)&gt;::operator()(absl::lts_20260817::Status&amp;&amp;) — 20 samples (9.6%)</title>
+<rect x="736.54" y="282.00" width="207.69" height="20" fill="#2b87bd"/>
+<text x="739.54" y="296.00">std::__function::__func&lt;…&gt;::…</text>
+</g>
+<g><title>hquant::v1::TradingAccount::SubmitResponse(hquant::v1::ClientOrderId, hquant::v1::TradeResponse) — 20 samples (9.6%)</title>
+<rect x="736.54" y="260.00" width="207.69" height="20" fill="#2b87bd"/>
+<text x="739.54" y="274.00">hquant::v1::TradingAccount::…</text>
+</g>
+<g><title>hquant::v1::AccountViewPublisher::Flush() — 13 samples (6.2%)</title>
+<rect x="736.54" y="238.00" width="135.00" height="20" fill="#7dbb9d"/>
+<text x="739.54" y="252.00">hquant::v1::Accou…</text>
+</g>
+<g><title>hquant::v1::AccountViewPublisher::View(hquant::v1::ShardId) const — 9 samples (4.3%)</title>
+<rect x="736.54" y="216.00" width="93.46" height="20" fill="#7dbb9d"/>
+<text x="739.54" y="230.00">hquant::v1:…</text>
+</g>
+<g><title>hquant::v1::TradingAccount::Budget(std::basic_string&lt;char&gt; const&amp;) const — 4 samples (1.9%)</title>
+<rect x="736.54" y="194.00" width="41.54" height="20" fill="#2b87bd"/>
+<text x="739.54" y="208.00">hqua…</text>
+</g>
+<g><title>std::__tree&lt;std::__value_type&lt;std::basic_string&lt;char&gt;, unsigned long long&gt;, std::__map_value_compare&lt;std::basic_string&lt;char&gt;, std::__value_type&lt;std::basic_string&lt;char&gt;, unsigned long long&gt;, true&gt;&gt;::find&lt;std::basic_string&lt;char&gt;&gt;(std::basic_string&lt;char&gt; const&amp;) const — 3 samples (1.4%)</title>
+<rect x="736.54" y="172.00" width="31.15" height="20" fill="#adc5d4"/>
+</g>
+<g><title>_platform_memcmp — 2 samples (1.0%)</title>
+<rect x="736.54" y="150.00" width="20.77" height="20" fill="#d7c6b8"/>
+</g>
+<g><title>hquant::v1::FundsState::Available(std::basic_string&lt;char&gt; const&amp;) const — 1 samples (0.5%)</title>
+<rect x="767.69" y="172.00" width="10.38" height="20" fill="#7dbb9d"/>
+</g>
+<g><title>std::__tree&lt;std::__value_type&lt;std::basic_string&lt;char&gt;, hquant::v1::FundsState::VenueAsset&gt;, std::__map_value_compare&lt;std::basic_string&lt;char&gt;, std::__value_type&lt;std::basic_string&lt;char&gt;, hquant::v1::FundsState::VenueAsset&gt;, true&gt;&gt;::find&lt;std::basic_string&lt;char&gt;&gt;(std::basic_string&lt;char&gt; const&amp;) const — 1 samples (0.5%)</title>
+<rect x="767.69" y="150.00" width="10.38" height="20" fill="#adc5d4"/>
+</g>
+<g><title>hquant::v1::FundsState::Available(std::basic_string&lt;char&gt; const&amp;) const — 2 samples (1.0%)</title>
+<rect x="778.08" y="194.00" width="20.77" height="20" fill="#7dbb9d"/>
+</g>
+<g><title>std::__tree&lt;std::__value_type&lt;std::basic_string&lt;char&gt;, hquant::v1::FundsState::AssetTracking&gt;, std::__map_value_compare&lt;std::basic_string&lt;char&gt;, std::__value_type&lt;std::basic_string&lt;char&gt;, hquant::v1::FundsState::AssetTracking&gt;, true&gt;&gt;::find&lt;std::basic_string&lt;char&gt;&gt;(std::basic_string&lt;char&gt; const&amp;) const — 2 samples (1.0%)</title>
+<rect x="778.08" y="172.00" width="20.77" height="20" fill="#adc5d4"/>
+</g>
+<g><title>_platform_memcmp — 1 samples (0.5%)</title>
+<rect x="778.08" y="150.00" width="10.38" height="20" fill="#d7c6b8"/>
+</g>
+<g><title>hquant::v1::OrderManager::OpenFor(hquant::v1::ShardId) const — 2 samples (1.0%)</title>
+<rect x="798.85" y="194.00" width="20.77" height="20" fill="#7dbb9d"/>
+</g>
+<g><title>hquant::v1::OrderState::Find(hquant::v1::ClientOrderId const&amp;) const — 2 samples (1.0%)</title>
+<rect x="798.85" y="172.00" width="20.77" height="20" fill="#7dbb9d"/>
+</g>
+<g><title>std::__tree&lt;std::__value_type&lt;std::basic_string&lt;char&gt;, hquant::v1::TrackedOrder&gt;, std::__map_value_compare&lt;std::basic_string&lt;char&gt;, std::__value_type&lt;std::basic_string&lt;char&gt;, hquant::v1::TrackedOrder&gt;, true&gt;&gt;::find&lt;std::basic_string&lt;char&gt;&gt;(std::basic_string&lt;char&gt; const&amp;) const — 2 samples (1.0%)</title>
+<rect x="798.85" y="150.00" width="20.77" height="20" fill="#adc5d4"/>
+</g>
+<g><title>hquant::v1::FundsState::Asset(std::basic_string&lt;char&gt; const&amp;) const — 1 samples (0.5%)</title>
+<rect x="819.62" y="194.00" width="10.38" height="20" fill="#7dbb9d"/>
+</g>
+<g><title>std::__tree&lt;std::__value_type&lt;std::basic_string&lt;char&gt;, hquant::v1::FundsState::VenueAsset&gt;, std::__map_value_compare&lt;std::basic_string&lt;char&gt;, std::__value_type&lt;std::basic_string&lt;char&gt;, hquant::v1::FundsState::VenueAsset&gt;, true&gt;&gt;::find&lt;std::basic_string&lt;char&gt;&gt;(std::basic_string&lt;char&gt; const&amp;) const — 1 samples (0.5%)</title>
+<rect x="819.62" y="172.00" width="10.38" height="20" fill="#adc5d4"/>
+</g>
+<g><title>std::__function::__func&lt;hquant::v1::Runtime::Runtime(hquant::v1::AppConfig const&amp;, hquant::v1::PerfProbe*)::$_8, void (hquant::v1::AccountView)&gt;::operator()(hquant::v1::AccountView&amp;&amp;) — 4 samples (1.9%)</title>
+<rect x="830.00" y="216.00" width="41.54" height="20" fill="#adc5d4"/>
+<text x="833.00" y="230.00">std:…</text>
+</g>
+<g><title>hquant::v1::Shard::PostAccountView(hquant::v1::AccountView) — 4 samples (1.9%)</title>
+<rect x="830.00" y="194.00" width="41.54" height="20" fill="#7dbb9d"/>
+<text x="833.00" y="208.00">hqua…</text>
+</g>
+<g><title>boost::asio::detail::scheduler::post_immediate_completion(boost::asio::detail::scheduler_operation*, bool) — 4 samples (1.9%)</title>
+<rect x="830.00" y="172.00" width="41.54" height="20" fill="#b3a0cd"/>
+<text x="833.00" y="186.00">boos…</text>
+</g>
+<g><title>boost::asio::detail::kqueue_reactor::interrupt() — 4 samples (1.9%)</title>
+<rect x="830.00" y="150.00" width="41.54" height="20" fill="#b3a0cd"/>
+<text x="833.00" y="164.00">boos…</text>
+</g>
+<g><title>write — 4 samples (1.9%)</title>
+<rect x="830.00" y="128.00" width="41.54" height="20" fill="#d7c6b8"/>
+<text x="833.00" y="142.00">write</text>
+</g>
+<g><title>hquant::v1::TradingAccount::ApplyEvent(std::variant&lt;hquant::v1::OrderReport, hquant::v1::Fill, hquant::v1::BalanceUpdate, hquant::v1::BalanceDelta&gt; const&amp;, bool) — 6 samples (2.9%)</title>
+<rect x="871.54" y="238.00" width="62.31" height="20" fill="#2b87bd"/>
+<text x="874.54" y="252.00">hquant:…</text>
+</g>
+<g><title>hquant::v1::OrderManager::ApplyReport(hquant::v1::OrderReport const&amp;) — 3 samples (1.4%)</title>
+<rect x="871.54" y="216.00" width="31.15" height="20" fill="#7dbb9d"/>
+</g>
+<g><title>hquant::v1::OrderManager::ErasePlan(hquant::v1::ClientOrderId const&amp;) — 1 samples (0.5%)</title>
+<rect x="871.54" y="194.00" width="10.38" height="20" fill="#7dbb9d"/>
+</g>
+<g><title>std::__tree&lt;std::pair&lt;std::chrono::time_point&lt;std::chrono::steady_clock, std::chrono::duration&lt;long long, std::ratio&lt;1l, 1000000000l&gt;&gt;&gt;, std::basic_string&lt;char&gt;&gt;&gt;::__erase_unique&lt;std::pair&lt;std::chrono::time_point&lt;std::chrono::steady_clock, std::chrono::duration&lt;long long, std::ratio&lt;1l, 1000000000l&gt;&gt;&gt;, std::basic_string&lt;char&gt;&gt;&gt;(std::pair&lt;std::chrono::time_point&lt;std::chrono::steady_clock, std::chrono::duration&lt;long long, std::ratio&lt;1l, 1000000000l&gt;&gt;&gt;, std::basic_string&lt;char&gt;&gt; const&amp;) — 1 samples (0.5%)</title>
+<rect x="871.54" y="172.00" width="10.38" height="20" fill="#adc5d4"/>
+</g>
+<g><title>_xzm_free — 1 samples (0.5%)</title>
+<rect x="871.54" y="150.00" width="10.38" height="20" fill="#bed1c2"/>
+</g>
+<g><title>hquant::v1::OrderState::ApplyReport(hquant::v1::OrderReport const&amp;) — 1 samples (0.5%)</title>
+<rect x="881.92" y="194.00" width="10.38" height="20" fill="#7dbb9d"/>
+</g>
+<g><title>hquant::v1::OrderState::Find(hquant::v1::ClientOrderId const&amp;) const — 1 samples (0.5%)</title>
+<rect x="892.31" y="194.00" width="10.38" height="20" fill="#7dbb9d"/>
+</g>
+<g><title>std::__tree&lt;std::__value_type&lt;std::basic_string&lt;char&gt;, hquant::v1::TrackedOrder&gt;, std::__map_value_compare&lt;std::basic_string&lt;char&gt;, std::__value_type&lt;std::basic_string&lt;char&gt;, hquant::v1::TrackedOrder&gt;, true&gt;&gt;::find&lt;std::basic_string&lt;char&gt;&gt;(std::basic_string&lt;char&gt; const&amp;) const — 1 samples (0.5%)</title>
+<rect x="892.31" y="172.00" width="10.38" height="20" fill="#adc5d4"/>
+</g>
+<g><title>hquant::v1::FundsState::MarkVenueAccepted(hquant::v1::ClientOrderId const&amp;) — 2 samples (1.0%)</title>
+<rect x="902.69" y="216.00" width="20.77" height="20" fill="#7dbb9d"/>
+</g>
+<g><title>std::__tree&lt;std::__value_type&lt;std::basic_string&lt;char&gt;, hquant::v1::FundsHold&gt;, std::__map_value_compare&lt;std::basic_string&lt;char&gt;, std::__value_type&lt;std::basic_string&lt;char&gt;, hquant::v1::FundsHold&gt;, true&gt;&gt;::find&lt;std::basic_string&lt;char&gt;&gt;(std::basic_string&lt;char&gt; const&amp;) — 1 samples (0.5%)</title>
+<rect x="902.69" y="194.00" width="10.38" height="20" fill="#adc5d4"/>
+</g>
+<g><title>std::map&lt;std::basic_string&lt;char&gt;, hquant::v1::FundsState::AssetTracking&gt;::at(std::basic_string&lt;char&gt; const&amp;) — 1 samples (0.5%)</title>
+<rect x="913.08" y="194.00" width="10.38" height="20" fill="#adc5d4"/>
+</g>
+<g><title>hquant::v1::OrderState::Find(hquant::v1::ClientOrderId const&amp;) const — 1 samples (0.5%)</title>
+<rect x="923.46" y="216.00" width="10.38" height="20" fill="#7dbb9d"/>
+</g>
+<g><title>std::__tree&lt;std::__value_type&lt;std::basic_string&lt;char&gt;, hquant::v1::TrackedOrder&gt;, std::__map_value_compare&lt;std::basic_string&lt;char&gt;, std::__value_type&lt;std::basic_string&lt;char&gt;, hquant::v1::TrackedOrder&gt;, true&gt;&gt;::find&lt;std::basic_string&lt;char&gt;&gt;(std::basic_string&lt;char&gt; const&amp;) const — 1 samples (0.5%)</title>
+<rect x="923.46" y="194.00" width="10.38" height="20" fill="#adc5d4"/>
+</g>
+<g><title>_platform_memcmp — 1 samples (0.5%)</title>
+<rect x="923.46" y="172.00" width="10.38" height="20" fill="#d7c6b8"/>
+</g>
+<g><title>hquant::v1::OrderState::Find(hquant::v1::ClientOrderId const&amp;) const — 1 samples (0.5%)</title>
+<rect x="933.85" y="238.00" width="10.38" height="20" fill="#7dbb9d"/>
+</g>
+<g><title>std::__tree&lt;std::__value_type&lt;std::basic_string&lt;char&gt;, hquant::v1::TrackedOrder&gt;, std::__map_value_compare&lt;std::basic_string&lt;char&gt;, std::__value_type&lt;std::basic_string&lt;char&gt;, hquant::v1::TrackedOrder&gt;, true&gt;&gt;::find&lt;std::basic_string&lt;char&gt;&gt;(std::basic_string&lt;char&gt; const&amp;) const — 1 samples (0.5%)</title>
+<rect x="933.85" y="216.00" width="10.38" height="20" fill="#adc5d4"/>
+</g>
+<g><title>boost::asio::detail::executor_op&lt;boost::asio::detail::binder0&lt;hquant::v1::OrderJournal::WriterLoop()::$_2&gt;, boost::asio::detail::scheduler_operation&gt;::ptr::reset() — 1 samples (0.5%)</title>
+<rect x="944.23" y="304.00" width="10.38" height="20" fill="#b3a0cd"/>
+</g>
+<g><title>std::__function::__func&lt;hquant::v1::TradingAccount::Persist(hquant::v1::JournalEntry, std::function&lt;void (absl::lts_20260817::Status)&gt;)::$_0, void (absl::lts_20260817::Status)&gt;::destroy_deallocate() — 1 samples (0.5%)</title>
+<rect x="954.62" y="304.00" width="10.38" height="20" fill="#2b87bd"/>
+</g>
+<g><title>std::__function::__func&lt;hquant::v1::TradingAccount::OnWriting(hquant::v1::ClientOrderId, bool)::$_0, void (absl::lts_20260817::Status)&gt;::destroy_deallocate() — 1 samples (0.5%)</title>
+<rect x="954.62" y="282.00" width="10.38" height="20" fill="#2b87bd"/>
+</g>
+<g><title>_free — 1 samples (0.5%)</title>
+<rect x="954.62" y="260.00" width="10.38" height="20" fill="#bed1c2"/>
+</g>
+<g><title>boost::asio::detail::executor_op&lt;boost::asio::detail::binder0&lt;hquant::v1::TradingAccount::TryEnqueue(std::function&lt;void ()&gt;)::$_0&gt;, boost::asio::detail::scheduler_operation&gt;::do_complete(void*, boost::asio::detail::scheduler_operation*, boost::system::error_code const&amp;, unsigned long) — 61 samples (29.3%)</title>
+<rect x="975.38" y="326.00" width="633.46" height="20" fill="#2b87bd"/>
+<text x="978.38" y="340.00">boost::asio::detail::executor_op&lt;…&gt;::do_complete(void*, boost::asio::detail::scheduler_oper…</text>
+</g>
+<g><title>hquant::v1::TradingAccount::Drain() — 60 samples (28.8%)</title>
+<rect x="975.38" y="304.00" width="623.08" height="20" fill="#2b87bd"/>
+<text x="978.38" y="318.00">hquant::v1::TradingAccount::Drain()</text>
+</g>
+<g><title>std::__function::__func&lt;hquant::v1::TradingAccount::TrySubmit(hquant::v1::ShardId, hquant::v1::MarketId, hquant::v1::LimitOrderRequest, unsigned long long, std::function&lt;void (bool, std::basic_string&lt;char&gt;)&gt;)::$_0, void ()&gt;::operator()() — 47 samples (22.6%)</title>
+<rect x="975.38" y="282.00" width="488.08" height="20" fill="#2b87bd"/>
+<text x="978.38" y="296.00">std::__function::__func&lt;…&gt;::operator()()</text>
+</g>
+<g><title>hquant::v1::TradingAccount::ProcessSubmit(hquant::v1::ShardId, hquant::v1::MarketId const&amp;, hquant::v1::LimitOrderRequest const&amp;, unsigned long long, unsigned long long, unsigned long long, std::function&lt;void (bool, std::basic_string&lt;char&gt;)&gt;) — 47 samples (22.6%)</title>
+<rect x="975.38" y="260.00" width="488.08" height="20" fill="#2b87bd"/>
+<text x="978.38" y="274.00">hquant::v1::TradingAccount::ProcessSubmit(hquant::v1::ShardId, hquant…</text>
+</g>
+<g><title>hquant::v1::AccountViewPublisher::Flush() — 21 samples (10.1%)</title>
+<rect x="975.38" y="238.00" width="218.08" height="20" fill="#7dbb9d"/>
+<text x="978.38" y="252.00">hquant::v1::AccountViewPublish…</text>
+</g>
+<g><title>hquant::v1::AccountViewPublisher::View(hquant::v1::ShardId) const — 11 samples (5.3%)</title>
+<rect x="975.38" y="216.00" width="114.23" height="20" fill="#7dbb9d"/>
+<text x="978.38" y="230.00">hquant::v1::Ac…</text>
+</g>
+<g><title>hquant::v1::TradingAccount::Budget(std::basic_string&lt;char&gt; const&amp;) const — 7 samples (3.4%)</title>
+<rect x="975.38" y="194.00" width="72.69" height="20" fill="#2b87bd"/>
+<text x="978.38" y="208.00">hquant::…</text>
+</g>
+<g><title>hquant::v1::FundsState::PendingDebit(std::basic_string&lt;char&gt; const&amp;) const — 3 samples (1.4%)</title>
+<rect x="975.38" y="172.00" width="31.15" height="20" fill="#7dbb9d"/>
+</g>
+<g><title>std::__tree&lt;std::__value_type&lt;std::basic_string&lt;char&gt;, hquant::v1::FundsState::AssetTracking&gt;, std::__map_value_compare&lt;std::basic_string&lt;char&gt;, std::__value_type&lt;std::basic_string&lt;char&gt;, hquant::v1::FundsState::AssetTracking&gt;, true&gt;&gt;::find&lt;std::basic_string&lt;char&gt;&gt;(std::basic_string&lt;char&gt; const&amp;) const — 3 samples (1.4%)</title>
+<rect x="975.38" y="150.00" width="31.15" height="20" fill="#adc5d4"/>
+</g>
+<g><title>DYLD-STUB$$memcmp — 2 samples (1.0%)</title>
+<rect x="975.38" y="128.00" width="20.77" height="20" fill="#d4c5cc"/>
+</g>
+<g><title>_platform_memcmp — 1 samples (0.5%)</title>
+<rect x="996.15" y="128.00" width="10.38" height="20" fill="#d7c6b8"/>
+</g>
+<g><title>hquant::v1::FundsState::Asset(std::basic_string&lt;char&gt; const&amp;) const — 1 samples (0.5%)</title>
+<rect x="1006.54" y="172.00" width="10.38" height="20" fill="#7dbb9d"/>
+</g>
+<g><title>std::__tree&lt;std::__value_type&lt;std::basic_string&lt;char&gt;, hquant::v1::FundsState::VenueAsset&gt;, std::__map_value_compare&lt;std::basic_string&lt;char&gt;, std::__value_type&lt;std::basic_string&lt;char&gt;, hquant::v1::FundsState::VenueAsset&gt;, true&gt;&gt;::find&lt;std::basic_string&lt;char&gt;&gt;(std::basic_string&lt;char&gt; const&amp;) const — 1 samples (0.5%)</title>
+<rect x="1006.54" y="150.00" width="10.38" height="20" fill="#adc5d4"/>
+</g>
+<g><title>_platform_memcmp — 1 samples (0.5%)</title>
+<rect x="1006.54" y="128.00" width="10.38" height="20" fill="#d7c6b8"/>
+</g>
+<g><title>hquant::v1::FundsState::Available(std::basic_string&lt;char&gt; const&amp;) const — 1 samples (0.5%)</title>
+<rect x="1016.92" y="172.00" width="10.38" height="20" fill="#7dbb9d"/>
+</g>
+<g><title>std::__tree&lt;std::__value_type&lt;std::basic_string&lt;char&gt;, hquant::v1::FundsState::VenueAsset&gt;, std::__map_value_compare&lt;std::basic_string&lt;char&gt;, std::__value_type&lt;std::basic_string&lt;char&gt;, hquant::v1::FundsState::VenueAsset&gt;, true&gt;&gt;::find&lt;std::basic_string&lt;char&gt;&gt;(std::basic_string&lt;char&gt; const&amp;) const — 1 samples (0.5%)</title>
+<rect x="1016.92" y="150.00" width="10.38" height="20" fill="#adc5d4"/>
+</g>
+<g><title>_platform_memcmp — 1 samples (0.5%)</title>
+<rect x="1016.92" y="128.00" width="10.38" height="20" fill="#d7c6b8"/>
+</g>
+<g><title>hquant::v1::FundsState::Reserved(std::basic_string&lt;char&gt; const&amp;) const — 1 samples (0.5%)</title>
+<rect x="1027.31" y="172.00" width="10.38" height="20" fill="#7dbb9d"/>
+</g>
+<g><title>std::__tree&lt;std::__value_type&lt;std::basic_string&lt;char&gt;, hquant::v1::FundsState::AssetTracking&gt;, std::__map_value_compare&lt;std::basic_string&lt;char&gt;, std::__value_type&lt;std::basic_string&lt;char&gt;, hquant::v1::FundsState::AssetTracking&gt;, true&gt;&gt;::find&lt;std::basic_string&lt;char&gt;&gt;(std::basic_string&lt;char&gt; const&amp;) const — 1 samples (0.5%)</title>
+<rect x="1027.31" y="150.00" width="10.38" height="20" fill="#adc5d4"/>
+</g>
+<g><title>_platform_memcmp — 1 samples (0.5%)</title>
+<rect x="1027.31" y="128.00" width="10.38" height="20" fill="#d7c6b8"/>
+</g>
+<g><title>std::__tree&lt;std::__value_type&lt;std::basic_string&lt;char&gt;, unsigned long long&gt;, std::__map_value_compare&lt;std::basic_string&lt;char&gt;, std::__value_type&lt;std::basic_string&lt;char&gt;, unsigned long long&gt;, true&gt;&gt;::find&lt;std::basic_string&lt;char&gt;&gt;(std::basic_string&lt;char&gt; const&amp;) const — 1 samples (0.5%)</title>
+<rect x="1037.69" y="172.00" width="10.38" height="20" fill="#adc5d4"/>
+</g>
+<g><title>_platform_memcmp — 1 samples (0.5%)</title>
+<rect x="1037.69" y="150.00" width="10.38" height="20" fill="#d7c6b8"/>
+</g>
+<g><title>hquant::v1::OrderManager::OpenFor(hquant::v1::ShardId) const — 2 samples (1.0%)</title>
+<rect x="1048.08" y="194.00" width="20.77" height="20" fill="#7dbb9d"/>
+</g>
+<g><title>hquant::v1::OrderState::Find(hquant::v1::ClientOrderId const&amp;) const — 1 samples (0.5%)</title>
+<rect x="1048.08" y="172.00" width="10.38" height="20" fill="#7dbb9d"/>
+</g>
+<g><title>std::__tree&lt;std::__value_type&lt;std::basic_string&lt;char&gt;, hquant::v1::TrackedOrder&gt;, std::__map_value_compare&lt;std::basic_string&lt;char&gt;, std::__value_type&lt;std::basic_string&lt;char&gt;, hquant::v1::TrackedOrder&gt;, true&gt;&gt;::find&lt;std::basic_string&lt;char&gt;&gt;(std::basic_string&lt;char&gt; const&amp;) const — 1 samples (0.5%)</title>
+<rect x="1048.08" y="150.00" width="10.38" height="20" fill="#adc5d4"/>
+</g>
+<g><title>_platform_memcmp — 1 samples (0.5%)</title>
+<rect x="1048.08" y="128.00" width="10.38" height="20" fill="#d7c6b8"/>
+</g>
+<g><title>hquant::v1::FundsState::Available(std::basic_string&lt;char&gt; const&amp;) const — 1 samples (0.5%)</title>
+<rect x="1068.85" y="194.00" width="10.38" height="20" fill="#7dbb9d"/>
+</g>
+<g><title>std::__tree&lt;std::__value_type&lt;std::basic_string&lt;char&gt;, hquant::v1::FundsState::AssetTracking&gt;, std::__map_value_compare&lt;std::basic_string&lt;char&gt;, std::__value_type&lt;std::basic_string&lt;char&gt;, hquant::v1::FundsState::AssetTracking&gt;, true&gt;&gt;::find&lt;std::basic_string&lt;char&gt;&gt;(std::basic_string&lt;char&gt; const&amp;) const — 1 samples (0.5%)</title>
+<rect x="1068.85" y="172.00" width="10.38" height="20" fill="#adc5d4"/>
+</g>
+<g><title>_platform_memcmp — 1 samples (0.5%)</title>
+<rect x="1068.85" y="150.00" width="10.38" height="20" fill="#d7c6b8"/>
+</g>
+<g><title>hquant::v1::OrderState::Find(hquant::v1::ClientOrderId const&amp;) const — 1 samples (0.5%)</title>
+<rect x="1079.23" y="194.00" width="10.38" height="20" fill="#7dbb9d"/>
+</g>
+<g><title>std::__tree&lt;std::__value_type&lt;std::basic_string&lt;char&gt;, hquant::v1::TrackedOrder&gt;, std::__map_value_compare&lt;std::basic_string&lt;char&gt;, std::__value_type&lt;std::basic_string&lt;char&gt;, hquant::v1::TrackedOrder&gt;, true&gt;&gt;::find&lt;std::basic_string&lt;char&gt;&gt;(std::basic_string&lt;char&gt; const&amp;) const — 1 samples (0.5%)</title>
+<rect x="1079.23" y="172.00" width="10.38" height="20" fill="#adc5d4"/>
+</g>
+<g><title>std::__function::__func&lt;hquant::v1::Runtime::Runtime(hquant::v1::AppConfig const&amp;, hquant::v1::PerfProbe*)::$_8, void (hquant::v1::AccountView)&gt;::operator()(hquant::v1::AccountView&amp;&amp;) — 6 samples (2.9%)</title>
+<rect x="1089.62" y="216.00" width="62.31" height="20" fill="#adc5d4"/>
+<text x="1092.62" y="230.00">std::__…</text>
+</g>
+<g><title>hquant::v1::Shard::PostAccountView(hquant::v1::AccountView) — 6 samples (2.9%)</title>
+<rect x="1089.62" y="194.00" width="62.31" height="20" fill="#7dbb9d"/>
+<text x="1092.62" y="208.00">hquant:…</text>
+</g>
+<g><title>boost::asio::detail::scheduler::post_immediate_completion(boost::asio::detail::scheduler_operation*, bool) — 5 samples (2.4%)</title>
+<rect x="1089.62" y="172.00" width="51.92" height="20" fill="#b3a0cd"/>
+<text x="1092.62" y="186.00">boost…</text>
+</g>
+<g><title>boost::asio::detail::kqueue_reactor::interrupt() — 5 samples (2.4%)</title>
+<rect x="1089.62" y="150.00" width="51.92" height="20" fill="#b3a0cd"/>
+<text x="1092.62" y="164.00">boost…</text>
+</g>
+<g><title>write — 5 samples (2.4%)</title>
+<rect x="1089.62" y="128.00" width="51.92" height="20" fill="#d7c6b8"/>
+<text x="1092.62" y="142.00">write</text>
+</g>
+<g><title>boost::asio::detail::thread_info_base::allocate&lt;boost::asio::detail::thread_info_base::default_tag&gt;(boost::asio::detail::thread_info_base::default_tag, boost::asio::detail::thread_info_base*, unsigned long, unsigned long) — 1 samples (0.5%)</title>
+<rect x="1141.54" y="172.00" width="10.38" height="20" fill="#b3a0cd"/>
+</g>
+<g><title>_malloc_zone_memalign — 1 samples (0.5%)</title>
+<rect x="1141.54" y="150.00" width="10.38" height="20" fill="#d4c5cc"/>
+</g>
+<g><title>_xzm_xzone_malloc_tiny — 1 samples (0.5%)</title>
+<rect x="1141.54" y="128.00" width="10.38" height="20" fill="#d7c6b8"/>
+</g>
+<g><title>hquant::v1::TradingAccount::Budget(std::basic_string&lt;char&gt; const&amp;) const — 2 samples (1.0%)</title>
+<rect x="1151.92" y="216.00" width="20.77" height="20" fill="#2b87bd"/>
+</g>
+<g><title>hquant::v1::FundsState::Available(std::basic_string&lt;char&gt; const&amp;) const — 1 samples (0.5%)</title>
+<rect x="1151.92" y="194.00" width="10.38" height="20" fill="#7dbb9d"/>
+</g>
+<g><title>std::__tree&lt;std::__value_type&lt;std::basic_string&lt;char&gt;, hquant::v1::FundsState::VenueAsset&gt;, std::__map_value_compare&lt;std::basic_string&lt;char&gt;, std::__value_type&lt;std::basic_string&lt;char&gt;, hquant::v1::FundsState::VenueAsset&gt;, true&gt;&gt;::find&lt;std::basic_string&lt;char&gt;&gt;(std::basic_string&lt;char&gt; const&amp;) const — 1 samples (0.5%)</title>
+<rect x="1151.92" y="172.00" width="10.38" height="20" fill="#adc5d4"/>
+</g>
+<g><title>_platform_memcmp — 1 samples (0.5%)</title>
+<rect x="1151.92" y="150.00" width="10.38" height="20" fill="#d7c6b8"/>
+</g>
+<g><title>std::__tree&lt;std::__value_type&lt;std::basic_string&lt;char&gt;, unsigned long long&gt;, std::__map_value_compare&lt;std::basic_string&lt;char&gt;, std::__value_type&lt;std::basic_string&lt;char&gt;, unsigned long long&gt;, true&gt;&gt;::find&lt;std::basic_string&lt;char&gt;&gt;(std::basic_string&lt;char&gt; const&amp;) const — 1 samples (0.5%)</title>
+<rect x="1162.31" y="194.00" width="10.38" height="20" fill="#adc5d4"/>
+</g>
+<g><title>hquant::v1::FundsState::Available(std::basic_string&lt;char&gt; const&amp;) const — 1 samples (0.5%)</title>
+<rect x="1172.69" y="216.00" width="10.38" height="20" fill="#7dbb9d"/>
+</g>
+<g><title>std::__tree&lt;std::__value_type&lt;std::basic_string&lt;char&gt;, hquant::v1::FundsState::VenueAsset&gt;, std::__map_value_compare&lt;std::basic_string&lt;char&gt;, std::__value_type&lt;std::basic_string&lt;char&gt;, hquant::v1::FundsState::VenueAsset&gt;, true&gt;&gt;::find&lt;std::basic_string&lt;char&gt;&gt;(std::basic_string&lt;char&gt; const&amp;) const — 1 samples (0.5%)</title>
+<rect x="1172.69" y="194.00" width="10.38" height="20" fill="#adc5d4"/>
+</g>
+<g><title>DYLD-STUB$$memcmp — 1 samples (0.5%)</title>
+<rect x="1172.69" y="172.00" width="10.38" height="20" fill="#d4c5cc"/>
+</g>
+<g><title>hquant::v1::AccountViewPublisher::MarkAssetDirty(std::basic_string&lt;char&gt; const&amp;) — 5 samples (2.4%)</title>
+<rect x="1193.46" y="238.00" width="51.92" height="20" fill="#7dbb9d"/>
+<text x="1196.46" y="252.00">hquan…</text>
+</g>
+<g><title>std::__tree&lt;std::__value_type&lt;std::basic_string&lt;char&gt;, std::vector&lt;unsigned short&gt;&gt;, std::__map_value_compare&lt;std::basic_string&lt;char&gt;, std::__value_type&lt;std::basic_string&lt;char&gt;, std::vector&lt;unsigned short&gt;&gt;, true&gt;&gt;::find&lt;std::basic_string&lt;char&gt;&gt;(std::basic_string&lt;char&gt; const&amp;) — 4 samples (1.9%)</title>
+<rect x="1193.46" y="216.00" width="41.54" height="20" fill="#adc5d4"/>
+<text x="1196.46" y="230.00">std:…</text>
+</g>
+<g><title>_platform_memcmp — 3 samples (1.4%)</title>
+<rect x="1193.46" y="194.00" width="31.15" height="20" fill="#d7c6b8"/>
+</g>
+<g><title>operator new(unsigned long) — 1 samples (0.5%)</title>
+<rect x="1235.00" y="216.00" width="10.38" height="20" fill="#d4c5cc"/>
+</g>
+<g><title>_xzm_xzone_malloc — 1 samples (0.5%)</title>
+<rect x="1235.00" y="194.00" width="10.38" height="20" fill="#cbd5dd"/>
+</g>
+<g><title>hquant::v1::OrderManager::Begin(hquant::v1::TrackedOrder) — 5 samples (2.4%)</title>
+<rect x="1245.38" y="238.00" width="51.92" height="20" fill="#7dbb9d"/>
+<text x="1248.38" y="252.00">hquan…</text>
+</g>
+<g><title>hquant::v1::OrderState::Begin(hquant::v1::TrackedOrder) — 2 samples (1.0%)</title>
+<rect x="1245.38" y="216.00" width="20.77" height="20" fill="#7dbb9d"/>
+</g>
+<g><title>std::__tree&lt;std::__value_type&lt;std::basic_string&lt;char&gt;, hquant::v1::TrackedOrder&gt;, std::__map_value_compare&lt;std::basic_string&lt;char&gt;, std::__value_type&lt;std::basic_string&lt;char&gt;, hquant::v1::TrackedOrder&gt;, true&gt;&gt;::__emplace_unique_key_args&lt;std::basic_string&lt;char&gt;, std::basic_string&lt;char&gt;&amp;, hquant::v1::TrackedOrder&gt;(std::basic_string&lt;char&gt; const&amp;, std::basic_string&lt;char&gt;&amp;, hquant::v1::TrackedOrder&amp;&amp;) — 2 samples (1.0%)</title>
+<rect x="1245.38" y="194.00" width="20.77" height="20" fill="#adc5d4"/>
+</g>
+<g><title>_platform_memcmp — 1 samples (0.5%)</title>
+<rect x="1245.38" y="172.00" width="10.38" height="20" fill="#d7c6b8"/>
+</g>
+<g><title>std::__tree&lt;std::__value_type&lt;unsigned long long, hquant::v1::ClientOrderId&gt;, std::__map_value_compare&lt;unsigned long long, std::__value_type&lt;unsigned long long, hquant::v1::ClientOrderId&gt;, true&gt;&gt;::__emplace_unique_key_args&lt;unsigned long long, unsigned long long const&amp;, hquant::v1::ClientOrderId const&amp;&gt;(unsigned long long const&amp;, unsigned long long const&amp;, hquant::v1::ClientOrderId const&amp;) — 2 samples (1.0%)</title>
+<rect x="1266.15" y="216.00" width="20.77" height="20" fill="#adc5d4"/>
+</g>
+<g><title>operator new(unsigned long) — 1 samples (0.5%)</title>
+<rect x="1286.92" y="216.00" width="10.38" height="20" fill="#d4c5cc"/>
+</g>
+<g><title>hquant::v1::FundsState::Reserve(hquant::v1::ClientOrderId const&amp;, std::basic_string&lt;char&gt;, unsigned long long) — 4 samples (1.9%)</title>
+<rect x="1297.31" y="238.00" width="41.54" height="20" fill="#7dbb9d"/>
+<text x="1300.31" y="252.00">hqua…</text>
+</g>
+<g><title>std::__tree&lt;std::__value_type&lt;std::basic_string&lt;char&gt;, hquant::v1::FundsHold&gt;, std::__map_value_compare&lt;std::basic_string&lt;char&gt;, std::__value_type&lt;std::basic_string&lt;char&gt;, hquant::v1::FundsHold&gt;, true&gt;&gt;::find&lt;std::basic_string&lt;char&gt;&gt;(std::basic_string&lt;char&gt; const&amp;) const — 2 samples (1.0%)</title>
+<rect x="1297.31" y="216.00" width="20.77" height="20" fill="#adc5d4"/>
+</g>
+<g><title>_platform_memcmp — 2 samples (1.0%)</title>
+<rect x="1297.31" y="194.00" width="20.77" height="20" fill="#d7c6b8"/>
+</g>
+<g><title>std::__tree&lt;std::__value_type&lt;std::basic_string&lt;char&gt;, hquant::v1::FundsHold&gt;, std::__map_value_compare&lt;std::basic_string&lt;char&gt;, std::__value_type&lt;std::basic_string&lt;char&gt;, hquant::v1::FundsHold&gt;, true&gt;&gt;::__emplace_unique_key_args&lt;std::basic_string&lt;char&gt;, std::basic_string&lt;char&gt; const&amp;, hquant::v1::FundsHold&gt;(std::basic_string&lt;char&gt; const&amp;, std::basic_string&lt;char&gt; const&amp;, hquant::v1::FundsHold&amp;&amp;) — 1 samples (0.5%)</title>
+<rect x="1318.08" y="216.00" width="10.38" height="20" fill="#adc5d4"/>
+</g>
+<g><title>DYLD-STUB$$memcmp — 1 samples (0.5%)</title>
+<rect x="1318.08" y="194.00" width="10.38" height="20" fill="#d4c5cc"/>
+</g>
+<g><title>std::__tree&lt;std::__value_type&lt;std::basic_string&lt;char&gt;, hquant::v1::FundsState::AssetTracking&gt;, std::__map_value_compare&lt;std::basic_string&lt;char&gt;, std::__value_type&lt;std::basic_string&lt;char&gt;, hquant::v1::FundsState::AssetTracking&gt;, true&gt;&gt;::__emplace_unique_key_args&lt;std::basic_string&lt;char&gt;, std::piecewise_construct_t const&amp;, std::tuple&lt;std::basic_string&lt;char&gt; const&amp;&gt;, std::tuple&lt;&gt;&gt;(std::basic_string&lt;char&gt; const&amp;, std::piecewise_construct_t const&amp;, std::tuple&lt;std::basic_string&lt;char&gt; const&amp;&gt;&amp;&amp;, std::tuple&lt;&gt;&amp;&amp;) — 1 samples (0.5%)</title>
+<rect x="1328.46" y="216.00" width="10.38" height="20" fill="#adc5d4"/>
+</g>
+<g><title>_platform_memcmp — 1 samples (0.5%)</title>
+<rect x="1328.46" y="194.00" width="10.38" height="20" fill="#d7c6b8"/>
+</g>
+<g><title>hquant::v1::TradingAccount::Budget(std::basic_string&lt;char&gt; const&amp;) const — 3 samples (1.4%)</title>
+<rect x="1338.85" y="238.00" width="31.15" height="20" fill="#2b87bd"/>
+</g>
+<g><title>hquant::v1::FundsState::Available(std::basic_string&lt;char&gt; const&amp;) const — 2 samples (1.0%)</title>
+<rect x="1338.85" y="216.00" width="20.77" height="20" fill="#7dbb9d"/>
+</g>
+<g><title>std::__tree&lt;std::__value_type&lt;std::basic_string&lt;char&gt;, hquant::v1::FundsState::AssetTracking&gt;, std::__map_value_compare&lt;std::basic_string&lt;char&gt;, std::__value_type&lt;std::basic_string&lt;char&gt;, hquant::v1::FundsState::AssetTracking&gt;, true&gt;&gt;::find&lt;std::basic_string&lt;char&gt;&gt;(std::basic_string&lt;char&gt; const&amp;) const — 2 samples (1.0%)</title>
+<rect x="1338.85" y="194.00" width="20.77" height="20" fill="#adc5d4"/>
+</g>
+<g><title>_platform_memcmp — 2 samples (1.0%)</title>
+<rect x="1338.85" y="172.00" width="20.77" height="20" fill="#d7c6b8"/>
+</g>
+<g><title>std::__tree&lt;std::__value_type&lt;std::basic_string&lt;char&gt;, unsigned long long&gt;, std::__map_value_compare&lt;std::basic_string&lt;char&gt;, std::__value_type&lt;std::basic_string&lt;char&gt;, unsigned long long&gt;, true&gt;&gt;::find&lt;std::basic_string&lt;char&gt;&gt;(std::basic_string&lt;char&gt; const&amp;) const — 1 samples (0.5%)</title>
+<rect x="1359.62" y="216.00" width="10.38" height="20" fill="#adc5d4"/>
+</g>
+<g><title>_platform_memcmp — 1 samples (0.5%)</title>
+<rect x="1359.62" y="194.00" width="10.38" height="20" fill="#d7c6b8"/>
+</g>
+<g><title>std::basic_string&lt;char&gt;::__init_copy_ctor_external(char const*, unsigned long) — 3 samples (1.4%)</title>
+<rect x="1370.00" y="238.00" width="31.15" height="20" fill="#adc5d4"/>
+</g>
+<g><title>operator new(unsigned long) — 3 samples (1.4%)</title>
+<rect x="1370.00" y="216.00" width="31.15" height="20" fill="#d4c5cc"/>
+</g>
+<g><title>_xzm_xzone_malloc — 2 samples (1.0%)</title>
+<rect x="1370.00" y="194.00" width="20.77" height="20" fill="#cbd5dd"/>
+</g>
+<g><title>&lt;deduplicated_symbol&gt; — 1 samples (0.5%)</title>
+<rect x="1390.77" y="194.00" width="10.38" height="20" fill="#cbd5dd"/>
+</g>
+<g><title>hquant::v1::BinanceTradeClient::Submit(hquant::v1::SubmitCommand, std::function&lt;void (hquant::v1::TradeResponse)&gt;, std::function&lt;void ()&gt;) — 2 samples (1.0%)</title>
+<rect x="1401.15" y="238.00" width="20.77" height="20" fill="#49a5c1"/>
+</g>
+<g><title>hquant::v1::BinanceTradeClient::Enqueue(hquant::v1::BinanceTradeClient::Job) — 2 samples (1.0%)</title>
+<rect x="1401.15" y="216.00" width="20.77" height="20" fill="#49a5c1"/>
+</g>
+<g><title>boost::asio::detail::scheduler::post_immediate_completion(boost::asio::detail::scheduler_operation*, bool) — 2 samples (1.0%)</title>
+<rect x="1401.15" y="194.00" width="20.77" height="20" fill="#b3a0cd"/>
+</g>
+<g><title>boost::asio::detail::kqueue_reactor::interrupt() — 1 samples (0.5%)</title>
+<rect x="1401.15" y="172.00" width="10.38" height="20" fill="#b3a0cd"/>
+</g>
+<g><title>write — 1 samples (0.5%)</title>
+<rect x="1401.15" y="150.00" width="10.38" height="20" fill="#d7c6b8"/>
+</g>
+<g><title>hquant::v1::TradingAccount::Persist(hquant::v1::JournalEntry, std::function&lt;void (absl::lts_20260817::Status)&gt;) — 1 samples (0.5%)</title>
+<rect x="1421.92" y="238.00" width="10.38" height="20" fill="#2b87bd"/>
+</g>
+<g><title>hquant::v1::OrderJournal::Append(std::basic_string&lt;char&gt; const&amp;, hquant::v1::JournalEntry, boost::asio::io_context&amp;, std::function&lt;void (absl::lts_20260817::Status)&gt;) — 1 samples (0.5%)</title>
+<rect x="1421.92" y="216.00" width="10.38" height="20" fill="#7dbb9d"/>
+</g>
+<g><title>std::condition_variable::notify_one() — 1 samples (0.5%)</title>
+<rect x="1421.92" y="194.00" width="10.38" height="20" fill="#adc5d4"/>
+</g>
+<g><title>pthread_cond_signal — 1 samples (0.5%)</title>
+<rect x="1421.92" y="172.00" width="10.38" height="20" fill="#cbd5dd"/>
+</g>
+<g><title>__psynch_cvsignal — 1 samples (0.5%)</title>
+<rect x="1421.92" y="150.00" width="10.38" height="20" fill="#d7c6b8"/>
+</g>
+<g><title>hquant::v1::TradingAccount::Record(hquant::v1::AccountHistoryRecord) — 1 samples (0.5%)</title>
+<rect x="1432.31" y="238.00" width="10.38" height="20" fill="#2b87bd"/>
+</g>
+<g><title>hquant::v1::SqliteHistory::TryPushAccount(hquant::v1::AccountHistoryRecord) — 1 samples (0.5%)</title>
+<rect x="1432.31" y="216.00" width="10.38" height="20" fill="#7dbb9d"/>
+</g>
+<g><title>std::mutex::unlock() — 1 samples (0.5%)</title>
+<rect x="1432.31" y="194.00" width="10.38" height="20" fill="#adc5d4"/>
+</g>
+<g><title>DYLD-STUB$$pthread_mutex_unlock — 1 samples (0.5%)</title>
+<rect x="1432.31" y="172.00" width="10.38" height="20" fill="#b9ccd5"/>
+</g>
+<g><title>std::__function::__func&lt;hquant::v1::Shard::RunAccountDecision(unsigned long long)::$_1, void (bool, std::basic_string&lt;char&gt;)&gt;::operator()(bool&amp;&amp;, std::basic_string&lt;char&gt;&amp;&amp;) — 1 samples (0.5%)</title>
+<rect x="1442.69" y="238.00" width="10.38" height="20" fill="#adc5d4"/>
+</g>
+<g><title>boost::asio::detail::thread_info_base::allocate&lt;boost::asio::detail::thread_info_base::default_tag&gt;(boost::asio::detail::thread_info_base::default_tag, boost::asio::detail::thread_info_base*, unsigned long, unsigned long) — 1 samples (0.5%)</title>
+<rect x="1442.69" y="216.00" width="10.38" height="20" fill="#b3a0cd"/>
+</g>
+<g><title>_malloc_zone_memalign — 1 samples (0.5%)</title>
+<rect x="1442.69" y="194.00" width="10.38" height="20" fill="#d4c5cc"/>
+</g>
+<g><title>std::basic_string&lt;char&gt;::__assign_no_alias&lt;true&gt;(char const*, unsigned long) — 1 samples (0.5%)</title>
+<rect x="1453.08" y="238.00" width="10.38" height="20" fill="#adc5d4"/>
+</g>
+<g><title>std::basic_string&lt;char&gt;::__grow_by_and_replace(unsigned long, unsigned long, unsigned long, unsigned long, unsigned long, unsigned long, char const*) — 1 samples (0.5%)</title>
+<rect x="1453.08" y="216.00" width="10.38" height="20" fill="#adc5d4"/>
+</g>
+<g><title>$_0::operator()() const::&#x27;lambda0&#x27;(unsigned long, std::__type_descriptor_t)::__invoke(unsigned long, std::__type_descriptor_t) — 1 samples (0.5%)</title>
+<rect x="1453.08" y="194.00" width="10.38" height="20" fill="#cbd5dd"/>
+</g>
+<g><title>operator_new_impl[abi:ne200100](unsigned long, std::__type_descriptor_t) — 1 samples (0.5%)</title>
+<rect x="1453.08" y="172.00" width="10.38" height="20" fill="#cbd5dd"/>
+</g>
+<g><title>malloc_type_malloc — 1 samples (0.5%)</title>
+<rect x="1453.08" y="150.00" width="10.38" height="20" fill="#bed1c2"/>
+</g>
+<g><title>std::__function::__func&lt;hquant::v1::TradingAccount::OnVenueEvent(std::variant&lt;hquant::v1::OrderReport, hquant::v1::Fill, hquant::v1::BalanceUpdate, hquant::v1::BalanceDelta&gt;)::$_0, void ()&gt;::operator()() — 7 samples (3.4%)</title>
+<rect x="1463.46" y="282.00" width="72.69" height="20" fill="#2b87bd"/>
+<text x="1466.46" y="296.00">std::__f…</text>
+</g>
+<g><title>hquant::v1::TradingAccount::OnVenueEvent(std::variant&lt;hquant::v1::OrderReport, hquant::v1::Fill, hquant::v1::BalanceUpdate, hquant::v1::BalanceDelta&gt;) — 7 samples (3.4%)</title>
+<rect x="1463.46" y="260.00" width="72.69" height="20" fill="#2b87bd"/>
+<text x="1466.46" y="274.00">hquant::…</text>
+</g>
+<g><title>hquant::v1::TradingAccount::PersistAndApply(std::variant&lt;hquant::v1::OrderReport, hquant::v1::Fill, hquant::v1::BalanceUpdate, hquant::v1::BalanceDelta&gt;, bool, std::function&lt;void (absl::lts_20260817::Status)&gt;) — 7 samples (3.4%)</title>
+<rect x="1463.46" y="238.00" width="72.69" height="20" fill="#2b87bd"/>
+<text x="1466.46" y="252.00">hquant::…</text>
+</g>
+<g><title>hquant::v1::TradingAccount::Persist(hquant::v1::JournalEntry, std::function&lt;void (absl::lts_20260817::Status)&gt;) — 7 samples (3.4%)</title>
+<rect x="1463.46" y="216.00" width="72.69" height="20" fill="#2b87bd"/>
+<text x="1466.46" y="230.00">hquant::…</text>
+</g>
+<g><title>hquant::v1::OrderJournal::Append(std::basic_string&lt;char&gt; const&amp;, hquant::v1::JournalEntry, boost::asio::io_context&amp;, std::function&lt;void (absl::lts_20260817::Status)&gt;) — 5 samples (2.4%)</title>
+<rect x="1463.46" y="194.00" width="51.92" height="20" fill="#7dbb9d"/>
+<text x="1466.46" y="208.00">hquan…</text>
+</g>
+<g><title>std::condition_variable::notify_one() — 2 samples (1.0%)</title>
+<rect x="1463.46" y="172.00" width="20.77" height="20" fill="#adc5d4"/>
+</g>
+<g><title>pthread_cond_signal — 2 samples (1.0%)</title>
+<rect x="1463.46" y="150.00" width="20.77" height="20" fill="#cbd5dd"/>
+</g>
+<g><title>__psynch_cvsignal — 2 samples (1.0%)</title>
+<rect x="1463.46" y="128.00" width="20.77" height="20" fill="#d7c6b8"/>
+</g>
+<g><title>std::deque&lt;hquant::v1::OrderJournal::Pending&gt;::push_back(hquant::v1::OrderJournal::Pending&amp;&amp;) — 2 samples (1.0%)</title>
+<rect x="1484.23" y="172.00" width="20.77" height="20" fill="#adc5d4"/>
+</g>
+<g><title>std::deque&lt;hquant::v1::OrderJournal::Pending&gt;::__add_back_capacity() — 2 samples (1.0%)</title>
+<rect x="1484.23" y="150.00" width="20.77" height="20" fill="#adc5d4"/>
+</g>
+<g><title>operator new(unsigned long) — 1 samples (0.5%)</title>
+<rect x="1484.23" y="128.00" width="10.38" height="20" fill="#d4c5cc"/>
+</g>
+<g><title>&lt;deduplicated_symbol&gt; — 1 samples (0.5%)</title>
+<rect x="1484.23" y="106.00" width="10.38" height="20" fill="#cbd5dd"/>
+</g>
+<g><title>std::__split_buffer&lt;hquant::v1::OrderJournal::Pending*&gt;::emplace_back&lt;hquant::v1::OrderJournal::Pending*&amp;&gt;(hquant::v1::OrderJournal::Pending*&amp;) — 1 samples (0.5%)</title>
+<rect x="1494.62" y="128.00" width="10.38" height="20" fill="#adc5d4"/>
+</g>
+<g><title>operator new(unsigned long) — 1 samples (0.5%)</title>
+<rect x="1515.38" y="194.00" width="10.38" height="20" fill="#d4c5cc"/>
+</g>
+<g><title>_xzm_xzone_thread_cache_fill_and_malloc — 1 samples (0.5%)</title>
+<rect x="1515.38" y="172.00" width="10.38" height="20" fill="#bed1c2"/>
+</g>
+<g><title>_xzm_xzone_find_and_malloc_from_freelist_chunk — 1 samples (0.5%)</title>
+<rect x="1515.38" y="150.00" width="10.38" height="20" fill="#b9ccd5"/>
+</g>
+<g><title>std::__function::__func&lt;hquant::v1::TradingAccount::TryCancel(hquant::v1::ShardId, hquant::v1::OrderId, unsigned long long, std::function&lt;void (bool, std::basic_string&lt;char&gt;)&gt;)::$_0, void ()&gt;::operator()() — 4 samples (1.9%)</title>
+<rect x="1536.15" y="282.00" width="41.54" height="20" fill="#2b87bd"/>
+<text x="1539.15" y="296.00">std:…</text>
+</g>
+<g><title>hquant::v1::TradingAccount::ProcessCancel(hquant::v1::ShardId, hquant::v1::OrderId, unsigned long long, std::function&lt;void (bool, std::basic_string&lt;char&gt;)&gt;) — 4 samples (1.9%)</title>
+<rect x="1536.15" y="260.00" width="41.54" height="20" fill="#2b87bd"/>
+<text x="1539.15" y="274.00">hqua…</text>
+</g>
+<g><title>hquant::v1::AccountViewPublisher::Flush() — 1 samples (0.5%)</title>
+<rect x="1536.15" y="238.00" width="10.38" height="20" fill="#7dbb9d"/>
+</g>
+<g><title>hquant::v1::AccountViewPublisher::View(hquant::v1::ShardId) const — 1 samples (0.5%)</title>
+<rect x="1536.15" y="216.00" width="10.38" height="20" fill="#7dbb9d"/>
+</g>
+<g><title>hquant::v1::TradingAccount::Budget(std::basic_string&lt;char&gt; const&amp;) const — 1 samples (0.5%)</title>
+<rect x="1536.15" y="194.00" width="10.38" height="20" fill="#2b87bd"/>
+</g>
+<g><title>std::__tree&lt;std::__value_type&lt;std::basic_string&lt;char&gt;, unsigned long long&gt;, std::__map_value_compare&lt;std::basic_string&lt;char&gt;, std::__value_type&lt;std::basic_string&lt;char&gt;, unsigned long long&gt;, true&gt;&gt;::find&lt;std::basic_string&lt;char&gt;&gt;(std::basic_string&lt;char&gt; const&amp;) const — 1 samples (0.5%)</title>
+<rect x="1536.15" y="172.00" width="10.38" height="20" fill="#adc5d4"/>
+</g>
+<g><title>_platform_memcmp — 1 samples (0.5%)</title>
+<rect x="1536.15" y="150.00" width="10.38" height="20" fill="#d7c6b8"/>
+</g>
+<g><title>hquant::v1::BinanceTradeClient::Cancel(hquant::v1::CancelCommand, std::function&lt;void (hquant::v1::TradeResponse)&gt;, std::function&lt;void ()&gt;) — 1 samples (0.5%)</title>
+<rect x="1546.54" y="238.00" width="10.38" height="20" fill="#49a5c1"/>
+</g>
+<g><title>hquant::v1::BinanceTradeClient::Enqueue(hquant::v1::BinanceTradeClient::Job) — 1 samples (0.5%)</title>
+<rect x="1546.54" y="216.00" width="10.38" height="20" fill="#49a5c1"/>
+</g>
+<g><title>hquant::v1::BinanceTradeClient::Job::Job(hquant::v1::BinanceTradeClient::Job&amp;&amp;) — 1 samples (0.5%)</title>
+<rect x="1546.54" y="194.00" width="10.38" height="20" fill="#49a5c1"/>
+</g>
+<g><title>hquant::v1::OrderState::Find(hquant::v1::ClientOrderId const&amp;) const — 1 samples (0.5%)</title>
+<rect x="1556.92" y="238.00" width="10.38" height="20" fill="#7dbb9d"/>
+</g>
+<g><title>std::__tree&lt;std::__value_type&lt;std::basic_string&lt;char&gt;, hquant::v1::TrackedOrder&gt;, std::__map_value_compare&lt;std::basic_string&lt;char&gt;, std::__value_type&lt;std::basic_string&lt;char&gt;, hquant::v1::TrackedOrder&gt;, true&gt;&gt;::find&lt;std::basic_string&lt;char&gt;&gt;(std::basic_string&lt;char&gt; const&amp;) const — 1 samples (0.5%)</title>
+<rect x="1556.92" y="216.00" width="10.38" height="20" fill="#adc5d4"/>
+</g>
+<g><title>_platform_memcmp — 1 samples (0.5%)</title>
+<rect x="1556.92" y="194.00" width="10.38" height="20" fill="#d7c6b8"/>
+</g>
+<g><title>hquant::v1::TradingAccount::Persist(hquant::v1::JournalEntry, std::function&lt;void (absl::lts_20260817::Status)&gt;) — 1 samples (0.5%)</title>
+<rect x="1567.31" y="238.00" width="10.38" height="20" fill="#2b87bd"/>
+</g>
+<g><title>hquant::v1::OrderJournal::Append(std::basic_string&lt;char&gt; const&amp;, hquant::v1::JournalEntry, boost::asio::io_context&amp;, std::function&lt;void (absl::lts_20260817::Status)&gt;) — 1 samples (0.5%)</title>
+<rect x="1567.31" y="216.00" width="10.38" height="20" fill="#7dbb9d"/>
+</g>
+<g><title>std::mutex::lock() — 1 samples (0.5%)</title>
+<rect x="1577.69" y="282.00" width="10.38" height="20" fill="#adc5d4"/>
+</g>
+<g><title>std::mutex::unlock() — 1 samples (0.5%)</title>
+<rect x="1588.08" y="282.00" width="10.38" height="20" fill="#adc5d4"/>
+</g>
+<g><title>pthread_mutex_unlock — 1 samples (0.5%)</title>
+<rect x="1588.08" y="260.00" width="10.38" height="20" fill="#d7c6b8"/>
+</g>
+<g><title>boost::asio::detail::thread_context::top_of_thread_call_stack() — 1 samples (0.5%)</title>
+<rect x="1598.46" y="304.00" width="10.38" height="20" fill="#b3a0cd"/>
+</g>
+<g><title>_tlv_get_addr — 1 samples (0.5%)</title>
+<rect x="1598.46" y="282.00" width="10.38" height="20" fill="#d4c5cc"/>
+</g>
+<g><title>boost::asio::detail::executor_op&lt;boost::asio::detail::binder0&lt;std::function&lt;void ()&gt;&gt;, boost::asio::detail::scheduler_operation&gt;::do_complete(void*, boost::asio::detail::scheduler_operation*, boost::system::error_code const&amp;, unsigned long) — 11 samples (5.3%)</title>
+<rect x="1608.85" y="326.00" width="114.23" height="20" fill="#b3a0cd"/>
+<text x="1611.85" y="340.00">boost::asio::d…</text>
+</g>
+<g><title>std::__function::__func&lt;hquant::v1::TradingAccount::ProcessSubmit(hquant::v1::ShardId, hquant::v1::MarketId const&amp;, hquant::v1::LimitOrderRequest const&amp;, unsigned long long, unsigned long long, unsigned long long, std::function&lt;void (bool, std::basic_string&lt;char&gt;)&gt;)::$_2, void ()&gt;::operator()() — 8 samples (3.8%)</title>
+<rect x="1608.85" y="304.00" width="83.08" height="20" fill="#2b87bd"/>
+<text x="1611.85" y="318.00">std::__fun…</text>
+</g>
+<g><title>hquant::v1::TradingAccount::OnWriting(hquant::v1::ClientOrderId, bool) — 8 samples (3.8%)</title>
+<rect x="1608.85" y="282.00" width="83.08" height="20" fill="#2b87bd"/>
+<text x="1611.85" y="296.00">hquant::v1…</text>
+</g>
+<g><title>hquant::v1::TradingAccount::ScheduleOrderQuery() — 3 samples (1.4%)</title>
+<rect x="1608.85" y="260.00" width="31.15" height="20" fill="#2b87bd"/>
+</g>
+<g><title>decltype(async_initiate&lt;hquant::v1::TradingAccount::ScheduleOrderQuery()::$_0, void (boost::system::error_code)&gt;(decltype(std::__declval&lt;hquant::v1::TradingAccount::ScheduleOrderQuery()::$_0&gt;(0)) std::declval[abi:ne200100]&lt;boost::asio::basic_waitable_timer&lt;std::chrono::steady_clock, boost::asio::wait_traits&lt;std::chrono::steady_clock&gt;, boost::asio::any_io_executor&gt;::initiate_async_wait&gt;()(), fp)) boost::asio::basic_waitable_timer&lt;std::chrono::steady_clock, boost::asio::wait_traits&lt;std::chrono::steady_clock&gt;, boost::asio::any_io_executor&gt;::async_wait&lt;hquant::v1::TradingAccount::ScheduleOrderQuery()::$_0&gt;(hquant::v1::TradingAccount::ScheduleOrderQuery()::$_0&amp;&amp;) — 3 samples (1.4%)</title>
+<rect x="1608.85" y="238.00" width="31.15" height="20" fill="#2b87bd"/>
+</g>
+<g><title>boost::asio::detail::kqueue_reactor::schedule_timer&lt;boost::asio::detail::chrono_time_traits&lt;std::chrono::steady_clock, boost::asio::wait_traits&lt;std::chrono::steady_clock&gt;&gt;, boost::asio::execution_context::allocator&lt;void&gt;&gt;(boost::asio::detail::timer_queue&lt;boost::asio::detail::chrono_time_traits&lt;std::chrono::steady_clock, boost::asio::wait_traits&lt;std::chrono::steady_clock&gt;&gt;, boost::asio::execution_context::allocator&lt;void&gt;&gt;&amp;, boost::asio::detail::chrono_time_traits&lt;std::chrono::steady_clock, boost::asio::wait_traits&lt;std::chrono::steady_clock&gt;&gt;::time_type const&amp;, boost::asio::detail::timer_queue&lt;boost::asio::detail::chrono_time_traits&lt;std::chrono::steady_clock, boost::asio::wait_traits&lt;std::chrono::steady_clock&gt;&gt;, boost::asio::execution_context::allocator&lt;void&gt;&gt;::per_timer_data&amp;, boost::asio::detail::wait_op*) — 3 samples (1.4%)</title>
+<rect x="1608.85" y="216.00" width="31.15" height="20" fill="#b3a0cd"/>
+</g>
+<g><title>boost::asio::detail::kqueue_reactor::interrupt() — 3 samples (1.4%)</title>
+<rect x="1608.85" y="194.00" width="31.15" height="20" fill="#b3a0cd"/>
+</g>
+<g><title>write — 3 samples (1.4%)</title>
+<rect x="1608.85" y="172.00" width="31.15" height="20" fill="#d7c6b8"/>
+</g>
+<g><title>hquant::v1::OrderManager::Arm(hquant::v1::ClientOrderId const&amp;, std::chrono::time_point&lt;std::chrono::steady_clock, std::chrono::duration&lt;long long, std::ratio&lt;1l, 1000000000l&gt;&gt;&gt;) — 2 samples (1.0%)</title>
+<rect x="1640.00" y="260.00" width="20.77" height="20" fill="#7dbb9d"/>
+</g>
+<g><title>std::__tree&lt;std::__value_type&lt;std::basic_string&lt;char&gt;, hquant::v1::OrderManager::QueryPlan&gt;, std::__map_value_compare&lt;std::basic_string&lt;char&gt;, std::__value_type&lt;std::basic_string&lt;char&gt;, hquant::v1::OrderManager::QueryPlan&gt;, true&gt;&gt;::__emplace_unique_key_args&lt;std::basic_string&lt;char&gt;, std::piecewise_construct_t const&amp;, std::tuple&lt;std::basic_string&lt;char&gt; const&amp;&gt;, std::tuple&lt;&gt;&gt;(std::basic_string&lt;char&gt; const&amp;, std::piecewise_construct_t const&amp;, std::tuple&lt;std::basic_string&lt;char&gt; const&amp;&gt;&amp;&amp;, std::tuple&lt;&gt;&amp;&amp;) — 2 samples (1.0%)</title>
+<rect x="1640.00" y="238.00" width="20.77" height="20" fill="#adc5d4"/>
+</g>
+<g><title>hquant::v1::TradingAccount::Persist(hquant::v1::JournalEntry, std::function&lt;void (absl::lts_20260817::Status)&gt;) — 2 samples (1.0%)</title>
+<rect x="1660.77" y="260.00" width="20.77" height="20" fill="#2b87bd"/>
+</g>
+<g><title>hquant::v1::OrderJournal::Append(std::basic_string&lt;char&gt; const&amp;, hquant::v1::JournalEntry, boost::asio::io_context&amp;, std::function&lt;void (absl::lts_20260817::Status)&gt;) — 2 samples (1.0%)</title>
+<rect x="1660.77" y="238.00" width="20.77" height="20" fill="#7dbb9d"/>
+</g>
+<g><title>std::condition_variable::notify_one() — 2 samples (1.0%)</title>
+<rect x="1660.77" y="216.00" width="20.77" height="20" fill="#adc5d4"/>
+</g>
+<g><title>pthread_cond_signal — 2 samples (1.0%)</title>
+<rect x="1660.77" y="194.00" width="20.77" height="20" fill="#cbd5dd"/>
+</g>
+<g><title>__psynch_cvsignal — 2 samples (1.0%)</title>
+<rect x="1660.77" y="172.00" width="20.77" height="20" fill="#d7c6b8"/>
+</g>
+<g><title>std::__function::__func&lt;hquant::v1::TradingAccount::ProcessCancel(hquant::v1::ShardId, hquant::v1::OrderId, unsigned long long, std::function&lt;void (bool, std::basic_string&lt;char&gt;)&gt;)::$_2, void ()&gt;::operator()() — 3 samples (1.4%)</title>
+<rect x="1691.92" y="304.00" width="31.15" height="20" fill="#2b87bd"/>
+</g>
+<g><title>hquant::v1::TradingAccount::OnWriting(hquant::v1::ClientOrderId, bool) — 3 samples (1.4%)</title>
+<rect x="1691.92" y="282.00" width="31.15" height="20" fill="#2b87bd"/>
+</g>
+<g><title>hquant::v1::TradingAccount::ScheduleOrderQuery() — 2 samples (1.0%)</title>
+<rect x="1691.92" y="260.00" width="20.77" height="20" fill="#2b87bd"/>
+</g>
+<g><title>decltype(async_initiate&lt;hquant::v1::TradingAccount::ScheduleOrderQuery()::$_0, void (boost::system::error_code)&gt;(decltype(std::__declval&lt;hquant::v1::TradingAccount::ScheduleOrderQuery()::$_0&gt;(0)) std::declval[abi:ne200100]&lt;boost::asio::basic_waitable_timer&lt;std::chrono::steady_clock, boost::asio::wait_traits&lt;std::chrono::steady_clock&gt;, boost::asio::any_io_executor&gt;::initiate_async_wait&gt;()(), fp)) boost::asio::basic_waitable_timer&lt;std::chrono::steady_clock, boost::asio::wait_traits&lt;std::chrono::steady_clock&gt;, boost::asio::any_io_executor&gt;::async_wait&lt;hquant::v1::TradingAccount::ScheduleOrderQuery()::$_0&gt;(hquant::v1::TradingAccount::ScheduleOrderQuery()::$_0&amp;&amp;) — 2 samples (1.0%)</title>
+<rect x="1691.92" y="238.00" width="20.77" height="20" fill="#2b87bd"/>
+</g>
+<g><title>boost::asio::detail::kqueue_reactor::schedule_timer&lt;boost::asio::detail::chrono_time_traits&lt;std::chrono::steady_clock, boost::asio::wait_traits&lt;std::chrono::steady_clock&gt;&gt;, boost::asio::execution_context::allocator&lt;void&gt;&gt;(boost::asio::detail::timer_queue&lt;boost::asio::detail::chrono_time_traits&lt;std::chrono::steady_clock, boost::asio::wait_traits&lt;std::chrono::steady_clock&gt;&gt;, boost::asio::execution_context::allocator&lt;void&gt;&gt;&amp;, boost::asio::detail::chrono_time_traits&lt;std::chrono::steady_clock, boost::asio::wait_traits&lt;std::chrono::steady_clock&gt;&gt;::time_type const&amp;, boost::asio::detail::timer_queue&lt;boost::asio::detail::chrono_time_traits&lt;std::chrono::steady_clock, boost::asio::wait_traits&lt;std::chrono::steady_clock&gt;&gt;, boost::asio::execution_context::allocator&lt;void&gt;&gt;::per_timer_data&amp;, boost::asio::detail::wait_op*) — 2 samples (1.0%)</title>
+<rect x="1691.92" y="216.00" width="20.77" height="20" fill="#b3a0cd"/>
+</g>
+<g><title>boost::asio::detail::kqueue_reactor::interrupt() — 2 samples (1.0%)</title>
+<rect x="1691.92" y="194.00" width="20.77" height="20" fill="#b3a0cd"/>
+</g>
+<g><title>write — 2 samples (1.0%)</title>
+<rect x="1691.92" y="172.00" width="20.77" height="20" fill="#d7c6b8"/>
+</g>
+<g><title>hquant::v1::OrderManager::Arm(hquant::v1::ClientOrderId const&amp;, std::chrono::time_point&lt;std::chrono::steady_clock, std::chrono::duration&lt;long long, std::ratio&lt;1l, 1000000000l&gt;&gt;&gt;) — 1 samples (0.5%)</title>
+<rect x="1712.69" y="260.00" width="10.38" height="20" fill="#7dbb9d"/>
+</g>
+<g><title>hquant::v1::OrderState::Find(hquant::v1::ClientOrderId const&amp;) const — 1 samples (0.5%)</title>
+<rect x="1712.69" y="238.00" width="10.38" height="20" fill="#7dbb9d"/>
+</g>
+<g><title>std::__tree&lt;std::__value_type&lt;std::basic_string&lt;char&gt;, hquant::v1::TrackedOrder&gt;, std::__map_value_compare&lt;std::basic_string&lt;char&gt;, std::__value_type&lt;std::basic_string&lt;char&gt;, hquant::v1::TrackedOrder&gt;, true&gt;&gt;::find&lt;std::basic_string&lt;char&gt;&gt;(std::basic_string&lt;char&gt; const&amp;) const — 1 samples (0.5%)</title>
+<rect x="1712.69" y="216.00" width="10.38" height="20" fill="#adc5d4"/>
+</g>
+<g><title>_platform_memcmp — 1 samples (0.5%)</title>
+<rect x="1712.69" y="194.00" width="10.38" height="20" fill="#d7c6b8"/>
+</g>
+<g><title>boost::asio::detail::executor_op&lt;boost::asio::detail::binder0&lt;auto std::function&lt;void (hquant::v1::TradeResponse)&gt; hquant::v1::(anonymous namespace)::OnAccount&lt;std::function&lt;void (hquant::v1::TradeResponse)&gt;&gt;(boost::asio::io_context&amp;, std::function&lt;void (hquant::v1::TradeResponse)&gt;)::&#x27;lambda&#x27;(std::function&lt;void (hquant::v1::TradeResponse)&gt;)::operator()&lt;hquant::v1::TradeResponse&gt;(std::function&lt;void (hquant::v1::TradeResponse)&gt;)::&#x27;lambda&#x27;()&gt;, boost::asio::detail::scheduler_operation&gt;::do_complete(void*, boost::asio::detail::executor_op&lt;boost::asio::detail::binder0&lt;auto std::function&lt;void (hquant::v1::TradeResponse)&gt; hquant::v1::(anonymous namespace)::OnAccount&lt;std::function&lt;void (hquant::v1::TradeResponse)&gt;&gt;(boost::asio::io_context&amp;, std::function&lt;void (hquant::v1::TradeResponse)&gt;)::&#x27;lambda&#x27;(std::function&lt;void (hquant::v1::TradeResponse)&gt;)::operator()&lt;hquant::v1::TradeResponse&gt;(std::function&lt;void (hquant::v1::TradeResponse)&gt;)::&#x27;lambda&#x27;()&gt;, boost::asio::detail::scheduler_operation&gt;*, boost::system::error_code const&amp;, unsigned long) — 8 samples (3.8%)</title>
+<rect x="1723.08" y="326.00" width="83.08" height="20" fill="#b3a0cd"/>
+<text x="1726.08" y="340.00">boost::asi…</text>
+</g>
+<g><title>std::__function::__func&lt;hquant::v1::TradingAccount::ProcessSubmit(hquant::v1::ShardId, hquant::v1::MarketId const&amp;, hquant::v1::LimitOrderRequest const&amp;, unsigned long long, unsigned long long, unsigned long long, std::function&lt;void (bool, std::basic_string&lt;char&gt;)&gt;)::$_1, void (hquant::v1::TradeResponse)&gt;::operator()(hquant::v1::TradeResponse&amp;&amp;) — 5 samples (2.4%)</title>
+<rect x="1723.08" y="304.00" width="51.92" height="20" fill="#2b87bd"/>
+<text x="1726.08" y="318.00">std::…</text>
+</g>
+<g><title>hquant::v1::TradingAccount::PersistSubmitResponse(hquant::v1::ClientOrderId, hquant::v1::TradeResponse) — 4 samples (1.9%)</title>
+<rect x="1723.08" y="282.00" width="41.54" height="20" fill="#2b87bd"/>
+<text x="1726.08" y="296.00">hqua…</text>
+</g>
+<g><title>hquant::v1::TradingAccount::Persist(hquant::v1::JournalEntry, std::function&lt;void (absl::lts_20260817::Status)&gt;) — 2 samples (1.0%)</title>
+<rect x="1723.08" y="260.00" width="20.77" height="20" fill="#2b87bd"/>
+</g>
+<g><title>hquant::v1::OrderJournal::Append(std::basic_string&lt;char&gt; const&amp;, hquant::v1::JournalEntry, boost::asio::io_context&amp;, std::function&lt;void (absl::lts_20260817::Status)&gt;) — 2 samples (1.0%)</title>
+<rect x="1723.08" y="238.00" width="20.77" height="20" fill="#7dbb9d"/>
+</g>
+<g><title>std::__function::__func&lt;hquant::v1::TradingAccount::ProcessCancel(hquant::v1::ShardId, hquant::v1::OrderId, unsigned long long, std::function&lt;void (bool, std::basic_string&lt;char&gt;)&gt;)::$_1, void (hquant::v1::TradeResponse)&gt;::operator()(hquant::v1::TradeResponse&amp;&amp;) — 2 samples (1.0%)</title>
+<rect x="1775.00" y="304.00" width="20.77" height="20" fill="#2b87bd"/>
+</g>
+<g><title>hquant::v1::TradingAccount::PersistCancelResponse(hquant::v1::ClientOrderId, hquant::v1::TradeResponse) — 2 samples (1.0%)</title>
+<rect x="1775.00" y="282.00" width="20.77" height="20" fill="#2b87bd"/>
+</g>
+<g><title>hquant::v1::TradingAccount::Persist(hquant::v1::JournalEntry, std::function&lt;void (absl::lts_20260817::Status)&gt;) — 2 samples (1.0%)</title>
+<rect x="1775.00" y="260.00" width="20.77" height="20" fill="#2b87bd"/>
+</g>
+<g><title>hquant::v1::OrderJournal::Append(std::basic_string&lt;char&gt; const&amp;, hquant::v1::JournalEntry, boost::asio::io_context&amp;, std::function&lt;void (absl::lts_20260817::Status)&gt;) — 2 samples (1.0%)</title>
+<rect x="1775.00" y="238.00" width="20.77" height="20" fill="#7dbb9d"/>
+</g>
+<g><title>std::mutex::lock() — 1 samples (0.5%)</title>
+<rect x="1775.00" y="216.00" width="10.38" height="20" fill="#adc5d4"/>
+</g>
+<g><title>std::__function::__func&lt;hquant::v1::TradingAccount::ProcessSubmit(hquant::v1::ShardId, hquant::v1::MarketId const&amp;, hquant::v1::LimitOrderRequest const&amp;, unsigned long long, unsigned long long, unsigned long long, std::function&lt;void (bool, std::basic_string&lt;char&gt;)&gt;)::$_1, void (hquant::v1::TradeResponse)&gt;::destroy_deallocate() — 1 samples (0.5%)</title>
+<rect x="1795.77" y="304.00" width="10.38" height="20" fill="#2b87bd"/>
+</g>
+<g><title>_xzm_free — 1 samples (0.5%)</title>
+<rect x="1795.77" y="282.00" width="10.38" height="20" fill="#bed1c2"/>
+</g>
+<g><title>boost::asio::detail::executor_op&lt;boost::asio::detail::binder0&lt;hquant::v1::TradingAccount::Drain()::$_0&gt;, boost::asio::detail::scheduler_operation&gt;::do_complete(void*, boost::asio::detail::scheduler_operation*, boost::system::error_code const&amp;, unsigned long) — 4 samples (1.9%)</title>
+<rect x="1806.15" y="326.00" width="41.54" height="20" fill="#2b87bd"/>
+<text x="1809.15" y="340.00">boos…</text>
+</g>
+<g><title>hquant::v1::TradingAccount::Drain() — 4 samples (1.9%)</title>
+<rect x="1806.15" y="304.00" width="41.54" height="20" fill="#2b87bd"/>
+<text x="1809.15" y="318.00">hqua…</text>
+</g>
+<g><title>std::__function::__func&lt;hquant::v1::TradingAccount::TrySubmit(hquant::v1::ShardId, hquant::v1::MarketId, hquant::v1::LimitOrderRequest, unsigned long long, std::function&lt;void (bool, std::basic_string&lt;char&gt;)&gt;)::$_0, void ()&gt;::operator()() — 4 samples (1.9%)</title>
+<rect x="1806.15" y="282.00" width="41.54" height="20" fill="#2b87bd"/>
+<text x="1809.15" y="296.00">std:…</text>
+</g>
+<g><title>hquant::v1::TradingAccount::ProcessSubmit(hquant::v1::ShardId, hquant::v1::MarketId const&amp;, hquant::v1::LimitOrderRequest const&amp;, unsigned long long, unsigned long long, unsigned long long, std::function&lt;void (bool, std::basic_string&lt;char&gt;)&gt;) — 4 samples (1.9%)</title>
+<rect x="1806.15" y="260.00" width="41.54" height="20" fill="#2b87bd"/>
+<text x="1809.15" y="274.00">hqua…</text>
+</g>
+<g><title>hquant::v1::AccountViewPublisher::Flush() — 2 samples (1.0%)</title>
+<rect x="1806.15" y="238.00" width="20.77" height="20" fill="#7dbb9d"/>
+</g>
+<g><title>hquant::v1::AccountViewPublisher::View(hquant::v1::ShardId) const — 1 samples (0.5%)</title>
+<rect x="1806.15" y="216.00" width="10.38" height="20" fill="#7dbb9d"/>
+</g>
+<g><title>hquant::v1::TradingAccount::Budget(std::basic_string&lt;char&gt; const&amp;) const — 1 samples (0.5%)</title>
+<rect x="1806.15" y="194.00" width="10.38" height="20" fill="#2b87bd"/>
+</g>
+<g><title>std::__tree&lt;std::__value_type&lt;std::basic_string&lt;char&gt;, unsigned long long&gt;, std::__map_value_compare&lt;std::basic_string&lt;char&gt;, std::__value_type&lt;std::basic_string&lt;char&gt;, unsigned long long&gt;, true&gt;&gt;::find&lt;std::basic_string&lt;char&gt;&gt;(std::basic_string&lt;char&gt; const&amp;) const — 1 samples (0.5%)</title>
+<rect x="1806.15" y="172.00" width="10.38" height="20" fill="#adc5d4"/>
+</g>
+<g><title>DYLD-STUB$$memcmp — 1 samples (0.5%)</title>
+<rect x="1806.15" y="150.00" width="10.38" height="20" fill="#d4c5cc"/>
+</g>
+<g><title>hquant::v1::TradingAccount::Budget(std::basic_string&lt;char&gt; const&amp;) const — 1 samples (0.5%)</title>
+<rect x="1816.54" y="216.00" width="10.38" height="20" fill="#2b87bd"/>
+</g>
+<g><title>std::__tree&lt;std::__value_type&lt;std::basic_string&lt;char&gt;, unsigned long long&gt;, std::__map_value_compare&lt;std::basic_string&lt;char&gt;, std::__value_type&lt;std::basic_string&lt;char&gt;, unsigned long long&gt;, true&gt;&gt;::find&lt;std::basic_string&lt;char&gt;&gt;(std::basic_string&lt;char&gt; const&amp;) const — 1 samples (0.5%)</title>
+<rect x="1816.54" y="194.00" width="10.38" height="20" fill="#adc5d4"/>
+</g>
+<g><title>_platform_memcmp — 1 samples (0.5%)</title>
+<rect x="1816.54" y="172.00" width="10.38" height="20" fill="#d7c6b8"/>
+</g>
+<g><title>hquant::v1::OrderManager::Begin(hquant::v1::TrackedOrder) — 1 samples (0.5%)</title>
+<rect x="1826.92" y="238.00" width="10.38" height="20" fill="#7dbb9d"/>
+</g>
+<g><title>hquant::v1::OrderState::Begin(hquant::v1::TrackedOrder) — 1 samples (0.5%)</title>
+<rect x="1826.92" y="216.00" width="10.38" height="20" fill="#7dbb9d"/>
+</g>
+<g><title>std::__tree&lt;std::__value_type&lt;std::basic_string&lt;char&gt;, hquant::v1::TrackedOrder&gt;, std::__map_value_compare&lt;std::basic_string&lt;char&gt;, std::__value_type&lt;std::basic_string&lt;char&gt;, hquant::v1::TrackedOrder&gt;, true&gt;&gt;::__emplace_unique_key_args&lt;std::basic_string&lt;char&gt;, std::basic_string&lt;char&gt;&amp;, hquant::v1::TrackedOrder&gt;(std::basic_string&lt;char&gt; const&amp;, std::basic_string&lt;char&gt;&amp;, hquant::v1::TrackedOrder&amp;&amp;) — 1 samples (0.5%)</title>
+<rect x="1826.92" y="194.00" width="10.38" height="20" fill="#adc5d4"/>
+</g>
+<g><title>std::__function::__func&lt;hquant::v1::Shard::RunAccountDecision(unsigned long long)::$_1, void (bool, std::basic_string&lt;char&gt;)&gt;::operator()(bool&amp;&amp;, std::basic_string&lt;char&gt;&amp;&amp;) — 1 samples (0.5%)</title>
+<rect x="1837.31" y="238.00" width="10.38" height="20" fill="#adc5d4"/>
+</g>
+<g><title>boost::asio::detail::thread_info_base::allocate&lt;boost::asio::detail::thread_info_base::default_tag&gt;(boost::asio::detail::thread_info_base::default_tag, boost::asio::detail::thread_info_base*, unsigned long, unsigned long) — 1 samples (0.5%)</title>
+<rect x="1837.31" y="216.00" width="10.38" height="20" fill="#b3a0cd"/>
+</g>
+<g><title>_malloc_zone_memalign — 1 samples (0.5%)</title>
+<rect x="1837.31" y="194.00" width="10.38" height="20" fill="#d4c5cc"/>
+</g>
+<g><title>_xzm_xzone_malloc — 1 samples (0.5%)</title>
+<rect x="1837.31" y="172.00" width="10.38" height="20" fill="#cbd5dd"/>
+</g>
+<g><title>boost::asio::detail::kqueue_reactor::run(long, boost::asio::detail::op_queue&lt;boost::asio::detail::scheduler_operation&gt;&amp;) — 2 samples (1.0%)</title>
+<rect x="1847.69" y="326.00" width="20.77" height="20" fill="#b3a0cd"/>
+</g>
+<g><title>read — 2 samples (1.0%)</title>
+<rect x="1847.69" y="304.00" width="20.77" height="20" fill="#bed1c2"/>
+</g>
+<g><title>_pthread_mutex_firstfit_unlock_slow — 1 samples (0.5%)</title>
+<rect x="1868.46" y="326.00" width="10.38" height="20" fill="#cbd5dd"/>
+</g>
+<g><title>_pthread_mutex_firstfit_wake — 1 samples (0.5%)</title>
+<rect x="1868.46" y="304.00" width="10.38" height="20" fill="#b9ccd5"/>
+</g>
+<g><title>__psynch_mutexdrop — 1 samples (0.5%)</title>
+<rect x="1868.46" y="282.00" width="10.38" height="20" fill="#d4c5cc"/>
+</g>
+<g><title>boost::asio::detail::scheduler::task_cleanup::~task_cleanup() — 1 samples (0.5%)</title>
+<rect x="1878.85" y="326.00" width="10.38" height="20" fill="#b3a0cd"/>
+</g>
+<g><title>boost::asio::detail::thread_info_base::~thread_info_base() — 5 samples (2.4%)</title>
+<rect x="1889.23" y="348.00" width="51.92" height="20" fill="#b3a0cd"/>
+<text x="1892.23" y="362.00">boost…</text>
+</g>
+<g><title>_xzm_free — 2 samples (1.0%)</title>
+<rect x="1889.23" y="326.00" width="20.77" height="20" fill="#bed1c2"/>
+</g>
+<g><title>_platform_memset — 1 samples (0.5%)</title>
+<rect x="1889.23" y="304.00" width="10.38" height="20" fill="#b9ccd5"/>
+</g>
+<g><title>std::exception_ptr::~exception_ptr() — 1 samples (0.5%)</title>
+<rect x="1910.00" y="326.00" width="10.38" height="20" fill="#adc5d4"/>
+</g>
+<g><title>__cxa_decrement_exception_refcount — 1 samples (0.5%)</title>
+<rect x="1910.00" y="304.00" width="10.38" height="20" fill="#bed1c2"/>
+</g>
+<g><title>boost::asio::io_context::run_one() — 19 samples (9.1%)</title>
+<rect x="1941.15" y="392.00" width="197.31" height="20" fill="#b3a0cd"/>
+<text x="1944.15" y="406.00">boost::asio::io_context::ru…</text>
+</g>
+<g><title>boost::asio::detail::scheduler::run_one(boost::system::error_code&amp;) — 19 samples (9.1%)</title>
+<rect x="1941.15" y="370.00" width="197.31" height="20" fill="#b3a0cd"/>
+<text x="1944.15" y="384.00">boost::asio::detail::schedu…</text>
+</g>
+<g><title>boost::asio::detail::scheduler::do_run_one(boost::asio::detail::conditionally_enabled_mutex::scoped_lock&amp;, boost::asio::detail::scheduler_thread_info&amp;, boost::system::error_code const&amp;) — 19 samples (9.1%)</title>
+<rect x="1941.15" y="348.00" width="197.31" height="20" fill="#b3a0cd"/>
+<text x="1944.15" y="362.00">boost::asio::detail::schedu…</text>
+</g>
+<g><title>boost::asio::detail::executor_op&lt;boost::asio::detail::binder0&lt;hquant::v1::OrderJournal::WriterLoop()::$_2&gt;, boost::asio::detail::scheduler_operation&gt;::do_complete(void*, boost::asio::detail::scheduler_operation*, boost::system::error_code const&amp;, unsigned long) — 19 samples (9.1%)</title>
+<rect x="1941.15" y="326.00" width="197.31" height="20" fill="#b3a0cd"/>
+<text x="1944.15" y="340.00">boost::asio::detail::execut…</text>
+</g>
+<g><title>std::__function::__func&lt;hquant::v1::TradingAccount::Persist(hquant::v1::JournalEntry, std::function&lt;void (absl::lts_20260817::Status)&gt;)::$_0, void (absl::lts_20260817::Status)&gt;::operator()(absl::lts_20260817::Status&amp;&amp;) — 18 samples (8.7%)</title>
+<rect x="1941.15" y="304.00" width="186.92" height="20" fill="#2b87bd"/>
+<text x="1944.15" y="318.00">std::__function::__func&lt;……</text>
+</g>
+<g><title>std::__function::__func&lt;hquant::v1::TradingAccount::PersistAndApply(std::variant&lt;hquant::v1::OrderReport, hquant::v1::Fill, hquant::v1::BalanceUpdate, hquant::v1::BalanceDelta&gt;, bool, std::function&lt;void (absl::lts_20260817::Status)&gt;)::$_0, void (absl::lts_20260817::Status)&gt;::operator()(absl::lts_20260817::Status&amp;&amp;) — 18 samples (8.7%)</title>
+<rect x="1941.15" y="282.00" width="186.92" height="20" fill="#2b87bd"/>
+<text x="1944.15" y="296.00">std::__function::__func&lt;……</text>
+</g>
+<g><title>hquant::v1::TradingAccount::ApplyEvent(std::variant&lt;hquant::v1::OrderReport, hquant::v1::Fill, hquant::v1::BalanceUpdate, hquant::v1::BalanceDelta&gt; const&amp;, bool) — 8 samples (3.8%)</title>
+<rect x="1941.15" y="260.00" width="83.08" height="20" fill="#2b87bd"/>
+<text x="1944.15" y="274.00">hquant::v1…</text>
+</g>
+<g><title>hquant::v1::OrderManager::ApplyFill(hquant::v1::Fill const&amp;) — 5 samples (2.4%)</title>
+<rect x="1941.15" y="238.00" width="51.92" height="20" fill="#7dbb9d"/>
+<text x="1944.15" y="252.00">hquan…</text>
+</g>
+<g><title>hquant::v1::OrderState::ApplyFill(hquant::v1::Fill const&amp;) — 5 samples (2.4%)</title>
+<rect x="1941.15" y="216.00" width="51.92" height="20" fill="#7dbb9d"/>
+<text x="1944.15" y="230.00">hquan…</text>
+</g>
+<g><title>std::__tree&lt;std::__value_type&lt;std::basic_string&lt;char&gt;, hquant::v1::TrackedOrder&gt;, std::__map_value_compare&lt;std::basic_string&lt;char&gt;, std::__value_type&lt;std::basic_string&lt;char&gt;, hquant::v1::TrackedOrder&gt;, true&gt;&gt;::find&lt;std::basic_string&lt;char&gt;&gt;(std::basic_string&lt;char&gt; const&amp;) — 5 samples (2.4%)</title>
+<rect x="1941.15" y="194.00" width="51.92" height="20" fill="#adc5d4"/>
+<text x="1944.15" y="208.00">std::…</text>
+</g>
+<g><title>_platform_memcmp — 2 samples (1.0%)</title>
+<rect x="1941.15" y="172.00" width="20.77" height="20" fill="#d7c6b8"/>
+</g>
+<g><title>hquant::v1::FundsState::Hold(hquant::v1::ClientOrderId const&amp;) const — 2 samples (1.0%)</title>
+<rect x="1993.08" y="238.00" width="20.77" height="20" fill="#7dbb9d"/>
+</g>
+<g><title>std::__tree&lt;std::__value_type&lt;std::basic_string&lt;char&gt;, hquant::v1::FundsHold&gt;, std::__map_value_compare&lt;std::basic_string&lt;char&gt;, std::__value_type&lt;std::basic_string&lt;char&gt;, hquant::v1::FundsHold&gt;, true&gt;&gt;::find&lt;std::basic_string&lt;char&gt;&gt;(std::basic_string&lt;char&gt; const&amp;) const — 2 samples (1.0%)</title>
+<rect x="1993.08" y="216.00" width="20.77" height="20" fill="#adc5d4"/>
+</g>
+<g><title>_platform_memcmp — 2 samples (1.0%)</title>
+<rect x="1993.08" y="194.00" width="20.77" height="20" fill="#d7c6b8"/>
+</g>
+<g><title>hquant::v1::TradingAccount::Record(hquant::v1::AccountHistoryRecord) — 1 samples (0.5%)</title>
+<rect x="2013.85" y="238.00" width="10.38" height="20" fill="#2b87bd"/>
+</g>
+<g><title>hquant::v1::SqliteHistory::TryPushAccount(hquant::v1::AccountHistoryRecord) — 1 samples (0.5%)</title>
+<rect x="2013.85" y="216.00" width="10.38" height="20" fill="#7dbb9d"/>
+</g>
+<g><title>std::condition_variable::notify_one() — 1 samples (0.5%)</title>
+<rect x="2013.85" y="194.00" width="10.38" height="20" fill="#adc5d4"/>
+</g>
+<g><title>pthread_cond_signal — 1 samples (0.5%)</title>
+<rect x="2013.85" y="172.00" width="10.38" height="20" fill="#cbd5dd"/>
+</g>
+<g><title>__psynch_cvsignal — 1 samples (0.5%)</title>
+<rect x="2013.85" y="150.00" width="10.38" height="20" fill="#d7c6b8"/>
+</g>
+<g><title>std::__function::__func&lt;hquant::v1::AccountSync::SyncNextBalance(std::shared_ptr&lt;hquant::v1::AccountSync::State&gt;)::$_0, void (absl::lts_20260817::Status)&gt;::operator()(absl::lts_20260817::Status&amp;&amp;) — 6 samples (2.9%)</title>
+<rect x="2024.23" y="260.00" width="62.31" height="20" fill="#adc5d4"/>
+<text x="2027.23" y="274.00">std::__…</text>
+</g>
+<g><title>hquant::v1::AccountSync::SyncNextBalance(std::shared_ptr&lt;hquant::v1::AccountSync::State&gt;) — 6 samples (2.9%)</title>
+<rect x="2024.23" y="238.00" width="62.31" height="20" fill="#7dbb9d"/>
+<text x="2027.23" y="252.00">hquant:…</text>
+</g>
+<g><title>hquant::v1::AccountSync::FinishSync(std::shared_ptr&lt;hquant::v1::AccountSync::State&gt;) — 4 samples (1.9%)</title>
+<rect x="2024.23" y="216.00" width="41.54" height="20" fill="#7dbb9d"/>
+<text x="2027.23" y="230.00">hqua…</text>
+</g>
+<g><title>hquant::v1::AccountSync::Start() — 2 samples (1.0%)</title>
+<rect x="2024.23" y="194.00" width="20.77" height="20" fill="#7dbb9d"/>
+</g>
+<g><title>hquant::v1::AccountViewPublisher::Flush() — 2 samples (1.0%)</title>
+<rect x="2024.23" y="172.00" width="20.77" height="20" fill="#7dbb9d"/>
+</g>
+<g><title>hquant::v1::AccountViewPublisher::View(hquant::v1::ShardId) const — 1 samples (0.5%)</title>
+<rect x="2024.23" y="150.00" width="10.38" height="20" fill="#7dbb9d"/>
+</g>
+<g><title>hquant::v1::TradingAccount::Budget(std::basic_string&lt;char&gt; const&amp;) const — 1 samples (0.5%)</title>
+<rect x="2024.23" y="128.00" width="10.38" height="20" fill="#2b87bd"/>
+</g>
+<g><title>std::__tree&lt;std::__value_type&lt;std::basic_string&lt;char&gt;, unsigned long long&gt;, std::__map_value_compare&lt;std::basic_string&lt;char&gt;, std::__value_type&lt;std::basic_string&lt;char&gt;, unsigned long long&gt;, true&gt;&gt;::find&lt;std::basic_string&lt;char&gt;&gt;(std::basic_string&lt;char&gt; const&amp;) const — 1 samples (0.5%)</title>
+<rect x="2024.23" y="106.00" width="10.38" height="20" fill="#adc5d4"/>
+</g>
+<g><title>std::__function::__func&lt;hquant::v1::Runtime::Runtime(hquant::v1::AppConfig const&amp;, hquant::v1::PerfProbe*)::$_8, void (hquant::v1::AccountView)&gt;::operator()(hquant::v1::AccountView&amp;&amp;) — 1 samples (0.5%)</title>
+<rect x="2034.62" y="150.00" width="10.38" height="20" fill="#adc5d4"/>
+</g>
+<g><title>hquant::v1::Shard::PostAccountView(hquant::v1::AccountView) — 1 samples (0.5%)</title>
+<rect x="2034.62" y="128.00" width="10.38" height="20" fill="#7dbb9d"/>
+</g>
+<g><title>boost::asio::detail::scheduler::post_immediate_completion(boost::asio::detail::scheduler_operation*, bool) — 1 samples (0.5%)</title>
+<rect x="2034.62" y="106.00" width="10.38" height="20" fill="#b3a0cd"/>
+</g>
+<g><title>boost::asio::detail::kqueue_reactor::interrupt() — 1 samples (0.5%)</title>
+<rect x="2034.62" y="84.00" width="10.38" height="20" fill="#b3a0cd"/>
+</g>
+<g><title>write — 1 samples (0.5%)</title>
+<rect x="2034.62" y="62.00" width="10.38" height="20" fill="#d7c6b8"/>
+</g>
+<g><title>hquant::v1::AccountViewPublisher::Flush() — 2 samples (1.0%)</title>
+<rect x="2045.00" y="194.00" width="20.77" height="20" fill="#7dbb9d"/>
+</g>
+<g><title>hquant::v1::AccountViewPublisher::View(hquant::v1::ShardId) const — 1 samples (0.5%)</title>
+<rect x="2045.00" y="172.00" width="10.38" height="20" fill="#7dbb9d"/>
+</g>
+<g><title>hquant::v1::TradingAccount::Budget(std::basic_string&lt;char&gt; const&amp;) const — 1 samples (0.5%)</title>
+<rect x="2045.00" y="150.00" width="10.38" height="20" fill="#2b87bd"/>
+</g>
+<g><title>hquant::v1::FundsState::Asset(std::basic_string&lt;char&gt; const&amp;) const — 1 samples (0.5%)</title>
+<rect x="2045.00" y="128.00" width="10.38" height="20" fill="#7dbb9d"/>
+</g>
+<g><title>std::__tree&lt;std::__value_type&lt;std::basic_string&lt;char&gt;, hquant::v1::FundsState::VenueAsset&gt;, std::__map_value_compare&lt;std::basic_string&lt;char&gt;, std::__value_type&lt;std::basic_string&lt;char&gt;, hquant::v1::FundsState::VenueAsset&gt;, true&gt;&gt;::find&lt;std::basic_string&lt;char&gt;&gt;(std::basic_string&lt;char&gt; const&amp;) const — 1 samples (0.5%)</title>
+<rect x="2045.00" y="106.00" width="10.38" height="20" fill="#adc5d4"/>
+</g>
+<g><title>DYLD-STUB$$memcmp — 1 samples (0.5%)</title>
+<rect x="2045.00" y="84.00" width="10.38" height="20" fill="#d4c5cc"/>
+</g>
+<g><title>std::__function::__func&lt;hquant::v1::Runtime::Runtime(hquant::v1::AppConfig const&amp;, hquant::v1::PerfProbe*)::$_8, void (hquant::v1::AccountView)&gt;::operator()(hquant::v1::AccountView&amp;&amp;) — 1 samples (0.5%)</title>
+<rect x="2055.38" y="172.00" width="10.38" height="20" fill="#adc5d4"/>
+</g>
+<g><title>hquant::v1::Shard::PostAccountView(hquant::v1::AccountView) — 1 samples (0.5%)</title>
+<rect x="2055.38" y="150.00" width="10.38" height="20" fill="#7dbb9d"/>
+</g>
+<g><title>boost::asio::detail::scheduler::post_immediate_completion(boost::asio::detail::scheduler_operation*, bool) — 1 samples (0.5%)</title>
+<rect x="2055.38" y="128.00" width="10.38" height="20" fill="#b3a0cd"/>
+</g>
+<g><title>boost::asio::detail::kqueue_reactor::interrupt() — 1 samples (0.5%)</title>
+<rect x="2055.38" y="106.00" width="10.38" height="20" fill="#b3a0cd"/>
+</g>
+<g><title>write — 1 samples (0.5%)</title>
+<rect x="2055.38" y="84.00" width="10.38" height="20" fill="#d7c6b8"/>
+</g>
+<g><title>std::__function::__func&lt;hquant::v1::TradingAccount::TradingAccount(boost::asio::io_context&amp;, hquant::v1::AccountConfig, std::vector&lt;hquant::v1::ShardConfig&gt;, std::basic_string&lt;char&gt;, hquant::v1::SqliteHistory*, unsigned long, hquant::v1::TradePerf*)::$_2, bool (std::variant&lt;hquant::v1::OrderReport, hquant::v1::Fill, hquant::v1::BalanceUpdate, hquant::v1::BalanceDelta&gt;, bool, std::function&lt;void (absl::lts_20260817::Status)&gt;)&gt;::operator()(std::variant&lt;hquant::v1::OrderReport, hquant::v1::Fill, hquant::v1::BalanceUpdate, hquant::v1::BalanceDelta&gt;&amp;&amp;, bool&amp;&amp;, std::function&lt;void (absl::lts_20260817::Status)&gt;&amp;&amp;) — 1 samples (0.5%)</title>
+<rect x="2065.77" y="216.00" width="10.38" height="20" fill="#2b87bd"/>
+</g>
+<g><title>hquant::v1::TradingAccount::PersistAndApply(std::variant&lt;hquant::v1::OrderReport, hquant::v1::Fill, hquant::v1::BalanceUpdate, hquant::v1::BalanceDelta&gt;, bool, std::function&lt;void (absl::lts_20260817::Status)&gt;) — 1 samples (0.5%)</title>
+<rect x="2065.77" y="194.00" width="10.38" height="20" fill="#2b87bd"/>
+</g>
+<g><title>hquant::v1::TradingAccount::Persist(hquant::v1::JournalEntry, std::function&lt;void (absl::lts_20260817::Status)&gt;) — 1 samples (0.5%)</title>
+<rect x="2065.77" y="172.00" width="10.38" height="20" fill="#2b87bd"/>
+</g>
+<g><title>hquant::v1::OrderJournal::Append(std::basic_string&lt;char&gt; const&amp;, hquant::v1::JournalEntry, boost::asio::io_context&amp;, std::function&lt;void (absl::lts_20260817::Status)&gt;) — 1 samples (0.5%)</title>
+<rect x="2065.77" y="150.00" width="10.38" height="20" fill="#7dbb9d"/>
+</g>
+<g><title>std::condition_variable::notify_one() — 1 samples (0.5%)</title>
+<rect x="2065.77" y="128.00" width="10.38" height="20" fill="#adc5d4"/>
+</g>
+<g><title>pthread_cond_signal — 1 samples (0.5%)</title>
+<rect x="2065.77" y="106.00" width="10.38" height="20" fill="#cbd5dd"/>
+</g>
+<g><title>__psynch_cvsignal — 1 samples (0.5%)</title>
+<rect x="2065.77" y="84.00" width="10.38" height="20" fill="#d7c6b8"/>
+</g>
+<g><title>hquant::v1::AccountViewPublisher::Flush() — 4 samples (1.9%)</title>
+<rect x="2086.54" y="260.00" width="41.54" height="20" fill="#7dbb9d"/>
+<text x="2089.54" y="274.00">hqua…</text>
+</g>
+<g><title>hquant::v1::AccountViewPublisher::View(hquant::v1::ShardId) const — 1 samples (0.5%)</title>
+<rect x="2086.54" y="238.00" width="10.38" height="20" fill="#7dbb9d"/>
+</g>
+<g><title>hquant::v1::TradingAccount::Budget(std::basic_string&lt;char&gt; const&amp;) const — 1 samples (0.5%)</title>
+<rect x="2086.54" y="216.00" width="10.38" height="20" fill="#2b87bd"/>
+</g>
+<g><title>std::__tree&lt;std::__value_type&lt;std::basic_string&lt;char&gt;, unsigned long long&gt;, std::__map_value_compare&lt;std::basic_string&lt;char&gt;, std::__value_type&lt;std::basic_string&lt;char&gt;, unsigned long long&gt;, true&gt;&gt;::find&lt;std::basic_string&lt;char&gt;&gt;(std::basic_string&lt;char&gt; const&amp;) const — 1 samples (0.5%)</title>
+<rect x="2086.54" y="194.00" width="10.38" height="20" fill="#adc5d4"/>
+</g>
+<g><title>DYLD-STUB$$memcmp — 1 samples (0.5%)</title>
+<rect x="2086.54" y="172.00" width="10.38" height="20" fill="#d4c5cc"/>
+</g>
+<g><title>hquant::v1::FundsState::Asset(std::basic_string&lt;char&gt; const&amp;) const — 1 samples (0.5%)</title>
+<rect x="2096.92" y="238.00" width="10.38" height="20" fill="#7dbb9d"/>
+</g>
+<g><title>std::__tree&lt;std::__value_type&lt;std::basic_string&lt;char&gt;, hquant::v1::FundsState::VenueAsset&gt;, std::__map_value_compare&lt;std::basic_string&lt;char&gt;, std::__value_type&lt;std::basic_string&lt;char&gt;, hquant::v1::FundsState::VenueAsset&gt;, true&gt;&gt;::find&lt;std::basic_string&lt;char&gt;&gt;(std::basic_string&lt;char&gt; const&amp;) const — 1 samples (0.5%)</title>
+<rect x="2096.92" y="216.00" width="10.38" height="20" fill="#adc5d4"/>
+</g>
+<g><title>_platform_memcmp — 1 samples (0.5%)</title>
+<rect x="2096.92" y="194.00" width="10.38" height="20" fill="#d7c6b8"/>
+</g>
+<g><title>hquant::v1::TradingAccount::Budget(std::basic_string&lt;char&gt; const&amp;) const — 1 samples (0.5%)</title>
+<rect x="2107.31" y="238.00" width="10.38" height="20" fill="#2b87bd"/>
+</g>
+<g><title>hquant::v1::FundsState::Asset(std::basic_string&lt;char&gt; const&amp;) const — 1 samples (0.5%)</title>
+<rect x="2107.31" y="216.00" width="10.38" height="20" fill="#7dbb9d"/>
+</g>
+<g><title>std::__tree&lt;std::__value_type&lt;std::basic_string&lt;char&gt;, hquant::v1::FundsState::VenueAsset&gt;, std::__map_value_compare&lt;std::basic_string&lt;char&gt;, std::__value_type&lt;std::basic_string&lt;char&gt;, hquant::v1::FundsState::VenueAsset&gt;, true&gt;&gt;::find&lt;std::basic_string&lt;char&gt;&gt;(std::basic_string&lt;char&gt; const&amp;) const — 1 samples (0.5%)</title>
+<rect x="2107.31" y="194.00" width="10.38" height="20" fill="#adc5d4"/>
+</g>
+<g><title>_platform_memcmp — 1 samples (0.5%)</title>
+<rect x="2107.31" y="172.00" width="10.38" height="20" fill="#d7c6b8"/>
+</g>
+<g><title>std::__function::__func&lt;hquant::v1::Runtime::Runtime(hquant::v1::AppConfig const&amp;, hquant::v1::PerfProbe*)::$_8, void (hquant::v1::AccountView)&gt;::operator()(hquant::v1::AccountView&amp;&amp;) — 1 samples (0.5%)</title>
+<rect x="2117.69" y="238.00" width="10.38" height="20" fill="#adc5d4"/>
+</g>
+<g><title>hquant::v1::Shard::PostAccountView(hquant::v1::AccountView) — 1 samples (0.5%)</title>
+<rect x="2117.69" y="216.00" width="10.38" height="20" fill="#7dbb9d"/>
+</g>
+<g><title>std::__function::__func&lt;hquant::v1::TradingAccount::Persist(hquant::v1::JournalEntry, std::function&lt;void (absl::lts_20260817::Status)&gt;)::$_0, void (absl::lts_20260817::Status)&gt;::destroy_deallocate() — 1 samples (0.5%)</title>
+<rect x="2128.08" y="304.00" width="10.38" height="20" fill="#2b87bd"/>
+</g>
+<g><title>std::__function::__func&lt;hquant::v1::TradingAccount::PersistAndApply(std::variant&lt;hquant::v1::OrderReport, hquant::v1::Fill, hquant::v1::BalanceUpdate, hquant::v1::BalanceDelta&gt;, bool, std::function&lt;void (absl::lts_20260817::Status)&gt;)::$_0, void (absl::lts_20260817::Status)&gt;::destroy_deallocate() — 1 samples (0.5%)</title>
+<rect x="2128.08" y="282.00" width="10.38" height="20" fill="#2b87bd"/>
+</g>
+<g><title>std::__function::__func&lt;hquant::v1::AccountSync::SyncNextBalance(std::shared_ptr&lt;hquant::v1::AccountSync::State&gt;)::$_0, void (absl::lts_20260817::Status)&gt;::destroy_deallocate() — 1 samples (0.5%)</title>
+<rect x="2128.08" y="260.00" width="10.38" height="20" fill="#adc5d4"/>
+</g>
+<g><title>hquant::v1::AccountSync::State::~State() — 1 samples (0.5%)</title>
+<rect x="2128.08" y="238.00" width="10.38" height="20" fill="#7dbb9d"/>
+</g>
+<g><title>xzm_segment_group_free_chunk — 1 samples (0.5%)</title>
+<rect x="2128.08" y="216.00" width="10.38" height="20" fill="#b9ccd5"/>
+</g>
+<g><title>_xzm_segment_group_segment_span_free_coalesce — 1 samples (0.5%)</title>
+<rect x="2128.08" y="194.00" width="10.38" height="20" fill="#b9ccd5"/>
+</g>
+<g><title>_xzm_segment_group_span_mark_used — 1 samples (0.5%)</title>
+<rect x="2128.08" y="172.00" width="10.38" height="20" fill="#cbd5dd"/>
+</g>
+<g><title>_xzm_reclaim_mark_used — 1 samples (0.5%)</title>
+<rect x="2128.08" y="150.00" width="10.38" height="20" fill="#cbd5dd"/>
+</g>
+<g><title>_xzm_reclaim_mark_used_locked — 1 samples (0.5%)</title>
+<rect x="2128.08" y="128.00" width="10.38" height="20" fill="#bed1c2"/>
+</g>
+<g><title>mach_vm_reclaim_try_cancel — 1 samples (0.5%)</title>
+<rect x="2128.08" y="106.00" width="10.38" height="20" fill="#b9ccd5"/>
+</g>
+<g><title>mach_absolute_time — 1 samples (0.5%)</title>
+<rect x="2128.08" y="84.00" width="10.38" height="20" fill="#cbd5dd"/>
+</g>
+<g><title>std::chrono::steady_clock::now() — 4 samples (1.9%)</title>
+<rect x="2138.46" y="392.00" width="41.54" height="20" fill="#adc5d4"/>
+<text x="2141.46" y="406.00">std:…</text>
+</g>
+<g><title>clock_gettime — 4 samples (1.9%)</title>
+<rect x="2138.46" y="370.00" width="41.54" height="20" fill="#b9ccd5"/>
+<text x="2141.46" y="384.00">cloc…</text>
+</g>
+<g><title>clock_gettime_nsec_np — 3 samples (1.4%)</title>
+<rect x="2138.46" y="348.00" width="31.15" height="20" fill="#b9ccd5"/>
+</g>
+<g><title>mach_continuous_time — 3 samples (1.4%)</title>
+<rect x="2138.46" y="326.00" width="31.15" height="20" fill="#cbd5dd"/>
+</g>
+</svg>

@@ -8,6 +8,7 @@
 
 #include "hquant/base/ids.h"
 #include "hquant/shard/order_book.h"
+#include "hquant/trading/trading_event.h"
 
 namespace hquant::v1 {
 
@@ -35,9 +36,8 @@ struct BookDiff {
   uint64_t last_sequence = 0;
   std::vector<BookLevel> bids;
   std::vector<BookLevel> asks;
+  uint64_t source_bench_seq = 0;
 };
-
-enum class Side { Buy, Sell };
 
 struct PublicTrade {
   MarketId market;
@@ -46,6 +46,7 @@ struct PublicTrade {
   uint64_t price_ticks = 0;
   uint64_t quantity_lots = 0;
   Side aggressor = Side::Buy;
+  uint64_t source_bench_seq = 0;
 };
 
 using MarketInput = std::variant<FeedConnected, BookSnapshot, BookDiff,
@@ -65,6 +66,7 @@ struct BookView {
 struct MarketNotice {
   enum class Kind { BookChanged, PublicTrade, BookUnavailable } kind;
   std::optional<hquant::v1::PublicTrade> trade;
+  uint64_t source_bench_seq = 0;
 };
 
 }  // namespace hquant::v1

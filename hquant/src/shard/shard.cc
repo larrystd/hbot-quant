@@ -1,5 +1,6 @@
 #include "hquant/shard/shard.h"
 
+#include <algorithm>
 #include <chrono>
 #include <exception>
 #include <limits>
@@ -11,32 +12,57 @@
 #include "boost/asio/co_spawn.hpp"
 #include "boost/asio/detached.hpp"
 #include "boost/asio/post.hpp"
+#include "hquant/base/log.h"
 
 namespace hquant::v1 {
 
-static_assert(DecisionStrategy<Strategy>);
-
 Shard::Shard(boost::asio::io_context& io, const ShardConfig& config,
-             const InputConfig& input,
-             SqliteHistory& history, std::string run_id, ShardPerf* perf)
+             const InputConfig& input, ShardPerf* perf, TradingAccount* account)
     : config_(config),
       input_(input),
-      history_(history),
-      run_id_(std::move(run_id)),
       io_(io),
       work_guard_(boost::asio::make_work_guard(io_)),
-      market_(io_, config_.market, input_,
-              [this](const MarketNotice& notice) { OnMarket(notice); }, perf),
+      market_(
+          io_, config_.market, input_,
+          [this](const MarketNotice& notice) { OnMarket(notice); }, perf),
       strategy_(config_.strategy),
-      exchange_(config_.market, config_.executor,
-                [this](AccountEvent event) {
-                  boost::asio::post(io_, [this, event = std::move(event)] {
-                    OnAccountEvent(event);
-                  });
-                }),
-      executor_(config_.market, config_.executor, exchange_),
+      account_(account),
       strategy_timer_(io_),
-      perf_(perf) {}
+      stop_timer_(io_),
+      perf_(perf) {
+  if (account_) {
+    base_asset_view_ = account_->AssetView(config_.market.base_asset);
+    quote_asset_view_ = account_->AssetView(config_.market.quote_asset);
+    asset_revision_ = account_->AssetRevision();
+  }
+}
+
+Shard::AssetPair Shard::ReadAssetViews() const {
+  AssetPair values;
+  for (;;) {
+    const uint64_t before = asset_revision_
+                                ? asset_revision_->load(std::memory_order_seq_cst)
+                                : 0;
+    if (before & 1) continue;
+    if (base_asset_view_) {
+      values.base = base_asset_view_->Read();
+    } else {
+      values.base.total_nanos = account_view_.base_total_nanos;
+      values.base.available_nanos = account_view_.base_available_nanos;
+      values.base.budget_nanos = account_view_.base_budget_nanos;
+    }
+    if (quote_asset_view_) {
+      values.quote = quote_asset_view_->Read();
+    } else {
+      values.quote.total_nanos = account_view_.quote_total_nanos;
+      values.quote.available_nanos = account_view_.quote_available_nanos;
+      values.quote.budget_nanos = account_view_.quote_budget_nanos;
+    }
+    if (!asset_revision_ ||
+        asset_revision_->load(std::memory_order_seq_cst) == before)
+      return values;
+  }
+}
 
 Shard::~Shard() {
   RequestStop();
@@ -55,128 +81,157 @@ absl::Status Shard::Start() {
   return absl::OkStatus();
 }
 
-int64_t Shard::EventAtUs() const {
-  if (input_.source == InputSource::Replay && last_input_time_) {
-    return last_input_time_->at_us;
-  }
-  return std::chrono::duration_cast<std::chrono::microseconds>(
-             std::chrono::system_clock::now().time_since_epoch())
-      .count();
-}
-
-void Shard::Record(HistoryRecord record) {
-  if (history_sequence_ ==
-      static_cast<uint64_t>(std::numeric_limits<int64_t>::max())) {
-    last_error_ = "history sequence exhausted";
-    return;
-  }
-  record.run_id = run_id_;
-  record.shard = config_.id;
-  record.sequence = ++history_sequence_;
-  record.at_us = EventAtUs();
-  if (perf_) {
-    record.perf_input_origin_ns =
-        current_input_origin_ns_ ? current_input_origin_ns_ : PerfNowNs();
-  }
-  const uint64_t enqueue_begin = perf_ ? PerfNowNs() : 0;
-  if (!history_.TryPush(std::move(record))) {
-    const auto health = history_.Health();
-    last_error_ = health.error.empty() ? "history queue full" : health.error;
-  }
-  if (perf_) {
-    ++perf_->history_records;
-    const uint64_t elapsed = PerfNowNs() - enqueue_begin;
-    perf_->history_enqueue_ns += elapsed;
-    perf_->history_enqueue_samples_ns.push_back(elapsed);
-  }
-}
-
-void Shard::OnAccountEvent(const AccountEvent& event) {
-  const uint64_t begin = perf_ ? PerfNowNs() : 0;
-  HistoryRecord record;
-  std::visit(
-      [&](const auto& value) {
-        using T = std::decay_t<decltype(value)>;
-        if constexpr (std::is_same_v<T, OrderReport>) {
-          switch (value.state) {
-            case OrderState::Rejected:
-              record.kind = HistoryKind::OrderRejected;
-              break;
-            case OrderState::Accepted:
-              record.kind = HistoryKind::OrderAccepted;
-              break;
-            case OrderState::PartiallyFilled:
-              record.kind = HistoryKind::OrderPartiallyFilled;
-              break;
-            case OrderState::Filled:
-              record.kind = HistoryKind::OrderFilled;
-              break;
-            case OrderState::Cancelled:
-              record.kind = HistoryKind::OrderCancelled;
-              break;
-          }
-          record.order_id = value.order.id.value;
-          record.price_nanos = value.order.price_nanos;
-          record.quantity_nanos = value.order.quantity_nanos;
-          record.remaining_nanos = value.order.remaining_nanos;
-          record.buy = value.order.side == Side::Buy;
-          record.message = value.reason;
-        } else if constexpr (std::is_same_v<T, Fill>) {
-          record.kind = HistoryKind::Fill;
-          record.order_id = value.order_id.value;
-          record.buy = value.side == Side::Buy;
-          record.trade_id = value.trade_id;
-          record.price_nanos = value.price_nanos;
-          record.quantity_nanos = value.quantity_nanos;
-          record.fee_nanos = value.fee_nanos;
-        } else if constexpr (std::is_same_v<T, BalanceUpdate>) {
-          record.kind = HistoryKind::Balance;
-          record.asset = value.asset;
-          record.total_nanos = value.total_nanos;
-          record.available_nanos = value.available_nanos;
-        }
-      },
-      event);
-  Record(std::move(record));
-  if (perf_) {
-    ++perf_->account_events;
-    const uint64_t elapsed = PerfNowNs() - begin;
-    perf_->account_event_ns += elapsed;
-    perf_->account_event_samples_ns.push_back(elapsed);
-  }
-}
-
-void Shard::RecordCommands(const std::vector<CommandResult>& commands) {
-  for (const CommandResult& command : commands) {
-    HistoryRecord record;
-    record.kind = command.kind == CommandResult::Kind::Submit
-                      ? HistoryKind::SubmitCommand
-                      : HistoryKind::CancelCommand;
-    record.order_id = command.order_id.value;
-    record.price_nanos = command.price_nanos;
-    record.quantity_nanos = command.quantity_nanos;
-    record.dispatched = command.dispatched;
-    record.buy = command.side == Side::Buy;
-    record.message = command.reason;
-    Record(std::move(record));
-  }
-}
-
-absl::StatusOr<uint64_t> Shard::RunStrategyDecision(
-    LiveHandlerPhases* phases) {
+absl::StatusOr<uint64_t> Shard::RunStrategyDecision(LiveHandlerPhases*,
+                                                    uint64_t source_bench_seq) {
   if (stop_requested_) return uint64_t{0};
+  if (!account_)
+    return absl::FailedPreconditionError("trading account missing");
+  return RunAccountDecision(source_bench_seq);
+}
+
+absl::StatusOr<uint64_t> Shard::RunAccountDecision(uint64_t source_bench_seq) {
+  if (!account_ || pending_account_requests_ != 0 ||
+      account_view_.pending_operation || !account_view_.ready) {
+    return uint64_t{0};
+  }
   const MonoTime now =
       input_.source == InputSource::Replay && last_input_time_
           ? MonoTime(std::chrono::microseconds(last_input_time_->at_us))
           : std::chrono::time_point_cast<std::chrono::microseconds>(
                 std::chrono::steady_clock::now());
-  return RunDecisionCycle(strategy_, executor_, market_.View(), now,
-                          [this](const std::vector<CommandResult>& commands) {
-                            RecordCommands(commands);
-                          }, phases);
+  ExecutionView view;
+  view.active_order_ids = account_view_.open_order_ids;
+  const AssetPair assets = ReadAssetViews();
+  view.base_available_nanos = assets.base.available_nanos;
+  view.quote_available_nanos = assets.quote.available_nanos;
+  view.base_budget_nanos = assets.base.budget_nanos;
+  view.quote_budget_nanos = assets.quote.budget_nanos;
+  view.maker_fee_rate_ppb = account_view_.maker_fee_rate_ppb;
+  view.price_per_tick_nanos = config_.market.price_per_tick_nanos;
+  view.price_increment_nanos = account_view_.rule.price_increment_nanos;
+  view.base_increment_nanos = account_view_.rule.base_increment_nanos;
+  view.min_base_amount_nanos = account_view_.rule.min_base_amount_nanos;
+  view.min_order_value_nanos = account_view_.rule.min_order_value_nanos;
+  const uint64_t strategy_begin = perf_ ? PerfNowNs() : 0;
+  auto decision = strategy_.Decide(market_.View(), view, now);
+  const uint64_t strategy_elapsed = perf_ ? PerfNowNs() - strategy_begin : 0;
+  if (!decision.ok()) return decision.status();
+  if (std::holds_alternative<NoAction>(*decision)) return uint64_t{0};
+  if (perf_) {
+    auto& samples = source_bench_seq == 0
+                        ? perf_->untagged_action_strategy_samples_ns
+                        : perf_->market_action_strategy_samples_ns;
+    samples.push_back(strategy_elapsed);
+    if (std::holds_alternative<SubmitOrders>(*decision)) {
+      auto& submit_samples =
+          source_bench_seq == 0
+              ? perf_->untagged_submit_strategy_samples_ns
+              : perf_->market_submit_strategy_samples_ns;
+      submit_samples.push_back(strategy_elapsed);
+    }
+  }
+  uint64_t sent = 0;
+  if (const auto* cancel = std::get_if<CancelOrders>(&*decision)) {
+    awaiting_cancel_ = true;
+    for (OrderId id : cancel->ids) {
+      ++pending_account_requests_;
+      const bool queued = account_->TryCancel(
+          config_.id, id, source_bench_seq,
+          [this](bool admitted, std::string reason) {
+            boost::asio::post(io_,
+                              [this, admitted, reason = std::move(reason)] {
+                                AccountRequestDone(admitted, reason);
+                              });
+          });
+      if (!queued) {
+        --pending_account_requests_;
+        strategy_.ResetRefresh();
+        last_error_ = "account cancel queue full";
+      } else {
+        ++sent;
+      }
+    }
+    if (sent == 0) awaiting_cancel_ = false;
+  } else {
+    const auto& submit = std::get<SubmitOrders>(*decision);
+    for (const LimitOrderRequest& request : submit.orders) {
+      ++pending_account_requests_;
+      const bool queued = account_->TrySubmit(
+          config_.id, config_.market.id, request, source_bench_seq,
+          [this](bool admitted, std::string reason) {
+            boost::asio::post(io_,
+                              [this, admitted, reason = std::move(reason)] {
+                                AccountRequestDone(admitted, reason);
+                              });
+          });
+      if (!queued) {
+        --pending_account_requests_;
+        strategy_.ResetRefresh();
+        last_error_ = "account submit queue full";
+      } else {
+        ++sent;
+      }
+    }
+  }
+  return sent;
+}
+
+void Shard::AccountRequestDone(bool admitted, std::string reason) {
+  if (pending_account_requests_ > 0) --pending_account_requests_;
+  if (!admitted) {
+    strategy_.ResetRefresh();
+    last_error_ = std::move(reason);
+  }
+  if (pending_account_requests_ == 0 && awaiting_cancel_ &&
+      !account_view_.pending_operation &&
+      account_view_.open_order_ids.empty()) {
+    awaiting_cancel_ = false;
+    auto result = RunStrategyDecision();
+    if (!result.ok()) StopFromError(result.status());
+  }
+  if (stopped_on_thread_) StopAccountOrders();
+  MaybeCompleteReplay();
+}
+
+void Shard::PostAccountView(AccountView view) {
+  boost::asio::post(io_, [this, view = std::move(view)]() mutable {
+    OnAccountView(std::move(view));
+  });
+}
+
+void Shard::OnAccountView(AccountView view) {
+  if (view.revision < account_view_.revision) return;
+  account_view_ = std::move(view);
+  if (stopped_on_thread_) {
+    StopAccountOrders();
+    MaybeCompleteReplay();
+    return;
+  }
+  if (!stop_requested_ && awaiting_cancel_ && pending_account_requests_ == 0 &&
+      !account_view_.pending_operation &&
+      account_view_.open_order_ids.empty()) {
+    awaiting_cancel_ = false;
+    const uint64_t decision_begin = perf_ ? PerfNowNs() : 0;
+    auto result = RunStrategyDecision();
+    if (perf_) {
+      const uint64_t elapsed = PerfNowNs() - decision_begin;
+      perf_->decision_ns += elapsed;
+      perf_->decision_samples_ns.push_back(elapsed);
+      if (result.ok() && *result != 0)
+        perf_->account_view_action_decision_samples_ns.push_back(elapsed);
+    }
+    if (!result.ok()) StopFromError(result.status());
+  }
+  if (awaiting_cancel_ && pending_account_requests_ == 0 &&
+      !account_view_.rejected_cancel_ids.empty()) {
+    awaiting_cancel_ = false;
+  }
+  MaybeCompleteReplay();
 }
 
 void Shard::StopFromError(absl::Status error) {
+  LOG_ERROR(Logger(), "shard stopped shard={} reason={}", config_.id.value,
+            error.ToString());
   last_error_ = std::string(error.message());
   fatal_status_ = std::move(error);
   stop_requested_ = true;
@@ -184,38 +239,25 @@ void Shard::StopFromError(absl::Status error) {
 }
 
 void Shard::OnMarket(const MarketNotice& notice) {
-  LiveHandlerPhases* phases = perf_ && perf_->bench_ack_fd >= 0
-                                  ? &perf_->live_handler_phases
-                                  : nullptr;
+  LOG_TRACE_L1(Logger(), "market shard={} bench_seq={} kind={}",
+               config_.id.value, notice.source_bench_seq,
+               static_cast<int>(notice.kind));
+  LiveHandlerPhases* phases =
+      perf_ && perf_->bench_ack_fd >= 0 ? &perf_->live_handler_phases : nullptr;
   BenchPhaseTimer shard_timer(phases ? &phases->shard_total_ns : nullptr);
   ++market_notices_;
   if (notice.kind == MarketNotice::Kind::BookUnavailable) {
     last_error_ = market_.LastError();
   }
   if (stop_requested_) return;
-  // Only paper trading matches locally; live fills arrive from the exchange.
-  if (config_.executor.mode == TradingMode::Paper) {
-    const uint64_t match_begin = perf_ ? PerfNowNs() : 0;
-    auto status = [&] {
-      BenchPhaseTimer timer(phases ? &phases->paper_ns : nullptr);
-      return exchange_.OnMarket(notice, market_.View());
-    }();
-    if (perf_) {
-      const uint64_t elapsed = PerfNowNs() - match_begin;
-      perf_->paper_match_ns += elapsed;
-      perf_->paper_match_samples_ns.push_back(elapsed);
-    }
-    if (!status.ok()) {
-      StopFromError(status);
-      return;
-    }
-  }
   const uint64_t decision_begin = perf_ ? PerfNowNs() : 0;
-  auto result = RunStrategyDecision(phases);
+  auto result = RunStrategyDecision(phases, notice.source_bench_seq);
   if (perf_) {
     const uint64_t elapsed = PerfNowNs() - decision_begin;
     perf_->decision_ns += elapsed;
     perf_->decision_samples_ns.push_back(elapsed);
+    if (result.ok() && *result != 0)
+      perf_->market_action_decision_samples_ns.push_back(elapsed);
   }
   if (!result.ok()) StopFromError(result.status());
 }
@@ -229,6 +271,8 @@ void Shard::OnStrategyTimer() {
     const uint64_t elapsed = PerfNowNs() - decision_begin;
     perf_->decision_ns += elapsed;
     perf_->decision_samples_ns.push_back(elapsed);
+    if (result.ok() && *result != 0)
+      perf_->timer_action_decision_samples_ns.push_back(elapsed);
   }
   if (!result.ok()) StopFromError(result.status());
 }
@@ -267,7 +311,6 @@ void Shard::PostReplay(ReplayRecord record,
     last_input_time_ = record.time;
     const uint64_t input_begin = perf_ ? PerfNowNs() : 0;
     if (perf_) {
-      current_input_origin_ns_ = input_begin;
       if (record.perf_post_ns) {
         perf_->post_to_shard_samples_ns.push_back(input_begin -
                                                   record.perf_post_ns);
@@ -288,25 +331,31 @@ void Shard::PostReplay(ReplayRecord record,
       perf_->input_dispatch_ns += elapsed;
       perf_->input_handler_samples_ns.push_back(elapsed);
     }
-    // Account events generated by this input are queued before its replay
-    // completion. This keeps deterministic replay while preserving the
-    // independent private-event delivery path used by live execution.
-    boost::asio::post(
-        io_, [this, handler_done_ns, done = std::move(done)]() mutable {
-          if (perf_) {
-            perf_->handler_to_completion_samples_ns.push_back(PerfNowNs() -
-                                                              handler_done_ns);
-            current_input_origin_ns_ = 0;
-          }
-          if (fatal_status_) {
-            done(*fatal_status_);
-          } else if (stop_requested_) {
-            done(absl::CancelledError("shard stopped"));
-          } else {
-            done(absl::OkStatus());
-          }
-        });
+    auto complete = [this, handler_done_ns, done = std::move(done)]() mutable {
+      if (perf_) {
+        perf_->handler_to_completion_samples_ns.push_back(PerfNowNs() -
+                                                          handler_done_ns);
+      }
+      if (fatal_status_) {
+        done(*fatal_status_);
+      } else if (stop_requested_) {
+        done(absl::CancelledError("shard stopped"));
+      } else {
+        done(absl::OkStatus());
+      }
+    };
+    replay_done_ = std::move(complete);
+    MaybeCompleteReplay();
   });
+}
+
+void Shard::MaybeCompleteReplay() {
+  if (!replay_done_ || pending_account_requests_ != 0) {
+    return;
+  }
+  auto done = std::move(replay_done_);
+  replay_done_ = {};
+  boost::asio::post(io_, std::move(done));
 }
 
 ShardStatus Shard::CaptureStatus() const {
@@ -327,12 +376,12 @@ ShardStatus Shard::CaptureStatus() const {
   status.market_notices = market_notices_;
   status.strategy_timer_ticks = strategy_timer_ticks_;
   status.config_version = config_version_;
-  status.active_orders = exchange_.ActiveOrders().size();
-  status.base_total_nanos = exchange_.Total(config_.market.base_asset);
-  status.base_available_nanos = exchange_.Available(config_.market.base_asset);
-  status.quote_total_nanos = exchange_.Total(config_.market.quote_asset);
-  status.quote_available_nanos =
-      exchange_.Available(config_.market.quote_asset);
+  status.active_orders = account_view_.open_order_ids.size();
+  const AssetPair assets = ReadAssetViews();
+  status.base_total_nanos = assets.base.total_nanos;
+  status.base_available_nanos = assets.base.available_nanos;
+  status.quote_total_nanos = assets.quote.total_nanos;
+  status.quote_available_nanos = assets.quote.available_nanos;
   status.last_error = last_error_.empty() ? market_.LastError() : last_error_;
   return status;
 }
@@ -388,21 +437,13 @@ void Shard::PostStrategyUpdate(
       strategy_timer_.cancel();
       ScheduleStrategyTimer();
     }
-    auto cancelled = executor_.CancelAll();
-    if (!cancelled.ok()) {
-      StopFromError(cancelled.status());
-      done(cancelled.status());
-      return;
-    }
-    const uint64_t cancelled_count = cancelled->size();
-    RecordCommands(*cancelled);
     auto result = RunStrategyDecision();
     if (!result.ok()) {
       StopFromError(result.status());
       done(result.status());
       return;
     }
-    done(StrategyUpdateResult{config_version_, cancelled_count + *result});
+    done(StrategyUpdateResult{config_version_, *result});
   });
 }
 
@@ -411,13 +452,52 @@ void Shard::StopOnThread() {
   stopped_on_thread_ = true;
   market_.Stop();
   strategy_timer_.cancel();
-  auto cancelled = executor_.CancelAll();
-  if (cancelled.ok()) {
-    RecordCommands(*cancelled);
-  } else {
-    last_error_ = std::string(cancelled.status().message());
+  stop_timer_.expires_after(std::chrono::seconds(30));
+  stop_timer_.async_wait([this](const boost::system::error_code& error) {
+    if (error) return;
+    if (!account_view_.open_order_ids.empty()) {
+      last_error_ = "shutdown left unconfirmed account orders";
+    }
+    FinishStopOnThread();
+  });
+  StopAccountOrders();
+}
+
+void Shard::StopAccountOrders() {
+  if (!stopped_on_thread_ || !account_) return;
+  if (account_view_.open_order_ids.empty() && pending_account_requests_ == 0) {
+    FinishStopOnThread();
+    return;
   }
+  if (account_view_.pending_operation) return;
+  for (OrderId id : account_view_.open_order_ids) {
+    if (!stop_cancel_attempted_.insert(id.value).second) continue;
+    ++pending_account_requests_;
+    if (!account_->TryCancel(
+            config_.id, id, [this, id](bool admitted, std::string reason) {
+              boost::asio::post(
+                  io_, [this, id, admitted, reason = std::move(reason)] {
+                    if (pending_account_requests_ > 0)
+                      --pending_account_requests_;
+                    if (!admitted) {
+                      stop_cancel_attempted_.erase(id.value);
+                      last_error_ = std::move(reason);
+                      return;
+                    }
+                    StopAccountOrders();
+                  });
+            })) {
+      --pending_account_requests_;
+      stop_cancel_attempted_.erase(id.value);
+      last_error_ = "account shutdown cancel queue full";
+    }
+  }
+}
+
+void Shard::FinishStopOnThread() {
+  stop_timer_.cancel();
   work_guard_.reset();
+  CompleteStop();
 }
 
 void Shard::RequestStop() {
@@ -426,11 +506,32 @@ void Shard::RequestStop() {
     boost::asio::post(io_, [this] { StopOnThread(); });
   } else {
     work_guard_.reset();
+    CompleteStop();
   }
 }
 
-void Shard::Join() {
-  worker_exited_ = true;
+void Shard::PostStopped(std::function<void()> done) {
+  {
+    std::lock_guard lock(stop_completion_mutex_);
+    if (!stop_complete_) {
+      stop_waiters_.push_back(std::move(done));
+      return;
+    }
+  }
+  done();
 }
+
+void Shard::CompleteStop() {
+  std::vector<std::function<void()>> waiters;
+  {
+    std::lock_guard lock(stop_completion_mutex_);
+    if (stop_complete_) return;
+    stop_complete_ = true;
+    waiters.swap(stop_waiters_);
+  }
+  for (auto& done : waiters) done();
+}
+
+void Shard::Join() { worker_exited_ = true; }
 
 }  // namespace hquant::v1

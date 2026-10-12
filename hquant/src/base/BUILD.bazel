@@ -22,6 +22,16 @@ cc_library(
 )
 
 cc_library(
+    name = "log",
+    srcs = ["log.cc"],
+    hdrs = ["log.h"],
+    strip_include_prefix = "/hquant/src",
+    include_prefix = "hquant",
+    deps = ["@quill//:quill"],
+    visibility = ["//hquant:__subpackages__"],
+)
+
+cc_library(
     name = "net",
     srcs = ["net.cc"],
     hdrs = ["net.h"],

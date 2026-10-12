@@ -17,7 +17,7 @@ Build and test:
   build [targets...]      Build targets (default //...)
   release [targets...]    Build with --config=release
   test [targets...]       Run tests (default //...)
-  ci                      Build and test every target
+  ci                      Build, generate compile_commands.json, and test every target
   asan | tsan             Run the sanitizer smoke test
   clean                   Remove Bazel build outputs
 
@@ -108,6 +108,12 @@ run_format() {
     echo "$([[ "${mode}" == write ]] && echo Formatted || echo Checked) $# C++ files."
 }
 
+generate_compdb() {
+    require_bazel
+    require_python
+    BAZEL_BIN="${BAZEL_BIN}" "${PYTHON_BIN}" tools/compdb.py "$@"
+}
+
 case "${1:-help}" in
     build)
         require_bazel
@@ -127,6 +133,7 @@ case "${1:-help}" in
     ci)
         require_bazel
         "${BAZEL_BIN}" build //...
+        generate_compdb
         "${BAZEL_BIN}" test //...
         ;;
     asan|tsan)
@@ -160,10 +167,8 @@ case "${1:-help}" in
         run_format write "${mapfile_files[@]}"
         ;;
     compdb)
-        require_bazel
-        require_python
         shift
-        BAZEL_BIN="${BAZEL_BIN}" "${PYTHON_BIN}" tools/compdb.py "$@"
+        generate_compdb "$@"
         ;;
     doctor)
         echo "Project: ${PROJECT_DIR}"

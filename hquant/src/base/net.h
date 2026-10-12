@@ -2,6 +2,7 @@
 
 #include <chrono>
 #include <cstdint>
+#include <functional>
 #include <memory>
 #include <string>
 #include <string_view>
@@ -101,6 +102,11 @@ struct HttpRequest {
   std::vector<std::pair<std::string, std::string>> headers;
   std::string body;
   std::chrono::steady_clock::time_point deadline;
+  // Called immediately before the first socket write attempt.
+  std::function<void()> on_write_start;
+  // Optional transport timing hook. Called once an HTTP write finishes.
+  std::function<void(std::chrono::steady_clock::time_point,
+                     std::chrono::steady_clock::time_point)> on_write;
 };
 
 struct HttpResponse {

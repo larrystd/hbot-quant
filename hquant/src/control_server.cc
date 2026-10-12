@@ -8,6 +8,7 @@
 #include <limits>
 #include <poll.h>
 #include <sys/socket.h>
+#include <sys/stat.h>
 #include <sys/un.h>
 #include <unistd.h>
 
@@ -55,6 +56,20 @@ std::string Success(uint64_t request_id) {
   return "{\"request_id\":" + std::to_string(request_id) + ",\"ok\":true";
 }
 
+std::string_view AccountActionName(uint64_t value) {
+  switch (value) {
+    case static_cast<uint64_t>(AccountAction::PauseNewOrders):
+      return "pause_new_orders";
+    case static_cast<uint64_t>(AccountAction::ResumeTrading):
+      return "resume_trading";
+    case static_cast<uint64_t>(AccountAction::SyncAccountState):
+      return "sync_account_state";
+    case static_cast<uint64_t>(AccountAction::CancelAll):
+      return "cancel_all";
+  }
+  return "unknown";
+}
+
 std::string JsonUint(uint64_t value) { return JsonString(std::to_string(value)); }
 
 std::string JsonLevels(const std::vector<BookLevel>& levels) {
@@ -63,6 +78,59 @@ std::string JsonLevels(const std::vector<BookLevel>& levels) {
     if (result.size() != 1) result += ',';
     result += '[' + std::to_string(level.price_ticks) + ',' +
               std::to_string(level.quantity_lots) + ']';
+  }
+  return result + ']';
+}
+
+std::string JsonAccounts(const std::vector<AccountStatus>& accounts) {
+  std::string result = "[";
+  for (const AccountStatus& account : accounts) {
+    if (result.size() != 1) result += ',';
+    result += "{\"id\":" + JsonString(account.id) +
+              ",\"revision\":" + JsonUint(account.revision) +
+              ",\"ready\":" + (account.ready ? "true" : "false") +
+              ",\"private_connected\":" +
+              (account.private_connected ? "true" : "false") +
+              ",\"syncing\":" + (account.syncing ? "true" : "false") +
+              ",\"manual_paused\":" +
+              (account.manual_paused ? "true" : "false") +
+              ",\"pending_journal\":" +
+              std::to_string(account.pending_journal) +
+              ",\"account_queue_peak\":" +
+              std::to_string(account.account_queue_peak) +
+              ",\"account_queue_rejections\":" +
+              std::to_string(account.account_queue_rejections) +
+              ",\"journal_pending_peak\":" +
+              std::to_string(account.journal_pending_peak) +
+              ",\"journal_rejections\":" +
+              std::to_string(account.journal_rejections) +
+              ",\"trade_queue\":{\"queued\":" +
+              std::to_string(account.trade_queue.queued) +
+              ",\"peak\":" +
+              std::to_string(account.trade_queue.peak) +
+              ",\"rejected\":" +
+              std::to_string(account.trade_queue.rejected) + "}" +
+              ",\"queued\":" + std::to_string(account.queued) +
+              ",\"open_orders\":" +
+              std::to_string(account.open_orders) +
+              ",\"unknown_orders\":" +
+              std::to_string(account.unknown_orders) +
+              ",\"error\":" + JsonString(account.error) +
+              ",\"balances\":{";
+    bool first = true;
+    for (const auto& [asset, balance] : account.balances) {
+      if (!first) result += ',';
+      first = false;
+      result += JsonString(asset) + ":{\"total_nanos\":" +
+                JsonUint(balance.total_nanos) +
+                ",\"free_nanos\":" + JsonUint(balance.free_nanos) +
+                ",\"locked_nanos\":" + JsonUint(balance.locked_nanos) +
+                ",\"available_nanos\":" +
+                JsonUint(account.available_nanos.at(asset)) +
+                ",\"reserved_nanos\":" +
+                JsonUint(account.reserved_nanos.at(asset)) + '}';
+    }
+    result += "}}";
   }
   return result + ']';
 }
@@ -86,6 +154,13 @@ const char* HistoryKindName(HistoryKind kind) {
     case HistoryKind::OrderCancelled: return "order_cancelled";
     case HistoryKind::Fill: return "fill";
     case HistoryKind::Balance: return "balance";
+    case HistoryKind::SubmitUnknown: return "submit_unknown";
+    case HistoryKind::CancelUnknown: return "cancel_unknown";
+    case HistoryKind::CancelRejected: return "cancel_rejected";
+    case HistoryKind::LocalRejected: return "local_rejected";
+    case HistoryKind::PrivateReportApplied: return "private_report_applied";
+    case HistoryKind::SubmitWriting: return "submit_writing";
+    case HistoryKind::CancelWriting: return "cancel_writing";
   }
   return "unknown";
 }
@@ -131,15 +206,34 @@ absl::Status ControlServer::Start() {
   if (socket_path_.size() >= sizeof(address.sun_path)) {
     return absl::InvalidArgumentError("control socket path too long");
   }
-  if (std::filesystem::exists(socket_path_)) {
-    return absl::AlreadyExistsError("control socket path already exists");
-  }
   std::memcpy(address.sun_path, socket_path_.c_str(), socket_path_.size() + 1);
+  struct stat existing{};
+  if (::lstat(socket_path_.c_str(), &existing) == 0) {
+    if (!S_ISSOCK(existing.st_mode)) {
+      return absl::AlreadyExistsError("control socket path is occupied");
+    }
+    const int probe = ::socket(AF_UNIX, SOCK_STREAM, 0);
+    if (probe < 0) return absl::InternalError("probe control socket failed");
+    const int connected =
+        ::connect(probe, reinterpret_cast<sockaddr*>(&address),
+                  sizeof(address));
+    const int probe_error = errno;
+    ::close(probe);
+    if (connected == 0 || probe_error != ECONNREFUSED) {
+      return absl::AlreadyExistsError("control socket is in use");
+    }
+    if (::unlink(socket_path_.c_str()) != 0) {
+      return absl::InternalError("remove stale control socket failed");
+    }
+  } else if (errno != ENOENT) {
+    return absl::InternalError("inspect control socket failed");
+  }
   listen_fd_ = ::socket(AF_UNIX, SOCK_STREAM, 0);
   if (listen_fd_ < 0) return absl::InternalError("create control socket failed");
   const bool bound = ::bind(listen_fd_, reinterpret_cast<sockaddr*>(&address),
                             sizeof(address)) == 0;
-  if (!bound || ::listen(listen_fd_, 8) != 0) {
+  if (!bound || ::chmod(socket_path_.c_str(), 0600) != 0 ||
+      ::listen(listen_fd_, 8) != 0) {
     const std::string error = std::strerror(errno);
     ::close(listen_fd_);
     listen_fd_ = -1;
@@ -254,7 +348,9 @@ std::string ControlServer::HandleLine(std::string_view line) {
           ",\"quote_available_nanos\":" + JsonUint(shard.quote_available_nanos) +
           ",\"last_error\":" + JsonString(shard.last_error) + "}";
     }
-    return response + "],\"history_health\":" +
+    return response + "],\"accounts\":" +
+           JsonAccounts(handlers_.account_status()) +
+           ",\"history_health\":" +
            JsonHealth(handlers_.history_health()) + "}";
   }
   if (op == "history") {
@@ -339,6 +435,58 @@ std::string ControlServer::HandleLine(std::string_view line) {
     return Success(request_id) +
            ",\"config_version\":" + std::to_string(result->config_version) +
            ",\"actions\":" + std::to_string(result->actions) + "}";
+  }
+  if (op == "pause_new_orders" || op == "resume_trading" ||
+      op == "sync_account_state" || op == "cancel_all") {
+    std::string_view account_id, operator_id, reason;
+    if (request["account_id"].get(account_id) || account_id.empty() ||
+        request["operator"].get(operator_id) || operator_id.empty() ||
+        request["reason"].get(reason) || reason.empty() ||
+        reason.size() > 256 || operator_id.size() > 64) {
+      return Error(request_id,
+                   "account_id, operator and reason are required");
+    }
+    const AccountAction action =
+        op == "pause_new_orders" ? AccountAction::PauseNewOrders :
+        op == "resume_trading" ? AccountAction::ResumeTrading :
+        op == "sync_account_state" ? AccountAction::SyncAccountState :
+                                     AccountAction::CancelAll;
+    auto result = handlers_.account_action(
+        std::string(account_id), action, std::string(operator_id),
+        std::string(reason));
+    if (!result.ok()) return Error(request_id, result.status().message());
+    return Success(request_id) +
+           ",\"accepted\":true,\"cancel_requests_enqueued\":" +
+           std::to_string(*result) + "}";
+  }
+  if (op == "account_controls") {
+    std::string_view account_id;
+    uint64_t cursor = 0, limit = 50;
+    if (request["account_id"].get(account_id) || account_id.empty() ||
+        (!request["cursor"].error() && request["cursor"].get(cursor)) ||
+        (!request["limit"].error() && request["limit"].get(limit)) ||
+        limit == 0 || limit > 100) {
+      return Error(request_id, "invalid account audit query");
+    }
+    auto page = handlers_.account_controls(
+        std::string(account_id), static_cast<uint32_t>(limit), cursor);
+    if (!page.ok()) return Error(request_id, page.status().message());
+    auto response = Success(request_id) +
+                    ",\"next_cursor\":" +
+                    std::to_string(page->next_cursor) +
+                    ",\"records\":[";
+    for (const JournalEntry& entry : page->records) {
+      if (&entry != &page->records.front()) response += ',';
+      response += "{\"sequence\":" + std::to_string(entry.sequence) +
+                  ",\"action\":" + std::to_string(entry.result) +
+                  ",\"action_name\":" +
+                  JsonString(AccountActionName(entry.result)) +
+                  ",\"operator\":" + JsonString(entry.asset) +
+                  ",\"reason\":" + JsonString(entry.message) +
+                  ",\"at_ms\":" +
+                  std::to_string(entry.transaction_ms) + "}";
+    }
+    return response + "]}";
   }
   if (op == "stop") {
     handlers_.stop();

@@ -1,8 +1,28 @@
-schema_version: 1
+schema_version: 2
 input:
   source: binance_public
+accounts:
+  - id: simulated
+    mode: pressure_sim
+    venue: binance_spot
+    trading_rest:
+      host: 127.0.0.1
+      port: 19001
+      tls: false
+    private_ws:
+      host: 127.0.0.1
+      port: 19002
+      tls: false
+    initial_balances:
+      BTC: "0.02"
+      USDT: "2000"
+    hard_limits:
+      BTC: "0.02"
+      USDT: "2000"
+    maker_fee_rate: "0.001"
 shards:
   - id: 0
+    account_id: simulated
     market:
       symbol: BTCUSDT
       base_asset: BTC
@@ -21,13 +41,3 @@ shards:
       bid_spread: "0.001"
       ask_spread: "0.001"
       refresh_ms: 15000
-    executor:
-      mode: paper
-      account: simulated
-      initial_balances:
-        BTC: "0.02"
-        USDT: "2000"
-      hard_limits:
-        BTC: "0.02"
-        USDT: "2000"
-      maker_fee_rate: "0.001"

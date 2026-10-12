@@ -67,6 +67,7 @@ class BinanceFeed {
   boost::asio::steady_timer retry_timer_;
   std::chrono::steady_clock::duration retry_after_{};
   uint64_t epoch_ = 0;
+  uint64_t snapshot_requests_ = 0;
   bool stopped_ = false;
 };
 

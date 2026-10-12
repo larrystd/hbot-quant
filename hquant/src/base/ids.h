@@ -23,6 +23,16 @@ struct OrderId {
   bool operator==(const OrderId&) const = default;
 };
 
+struct ClientOrderId {
+  std::string value;
+  bool operator==(const ClientOrderId&) const = default;
+};
+
+struct ExchangeOrderId {
+  uint64_t value = 0;
+  bool operator==(const ExchangeOrderId&) const = default;
+};
+
 using MonoTime = std::chrono::time_point<std::chrono::steady_clock,
                                          std::chrono::microseconds>;
 

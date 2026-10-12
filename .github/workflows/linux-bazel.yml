@@ -27,6 +27,14 @@ jobs:
           bazel version
       - name: Build every target
         run: bazel build --jobs=2 //...
+      - name: Generate compilation database
+        run: ./op.sh compdb
+      - name: Upload compilation database
+        uses: actions/upload-artifact@v7.0.2
+        with:
+          name: compile_commands-linux-x86_64
+          path: compile_commands.json
+          if-no-files-found: error
       - name: Test every target
         run: bazel test --jobs=2 //...
 

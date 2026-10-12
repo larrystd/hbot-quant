@@ -57,6 +57,17 @@ std::string StreamTarget(std::string symbol) {
   return "/stream?streams=" + symbol + "@depth/" + symbol + "@trade";
 }
 
+uint64_t SourceBenchSeq(std::string_view message) {
+  constexpr std::string_view marker = "\"bench_seq\":";
+  const size_t position = message.find(marker);
+  if (position == std::string_view::npos) return 0;
+  const char* first = message.data() + position + marker.size();
+  uint64_t sequence = 0;
+  const auto [last, error] =
+      std::from_chars(first, message.data() + message.size(), sequence);
+  return error == std::errc{} && last != first ? sequence : 0;
+}
+
 }  // namespace
 
 BinanceFeed::BinanceFeed(boost::asio::io_context& io,
@@ -195,13 +206,9 @@ void BinanceFeed::RecordBenchHandlerPhases(uint64_t parsed_ns,
                                            uint64_t done_ns) {
   if (!perf_ || perf_->bench_ack_fd < 0) return;
   const auto& phases = perf_->live_handler_phases;
-  const uint64_t measured_shard =
-      phases.paper_ns + phases.account_view_ns + phases.strategy_ns +
-      phases.executor_ns + phases.command_history_ns;
   if (done_ns < parsed_ns ||
       phases.market_total_ns > done_ns - parsed_ns ||
-      phases.shard_total_ns > phases.market_total_ns ||
-      measured_shard > phases.shard_total_ns) {
+      phases.shard_total_ns > phases.market_total_ns) {
     ++perf_->live_phase_invalid;
     return;
   }
@@ -209,13 +216,7 @@ void BinanceFeed::RecordBenchHandlerPhases(uint64_t parsed_ns,
       done_ns - parsed_ns - phases.market_total_ns);
   perf_->live_market_samples_ns.push_back(
       phases.market_total_ns - phases.shard_total_ns);
-  perf_->live_paper_samples_ns.push_back(phases.paper_ns);
-  perf_->live_account_view_samples_ns.push_back(phases.account_view_ns);
-  perf_->live_strategy_samples_ns.push_back(phases.strategy_ns);
-  perf_->live_executor_samples_ns.push_back(phases.executor_ns);
-  perf_->live_command_history_samples_ns.push_back(phases.command_history_ns);
-  perf_->live_shard_other_samples_ns.push_back(
-      phases.shard_total_ns - measured_shard);
+  perf_->live_shard_other_samples_ns.push_back(phases.shard_total_ns);
 }
 
 absl::StatusOr<uint64_t> BinanceFeed::PriceTicks(std::string_view text) const {
@@ -377,6 +378,7 @@ boost::asio::awaitable<absl::Status> BinanceFeed::RunCycle() {
     if (*kind == "trade" || *kind == "aggTrade") {
       auto trade = ParseTrade(*root);
       if (!trade.ok()) co_return Fault(trade.status());
+      trade->source_bench_seq = SourceBenchSeq(*message);
       const uint64_t parsed_ns = perf_ ? ProbeNowNs() : 0;
       if (perf_ && perf_->bench_ack_fd >= 0) perf_->live_handler_phases = {};
       on_input_(*trade, Now());
@@ -393,6 +395,7 @@ boost::asio::awaitable<absl::Status> BinanceFeed::RunCycle() {
       co_return Fault(Invalid("unexpected WebSocket event"));
     auto diff = ParseDiff(*root);
     if (!diff.ok()) co_return Fault(diff.status());
+    diff->source_bench_seq = SourceBenchSeq(*message);
     first_update = diff->first_sequence;
     const uint64_t parsed_ns = perf_ ? ProbeNowNs() : 0;
     if (perf_ && perf_->bench_ack_fd >= 0) perf_->live_handler_phases = {};
@@ -411,12 +414,18 @@ boost::asio::awaitable<absl::Status> BinanceFeed::RunCycle() {
 
   bool accepted_snapshot = false;
   for (int attempt = 0; attempt < 3 && !stopped_; ++attempt) {
+    if (input_.max_snapshot_requests_per_run != 0 &&
+        snapshot_requests_ >= input_.max_snapshot_requests_per_run) {
+      co_return Fault(absl::ResourceExhaustedError(
+          "market snapshot request cap reached"));
+    }
     ::hquant::v1::HttpRequest request;
     request.method = "GET";
-    request.target =
-        "/api/v3/depth?symbol=" + market_.id.symbol + "&limit=1000";
+    request.target = "/api/v3/depth?symbol=" + market_.id.symbol +
+                     "&limit=" + std::to_string(input_.depth_snapshot_limit);
     request.deadline =
         std::chrono::steady_clock::now() + std::chrono::seconds(5);
+    ++snapshot_requests_;
     auto response = co_await http_.Send(std::move(request));
     if (!response.ok()) co_return Fault(response.status());
     if (response->status == 429 || response->status == 418) {
@@ -460,6 +469,7 @@ boost::asio::awaitable<absl::Status> BinanceFeed::RunCycle() {
     if (*kind == "trade" || *kind == "aggTrade") {
       auto trade = ParseTrade(*root);
       if (!trade.ok()) co_return Fault(trade.status());
+      trade->source_bench_seq = SourceBenchSeq(*message);
       const uint64_t parsed_ns = perf_ ? ProbeNowNs() : 0;
       if (perf_ && perf_->bench_ack_fd >= 0) perf_->live_handler_phases = {};
       on_input_(*trade, Now());
@@ -473,6 +483,7 @@ boost::asio::awaitable<absl::Status> BinanceFeed::RunCycle() {
     } else if (*kind == "depthUpdate") {
       auto diff = ParseDiff(*root);
       if (!diff.ok()) co_return Fault(diff.status());
+      diff->source_bench_seq = SourceBenchSeq(*message);
       const uint64_t parsed_ns = perf_ ? ProbeNowNs() : 0;
       if (perf_ && perf_->bench_ack_fd >= 0) perf_->live_handler_phases = {};
       const bool resync = on_input_(*diff, Now());
@@ -498,6 +509,8 @@ boost::asio::awaitable<void> BinanceFeed::Run() {
     auto result = co_await RunCycle();
     if (stopped_) break;
     if (!result.ok()) on_error_(std::string(result.message()));
+    if (input_.max_snapshot_requests_per_run != 0 &&
+        snapshot_requests_ >= input_.max_snapshot_requests_per_run) break;
     retry_timer_.expires_after(
         std::max<std::chrono::steady_clock::duration>(delay, retry_after_));
     boost::system::error_code error;

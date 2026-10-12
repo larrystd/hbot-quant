@@ -45,6 +45,31 @@ CREATE TABLE IF NOT EXISTS history_gaps (
   last_seq TEXT NOT NULL,
   reason TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS account_events (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  run_id TEXT NOT NULL,
+  account_id TEXT NOT NULL,
+  account_sequence INTEGER NOT NULL,
+  shard INTEGER NOT NULL,
+  symbol TEXT NOT NULL,
+  at_us INTEGER NOT NULL,
+  at_mono_ns TEXT NOT NULL DEFAULT '0',
+  kind INTEGER NOT NULL,
+  client_order_id TEXT NOT NULL,
+  exchange_order_id TEXT NOT NULL,
+  trade_id TEXT NOT NULL,
+  source_bench_seq TEXT NOT NULL,
+  price_nanos TEXT NOT NULL,
+  quantity_nanos TEXT NOT NULL,
+  remaining_nanos TEXT NOT NULL,
+  fee_nanos TEXT NOT NULL,
+  total_nanos TEXT NOT NULL,
+  available_nanos TEXT NOT NULL,
+  locked_nanos TEXT NOT NULL,
+  asset TEXT NOT NULL,
+  message TEXT NOT NULL,
+  UNIQUE(run_id, account_id, account_sequence)
+);
 )sql";
 
 constexpr const char* kInsertRecord = R"sql(
@@ -58,6 +83,15 @@ VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 constexpr const char* kInsertGap = R"sql(
 INSERT INTO history_gaps(run_id, shard, first_seq, last_seq, reason)
 VALUES (?, ?, ?, ?, 'queue_full')
+)sql";
+
+constexpr const char* kInsertAccount = R"sql(
+INSERT INTO account_events
+(run_id, account_id, account_sequence, shard, symbol, at_us, at_mono_ns, kind,
+ client_order_id, exchange_order_id, trade_id, source_bench_seq,
+ price_nanos, quantity_nanos, remaining_nanos, fee_nanos, total_nanos,
+ available_nanos, locked_nanos, asset, message)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 )sql";
 
 absl::Status SqliteError(sqlite3* db, const char* context) {
@@ -107,6 +141,26 @@ absl::Status MigrateHistoryColumns(sqlite3* db) {
   return Exec(db,
               "ALTER TABLE history_records ADD COLUMN "
               "remaining_nanos TEXT NOT NULL DEFAULT '0'");
+}
+
+absl::Status MigrateAccountColumns(sqlite3* db) {
+  sqlite3_stmt* statement = nullptr;
+  if (sqlite3_prepare_v2(db, "PRAGMA table_info(account_events)", -1,
+                         &statement, nullptr) != SQLITE_OK) {
+    return SqliteError(db, "inspect account schema");
+  }
+  bool monotonic = false;
+  int code = SQLITE_OK;
+  while ((code = sqlite3_step(statement)) == SQLITE_ROW) {
+    const unsigned char* name = sqlite3_column_text(statement, 1);
+    if (name && std::string_view(reinterpret_cast<const char*>(name)) ==
+                    "at_mono_ns") monotonic = true;
+  }
+  sqlite3_finalize(statement);
+  if (code != SQLITE_DONE) return SqliteError(db, "inspect account schema");
+  if (monotonic) return absl::OkStatus();
+  return Exec(db, "ALTER TABLE account_events ADD COLUMN "
+                  "at_mono_ns TEXT NOT NULL DEFAULT '0'");
 }
 
 void BindText(sqlite3_stmt* statement, int index, const std::string& text) {
@@ -177,6 +231,11 @@ absl::Status SqliteHistory::Start() {
     writer_db_ = nullptr;
     return status;
   }
+  if (auto status = MigrateAccountColumns(writer_db_); !status.ok()) {
+    sqlite3_close(writer_db_);
+    writer_db_ = nullptr;
+    return status;
+  }
   // The UNIQUE constraint already creates the same index. Older databases
   // may still have the redundant explicit copy.
   if (auto status =
@@ -224,13 +283,14 @@ bool SqliteHistory::TryPush(HistoryRecord record) {
   if (!started_ || stopping_ || !error_.empty()) return false;
   if (wait_for_space_) {
     space_cv_.wait(lock, [this] {
-      return writer_queue_.size() < queue_capacity_ || stopping_ ||
+      return writer_queue_.size() + account_queue_.size() < queue_capacity_ || stopping_ ||
              !error_.empty();
     });
     if (stopping_ || !error_.empty()) return false;
   }
-  const bool wake_writer = writer_queue_.empty() && gaps_.empty();
-  if (writer_queue_.size() >= queue_capacity_) {
+  const bool wake_writer = writer_queue_.empty() && account_queue_.empty() &&
+                           gaps_.empty();
+  if (writer_queue_.size() + account_queue_.size() >= queue_capacity_) {
     ++dropped_;
     if (!gaps_.empty() && gaps_.back().run_id == record.run_id &&
         gaps_.back().shard == record.shard &&
@@ -264,14 +324,32 @@ bool SqliteHistory::TryPush(HistoryRecord record) {
   return true;
 }
 
+bool SqliteHistory::TryPushAccount(AccountHistoryRecord record) {
+  std::lock_guard lock(mutex_);
+  if (!started_ || stopping_ || !error_.empty()) return false;
+  if (writer_queue_.size() + account_queue_.size() >= queue_capacity_) {
+    ++dropped_;
+    error_ = "account history queue full";
+    return false;
+  }
+  const bool wake_writer = writer_queue_.empty() && account_queue_.empty() &&
+                           gaps_.empty();
+  account_queue_.push_back(std::move(record));
+  if (wake_writer) writer_cv_.notify_one();
+  return true;
+}
+
 HistoryHealth SqliteHistory::Health() const {
   std::lock_guard lock(mutex_);
-  return HistoryHealth{writer_queue_.size(), dropped_, error_};
+  return HistoryHealth{writer_queue_.size() + account_queue_.size(),
+                       dropped_, error_};
 }
 
 absl::Status SqliteHistory::WriteBatch(
-    const std::vector<HistoryRecord>& records, const std::vector<Gap>& gaps,
-    sqlite3_stmt* record_statement, sqlite3_stmt* gap_statement) {
+    const std::vector<HistoryRecord>& records,
+    const std::vector<AccountHistoryRecord>& account_records,
+    const std::vector<Gap>& gaps, sqlite3_stmt* record_statement,
+    sqlite3_stmt* account_statement, sqlite3_stmt* gap_statement) {
   if (auto status = Exec(writer_db_, "BEGIN IMMEDIATE"); !status.ok())
     return status;
   for (const HistoryRecord& record : records) {
@@ -302,6 +380,38 @@ absl::Status SqliteHistory::WriteBatch(
     }
   }
   sqlite3_reset(record_statement);
+  for (const AccountHistoryRecord& record : account_records) {
+    sqlite3_reset(account_statement);
+    BindText(account_statement, 1, record.run_id);
+    BindText(account_statement, 2, record.account_id);
+    sqlite3_bind_int64(account_statement, 3,
+                       static_cast<sqlite3_int64>(record.sequence));
+    sqlite3_bind_int(account_statement, 4, record.shard.value);
+    BindText(account_statement, 5, record.symbol);
+    sqlite3_bind_int64(account_statement, 6, record.at_us);
+    BindUint(account_statement, 7, record.at_mono_ns);
+    sqlite3_bind_int(account_statement, 8, static_cast<int>(record.kind));
+    BindText(account_statement, 9, record.client_order_id);
+    BindUint(account_statement, 10, record.exchange_order_id);
+    BindUint(account_statement, 11, record.trade_id);
+    BindUint(account_statement, 12, record.source_bench_seq);
+    BindUint(account_statement, 13, record.price_nanos);
+    BindUint(account_statement, 14, record.quantity_nanos);
+    BindUint(account_statement, 15, record.remaining_nanos);
+    BindUint(account_statement, 16, record.fee_nanos);
+    BindUint(account_statement, 17, record.total_nanos);
+    BindUint(account_statement, 18, record.available_nanos);
+    BindUint(account_statement, 19, record.locked_nanos);
+    BindText(account_statement, 20, record.asset);
+    BindText(account_statement, 21, record.message);
+    if (sqlite3_step(account_statement) != SQLITE_DONE) {
+      auto error = SqliteError(writer_db_, "insert account event");
+      sqlite3_reset(account_statement);
+      (void)Exec(writer_db_, "ROLLBACK");
+      return error;
+    }
+  }
+  sqlite3_reset(account_statement);
   for (const Gap& gap : gaps) {
     sqlite3_reset(gap_statement);
     BindText(gap_statement, 1, gap.run_id);
@@ -321,13 +431,17 @@ absl::Status SqliteHistory::WriteBatch(
 
 void SqliteHistory::WriterLoop() {
   sqlite3_stmt* record_statement = nullptr;
+  sqlite3_stmt* account_statement = nullptr;
   sqlite3_stmt* gap_statement = nullptr;
   if (sqlite3_prepare_v2(writer_db_, kInsertRecord, -1, &record_statement,
+                         nullptr) != SQLITE_OK ||
+      sqlite3_prepare_v2(writer_db_, kInsertAccount, -1, &account_statement,
                          nullptr) != SQLITE_OK ||
       sqlite3_prepare_v2(writer_db_, kInsertGap, -1, &gap_statement, nullptr) !=
           SQLITE_OK) {
     const auto error = SqliteError(writer_db_, "prepare history writer");
     sqlite3_finalize(record_statement);
+    sqlite3_finalize(account_statement);
     sqlite3_finalize(gap_statement);
     std::lock_guard lock(mutex_);
     error_ = std::string(error.message());
@@ -337,31 +451,43 @@ void SqliteHistory::WriterLoop() {
   }
   std::vector<HistoryRecord> records;
   records.reserve(64);
+  std::vector<AccountHistoryRecord> account_records;
+  account_records.reserve(64);
   std::vector<Gap> gaps;
   for (;;) {
     records.clear();
+    account_records.clear();
     gaps.clear();
     {
       std::unique_lock lock(mutex_);
       writer_cv_.wait(lock, [this] {
-        return stopping_ || !writer_queue_.empty() || !gaps_.empty();
+        return stopping_ || !writer_queue_.empty() ||
+               !account_queue_.empty() || !gaps_.empty();
       });
-      if (writer_queue_.empty() && gaps_.empty() && stopping_) break;
+      if (writer_queue_.empty() && account_queue_.empty() && gaps_.empty() &&
+          stopping_) break;
       const size_t count = std::min<size_t>(writer_queue_.size(), 64);
       for (size_t i = 0; i < count; ++i) {
         records.push_back(std::move(writer_queue_.front()));
         writer_queue_.pop_front();
+      }
+      const size_t account_count = std::min<size_t>(account_queue_.size(), 64);
+      for (size_t i = 0; i < account_count; ++i) {
+        account_records.push_back(std::move(account_queue_.front()));
+        account_queue_.pop_front();
       }
       gaps.swap(gaps_);
     }
     if (wait_for_space_) space_cv_.notify_all();
     const uint64_t write_begin = perf_ ? PerfNowNs() : 0;
     if (auto status =
-            WriteBatch(records, gaps, record_statement, gap_statement);
+            WriteBatch(records, account_records, gaps, record_statement,
+                       account_statement, gap_statement);
         !status.ok()) {
       std::lock_guard lock(mutex_);
       error_ = std::string(status.message());
       writer_queue_.clear();
+      account_queue_.clear();
       gaps_.clear();
       stopping_ = true;
       space_cv_.notify_all();
@@ -371,6 +497,7 @@ void SqliteHistory::WriterLoop() {
       const uint64_t committed_at = PerfNowNs();
       ++perf_->batches;
       perf_->records_written += records.size();
+      perf_->account_records_written += account_records.size();
       const uint64_t elapsed = committed_at - write_begin;
       perf_->batch_write_ns += elapsed;
       perf_->batch_write_samples_ns.push_back(elapsed);
@@ -386,6 +513,7 @@ void SqliteHistory::WriterLoop() {
     }
   }
   sqlite3_finalize(record_statement);
+  sqlite3_finalize(account_statement);
   sqlite3_finalize(gap_statement);
 }
 

@@ -1,0 +1,145 @@
+load("@rules_cc//cc:defs.bzl", "cc_library")
+
+cc_library(
+    name = "trading_event",
+    hdrs = ["trading_event.h"],
+    strip_include_prefix = "/hquant/src",
+    include_prefix = "hquant",
+    deps = ["//hquant/src/base:ids"],
+    visibility = ["//hquant:__subpackages__"],
+)
+
+cc_library(
+    name = "trade_port",
+    hdrs = ["trade_port.h"],
+    strip_include_prefix = "/hquant/src",
+    include_prefix = "hquant",
+    deps = [
+        ":trading_event",
+        "@abseil-cpp//absl/status:status",
+    ],
+    visibility = ["//hquant:__subpackages__"],
+)
+
+cc_library(
+    name = "client_order_id",
+    srcs = ["client_order_id.cc"],
+    hdrs = ["client_order_id.h"],
+    strip_include_prefix = "/hquant/src",
+    include_prefix = "hquant",
+    deps = [
+        "//hquant/src/base:ids",
+        "@abseil-cpp//absl/status:status",
+        "@abseil-cpp//absl/status:statusor",
+        "@openssl//:ssl",
+    ],
+    visibility = ["//hquant:__subpackages__"],
+)
+
+cc_library(
+    name = "order_state",
+    srcs = ["order_state.cc"],
+    hdrs = ["order_state.h"],
+    strip_include_prefix = "/hquant/src",
+    include_prefix = "hquant",
+    deps = [
+        ":trading_event",
+        "@abseil-cpp//absl/status:status",
+        "@abseil-cpp//absl/status:statusor",
+    ],
+    visibility = ["//hquant:__subpackages__"],
+)
+
+cc_library(
+    name = "order_manager",
+    srcs = ["order_manager.cc"],
+    hdrs = ["order_manager.h"],
+    strip_include_prefix = "/hquant/src",
+    include_prefix = "hquant",
+    deps = [
+        ":order_state",
+        ":trade_port",
+        "@abseil-cpp//absl/status:status",
+        "@abseil-cpp//absl/status:statusor",
+    ],
+    visibility = ["//hquant:__subpackages__"],
+)
+
+cc_library(
+    name = "funds_state",
+    srcs = ["funds_state.cc"],
+    hdrs = ["funds_state.h"],
+    strip_include_prefix = "/hquant/src",
+    include_prefix = "hquant",
+    deps = [
+        ":trading_event",
+        "//hquant/src/base:fixed",
+        "@abseil-cpp//absl/status:status",
+        "@abseil-cpp//absl/status:statusor",
+    ],
+    visibility = ["//hquant:__subpackages__"],
+)
+
+cc_library(
+    name = "order_journal",
+    srcs = ["order_journal.cc"],
+    hdrs = ["order_journal.h"],
+    strip_include_prefix = "/hquant/src",
+    include_prefix = "hquant",
+    deps = [
+        "@abseil-cpp//absl/status:status",
+        "@abseil-cpp//absl/status:statusor",
+        "@boost.asio//:boost.asio",
+        "@sqlite3//:sqlite3",
+    ],
+    visibility = ["//hquant:__subpackages__"],
+)
+
+cc_library(
+    name = "risk_limits",
+    srcs = ["risk_limits.cc"],
+    hdrs = ["risk_limits.h"],
+    strip_include_prefix = "/hquant/src",
+    include_prefix = "hquant",
+    deps = [
+        ":order_state",
+        ":trade_port",
+        "//hquant/src:config",
+        "//hquant/src/base:fixed",
+        "@abseil-cpp//absl/status:status",
+    ],
+    visibility = ["//hquant:__subpackages__"],
+)
+
+cc_library(
+    name = "trading_account",
+    srcs = [
+        "account_sync.cc",
+        "account_view_publisher.cc",
+        "trading_account.cc",
+        "trading_account_journal.cc",
+    ],
+    hdrs = [
+        "account_sync.h",
+        "account_view_publisher.h",
+        "trading_account.h",
+    ],
+    strip_include_prefix = "/hquant/src",
+    include_prefix = "hquant",
+    deps = [
+        ":client_order_id",
+        ":funds_state",
+        ":order_journal",
+        ":order_manager",
+        ":risk_limits",
+        ":trade_port",
+        "//hquant/src:config",
+        "//hquant/src:sqlite_history",
+        "//hquant/src/base:fixed",
+        "//hquant/src/base:log",
+        "@abseil-cpp//absl/status:status",
+        "@abseil-cpp//absl/status:statusor",
+        "@boost.asio//:boost.asio",
+    ],
+    visibility = ["//hquant:__subpackages__"],
+)

@@ -104,6 +104,7 @@ void Market::OnConnected(const FeedConnected& input) {
 void Market::ApplyBuffered(MonoTime now) {
   if (!snapshot_ready_ || !sequence_) return;
   bool applied = false;
+  uint64_t source_bench_seq = 0;
   while (!buffered_diffs_.empty()) {
     BookDiff diff = std::move(buffered_diffs_.front());
     buffered_diffs_.pop_front();
@@ -121,12 +122,14 @@ void Market::ApplyBuffered(MonoTime now) {
     depth_digest_ = HashDiff(depth_digest_, diff);
     view_.last_book_at = now;
     applied = true;
+    source_bench_seq = diff.source_bench_seq;
   }
   if (applied) {
     view_.state = BookState::Live;
     last_error_.clear();
     RefreshView();
-    notify_(MarketNotice{MarketNotice::Kind::BookChanged, {}});
+    notify_(MarketNotice{MarketNotice::Kind::BookChanged, {},
+                         source_bench_seq});
   } else {
     RefreshView();
   }
@@ -202,7 +205,8 @@ void Market::OnDiff(const BookDiff& input, MonoTime now) {
     depth_digest_ = HashDiff(depth_digest_, input);
     view_.last_book_at = now;
     RefreshView();
-    notify_(MarketNotice{MarketNotice::Kind::BookChanged, {}});
+    notify_(MarketNotice{MarketNotice::Kind::BookChanged, {},
+                         input.source_bench_seq});
     return;
   }
   // 缓冲满说明快照迟迟未到，放弃本轮同步。
@@ -225,7 +229,8 @@ void Market::OnTrade(const PublicTrade& input) {
   ++accepted_trades_;
   last_trade_id_ = input.trade_id;
   trade_digest_ = HashTrade(trade_digest_, input);
-  notify_(MarketNotice{MarketNotice::Kind::PublicTrade, input});
+  notify_(MarketNotice{MarketNotice::Kind::PublicTrade, input,
+                       input.source_bench_seq});
 }
 
 void Market::OnDisconnected(const FeedDisconnected& input) {

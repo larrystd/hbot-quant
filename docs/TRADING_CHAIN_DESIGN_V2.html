@@ -1,0 +1,249 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="hquant 交易链路 V2：账户级订单跟踪、REST 与私有 WS 回报、双 SQLite 持久化和恢复。">
+<title>hquant 交易链路设计 V2：账户级订单跟踪</title>
+<style>
+:root{color-scheme:light dark;--bg:#f3f6f8;--paper:#fff;--ink:#17242c;--muted:#586b75;--line:#d9e2e6;--soft:#edf3f6;--accent:#185b74;--accent-soft:#dceff5;--shadow:0 12px 32px #18374810}
+@media(prefers-color-scheme:dark){:root{--bg:#10191f;--paper:#19262e;--ink:#e5eef2;--muted:#adbec6;--line:#35454d;--soft:#21333d;--accent:#91cce0;--accent-soft:#22404c;--shadow:none}}
+*{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.7 system-ui,-apple-system,"PingFang SC","Microsoft YaHei",sans-serif}
+.layout{max-width:1530px;margin:auto;display:grid;grid-template-columns:230px minmax(0,1fr);gap:32px;padding:30px 26px 90px}.sidebar{position:sticky;top:24px;align-self:start;max-height:calc(100vh - 48px);overflow:auto}.sidebar-label{font-size:11px;font-weight:800;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);padding:0 10px 10px}.sidebar a{display:block;color:var(--muted);text-decoration:none;font-size:13px;line-height:1.45;padding:6px 10px;border-radius:7px}.sidebar a:hover{background:var(--soft);color:var(--accent)}.sidebar .level-2{font-weight:700;color:var(--ink);margin-top:5px}.sidebar .level-3{padding-left:22px}main{min-width:0;max-width:1190px}
+.hero{padding:30px 36px;background:linear-gradient(135deg,var(--paper),var(--accent-soft));border:1px solid var(--line);border-radius:18px;box-shadow:var(--shadow)}.eyebrow{font:700 11px/1.3 ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:.14em;text-transform:uppercase;color:var(--accent)}h1{font-size:clamp(28px,3.6vw,43px);line-height:1.22;margin:12px 0 15px}.hero p{color:var(--muted);margin:0}.hero-links{display:flex;flex-wrap:wrap;gap:10px;margin-top:20px}.hero-links a{color:var(--accent);background:var(--paper);border:1px solid var(--line);border-radius:999px;padding:5px 12px;text-decoration:none;font-size:12px;font-weight:700}.hero-links a:hover{text-decoration:underline}
+article{padding:0 5px}article h2{font-size:clamp(23px,2.5vw,29px);line-height:1.3;scroll-margin-top:24px;margin:55px 0 18px;padding-top:25px;border-top:1px solid var(--line)}article h3{font-size:19px;scroll-margin-top:24px;margin:36px 0 14px}article p{max-width:100ch;margin:13px 0 19px}article a{color:var(--accent);text-underline-offset:3px}article code{font:.88em ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;background:var(--soft);padding:.1em .3em;border-radius:4px;overflow-wrap:anywhere}article ol,article ul{max-width:103ch;padding-left:1.7em}article li{margin:8px 0}
+.table-wrap,.code-card{border:1px solid var(--line);border-radius:12px;background:var(--paper);box-shadow:var(--shadow);margin:19px 0 26px;overflow:auto}.table-wrap table{width:100%;border-collapse:collapse;font-size:13px;line-height:1.55}.table-wrap th,.table-wrap td{padding:11px 13px;text-align:left;vertical-align:top;border-bottom:1px solid var(--line)}.table-wrap th{background:var(--soft);white-space:nowrap;font-size:12px;color:var(--muted)}.table-wrap tr:last-child td{border-bottom:0}.table-wrap td:first-child{font-weight:650;min-width:135px}.code-label{padding:8px 15px;border-bottom:1px solid var(--line);font:700 10px ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:.13em;text-transform:uppercase;color:var(--muted)}.code-card pre{margin:0;padding:17px 20px;overflow:auto}.code-card pre code{background:none;padding:0;white-space:pre;font:12px/1.6 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;color:var(--ink)}.diagram{border-left:4px solid var(--accent)}.diagram pre code{font-size:11.5px;line-height:1.45}
+footer{border-top:1px solid var(--line);padding-top:18px;margin-top:65px;font-size:12px;color:var(--muted)}footer a{color:var(--accent)}@media(max-width:1050px){.layout{display:block;padding:16px 14px 65px}.sidebar{position:static;max-height:none;display:flex;flex-wrap:wrap;gap:2px;margin:0 0 16px}.sidebar-label{width:100%;padding-left:3px}.sidebar a{border:1px solid var(--line);background:var(--paper)}.sidebar .level-3{display:none}.hero{padding:24px}.table-wrap th,.table-wrap td{padding:9px 10px}}@media print{body{background:#fff}.layout{display:block;padding:0}.sidebar{display:none}.hero,.table-wrap,.code-card{box-shadow:none}article h2,article h3{break-after:avoid}.table-wrap,.code-card{break-inside:avoid}}
+</style>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" aria-label="文档目录"><div class="sidebar-label">V2 设计目录</div><a class="level-2" href="#section-1">与 V1 设计的区别</a>
+<a class="level-2" href="#section-2">1. 现状、目标与差距</a>
+<a class="level-2" href="#section-3">2. 两条主链与补偿链</a>
+<a class="level-3" href="#section-4">2.1 行情到下单／撤单</a>
+<a class="level-3" href="#section-5">2.2 交易所结果到账户和策略</a>
+<a class="level-3" href="#section-6">2.3 超时、断线和重启</a>
+<a class="level-2" href="#section-7">3. 模块所有权</a>
+<a class="level-2" href="#section-8">4. 订单跟踪与取消换单</a>
+<a class="level-3" href="#section-9">4.1 一张订单、两组状态</a>
+<a class="level-3" href="#section-10">4.2 关键函数的改动</a>
+<a class="level-2" href="#section-11">5. 资金、SQLite 与故障边界</a>
+<a class="level-3" href="#section-12">5.1 FundsState 同时处理交易所余额和本地占用</a>
+<a class="level-3" href="#section-13">5.2 两份 SQLite 的写入位置</a>
+<a class="level-3" href="#section-14">5.3 同步和停机</a>
+<a class="level-2" href="#section-15">6. 目录与文件变更</a>
+<a class="level-2" href="#section-16">7. 开发计划</a>
+<a class="level-2" href="#section-17">8. 本轮本机验收</a>
+<a class="level-2" href="#section-18">9. 开发 Prompt</a></nav>
+<main>
+<header class="hero"><div class="eyebrow">hquant / Trading Chain / V2</div><h1>hquant 交易链路设计 V2：账户级订单跟踪</h1><p>账户级订单跟踪、资金占用、可靠日志与外部交易所故障恢复的设计及本机实施记录。</p><div class="hero-links"><a href="TRADING_CHAIN_DESIGN.html">查看 V1 HTML</a><a href="TRADING_CHAIN_DESIGN_V2.md">查看 V2 Markdown</a><a href="#section-1">与 V1 的区别</a></div></header>
+<article><p>状态：V2 本机实现与设计说明，基于 2026-10-11 工作区代码。<code>OrderManager</code>、按单查单、发送阶段、资金覆盖与外部模拟交易所已落地；本机及两笔真实 Binance Demo 虚拟资金成交的实测见第 8 节。旧版 <a href="TRADING_CHAIN_DESIGN.md">交易链路设计</a>记录了从进程内 Paper 到外部交易接口的第一轮方案；Demo API 验证明细见<a href="BINANCE_DEMO_VALIDATION.md">Binance Demo 验证记录</a>。当前交易模式只有 <code>pressure_sim</code>（压力器模拟）与 <code>online_sim</code>（Binance Spot Demo 在线模拟）；不提供真实资金实盘模式。旧文档中的 <code>live</code> 曾指预留的实盘模式，以此处定义为准。</p>
+<h2 id="section-1">与 V1 设计的区别</h2>
+<div class="table-wrap"><table><thead><tr><th scope="col">主题</th><th scope="col">V1 设计</th><th scope="col">V2 设计</th></tr></thead><tbody><tr><td>起点</td><td>每个 Shard 的进程内 Paper 下单，目标是建成共享账户和外部交易链路</td><td>共享账户、REST、私有 WS、可靠日志及全账户同步已在代码中；目标是整理订单跟踪并补齐边界语义</td></tr><tr><td>订单所有权</td><td><code>TradingAccount</code> 直接协调 <code>OrderState</code>、资金和回报</td><td><code>OrderManager</code> 专门管理订单、撤单请求、ID、期限和按单查询；<code>TradingAccount</code> 负责串行编排</td></tr><tr><td>结果路径</td><td>架构图主要展示外部下单和私有回报</td><td>明确画出 REST 结果、私有 WS、查单结果三路汇入 <code>OrderJournal</code>，再更新订单、资金和 Shard</td></tr><tr><td>SQLite</td><td>V1 将可靠日志列为后续能力，历史作为观察库</td><td>两份 SQLite 均已存在；V2 明确发单前意图提交、回报应用前事实提交，以及两侧观察历史的旁路写入</td></tr><tr><td>未知订单</td><td>依靠全账户 <code>SyncFromVenue()</code> 补漏</td><td>增加单笔期限和限速查单；全账户同步继续处理启动、断线及周期核对</td></tr><tr><td>资金占用</td><td>提出交易所余额与本地预留不能重复扣减</td><td>设计可核对的占用覆盖金额／版本、余额晚到处理和释放门禁</td></tr><tr><td>Paper</td><td>保留进程内 Paper 撮合与旧配置兼容</td><td>移除 Paper 模式和 schema v1 交易分支；外部模拟交易所通过真实 socket 完成正确性测试</td></tr><tr><td>验收</td><td>首轮 1000 标的、30 秒外部链路</td><td>在同一 case 上重新核对故障语义；真实 Demo 的成交路径另以单笔小额订单验收</td></tr></tbody></table></div>
+<h2 id="section-2">1. 现状、目标与差距</h2>
+<p>当前 <code>schema_version: 2</code> 已允许多个 Shard 共用一个 <code>TradingAccount</code>。公开行情经 <code>Shard::OnMarket()</code> 驱动策略；<code>Shard::RunAccountDecision()</code> 把挂单、撤单交给账户。账户在 <a href="../hquant/src/trading/trading_account.cc">`trading_account.cc`</a> 中完成风险检查、调用 <a href="../hquant/src/trading/client_order_id.cc">`client_order_id.cc`</a> 生成随机 <code>client_order_id</code>、预留资金、记可靠意图、调用 <code>TradePort</code>；<a href="../hquant/src/venue/binance/trade_client.cc">`trade_client.cc`</a> 负责签名 REST 和有界异步发送队列；<a href="../hquant/src/venue/binance/user_stream.cc">`user_stream.cc`</a> 收私有 WS。REST 结果、私有事件和查询结果回到账户，先记 <code>OrderJournal</code>，再应用到 <code>OrderState</code>、<code>FundsState</code> 和账户视图。可靠日志和回放在 <a href="../hquant/src/trading/trading_account_journal.cc">`trading_account_journal.cc`</a>；启动、断线和周期全账户同步由 <a href="../hquant/src/trading/account_sync.cc">`AccountSync`</a> 执行；<a href="../hquant/src/trading/account_view_publisher.cc">`AccountViewPublisher`</a> 负责构造并推送 Shard 视图。两者由 TradingAccount 组合持有，运行在账户的同一 I/O 线程。</p>
+<p>V1 外部链路曾在本机模拟交易所的 1000 标的、30 秒 case 中验证；V2 已重新运行同一 case，并用两笔 BTCUSDT 虚拟资金成交验证了真实 Binance Spot Demo 的挂单、私有成交回报、非空成交查询、余额对账及重启。配置值 <code>online_sim</code> 仅允许固定 Binance Demo 域名、Demo 凭据、一个账户和一个标的；示例默认零笔挂单，单次上限一笔。</p>
+<p>V2 解决<strong>订单跟踪的所有权和故障语义</strong>。下表的左列是 V2 开发前的外部交易链路，右列是本轮实现：</p>
+<div class="table-wrap"><table><thead><tr><th scope="col">V2 开发前</th><th scope="col">V2 本轮实现</th></tr></thead><tbody><tr><td><code>TradingAccount</code> 直接持有 <code>OrderState</code>、本地 ID 映射、活动订单集合，并在 <code>ProcessSubmit</code>、<code>ProcessCancel</code>、<code>SubmitResponse</code>、<code>CancelResponse</code>、<code>ApplyEvent</code> 和 <code>RestoreJournal</code> 中分散处理订单状态</td><td>新增每账户一个 <code>OrderManager</code>，集中维护订单与撤单请求、ID 映射、超时、查询进度和去重；<code>TradingAccount</code> 保留单写入者、持久化和账户协调职责</td></tr><tr><td>未知结果触发 <code>SyncFromVenue()</code>；正常状态每 60 秒全账户同步</td><td>未决订单由 <code>OrderManager</code> 按单安排有界、退避的查询；全账户同步继续负责启动、断线和周期核对</td></tr><tr><td><code>FundsHold.reflected_by_venue</code> 是布尔值，外部模式不能精确表达交易所余额中已经覆盖多少预留</td><td>按资产和订单维护“本地尚未被交易所余额覆盖的占用”；只有经私有余额或同步快照核对后才消除重复占用</td></tr><tr><td><code>TradePort::Submit/Cancel</code> 的 <code>bool</code> 只表示本地队列接纳，后续只有最终 <code>Confirmed/Rejected/Unknown</code></td><td>发送端另报告“确定未发出／开始发包／结果未知”的阶段，供订单超时和停机恢复使用；入队绝不等于交易所接受</td></tr><tr><td><code>Shard::OnAccountView()</code> 主要靠“没有活动订单”决定撤单后能否换单</td><td>账户视图给出每个撤单请求的待确认、未知或已解决状态；确认订单终态且资金可用后才换单，拒撤后可重新查询或重试</td></tr><tr><td>schema v1 的 Shard 直连 Paper 和 schema v2 的 <code>PaperTradePort</code> 两条本地撮合路径仍在构建</td><td>删除这两条路径和 <code>TradingMode::Paper</code>，订单正确性只用外部模拟交易所与 Demo 路径验证</td></tr></tbody></table></div>
+<h2 id="section-3">2. 两条主链与补偿链</h2>
+<p>一个 Shard 对应一个行情标的；一个交易账户可以服务多个 Shard，但只维护一份订单投影、资金投影、交易客户端和私有回报连接。以下 <code>OrderJournal</code> 的两个方框指向<strong>同一个</strong> <code>order_journal.sqlite</code>；<code>SqliteHistory</code> 指 <code>history.sqlite</code>，是另一份库。</p>
+<h3 id="section-4">2.1 行情到下单／撤单</h3>
+<div class="code-card diagram"><div class="code-label">text</div><pre><code>┌───────────┐  ┌───────────────────────────────┐  ┌───────────────────────────┐
+│ 公开行情 WS│→│ Shard::OnMarket / Strategy      │→│ TradingAccount 账户入口队列│
+└───────────┘  │ 或策略定时器触发                │  │ 每账户串行、跨标的 RiskLimits│
+               └───────────────────────────────┘  └─────────────┬─────────────┘
+                                                                ↓
+                                                   ┌───────────────────────────┐
+                                                   │ ClientOrderId 生成器      │
+                                                   │ 生成 128 位随机 ID         │
+                                                   │ OrderManager 建立订单状态  │
+                                                   └─────────────┬─────────────┘
+                                                                 ↓
+                                                   ┌───────────────────────────┐
+                                                   │ FundsState                │
+                                                   │ 检查共享可用额、预留资金    │
+                                                   └─────────────┬─────────────┘
+                                                                 ↓
+                                                   ┌───────────────────────────┐
+                                                   │ OrderJournal（SQLite）     │
+                                                   │ SubmitIntent/CancelIntent  │
+                                                   │ 入有界队列后即允许发命令    │
+                                                   └────────┬───────────┬──────┘
+                                                            │           └→┌─────────────────────────┐
+                                                            │             │ SqliteHistory（SQLite）  │
+                                                            │             │ 异步记录命令历史         │
+                                                            ↓             └─────────────────────────┘
+                                                   ┌───────────────────────────┐
+                                                   │ TradePort 发送接口        │
+                                                   └─────────────┬─────────────┘
+                                                                 ↓
+                                                   ┌───────────────────────────┐
+                                                   │ BinanceTradeClient        │
+                                                   │ 有界队列＋REST 挂单／撤单  │
+                                                   └─────────────┬─────────────┘
+                                                                 ↓
+                                                            ┌──────────┐
+                                                            │ 交易所   │
+                                                            └──────────┘</code></pre></div>
+<p><code>FundsState</code> 的预留先在账户的串行执行序列中占位，防止并发 Shard 重复花钱；可靠意图提交失败则释放未发出的占位并暂停账户。<code>OrderJournal</code> 提交后才调用 <code>TradePort</code>。发送队列拒绝时写 <code>SubmitAbort</code>／<code>CancelAbort</code> 后撤销本地请求；若无法可靠记录撤销，保持未知并暂停。<code>SqliteHistory</code> 异步记录，<strong>不作为发包门禁，也不作为恢复来源</strong>。</p>
+<h3 id="section-5">2.2 交易所结果到账户和策略</h3>
+<div class="code-card diagram"><div class="code-label">text</div><pre><code>┌────────────────────────┐
+│ REST 挂单／撤单响应     │────┐
+├────────────────────────┤    │   ┌───────────────────────┐  ┌──────────────────────────┐
+│ 私有 WS 订单／成交／余额│────┼→│ TradingAccount        │→│ OrderJournal（SQLite）    │
+├────────────────────────┤    │   │ 有界账户事件队列      │  │ 结果／状态变化事实先提交 │
+│ 查订单／成交／余额结果  │────┘   └───────────────────────┘  └────────────┬─────────────┘
+└────────────────────────┘                                             ↓
+                                                            ┌──────────────────────┐
+                                                            │ OrderManager         │
+                                                            │ 按 ID 归并、去重、校验│
+                                                            └───────────┬──────────┘
+                                                                        ↓
+                                                            ┌──────────────────────┐
+                                                            │ FundsState           │
+                                                            │ 调整预留与资产投影   │
+                                                            └───────────┬──────────┘
+                                                                        ↓
+                                                            ┌──────────────────────┐
+                                                            │ TradingAccount       │
+                                                            │ 更新账户视图与健康   │
+                                                            └────────┬────────┬────┘
+                                                                     │        └→┌───────────────────────┐
+                                                                     │          │ SqliteHistory（SQLite）│
+                                                                     │          │ 异步记录回报与余额    │
+                                                                     ↓          └───────────────────────┘
+                                                         ┌──────────────────────────┐
+                                                         │ 相关 Shard 收到账户视图  │
+                                                         │ 确认可换单后重新决策     │
+                                                         └──────────────────────────┘</code></pre></div>
+<p>REST 响应、私有 WS 和查单结果可能先后颠倒，必须用同一个 <code>client_order_id</code> 归并，<code>exchange_order_id</code> 单独保存。会改变订单或资金的查询事实先落盘再应用；完全相同的只读查询可以只记录指标。<code>OrderManager</code> 维护订单状态与查单计划，<code>TradingAccount</code> 在同一个账户执行序列中调用 <code>FundsState</code>，两者都不能绕过日志直接发布新视图。</p>
+<h3 id="section-6">2.3 超时、断线和重启</h3>
+<div class="code-card diagram"><div class="code-label">text</div><pre><code>┌──────────────────────────────┐
+│ OrderManager 最早到期计时器  │→ TradePort → REST 按 client_order_id 查单 ─┐
+│ PendingSubmit / PendingCancel│                                          │
+└──────────────────────────────┘                                          │
+┌──────────────────────────────┐                                          ├→ 2.2 的账户事件队列
+│ 启动：回放 OrderJournal      │→ 私有 WS 建立并缓存事件 → 查未决单／成交／余额┤
+└──────────────────────────────┘                                          │
+┌──────────────────────────────┐                                          │
+│ 私有 WS 断线／周期全量同步   │→ 暂停新单 → 查规则／活动单／成交／余额 ──────┘
+└──────────────────────────────┘</code></pre></div>
+<p>公开行情只驱动报价决策，<strong>不推断真实订单是否已接受、成交或撤销</strong>。<code>bench_seq</code> 只把触发决策的行情与订单关联，用于压测延迟；定时器触发的订单没有来源 <code>bench_seq</code>。超时和断线期间继续管理已有订单、撤单与查询，但不在状态未知时换一个新 ID 盲目重发。</p>
+<h2 id="section-7">3. 模块所有权</h2>
+<div class="table-wrap"><table><thead><tr><th scope="col">模块</th><th scope="col">唯一职责</th><th scope="col">不负责</th></tr></thead><tbody><tr><td><code>Shard</code>、<code>Strategy</code></td><td>接公开行情和账户视图，按单标的决定报价、撤单和换单</td><td>判断交易所订单终态、记账户余额</td></tr><tr><td><code>TradingAccount</code></td><td>每账户单写入者；入口风控、事件排序、日志提交回调、资金效果与暂停门禁</td><td>具体 Binance JSON、按标的创建交易连接</td></tr><tr><td><code>AccountViewPublisher</code></td><td>按资产合并受影响的 Shard，构造只读视图并推送</td><td>修改订单、资金或交易所状态</td></tr><tr><td><code>AccountSync</code></td><td>启动、断线和周期全账户同步，核对规则、活动单、逐笔成交与余额</td><td>代替 <code>OrderManager</code> 的日常单笔超时跟踪</td></tr><tr><td><strong><code>OrderManager</code></strong></td><td>持有 <code>OrderState</code>、本地／客户端 ID 映射、交易所 ID 的订单字段、活动订单、提交和撤单阶段、期限与查单计划；归并标准化订单与成交事件</td><td>SQLite、socket、交易所余额、策略报价</td></tr><tr><td><code>OrderState</code></td><td>纯订单状态转换、累计成交量与 <code>trade_id</code> 去重、矛盾回报校验</td><td>计时、查询调度、资金和持久化</td></tr><tr><td><code>FundsState</code></td><td>每资产交易所余额、本地资金预留、成交待反映扣减及共享可用额</td><td>判断订单是否成交、维护交易所独立账本</td></tr><tr><td><code>RiskLimits</code></td><td>单笔、标的和账户限额，以及交易规则校验</td><td>占用真实可用资金</td></tr><tr><td><code>OrderJournal</code></td><td>单账户连续序号的可靠意图和回报事实，提交成功后回调；恢复来源</td><td>历史查询报表、发送网络请求</td></tr><tr><td><code>SqliteHistory</code></td><td>命令、回报、余额、阶段时间的异步观察历史</td><td>决定能否发单、崩溃恢复</td></tr><tr><td><code>TradePort</code> / <code>BinanceTradeClient</code></td><td>前者定义发送与查询接口；后者管理有界队列、签名 REST、请求额度及明确的发送阶段／结果</td><td>写订单状态或余额</td></tr><tr><td><code>BinanceUserStream</code></td><td>每账户私有 WS 的订阅、重连、解析和投递</td><td>直接修改账户投影</td></tr><tr><td><code>TradingAccount::SyncFromVenue</code></td><td>调用 <code>AccountSync::Start()</code>，保持账户控制入口</td><td>自行保存同步状态或执行全量查询</td></tr></tbody></table></div>
+<p>不新增 <code>order/</code>、<code>account/</code>、<code>exchange/</code> 目录，也不叫 <code>Reconciler</code>。交易所无关的类继续放在 <code>src/trading/</code>；具体协议继续放在 <code>src/venue/binance/</code>，保留 <code>venue</code> 目录名。本机模拟交易所和 Demo 走相同的外部 REST／私有 WS 路径。V2 不再提供进程内 Paper 模式，已删除 <code>src/sim/</code>。</p>
+<p>V2 前 <code>PaperExchange</code> 保存进程内订单和资金，schema v1 的 Shard 直接持有它；schema v2 的 Paper 账户通过 <code>PaperTradePort</code> 调用它。两条 Paper 路径已经删除。V2 的 <code>pressure_sim</code> 使用 <code>bench/venue/mock_binance_server.py</code> 作为<strong>独立账本、真实 socket</strong>的交易对端；<code>online_sim</code> 使用 Binance Demo API。行情回放仍可作为行情输入，订单测试接外部模拟交易所。</p>
+<p>协议入口按账户复用交易连接和请求预算：</p>
+<div class="table-wrap"><table><thead><tr><th scope="col">通道</th><th scope="col">当前代码使用的接口</th><th scope="col">进入 V2 的位置</th></tr></thead><tbody><tr><td>公开行情</td><td>深度快照、公开深度与逐笔交易 WS</td><td><code>Shard</code> 的 Market 和 Strategy；仅驱动决策</td></tr><tr><td>签名 REST</td><td><code>POST /api/v3/order</code>、<code>DELETE /api/v3/order</code></td><td><code>TradePort</code> 回调产生提交或撤单结果</td></tr><tr><td>签名 REST 查询</td><td><code>GET /api/v3/order</code>、<code>GET /api/v3/myTrades</code>、<code>GET /api/v3/openOrders</code></td><td>单笔查询进入 <code>OrderManager</code>；全账户查询由 <code>SyncFromVenue()</code> 编排</td></tr><tr><td>签名 REST 查询</td><td><code>GET /api/v3/account</code></td><td>余额事实经日志与核对后应用到 <code>FundsState</code></td></tr><tr><td>公开 REST 查询</td><td><code>GET /api/v3/exchangeInfo</code></td><td><code>SyncFromVenue()</code> 校验交易规则后更新账户规则视图</td></tr><tr><td>私有 WS</td><td><code>executionReport</code>、<code>outboundAccountPosition</code>、<code>balanceUpdate</code></td><td>标准化为订单、成交和余额事件，经账户事件队列与日志后应用</td></tr></tbody></table></div>
+<h2 id="section-8">4. 订单跟踪与取消换单</h2>
+<h3 id="section-9">4.1 一张订单、两组状态</h3>
+<p><code>OrderManager</code> 以 <code>(account_id, client_order_id)</code> 查订单，保存 <code>exchange_order_id</code>、所属 Shard、标的、方向、原始数量、累计成交、剩余数量、成交 ID 集合、来源 <code>bench_seq</code> 和最近的回报版本。订单生命周期与撤单请求是两组状态，避免把“请求撤单”误写成“订单已撤”。</p>
+<div class="table-wrap"><table><thead><tr><th scope="col">维度</th><th scope="col">典型状态</th><th scope="col">进入条件</th></tr></thead><tbody><tr><td>订单</td><td><code>PendingSubmit</code> → <code>Accepted</code> → <code>PartiallyFilled</code> → <code>Filled</code></td><td>已提交可靠意图；随后收到匹配的 REST 成功响应、私有回报或有效查询事实；成交按 ID 去重</td></tr><tr><td>订单拒绝</td><td><code>PendingSubmit</code> → <code>Rejected</code></td><td>明确的交易所拒绝或经查询确认的拒绝；本地队列拒绝单独记 <code>SubmitAbort</code></td></tr><tr><td>撤单请求</td><td><code>None</code> → <code>PendingCancel</code> → <code>Confirmed</code> / <code>Rejected</code> / <code>Unknown</code></td><td>撤单意图持久化后等待交易所结果；撤单期间订单仍可能部分或全部成交</td></tr><tr><td>网络结果</td><td><code>Queued</code>、<code>DispatchStarted</code>、<code>ResultUnknown</code>、<code>DefinitelyNotSent</code></td><td>用于判断是否可本地撤销请求；它不是交易所订单状态</td></tr></tbody></table></div>
+<p>明确匹配 <code>client_order_id</code> 和订单参数的 REST 成功响应可以作为交易所确认；私有 WS 可能先到，不能被晚到的 REST 超时覆盖。<code>TradePort::Submit/Cancel</code> 返回 <code>true</code> 只表示<strong>本地队列接纳</strong>。发送队列中的命令在客户端停机或连接失败时，需要给账户一个“确定未发出”或“可能已发出”的结果；后者始终按未知处理。</p>
+<p><code>OrderManager</code> 按账户维护到期队列并给出下一到期时间，<code>TradingAccount</code> 只持有一个 <code>steady_timer</code> 调用 <code>TakeDue()</code>，不为每笔订单创建 socket 或线程。到期通过请求调度器查询原 <code>client_order_id</code>，并查询该单成交；查单无结果或超时不自动视为拒单。撤单未知期间不重复发撤单；确认撤单、成交终态或确认订单仍在账并允许重试后，Shard 才继续决策。</p>
+<p>本轮 <code>OrderManager</code> 提供状态变化和查询计划，<code>TradingAccount::ApplyEvent()</code> 在日志提交后根据状态变化调整 <code>FundsState</code>、记录历史并发布 Shard 视图。<code>OrderManager</code> 不直接写资金或 SQLite，可单独测试订单状态。资金效果对象化尚未实现，继续由账户编排代码显式处理。</p>
+<h3 id="section-10">4.2 关键函数的改动</h3>
+<div class="table-wrap"><table><thead><tr><th scope="col">入口</th><th scope="col">当前</th><th scope="col">V2</th></tr></thead><tbody><tr><td><code>Shard::OnMarket()</code></td><td>外部模式由行情或定时器直接调用策略；Paper 另走 <code>TryMarket()</code></td><td>删除 Paper 的 <code>TryMarket()</code> 与直接撮合分支；行情只驱动策略，不跟踪真实订单</td></tr><tr><td><code>Shard::RunAccountDecision()</code></td><td><code>TrySubmit/TryCancel</code>；<code>OnAccountView()</code> 主要看活动订单是否为空</td><td>仍发送策略意图；根据账户给出的撤单结果和资金就绪门禁决定换单或重试</td></tr><tr><td><code>TradingAccount::ProcessSubmit()</code></td><td>自己建 ID、<code>OrderState</code>、<code>FundsHold</code>、日志和发包</td><td>风控与资金占位后调用 <code>OrderManager</code> 建订单；可靠意图提交后交 <code>TradePort</code>；账户继续编排资金和日志</td></tr><tr><td><code>TradingAccount::ProcessCancel()</code></td><td>自己 <code>BeginCancel</code>、写日志、发包</td><td>由 <code>OrderManager</code> 检查是否已有待确认撤单，避免重复；确认前不释放资金</td></tr><tr><td><code>TradingAccount::SubmitResponse()</code> / <code>CancelResponse()</code></td><td>自己解释 REST 结果与未知状态</td><td>先记结果，再委托 <code>OrderManager</code> 归并并应用资金效果</td></tr><tr><td><code>TradingAccount::ApplyEvent()</code></td><td>直接调用 <code>OrderState</code> 并处理预留、历史、Shard 通知</td><td>订单／成交交 <code>OrderManager</code>；余额交 <code>FundsState</code>；账户按结果处理资金并统一发布视图与历史</td></tr><tr><td><code>TradingAccount::SyncFromVenue()</code></td><td>恢复和未知结果都发起全账户同步</td><td>保留全账户同步；单笔期限查询交 <code>OrderManager</code>，同步结果复用同一归并入口</td></tr></tbody></table></div>
+<h2 id="section-11">5. 资金、SQLite 与故障边界</h2>
+<h3 id="section-12">5.1 FundsState 同时处理交易所余额和本地占用</h3>
+<p>交易所的 <code>free/locked/total</code> 是外部账本，<code>FundsState</code> 是本地安全投影。买单预留报价资产和可确定的手续费余量，卖单预留基础资产；手续费若可能从第三种资产扣除，需要相应余额或风险余量。<code>PendingSubmit</code>、活动单、<code>PendingCancel</code> 和结果未知都保留占用。部分成交缩小剩余预留，并在余额事件反映成交前保持临时扣减。</p>
+<p>V2 将当前 <a href="../hquant/src/trading/funds_state.h">`FundsHold.reflected_by_venue`</a> 的布尔语义改成可核对的覆盖金额／版本：</p>
+<div class="code-card code-block"><div class="code-label">text</div><pre><code>可用于新订单的资产金额
+  = max(0, 最近可信交易所 free
+            − 尚未被该余额快照覆盖的本地订单预留
+            − 尚未被该余额快照覆盖的成交与手续费扣减)</code></pre></div>
+<p>例如账户原有 100 USDT，订单 A 待提交预留 60，可再用 40；若交易所确认 A 在账、可信余额变为 <code>free=40, locked=60</code>，A 的 60 已包含在交易所锁定中，不再从 40 重复扣减。<strong>REST 接受本身不足以证明余额已更新</strong>。本轮用每笔覆盖金额、每资产尚未覆盖的预留和余额版本做保守扣减；旧版本快照不能覆盖新状态。全账户同步完成后，才依据核实过的余额快照结算待反映成交扣减。</p>
+<p><code>FundsState</code> 另保存一份独立于交易所余额回报的资产总额：新状态目录以配置的<strong>全部非零资产</strong>为基线，仅以已确认成交的基础资产、报价资产及手续费资产变化推进。私有余额事件按事件时间与成交时间比较，避免“REST 查成交先于较早私有余额回报”时误报；全量账户查询及停机最终查询仍要求与<strong>最新</strong>成交投影完全相等。未配置的非零资产、真正账户外资金变动或无法解释的余额会暂停新单。第三资产手续费和账户外借记已在本机模拟交易所用例中验证；真实 Demo 的这些故障场景仍未验收。重启同一状态目录必须保留最初的配置基线，不能改成当前余额，否则重放成交会重复计算。</p>
+<h3 id="section-13">5.2 两份 SQLite 的写入位置</h3>
+<div class="table-wrap"><table><thead><tr><th scope="col">数据库</th><th scope="col">文件</th><th scope="col">写入时机与用途</th></tr></thead><tbody><tr><td>可靠日志</td><td><code>order_journal.sqlite</code>，实现为 <a href="../hquant/src/trading/order_journal.cc">`OrderJournal`</a></td><td>发包前将 <code>SubmitIntent</code>／<code>CancelIntent</code> 放入有界写队列，不等待 SQLite COMMIT；REST 结果、私有订单／成交／余额事件仍在应用前提交。SQLite WAL + <code>synchronous=FULL</code> 用于已写入记录的持久性。</td></tr><tr><td>观察历史</td><td><code>history.sqlite</code>，实现为 <a href="../hquant/src/sqlite_history.cc">`SqliteHistory`</a></td><td>命令进入发送链路后异步记历史；回报应用后异步记订单、成交、余额与阶段。可查询和核对历史序号；写入成功不代表交易所成功，写入失败不能用这份库恢复订单。</td></tr></tbody></table></div>
+<p>账户日志序号必须连续。意图入日志队列后可立即进入 TradePort；发送队列明确拒绝时异步记 <code>Abort</code>，并立即撤销未发出的本地状态。订单超时从实际开始写 socket 计时，不能把仍在交易客户端队列中的订单提前当成交易所结果未知。意图提交失败时 Quill 记录带 <code>client_order_id</code> 的错误、账户暂停新单，并对仍未决的订单启动查单；已入队不能当作未发出。会改变订单或资金的回报仍先可靠提交再应用、发布账户视图、写观察历史。<strong>进程在意图 COMMIT 前崩溃可能丢失本地 <code>client_order_id</code></strong>：启动同步可发现陌生活动单并暂停，但已终结订单仍需交易所历史排查；当前实现不保证这个窗口的自动恢复。</p>
+<h3 id="section-14">5.3 同步和停机</h3>
+<p>启动顺序：<code>OrderJournal</code> 回放订单与占用 → 建立私有 WS 并缓存事件 → 查询交易规则、全账户活动单、未决订单、逐笔成交和余额 → 将状态变化记日志并归并 → 消费或重新同步缓存事件 → 差异消除后进入 <code>Ready</code>。私有 WS 断线、余额矛盾或定期检查重用全量同步；未知订单先按单查询。交易所出现本地未记录的活动单、资金无法解释或查询不完整时保持暂停。</p>
+<p>正常停机先停止新单和策略定时器，再管理已知订单，继续收回报和查单直至确认或达到期限；未决意图保留在日志中供下次启动查询。不能把“撤单已入队”写成“撤单成功”。</p>
+<h2 id="section-15">6. 目录与文件变更</h2>
+<p>只列交易链路相关文件；<code>src/</code> 根目录不增加交易类文件。</p>
+<p><strong>V2 开发前目录：</strong></p>
+<div class="code-card code-block"><div class="code-label">text</div><pre><code>hquant/
+  src/
+    runtime.h / runtime.cc
+    sqlite_history.h / sqlite_history.cc
+    config.h / config.cc
+    perf_probe.h
+    shard/
+      shard.h / shard.cc
+      strategy.h / strategy.cc
+      binance_feed.h / binance_feed.cc
+      executor.h / executor.cc
+    trading/
+      trading_account.h / trading_account.cc / trading_account_sync.cc
+      order_state.h / order_state.cc
+      funds_state.h / funds_state.cc
+      order_journal.h / order_journal.cc
+      risk_limits.h / risk_limits.cc
+      trade_port.h / trading_event.h
+      BUILD.bazel
+    venue/binance/
+      trade_client.h / trade_client.cc
+      user_stream.h / user_stream.cc
+      request_scheduler.h / request_scheduler.cc
+      auth.h / auth.cc
+      rules.h / rules.cc
+      BUILD.bazel
+    sim/
+      paper_exchange.h / paper_exchange.cc
+      paper_trade_port.h / paper_trade_port.cc
+      BUILD.bazel
+  bench/
+    mock_binance_server.py / validate_trade_chain.py / trade_chain_bench.py
+  test/
+    order_state_test.cc / funds_state_test.cc / trading_account_test.cc
+    order_journal_test.cc / e2e_trade.py</code></pre></div>
+<p><strong>V2 实施后目录：</strong>新增 <code>OrderManager</code>，保留 <code>venue/binance/</code>；<code>sim/</code> 和旧 <code>shard/executor.*</code> 已删除。<code>src/</code> 根目录没有新增交易类。</p>
+<div class="code-card code-block"><div class="code-label">text</div><pre><code>hquant/
+  src/
+    runtime.* / sqlite_history.* / config.* / perf_probe.h       修改
+    shard/shard.*                                                修改
+    shard/strategy.* / shard/binance_feed.*                      保留
+    trading/
+      order_manager.h / order_manager.cc                         新增
+      order_state.* / funds_state.* / trading_event.h            修改
+      trading_account.* / trading_account_journal.cc            修改
+      account_sync.* / account_view_publisher.*                  新增
+      order_journal.* / trade_port.h / BUILD.bazel               修改
+    venue/binance/                                               保留目录名
+      trade_client.* / user_stream.*                             修改
+      auth.* / rules.* / request_scheduler.* / BUILD.bazel       保留
+  bench/
+    market_wire.py / mock_binance_server.py                      外部行情和交易模拟
+    trade_chain_bench.py / validate_trade_chain.py               逐单、逐笔、逐资产核对
+    make_market_cases.py / validate_market_cases.py              行情样本生成与检查
+  test/
+    order_manager_test.cc                                        新增
+    order_state_test.cc / funds_state_test.cc                    扩充
+    order_journal_test.cc / e2e_trade.py                         保留并扩充
+    mock_public_server.py / run_trade_e2e.cc / BUILD.bazel      本机真实 socket 测试</code></pre></div>
+<div class="table-wrap"><table><thead><tr><th scope="col">文件</th><th scope="col">具体改动</th></tr></thead><tbody><tr><td><code>trading/order_manager.h/.cc</code>、<code>trading/BUILD.bazel</code></td><td>新的每账户订单跟踪器、期限队列和标准化订单／成交事件归并；依赖 <code>OrderState</code> 和中立事件类型，不依赖 Binance 或 SQLite。资金效果仍由 <code>TradingAccount</code> 编排。</td></tr><tr><td><code>trading/trading_account.h/.cc</code></td><td>把 <code>orders_</code>、订单 ID 映射、活动单集合和结果解释迁入 <code>OrderManager</code>；保留风险、FundsState、事件队列，并组合持有 <code>AccountSync</code> 与 <code>AccountViewPublisher</code>。</td></tr><tr><td><code>trading/trading_account_journal.cc</code></td><td>意图、回报的可靠提交回调与启动日志回放。</td></tr><tr><td><code>trading/account_sync.*</code></td><td>启动、断线和周期全账户同步；查询事实通过账户的持久化回调应用。</td></tr><tr><td><code>trading/account_view_publisher.*</code></td><td>合并资产变化并向相关 Shard 发布只读账户视图。</td></tr><tr><td><code>trading/order_state.*</code></td><td>保留纯状态机；补足 REST／私有 WS／查单乱序、部分成交后撤单、终态重复事件的规则。</td></tr><tr><td><code>trading/funds_state.*</code></td><td>用覆盖金额／版本代替单一 <code>reflected_by_venue</code> 标记；细化成交待反映扣减、手续费资产和迟到余额快照。</td></tr><tr><td><code>trading/trade_port.h</code>、<code>trading/trading_event.h</code>、<code>venue/binance/trade_client.*</code></td><td>删除仅供 Paper 使用的 <code>OnMarket</code> 与 <code>MarketMatchInput</code>；明确本地入队、开始写 socket、确定未发出和结果未知；维持账户级请求额度。</td></tr><tr><td><code>venue/binance/user_stream.*</code></td><td>保持标准化事件入口；补充重连后回报版本与余额顺序信息，保证旧事件不会覆盖新状态。</td></tr><tr><td><code>trading/order_journal.*</code></td><td>为需要重放的发送结果、超时与查询事实补足事件字段；保持提交后回调和连续序号。</td></tr><tr><td><code>sqlite_history.*</code>、<code>perf_probe.h</code></td><td>历史明确区分意图、入队、发包、REST 确认、私有回报应用、查询恢复；分别统计可靠提交与观察历史提交。</td></tr><tr><td><code>shard/shard.*</code>、删除 <code>shard/executor.*</code></td><td>删除 Shard 直连 Paper、<code>TryMarket()</code> 和旧同步 <code>Executor</code> 分支；账户视图中的撤单状态与资金门禁驱动换单。</td></tr><tr><td>删除 <code>sim/paper_exchange.*</code>、<code>sim/paper_trade_port.*</code>、<code>sim/BUILD.bazel</code></td><td>进程内撮合及适配器全部退出构建；外部模拟交易所仍在 <code>bench/</code>，通过 <code>venue/binance/</code> 协议适配器访问。</td></tr><tr><td><code>config.*</code>、<code>runtime.*</code>、<code>src/BUILD.bazel</code></td><td>只保留 schema v2 的外部账户模式，移除 <code>TradingMode::Paper</code>、schema v1 Paper 解析及构建注入；把仍需的费率等字段从旧 <code>ExecutorConfig</code> 迁入账户视图／配置。当前 <code>online_sim</code> 只连接固定 Binance Demo 域名；不存在生产实盘分支。</td></tr><tr><td><code>perf_probe.h</code>、<code>main.cc</code>、<code>shard/binance_feed.*</code></td><td>删除 <code>paper_match</code> 与 <code>live_paper</code> 等本地撮合指标，保留行情、日志、交易请求和私有回报的分段计时。</td></tr><tr><td><code>bench/market/make_market_cases.py</code>、<code>bench/market/market_wire.py</code>、<code>bench/market/validate_market_cases.py</code>、<code>bench/trade_chain_bench.py</code></td><td>原行情样本继续可用；生成 <code>market_shards.yaml</code>，运行时转换为 schema v2 + 外部模拟交易所配置。旧 case 的 <code>config.yaml</code> 也可转换。<code>live_ws_bench.py</code> 已删除，公共行情工具移入 <code>market_wire.py</code>。</td></tr><tr><td>删除 <code>test/e2e_replay.py</code>、<code>test/trading_account_test.cc</code>，新增 <code>test/mock_public_server.py</code>、<code>test/order_manager_test.cc</code>，修改 <code>test/BUILD.bazel</code>、<code>examples/replay.yaml</code>、<code>examples/binance_public.yaml</code></td><td>移除旧 schema v1/Paper 测试配置；订单断言通过外部 socket 用例和纯状态测试完成。</td></tr><tr><td><code>bench/venue/mock_binance_server.py</code>、<code>bench/validate_trade_chain.py</code>、<code>test/e2e_trade.py</code></td><td>逐 ID、成交、余额和日志序号核对；增加队列拒绝、回报乱序、撤单成交竞态、余额晚到和崩溃恢复故障场景。</td></tr></tbody></table></div>
+<h2 id="section-16">7. 开发计划</h2>
+<p>第 1–6 项已完成本机实现与验收；第 5 项还增加成交时间投影，第三资产手续费与账户外借记的本地正确性用例已通过。第 7 项的两笔真实 Demo 虚拟资金成交已通过，其中新版本验证了成交时间在私有回报、可靠日志与独立查成交之间一致；Demo 中的第三资产手续费、账户外活动和断线故障尚未验收。</p>
+<ol><li><strong>迁移旧 Paper 测试输入。</strong> 保留有价值的行情回放样本，把需要订单断言的 case 接到 <code>bench/venue/mock_binance_server.py</code>；旧 <code>schema_version: 1</code> 配置和 Paper 专用断言退出目标测试集。先建立可重复的外部链路基线。</li><li><strong>删除进程内 Paper 路径。</strong> 删除 <code>sim/</code>、<code>shard/executor.*</code>、两条 Shard Paper 分支、账户 <code>TryMarket()</code>、<code>TradePort::OnMarket()</code>、<code>MarketMatchInput</code>、schema v1／Paper 配置和相关 Bazel 依赖。保持 <code>venue/binance/</code> 与外部模拟交易所链路可构建、可运行。</li><li><strong>抽出 <code>OrderManager</code>。</strong> 迁移订单状态、ID 映射、撤单阶段和视图查询；由 <code>TradingAccount</code> 按日志提交顺序调用它。通过订单状态、账户状态与本机 socket 用例验证行为。</li><li><strong>补齐发送与未知结果语义。</strong> <code>TradePort</code> 报告确定未发出与可能已发出；<code>OrderManager</code> 按单计时、退避查询；撤单结果决定重试或换单。覆盖丢 REST 响应、私有回报先到、查单先于撤单、队列停机。</li><li><strong>修正资金覆盖与日志回放。</strong> 核对交易所 <code>locked</code> 和本地预留，覆盖余额晚到与第三资产手续费；回放日志后先查账再开放新单。不能解释的差异保持暂停。</li><li><strong>先跑本机正确性，再测性能。</strong> 沿用 1000 标的、30 秒 case，核对模拟交易所独立账本、<code>OrderManager</code>／<code>FundsState</code>、<code>order_journal.sqlite</code> 和 <code>history.sqlite</code>；分段报告日志提交、队列等待、发包、REST 结果、私有回报应用与历史提交。</li><li><strong>单独验收 <code>online_sim</code> 的 Demo 成交路径。</strong> 一个 BTCUSDT 标的、最多一笔小额虚拟资金订单，按<a href="BINANCE_DEMO_VALIDATION.md">Demo 验证手册</a>核对真实 <code>TRADE</code> 回报、非空成交查询、余额与两份 SQLite。1000 标的压测只对本机模拟交易所运行。</li></ol>
+<p>通过条件是：任一时刻每笔订单只有一个 <code>client_order_id</code> 和可解释状态；未决命令的资金不会被第二个 Shard 复用；确认撤单前不会换单；REST、私有 WS、查单和重启回放得到相同订单／资金终态；可靠日志无序号缺口；观察历史的缺口明确可见；请求队列、查询次数与账户状态均有上限。行情吞吐和订单性能只能在这些正确性条件满足后解释。</p>
+<h2 id="section-17">8. 本轮本机验收</h2>
+<p>使用 C++20 构建，通过 <code>bazelisk --batch test //hquant/test:all</code> 的 10 个目标，包含签名、规则、风险、订单状态、资金、可靠日志与本机 REST／私有 WS 故障用例。另用本机端到端用例验证：已有成交的状态目录若错误地把 <code>initial_balances</code> 改成当前余额，恢复对账会暂停并拒绝新单。新格式的 1000 标的行情 fixture 通过 <code>make_market_cases.py</code> 和 <code>validate_market_cases.py</code>；旧 fixture 仍可由 <code>trade_chain_bench.py</code> 转换。</p>
+<p>最新本机压测沿用<strong>原有</strong> <code>stress</code> case：1000 标的、30 秒、30 万条行情处理完成通知。独立模拟交易所经真实 socket 收到 3800 次挂单和 1728 次撤单，产生 3703 笔成交、9449 条私有订单回报，覆盖拒单、部分成交、撤单中成交和重复回报。<code>history.sqlite</code> 共 49584 条账户事件，<code>order_journal.sqlite</code> 共 46105 条可靠记录；两库完整性、日志连续序号、逐订单 ID、成交 ID、价格数量、每资产余额和最终账户状态核对均无错误。结果在 <code>/private/tmp/hquant-trade-projection-1000-04/trade_chain_result.json</code>，模拟器独立账本在同目录 <code>venue_snapshot.json</code>，<code>valid: true</code>。</p>
+<div class="table-wrap"><table><thead><tr><th scope="col">分段指标</th><th scope="col">本轮 p99</th></tr></thead><tbody><tr><td>行情发出 → 模拟交易所收到实际订单</td><td>2980 ms</td></tr><tr><td>模拟交易所发私有回报 → 账户应用</td><td>1239 ms</td></tr><tr><td>行情发出 → 对应私有回报应用</td><td>3863 ms</td></tr><tr><td>交易发送队列等待</td><td>2613 ms</td></tr><tr><td>socket 写入 / REST 响应等待</td><td>1.9 / 3.2 ms</td></tr></tbody></table></div>
+<p>这些是本机正确性负载下的观测值；订单队列等待主导延迟，不能据此推断真实交易所性能。1000 标的压测没有访问真实 Demo API。新版本又以单标的、最多一笔、20 虚拟 USDT 硬额度完成真实 Demo 成交验收：订单状态 <code>FILLED</code>，一笔 <code>executionReport: TRADE</code> 已应用，签名 <code>myTrades</code> 返回一笔，成交 ID、数量、价格、手续费、资产和成交时间与可靠日志及 SQLite 一致，独立账户余额匹配，未结订单为零。同一状态目录保留原始基线只读重启，回放订单和成交后全账户同步完成，没有新挂单或日志缺口。具体记录见<a href="BINANCE_DEMO_VALIDATION.md">Demo 验证文档</a>。Demo 环境的丢响应、私有流断线、第三资产手续费和账户外变动仍是扩大运行范围前的缺口。</p>
+<h2 id="section-18">9. 开发 Prompt</h2>
+<p>下面保留本轮开发使用的 Prompt，供后续复查和扩展测试时参考。</p>
+<div class="code-card code-block"><div class="code-label">text</div><pre><code>在 /Users/larry/project/open_project/hummingbot-cpp-redesign 按 docs/TRADING_CHAIN_DESIGN_V2.md 实施交易链路 V2。使用 C++20，并遵循现有 hquant 命名、Bazel 目标和账户单写入者风格。
+
+目标：交易只走外部接口。移除进程内 PaperExchange、PaperTradePort、TradingMode::Paper、schema v1 Paper 兼容、Shard 直连 Executor/Paper、TradingAccount::TryMarket 和 TradePort::OnMarket；迁移依赖 Paper 的测试与配置。保留 src/venue/binance/ 目录及其 Binance 协议适配器。正确性测试使用 bench/venue/mock_binance_server.py 的独立账本和真实 REST／私有 WS socket。
+
+新增 src/trading/order_manager.h/.cc，按账户集中持有 OrderState、订单 ID 映射、提交与撤单阶段、超时期限及查单计划。TradingAccount 负责风险、FundsState、OrderJournal、事件队列、全账户 SyncFromVenue 和视图发布。意图入日志队列后发送；REST、私有 WS、查单产生的状态变化先记日志再应用 OrderManager 和 FundsState；history.sqlite 只记异步观察历史。入发送队列不算交易所接受；未知结果保留资金并按原 client_order_id 查询，不生成新 ID 重发。PendingCancel 期间不重复撤单，确认订单与资金状态后才让 Shard 换单。
+
+按文档第 7 节顺序开发。补充单元、故障和真实 socket 集成测试，再运行现有 1000 标的、30 秒本机外部交易 case 做逐单、逐成交、逐资产和两份 SQLite 核对。不要对真实 Demo 做压力测试；保持 `online_sim` 的单笔限额，且只允许 Binance Demo 域名与虚拟账户。不要输出或提交凭据。交付时列出实际删除／新增／修改文件、测试命令及结果、真实 Demo 验证结果与剩余缺口。</code></pre></div></article>
+<footer>本页由 <a href="TRADING_CHAIN_DESIGN_V2.md">TRADING_CHAIN_DESIGN_V2.md</a> 生成；以 Markdown 源文件为准。可离线打开。</footer>
+</main>
+</div>
+</body>
+</html>

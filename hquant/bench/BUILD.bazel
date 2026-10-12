@@ -1,0 +1,19 @@
+load("@rules_cc//cc:defs.bzl", "cc_binary")
+
+cc_binary(
+    name = "trade_chain_bench",
+    srcs = ["trade_chain_bench.cc"],
+    visibility = ["//hquant:__subpackages__"],
+    deps = [
+        "//hquant/bench/venue:sim_venue",
+        "//hquant/src/base:log",
+        "@sqlite3//:sqlite3",
+        "@simdjson//:simdjson",
+    ],
+)
+
+exports_files([
+    "make_market_cases.py",
+    "trade_chain_bench.py",
+    "validate_market_cases.py",
+])

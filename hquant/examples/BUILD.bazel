@@ -1,0 +1,4 @@
+exports_files([
+    "binance_demo.yaml",
+    "binance_demo_credentials.yaml.example",
+])

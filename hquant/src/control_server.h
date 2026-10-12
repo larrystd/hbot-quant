@@ -12,15 +12,21 @@
 #include "absl/status/statusor.h"
 #include "hquant/shard/shard.h"
 #include "hquant/sqlite_history.h"
+#include "hquant/trading/trading_account.h"
 
 namespace hquant::v1 {
 
 struct ControlHandlers {
   std::function<std::vector<ShardStatus>()> status;
+  std::function<std::vector<AccountStatus>()> account_status;
   std::function<HistoryHealth()> history_health;
   std::function<absl::StatusOr<HistoryPage>(uint32_t, uint64_t)> history;
   std::function<absl::StatusOr<StrategyUpdateResult>(
       ShardId, uint64_t, StrategyPatch)> set_strategy;
+  std::function<absl::StatusOr<uint64_t>(
+      std::string, AccountAction, std::string, std::string)> account_action;
+  std::function<absl::StatusOr<JournalControlPage>(
+      std::string, uint32_t, uint64_t)> account_controls;
   std::function<void()> stop;
 };
 

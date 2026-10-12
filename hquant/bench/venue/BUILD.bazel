@@ -1,0 +1,35 @@
+load("@rules_cc//cc:defs.bzl", "cc_library", "cc_test")
+
+filegroup(
+    name = "mock_binance_server",
+    srcs = ["__init__.py", "mock_binance_server.py"],
+    visibility = ["//visibility:public"],
+)
+
+cc_library(
+    name = "matching_engine",
+    srcs = ["matching_engine.cc"],
+    hdrs = ["matching_engine.h"],
+    visibility = ["//visibility:public"],
+)
+
+cc_test(
+    name = "matching_engine_test",
+    srcs = ["matching_engine_test.cc"],
+    deps = [":matching_engine"],
+    size = "small",
+)
+
+cc_library(
+    name = "sim_venue",
+    srcs = ["sim_venue.cc"],
+    hdrs = ["sim_venue.h"],
+    deps = [
+        ":matching_engine",
+        "//hquant/src/venue/binance:auth",
+        "@boost.asio//:boost.asio",
+        "@boost.beast//:boost.beast",
+        "@simdjson//:simdjson",
+    ],
+    visibility = ["//visibility:public"],
+)

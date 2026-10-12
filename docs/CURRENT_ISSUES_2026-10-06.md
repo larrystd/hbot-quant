@@ -71,7 +71,7 @@ T1 = 客户端 send() 返回；K = 服务端 kevent 返回该 socket 的可读�
 
 **建议解决方案：**先对真实服务 A/B 测试发送器忙等与 I/O 线程 CPU 资源安排，比较内核线程和 I/O 线程两次“可运行→获得 CPU”以及 T1→T2。若仍需要定位 2.960 µs 的内部组成，再使用能看到 TCP 接收队列入队和 `kqueue` 通知的内核探针。
 
-证据文件：`/private/tmp/hquant-phase-10k-20261006/result.json`（正式轮次）；`/private/tmp/hquant-kevent-10k-20261006-r2/result.json`、`/private/tmp/hquant-kevent-10k-20261006-r3/result.json`（K 复跑）；`/private/tmp/hquant-t1t2-kernel30/result.json`、`acks.bin`、`ws_sender.events`、`ws_sender.sent_ns.bin`、`ws_sender.write_ns.bin`（同一内核诊断运行）；`/private/tmp/hquant-t1t2-kernel-final.ktrace` 及导出的 `.csv`；`/private/tmp/hquant_t1t2_kernel_correlate.py`（原有相关脚本，七段表补充了线程 578 的调度配对）。打点代码：`hquant/bench/ws_sender.cc`、`hquant/bench/kevent_probe_darwin.cc`、`hquant/src/base/net.h`、`hquant/bench/live_ws_bench.py`。
+证据文件：`/private/tmp/hquant-phase-10k-20261006/result.json`（正式轮次）；`/private/tmp/hquant-kevent-10k-20261006-r2/result.json`、`/private/tmp/hquant-kevent-10k-20261006-r3/result.json`（K 复跑）；`/private/tmp/hquant-t1t2-kernel30/result.json`、`acks.bin`、`ws_sender.events`、`ws_sender.sent_ns.bin`、`ws_sender.write_ns.bin`（同一内核诊断运行）；`/private/tmp/hquant-t1t2-kernel-final.ktrace` 及导出的 `.csv`；`/private/tmp/hquant_t1t2_kernel_correlate.py`（原有相关脚本，七段表补充了线程 578 的调度配对）。打点代码：`hquant/bench/market/ws_sender.cc`、`hquant/bench/timing/kevent_probe_darwin.cc`、`hquant/src/base/net.h`、`hquant/bench/live_ws_bench.py`。
 
 ## 2. 测量扰动与毫秒级异常长尾
 
@@ -123,4 +123,4 @@ T1 = 客户端 send() 返回；K = 服务端 kevent 返回该 socket 的可读�
 
 ## 不列为当前未修复问题
 
-旧的逐条等待文件回放基准入口已删除；跨进程时钟纪元不一致、已测试负载下的 SSE 历史队列溢出、SQLite 重复索引和每批反复 prepare 已分别处理。旧报告保留作历史证据，相关经过见 `hquant/bench/live_run_issues_2026-10-06.json` 和 [PERFORMANCE_2026-10-06.md](PERFORMANCE_2026-10-06.md)。
+旧的逐条等待文件回放基准入口已删除；跨进程时钟纪元不一致、已测试负载下的 SSE 历史队列溢出、SQLite 重复索引和每批反复 prepare 已分别处理。旧报告保留作历史证据，相关经过见 `hquant/bench/timing/live_run_issues_2026-10-06.json` 和 [PERFORMANCE_2026-10-06.md](PERFORMANCE_2026-10-06.md)。

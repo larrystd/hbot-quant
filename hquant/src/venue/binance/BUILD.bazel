@@ -1,0 +1,82 @@
+load("@rules_cc//cc:defs.bzl", "cc_library")
+
+cc_library(
+    name = "auth",
+    srcs = ["auth.cc"],
+    hdrs = ["auth.h"],
+    strip_include_prefix = "/hquant/src",
+    include_prefix = "hquant",
+    deps = ["//hquant/src/base:fixed", "@openssl//:ssl"],
+    visibility = ["//hquant:__subpackages__"],
+)
+
+cc_library(
+    name = "user_stream",
+    srcs = ["user_stream.cc"],
+    hdrs = ["user_stream.h"],
+    strip_include_prefix = "/hquant/src",
+    include_prefix = "hquant",
+    deps = [
+        ":auth",
+        "//hquant/src:config",
+        "//hquant/src:perf_probe",
+        "//hquant/src/base:fixed",
+        "//hquant/src/base:net",
+        "//hquant/src/trading:trading_event",
+        "@abseil-cpp//absl/status:status",
+        "@abseil-cpp//absl/status:statusor",
+        "@boost.asio//:boost.asio",
+        "@simdjson//:simdjson",
+    ],
+    visibility = ["//hquant:__subpackages__"],
+)
+
+cc_library(
+    name = "trade_client",
+    srcs = ["trade_client.cc"],
+    hdrs = ["trade_client.h"],
+    strip_include_prefix = "/hquant/src",
+    include_prefix = "hquant",
+    deps = [
+        ":auth",
+        ":request_scheduler",
+        ":rules",
+        ":user_stream",
+        "//hquant/src:config",
+        "//hquant/src:perf_probe",
+        "//hquant/src/base:fixed",
+        "//hquant/src/base:net",
+        "//hquant/src/trading:trade_port",
+        "@abseil-cpp//absl/status:status",
+        "@abseil-cpp//absl/status:statusor",
+        "@boost.asio//:boost.asio",
+        "@simdjson//:simdjson",
+    ],
+    visibility = ["//hquant:__subpackages__"],
+)
+
+cc_library(
+    name = "request_scheduler",
+    srcs = ["request_scheduler.cc"],
+    hdrs = ["request_scheduler.h"],
+    strip_include_prefix = "/hquant/src",
+    include_prefix = "hquant",
+    deps = ["//hquant/src/base:net"],
+    visibility = ["//hquant:__subpackages__"],
+)
+
+cc_library(
+    name = "rules",
+    srcs = ["rules.cc"],
+    hdrs = ["rules.h"],
+    strip_include_prefix = "/hquant/src",
+    include_prefix = "hquant",
+    deps = [
+        "//hquant/src/base:fixed",
+        "//hquant/src/trading:trade_port",
+        "@abseil-cpp//absl/status:status",
+        "@abseil-cpp//absl/status:statusor",
+        "@simdjson//:simdjson",
+    ],
+    visibility = ["//hquant:__subpackages__"],
+)

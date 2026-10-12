@@ -205,6 +205,8 @@ asio::awaitable<absl::StatusOr<HttpResponse>> HttpClient::Send(
     if (!status.ok()) co_return status;
 
     boost::system::error_code ec;
+    const auto write_begin = std::chrono::steady_clock::now();
+    if (request.on_write_start) request.on_write_start();
     if (plain_) {
       plain_->expires_at(request.deadline);
       co_await http::async_write(*plain_, wire,
@@ -213,6 +215,9 @@ asio::awaitable<absl::StatusOr<HttpResponse>> HttpClient::Send(
       beast::get_lowest_layer(*secure_).expires_at(request.deadline);
       co_await http::async_write(*secure_, wire,
                                  asio::redirect_error(asio::use_awaitable, ec));
+    }
+    if (request.on_write) {
+      request.on_write(write_begin, std::chrono::steady_clock::now());
     }
     if (!ec) {
       beast::flat_buffer buffer;

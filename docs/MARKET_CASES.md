@@ -10,21 +10,21 @@
 
 盘口总数包括每只股票的首条快照；每只股票另有一条 `subscribe`，所以回放输入比行情消息多 1000 条。没有用于衔接序号的空差分。每次盘口快照的买卖两侧各恰好 10 档，价格严格排序、数量为正；快照序号逐只股票连续。成交价取当时卖一（主动买）或买一（主动卖），成交 ID 逐只股票连续。
 
-压力 case 中，Shard ID 为 0、10、…、990 的 100 只股票挂单量为 2 股，报价价差为 `0.00005`，报价位于买一和卖一，策略刷新间隔为 60 秒。每只股票的前 4 笔公开成交各成交 1 股，依次使卖单、买单部分成交，再使卖单、买单完全成交；其余 900 只保持原来的 1 股挂单、0.001 报价价差和 15 秒刷新。30 秒完整压力轮次预期有 **400 条 Paper 成交记录、200 次部分成交、200 次完全成交**。公开成交仍是 60,000 笔，不能与 Paper 成交笔数混用。端到端校验按每只股票核对成交方向、价格、数量、费用、订单剩余量和余额。
+压力 case 中，Shard ID 为 0、10、…、990 的 100 只股票配置 2 股挂单量、`0.00005` 报价价差和 60 秒刷新；其余 900 只配置 1 股挂单量、`0.001` 价差和 15 秒刷新。公开逐笔成交共 60,000 条，只是行情输入负载。当前 `bench/venue/` 模拟交易所按独立脚本产生订单成交，并不按这些公开逐笔撮合，因此不再使用旧 Paper 路径的固定成交笔数作为交易链路验收值。
 
-第一只被选中的股票展示了完整的正确性预期：首个盘口的买一为 99.99 元、卖一为 100.01 元；策略由中间价 100.00 元及上述配置，向 Paper 各提交一张 **买 99.99 元 × 2 股**和**卖 100.01 元 × 2 股**的限价单。之后四条公开逐笔消息依次为：主动买 100.01 元 1 股 → 卖单剩 1 股；主动卖 99.99 元 1 股 → 买单剩 1 股；再重复这两条 → 两单分别全部成交。测试逐条检查这四笔模拟成交和订单状态。其余 900 只股票的挂单价未被公开逐笔成交价触及，预期 Paper 成交为 0。公开逐笔成交只供 Paper 按当前简化规则模拟撮合；它不能证明实盘中我们的挂单已经排队成交。
+第一只被选中的股票首个盘口买一为 99.99 元、卖一为 100.01 元，后续公开逐笔成交在买一和卖一之间交替。交易链路压测核对模拟交易所实际收到的订单、独立账本、私有回报和本地记录；模拟成交不代表真实交易所排队成交。
 
-生成器把 1000 只股票的消息错开排入各自的间隔：盘口消息使用 `slot × interval + shard × 100µs`；成交消息使用 `slot × interval + shard × interval / 1000`。`at_us` 是计划到达时间。文件回放的 `RunReplay` 逐条等待完成，不按时间戳限速；当前性能测试由 `live_ws_bench.py` 按计划时间经 WebSocket 发送，首条盘口预热不计时。两种执行方式的 QPS 和延迟不能混用。
+生成器把 1000 只股票的消息错开排入各自的间隔：盘口消息使用 `slot × interval + shard × 100µs`；成交消息使用 `slot × interval + shard × interval / 1000`。`at_us` 是计划到达时间。当前性能测试由 `trade_chain_bench.py` 调用 `market/ws_sender.cc`，按计划时间经 WebSocket 发送全部公开行情消息，包括首条盘口；`subscribe` 只用于样本描述，不作为行情帧发送。
 
 `nyse` 的每秒盘口频率参考 [NYSE OpenBook Aggregated](https://www.nyse.com/data-products/catalog/openbook-aggregated)；`sse` 的每 3 秒盘口频率参考 [上交所 Level-2 产品说明](https://www.sseinfo.com/services/assortment/level2/)。股票、成交频率、价格、数量及压力速率都是测试选择，不是交易所录制行情。这些回放也不包含网络接收、集合竞价或真实券商私有订单回报。
 
 生成和校验：
 
 ```sh
-python3 hquant/bench/make_market_cases.py /tmp/hquant-market-cases --case all
-python3 hquant/bench/validate_market_cases.py /tmp/hquant-market-cases/nyse
-python3 hquant/bench/validate_market_cases.py /tmp/hquant-market-cases/sse
-python3 hquant/bench/validate_market_cases.py /tmp/hquant-market-cases/stress
+python3 hquant/bench/market/make_market_cases.py /tmp/hquant-market-cases --case all
+python3 hquant/bench/market/validate_market_cases.py /tmp/hquant-market-cases/nyse
+python3 hquant/bench/market/validate_market_cases.py /tmp/hquant-market-cases/sse
+python3 hquant/bench/market/validate_market_cases.py /tmp/hquant-market-cases/stress
 ```
 
-每组输出 `replay.json`、`config.yaml`、`manifest.json`。校验器核对全部 1000 只股票的订阅、每条消息的时间、每条快照的 20 档、序号、成交价格与数量、总数和最终买卖一。端到端执行还需检查 Shard 处理数、SQLite 历史记录和序号缺口。
+每组输出 `replay.json`、`market_shards.yaml`、`manifest.json`。校验器核对全部 1000 只股票的订阅、每条消息的时间、每条快照的 20 档、序号、成交价格与数量、总数和最终买卖一。`trade_chain_bench.py` 在运行时从 `market_shards.yaml` 生成实际 `config.yaml`；目录分工见 [Bench 说明](../hquant/bench/README.md)。

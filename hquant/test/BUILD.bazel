@@ -1,12 +1,108 @@
 load("@rules_cc//cc:defs.bzl", "cc_test")
 
 cc_test(
-    name = "end_to_end",
-    srcs = ["run_e2e.cc"],
+    name = "demo_config_test",
+    srcs = ["demo_config_test.cc"],
+    data = ["//hquant/examples:binance_demo.yaml"],
+    deps = ["//hquant/src:config"],
+)
+
+cc_test(
+    name = "order_manager_test",
+    srcs = ["order_manager_test.cc"],
+    deps = ["//hquant/src/trading:order_manager"],
+)
+
+cc_test(
+    name = "client_order_id_test",
+    srcs = ["client_order_id_test.cc"],
+    deps = ["//hquant/src/trading:client_order_id"],
+)
+
+cc_test(
+    name = "order_state_test",
+    srcs = ["order_state_test.cc"],
+    deps = ["//hquant/src/trading:order_state"],
+)
+
+cc_test(
+    name = "order_journal_test",
+    srcs = ["order_journal_test.cc"],
+    deps = [
+        "//hquant/src/trading:order_journal",
+        "@boost.asio//:boost.asio",
+        "@sqlite3//:sqlite3",
+    ],
+)
+
+cc_test(
+    name = "binance_auth_test",
+    srcs = ["binance_auth_test.cc"],
+    deps = ["//hquant/src/venue/binance:auth"],
+)
+
+cc_test(
+    name = "binance_rules_test",
+    srcs = ["binance_rules_test.cc"],
+    deps = ["//hquant/src/venue/binance:rules"],
+)
+
+cc_test(
+    name = "funds_state_test",
+    srcs = ["funds_state_test.cc"],
+    deps = ["//hquant/src/trading:funds_state"],
+)
+
+cc_test(
+    name = "risk_limits_test",
+    srcs = ["risk_limits_test.cc"],
+    deps = ["//hquant/src/trading:risk_limits"],
+)
+
+cc_test(
+    name = "request_scheduler_test",
+    srcs = ["request_scheduler_test.cc"],
+    deps = ["//hquant/src/venue/binance:request_scheduler"],
+)
+
+cc_test(
+    name = "account_view_publisher_test",
+    srcs = ["account_view_publisher_test.cc"],
+    deps = [
+        "//hquant/src/trading:trading_account",
+    ],
+)
+
+cc_test(
+    name = "trade_client_stop_test",
+    srcs = ["trade_client_stop_test.cc"],
+    deps = [
+        "//hquant/src/venue/binance:trade_client",
+        "@boost.asio//:boost.asio",
+    ],
+    tags = ["local"],
+)
+
+cc_test(
+    name = "trade_chain_smoke",
+    srcs = ["run_trade_chain_smoke.cc"],
     data = [
-        "e2e_replay.py",
+        "//hquant/bench:trade_chain_bench",
         "//hquant/src:hquant_server",
     ],
-    size = "small",
+    size = "medium",
+    tags = ["local"],
+)
+
+cc_test(
+    name = "trade_end_to_end",
+    srcs = ["run_trade_e2e.cc"],
+    data = [
+        "e2e_trade.py",
+        "mock_public_server.py",
+        "//hquant/bench/venue:mock_binance_server",
+        "//hquant/src:hquant_server",
+    ],
+    size = "medium",
     tags = ["local"],
 )

@@ -22,7 +22,10 @@ cc_library(
         "@abseil-cpp//absl/status:statusor",
         "@yaml-cpp//:yaml-cpp",
     ],
-    visibility = ["//hquant/src:__subpackages__"],
+    visibility = [
+        "//hquant/src:__subpackages__",
+        "//hquant/test:__pkg__",
+    ],
 )
 
 cc_library(
@@ -38,6 +41,9 @@ cc_library(
         ":replay_reader",
         ":sqlite_history",
         "//hquant/src/shard:shard",
+        "//hquant/src/trading:trading_account",
+        "//hquant/src/trading:order_journal",
+        "//hquant/src/venue/binance:trade_client",
         "@abseil-cpp//absl/status:status",
         "@abseil-cpp//absl/status:statusor",
     ],
@@ -71,6 +77,7 @@ cc_library(
         ":perf_probe",
         "//hquant/src/base:fixed",
         "//hquant/src/shard:shard",
+        "//hquant/src/trading:trading_account",
         "@abseil-cpp//absl/status:status",
         "@abseil-cpp//absl/status:statusor",
         "@simdjson//:simdjson",
@@ -103,6 +110,7 @@ cc_binary(
         ":perf_probe",
         ":runtime",
         "//hquant/src/base:fixed",
+        "//hquant/src/base:log",
         "@abseil-cpp//absl/status:status",
         "@gflags//:gflags",
     ],

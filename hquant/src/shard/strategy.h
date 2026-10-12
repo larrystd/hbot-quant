@@ -8,6 +8,7 @@
 #include "hquant/base/ids.h"
 #include "hquant/config.h"
 #include "hquant/shard/market_type.h"
+#include "hquant/trading/trading_event.h"
 
 namespace hquant::v1 {
 
@@ -27,11 +28,6 @@ struct ExecutionView {
 
 struct NoAction {};
 struct CancelOrders { std::vector<OrderId> ids; };
-struct LimitOrderRequest {
-  Side side = Side::Buy;
-  uint64_t price_nanos = 0;
-  uint64_t quantity_nanos = 0;
-};
 struct SubmitOrders { std::vector<LimitOrderRequest> orders; };
 using StrategyDecision = std::variant<NoAction, CancelOrders, SubmitOrders>;
 
@@ -45,6 +41,7 @@ class Strategy {
     config_ = config;
     next_refresh_at_.reset();
   }
+  void ResetRefresh() { next_refresh_at_.reset(); }
   const StrategyConfig& Config() const { return config_; }
 
  private:

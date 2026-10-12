@@ -1,0 +1,63 @@
+# Binance Spot Demo correctness check. Default is read-only.
+# Copy the credentials template into hquant/local/ and chmod 600 it.
+# Set initial_balances to the exact Demo account totals before enabling orders.
+schema_version: 2
+input:
+  source: binance_public
+  rest_host: demo-api.binance.com
+  rest_port: 443
+  websocket_host: demo-stream.binance.com
+  websocket_port: 443
+  tls: true
+  depth_snapshot_limit: 100
+  max_snapshot_requests_per_run: 3
+accounts:
+  - id: demo
+    mode: online_sim
+    venue: binance_spot
+    trading_rest:
+      host: demo-api.binance.com
+      port: 443
+      tls: true
+    private_ws:
+      host: demo-ws-api.binance.com
+      port: 443
+      tls: true
+    api_credentials_file: ../local/binance_demo_credentials.yaml
+    max_submissions_per_run: 0
+    initial_balances:
+      BTC: "0"
+      USDT: "0"
+    hard_limits:
+      BTC: "0"
+      USDT: "20"
+    maker_fee_rate: "0.001"
+    risk:
+      max_order_value: "20"
+      max_open_value_per_quote: "20"
+      max_active_orders: 1
+      max_symbol_active_orders: 1
+    request_limits:
+      weight_per_minute: 200
+      orders_per_ten_seconds: 1
+shards:
+  - id: 0
+    account_id: demo
+    market:
+      symbol: BTCUSDT
+      base_asset: BTC
+      quote_asset: USDT
+      price_per_tick: "0.00000001"
+      amount_per_lot: "0.00000001"
+      stale_after_ms: 30000
+      max_buffered_diffs: 1024
+      trading_rule:
+        price_increment: "0.01"
+        base_increment: "0.00001"
+        min_base_amount: "0.00001"
+        min_order_value: "5"
+    strategy:
+      order_amount: "0.0001"
+      bid_spread: "0.001"
+      ask_spread: "0.001"
+      refresh_ms: 15000

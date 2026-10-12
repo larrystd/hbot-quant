@@ -13,10 +13,10 @@ int main() {
     return 2;
   }
   const std::string root = std::string(test_srcdir) + "/" + test_workspace;
-  const std::string script = root + "/hquant/test/e2e_replay.py";
+  const std::string script = root + "/hquant/test/e2e_trade.py";
   const std::string binary = root + "/hquant/src/hquant_server";
-  execlp("python3", "python3", script.c_str(), "--binary", binary.c_str(), "-v",
-         static_cast<char*>(nullptr));
-  std::perror("cannot start Python end-to-end suite");
+  execlp("python3", "python3", script.c_str(), "--binary", binary.c_str(),
+         "-v", static_cast<char*>(nullptr));
+  std::perror("cannot start trade end-to-end suite");
   return 2;
 }

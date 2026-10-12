@@ -1,0 +1,1078 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="2200" height="515" viewBox="0 0 2200 515">
+<style>text{font:12px system-ui,sans-serif;fill:#182332} .head{font-size:18px;font-weight:600} .sub{font-size:12px;fill:#506070} rect{stroke:#fff;stroke-width:.5}</style>
+<rect width="100%" height="100%" fill="#fff" stroke="none"/>
+<text class="head" x="20" y="28">模拟交易所 I/O 线程</text>
+<text class="sub" x="20" y="48">macOS sample：回放期活跃栈 6,846 个采样；已排除睡眠／阻塞栈；公共线程入口已折叠。宽度表示活跃采样占比，非逐单延迟。</text>
+<g><title>模拟交易所 I/O 线程 — 6,846 samples (100.0%)</title>
+<rect x="20.00" y="480.00" width="2160.00" height="20" fill="#bed1c2"/>
+<text x="23.00" y="494.00">模拟交易所 I/O 线程</text>
+</g>
+<g><title>boost::asio::detail::scheduler::do_run_one(boost::asio::detail::conditionally_enabled_mutex::scoped_lock&amp;, boost::asio::detail::scheduler_thread_info&amp;, boost::system::error_code const&amp;) — 6,840 samples (99.9%)</title>
+<rect x="20.00" y="458.00" width="2158.11" height="20" fill="#b3a0cd"/>
+<text x="23.00" y="472.00">boost::asio::detail::scheduler::do_run_one(boost::asio::detail::conditionally_enabled_mutex::scoped_lock&amp;, boost::asio::detail::scheduler_thread_info&amp;, boost…</text>
+</g>
+<g><title>boost::asio::detail::wait_handler&lt;hquant::bench::SimVenue::Impl::Tick()::&#x27;lambda&#x27;(boost::system::error_code), boost::asio::any_io_executor&gt;::do_complete(void*, boost::asio::detail::scheduler_operation*, boost::system::error_code const&amp;, unsigned long) — 6,024 samples (88.0%)</title>
+<rect x="20.00" y="436.00" width="1900.65" height="20" fill="#ef8b42"/>
+<text x="23.00" y="450.00">boost::asio::detail::wait_handler&lt;…&gt;::do_complete(void*, boost::asio::detail::scheduler_operation*, boost::system::error_code const&amp;, unsigned long)</text>
+</g>
+<g><title>hquant::bench::SimVenue::Impl::Tick() — 5,996 samples (87.6%)</title>
+<rect x="20.00" y="414.00" width="1891.81" height="20" fill="#ef8b42"/>
+<text x="23.00" y="428.00">hquant::bench::SimVenue::Impl::Tick()</text>
+</g>
+<g><title>hquant::bench::SimVenue::Impl::ApplyCancel(unsigned long, unsigned long long, bool) — 2,328 samples (34.0%)</title>
+<rect x="20.00" y="392.00" width="734.51" height="20" fill="#eeb468"/>
+<text x="23.00" y="406.00">hquant::bench::SimVenue::Impl::ApplyCancel(unsigned long, unsigned long long, bool)</text>
+</g>
+<g><title>hquant::bench::MatchingEngine::Levels(std::basic_string&lt;char&gt; const&amp;, hquant::bench::Side) const — 1,698 samples (24.8%)</title>
+<rect x="20.00" y="370.00" width="535.74" height="20" fill="#e15241"/>
+<text x="23.00" y="384.00">hquant::bench::MatchingEngine::Levels(std::basic_string&lt;…&gt; const&amp;, hquant::b…</text>
+</g>
+<g><title>std::vector&lt;hquant::bench::SimLevel&gt;::push_back[abi:ne200100](hquant::bench::SimLevel&amp;&amp;) — 100 samples (1.5%)</title>
+<rect x="20.00" y="348.00" width="31.55" height="20" fill="#adc5d4"/>
+</g>
+<g><title>operator new(unsigned long) — 21 samples (0.3%)</title>
+<rect x="20.00" y="326.00" width="6.63" height="20" fill="#d4c5cc"/>
+</g>
+<g><title>&lt;deduplicated_symbol&gt; — 9 samples (0.1%)</title>
+<rect x="20.00" y="304.00" width="2.84" height="20" fill="#cbd5dd"/>
+</g>
+<g><title>_xzm_xzone_malloc — 5 samples (0.1%)</title>
+<rect x="22.84" y="304.00" width="1.58" height="20" fill="#cbd5dd"/>
+</g>
+<g><title>malloc_type_malloc — 4 samples (0.1%)</title>
+<rect x="24.42" y="304.00" width="1.26" height="20" fill="#bed1c2"/>
+</g>
+<g><title>_platform_memmove — 19 samples (0.3%)</title>
+<rect x="26.63" y="326.00" width="5.99" height="20" fill="#b9ccd5"/>
+</g>
+<g><title>_xzm_free — 17 samples (0.2%)</title>
+<rect x="32.62" y="326.00" width="5.36" height="20" fill="#bed1c2"/>
+</g>
+<g><title>__bzero — 3 samples (0.0%)</title>
+<rect x="32.62" y="304.00" width="0.95" height="20" fill="#b9ccd5"/>
+</g>
+<g><title>_free — 12 samples (0.2%)</title>
+<rect x="37.98" y="326.00" width="3.79" height="20" fill="#bed1c2"/>
+</g>
+<g><title>DYLD-STUB$$memcpy — 3 samples (0.0%)</title>
+<rect x="41.77" y="326.00" width="0.95" height="20" fill="#d4c5cc"/>
+</g>
+<g><title>DYLD-STUB$$operator delete(void*) — 3 samples (0.0%)</title>
+<rect x="42.72" y="326.00" width="0.95" height="20" fill="#b9ccd5"/>
+</g>
+<g><title>std::__hash_table&lt;std::__hash_value_type&lt;std::basic_string&lt;char&gt;, hquant::bench::MatchingEngine::Book&gt;&gt;::find&lt;std::basic_string&lt;char&gt;&gt;(std::basic_string&lt;char&gt; const&amp;) const — 77 samples (1.1%)</title>
+<rect x="51.55" y="348.00" width="24.29" height="20" fill="#adc5d4"/>
+</g>
+<g><title>DYLD-STUB$$memcmp — 10 samples (0.1%)</title>
+<rect x="51.55" y="326.00" width="3.16" height="20" fill="#d4c5cc"/>
+</g>
+<g><title>std::__murmur2_or_cityhash&lt;unsigned long, 64ul&gt;::operator()[abi:ne200100](void const*, unsigned long) const — 9 samples (0.1%)</title>
+<rect x="54.71" y="326.00" width="2.84" height="20" fill="#adc5d4"/>
+</g>
+<g><title>_platform_memcmp — 8 samples (0.1%)</title>
+<rect x="57.55" y="326.00" width="2.52" height="20" fill="#d7c6b8"/>
+</g>
+<g><title>_xzm_free — 3 samples (0.0%)</title>
+<rect x="75.85" y="348.00" width="0.95" height="20" fill="#bed1c2"/>
+</g>
+<g><title>hquant::bench::SimVenue::Impl::DepthFrame(unsigned long, std::vector&lt;hquant::bench::SimLevel&gt; const&amp;, std::vector&lt;hquant::bench::SimLevel&gt; const&amp;, unsigned long long, bool) — 324 samples (4.7%)</title>
+<rect x="555.74" y="370.00" width="102.23" height="20" fill="#eeb468"/>
+<text x="558.74" y="384.00">hquant::bench…</text>
+</g>
+<g><title>hquant::bench::MatchingEngine::Levels(std::basic_string&lt;char&gt; const&amp;, hquant::bench::Side) const — 158 samples (2.3%)</title>
+<rect x="555.74" y="348.00" width="49.85" height="20" fill="#e15241"/>
+<text x="558.74" y="362.00">hquan…</text>
+</g>
+<g><title>std::vector&lt;hquant::bench::SimLevel&gt;::push_back[abi:ne200100](hquant::bench::SimLevel&amp;&amp;) — 18 samples (0.3%)</title>
+<rect x="555.74" y="326.00" width="5.68" height="20" fill="#adc5d4"/>
+</g>
+<g><title>operator new(unsigned long) — 5 samples (0.1%)</title>
+<rect x="555.74" y="304.00" width="1.58" height="20" fill="#d4c5cc"/>
+</g>
+<g><title>_xzm_free — 4 samples (0.1%)</title>
+<rect x="557.32" y="304.00" width="1.26" height="20" fill="#bed1c2"/>
+</g>
+<g><title>std::__hash_table&lt;std::__hash_value_type&lt;std::basic_string&lt;char&gt;, hquant::bench::MatchingEngine::Book&gt;&gt;::find&lt;std::basic_string&lt;char&gt;&gt;(std::basic_string&lt;char&gt; const&amp;) const — 3 samples (0.0%)</title>
+<rect x="561.42" y="326.00" width="0.95" height="20" fill="#adc5d4"/>
+</g>
+<g><title>hquant::bench::SimVenue::Impl::LevelRows(std::vector&lt;hquant::bench::SimLevel&gt; const&amp;) const — 132 samples (1.9%)</title>
+<rect x="605.59" y="348.00" width="41.65" height="20" fill="#eeb468"/>
+<text x="608.59" y="362.00">hqua…</text>
+</g>
+<g><title>hquant::v1::BinanceDecimal(unsigned long long) — 46 samples (0.7%)</title>
+<rect x="605.59" y="326.00" width="14.51" height="20" fill="#7dbb9d"/>
+</g>
+<g><title>std::to_string(unsigned long long) — 14 samples (0.2%)</title>
+<rect x="605.59" y="304.00" width="4.42" height="20" fill="#adc5d4"/>
+</g>
+<g><title>&lt;deduplicated_symbol&gt; — 7 samples (0.1%)</title>
+<rect x="605.59" y="282.00" width="2.21" height="20" fill="#cbd5dd"/>
+</g>
+<g><title>_platform_memmove — 7 samples (0.1%)</title>
+<rect x="605.59" y="260.00" width="2.21" height="20" fill="#b9ccd5"/>
+</g>
+<g><title>std::__itoa::__base_10_u32[abi:ne200100](char*, unsigned int) — 5 samples (0.1%)</title>
+<rect x="607.80" y="282.00" width="1.58" height="20" fill="#adc5d4"/>
+</g>
+<g><title>std::basic_string&lt;char&gt;::append(char const*, unsigned long) — 5 samples (0.1%)</title>
+<rect x="610.01" y="304.00" width="1.58" height="20" fill="#adc5d4"/>
+</g>
+<g><title>DYLD-STUB$$std::to_string(unsigned long long) — 4 samples (0.1%)</title>
+<rect x="611.59" y="304.00" width="1.26" height="20" fill="#d4c5cc"/>
+</g>
+<g><title>std::basic_string&lt;char&gt;::insert(unsigned long, unsigned long, char) — 4 samples (0.1%)</title>
+<rect x="612.85" y="304.00" width="1.26" height="20" fill="#adc5d4"/>
+</g>
+<g><title>std::basic_string&lt;char&gt;::append(char const*, unsigned long) — 44 samples (0.6%)</title>
+<rect x="620.11" y="326.00" width="13.88" height="20" fill="#adc5d4"/>
+</g>
+<g><title>std::basic_string&lt;char&gt;::__grow_by_and_replace(unsigned long, unsigned long, unsigned long, unsigned long, unsigned long, unsigned long, char const*) — 18 samples (0.3%)</title>
+<rect x="620.11" y="304.00" width="5.68" height="20" fill="#adc5d4"/>
+</g>
+<g><title>$_0::operator()() const::&#x27;lambda0&#x27;(unsigned long, std::__type_descriptor_t)::__invoke(unsigned long, std::__type_descriptor_t) — 5 samples (0.1%)</title>
+<rect x="620.11" y="282.00" width="1.58" height="20" fill="#cbd5dd"/>
+</g>
+<g><title>operator_new_impl[abi:ne200100](unsigned long, std::__type_descriptor_t) — 4 samples (0.1%)</title>
+<rect x="620.11" y="260.00" width="1.26" height="20" fill="#cbd5dd"/>
+</g>
+<g><title>_platform_memmove — 5 samples (0.1%)</title>
+<rect x="621.68" y="282.00" width="1.58" height="20" fill="#b9ccd5"/>
+</g>
+<g><title>_xzm_free — 5 samples (0.1%)</title>
+<rect x="623.26" y="282.00" width="1.58" height="20" fill="#bed1c2"/>
+</g>
+<g><title>_platform_memmove — 7 samples (0.1%)</title>
+<rect x="625.78" y="304.00" width="2.21" height="20" fill="#b9ccd5"/>
+</g>
+<g><title>DYLD-STUB$$memmove — 5 samples (0.1%)</title>
+<rect x="627.99" y="304.00" width="1.58" height="20" fill="#d4c5cc"/>
+</g>
+<g><title>std::to_string(unsigned long long) — 19 samples (0.3%)</title>
+<rect x="633.99" y="326.00" width="5.99" height="20" fill="#adc5d4"/>
+</g>
+<g><title>&lt;deduplicated_symbol&gt; — 6 samples (0.1%)</title>
+<rect x="633.99" y="304.00" width="1.89" height="20" fill="#cbd5dd"/>
+</g>
+<g><title>_platform_memmove — 3 samples (0.0%)</title>
+<rect x="633.99" y="282.00" width="0.95" height="20" fill="#b9ccd5"/>
+</g>
+<g><title>std::__itoa::__base_10_u32[abi:ne200100](char*, unsigned int) — 5 samples (0.1%)</title>
+<rect x="635.88" y="304.00" width="1.58" height="20" fill="#adc5d4"/>
+</g>
+<g><title>std::basic_string&lt;char&gt;::insert(unsigned long, char const*, unsigned long) — 14 samples (0.2%)</title>
+<rect x="639.98" y="326.00" width="4.42" height="20" fill="#adc5d4"/>
+</g>
+<g><title>_platform_memmove — 9 samples (0.1%)</title>
+<rect x="639.98" y="304.00" width="2.84" height="20" fill="#b9ccd5"/>
+</g>
+<g><title>std::basic_string&lt;char&gt;::append(char const*, unsigned long) — 21 samples (0.3%)</title>
+<rect x="647.24" y="348.00" width="6.63" height="20" fill="#adc5d4"/>
+</g>
+<g><title>std::basic_string&lt;char&gt;::__grow_by_and_replace(unsigned long, unsigned long, unsigned long, unsigned long, unsigned long, unsigned long, char const*) — 12 samples (0.2%)</title>
+<rect x="647.24" y="326.00" width="3.79" height="20" fill="#adc5d4"/>
+</g>
+<g><title>_xzm_free — 9 samples (0.1%)</title>
+<rect x="647.24" y="304.00" width="2.84" height="20" fill="#bed1c2"/>
+</g>
+<g><title>mach_absolute_time — 5 samples (0.1%)</title>
+<rect x="647.24" y="282.00" width="1.58" height="20" fill="#cbd5dd"/>
+</g>
+<g><title>_platform_memmove — 3 samples (0.0%)</title>
+<rect x="651.03" y="326.00" width="0.95" height="20" fill="#b9ccd5"/>
+</g>
+<g><title>std::basic_string&lt;char&gt;::insert(unsigned long, char const*, unsigned long) — 3 samples (0.0%)</title>
+<rect x="653.87" y="348.00" width="0.95" height="20" fill="#adc5d4"/>
+</g>
+<g><title>std::to_string(unsigned long long) — 3 samples (0.0%)</title>
+<rect x="654.81" y="348.00" width="0.95" height="20" fill="#adc5d4"/>
+</g>
+<g><title>hquant::bench::SimVenue::Impl::SendPublic(unsigned long, std::basic_string&lt;char&gt;, unsigned long long) — 297 samples (4.3%)</title>
+<rect x="657.97" y="370.00" width="93.71" height="20" fill="#eeb468"/>
+<text x="660.97" y="384.00">hquant::ben…</text>
+</g>
+<g><title>hquant::bench::SimVenue::Impl::WsSession::Write() — 290 samples (4.2%)</title>
+<rect x="657.97" y="348.00" width="91.50" height="20" fill="#eeb468"/>
+<text x="660.97" y="362.00">hquant::ben…</text>
+</g>
+<g><title>boost::beast::websocket::stream&lt;boost::asio::basic_stream_socket&lt;boost::asio::ip::tcp, boost::asio::any_io_executor&gt;, true&gt;::run_write_some_op::operator()&lt;hquant::bench::SimVenue::Impl::WsSession::Write()::&#x27;lambda&#x27;(boost::system::error_code, unsigned long), boost::asio::mutable_buffer&gt;(hquant::bench::SimVenue::Impl::WsSession::Write()::&#x27;lambda&#x27;(boost::system::error_code, unsigned long)&amp;&amp;, bool, boost::asio::mutable_buffer const&amp;) — 272 samples (4.0%)</title>
+<rect x="657.97" y="326.00" width="85.82" height="20" fill="#eeb468"/>
+<text x="660.97" y="340.00">boost::bea…</text>
+</g>
+<g><title>boost::beast::websocket::stream&lt;boost::asio::basic_stream_socket&lt;boost::asio::ip::tcp, boost::asio::any_io_executor&gt;, true&gt;::write_some_op&lt;hquant::bench::SimVenue::Impl::WsSession::Write()::&#x27;lambda&#x27;(boost::system::error_code, unsigned long), boost::asio::mutable_buffer&gt;::write_some_op&lt;hquant::bench::SimVenue::Impl::WsSession::Write()::&#x27;lambda&#x27;(boost::system::error_code, unsigned long)&gt;(hquant::bench::SimVenue::Impl::WsSession::Write()::&#x27;lambda&#x27;(boost::system::error_code, unsigned long)&amp;&amp;, boost::shared_ptr&lt;boost::beast::websocket::stream&lt;boost::asio::basic_stream_socket&lt;boost::asio::ip::tcp, boost::asio::any_io_executor&gt;, true&gt;::impl_type&gt; const&amp;, bool, boost::asio::mutable_buffer const&amp;) — 272 samples (4.0%)</title>
+<rect x="657.97" y="304.00" width="85.82" height="20" fill="#eeb468"/>
+<text x="660.97" y="318.00">boost::bea…</text>
+</g>
+<g><title>boost::beast::websocket::stream&lt;boost::asio::basic_stream_socket&lt;boost::asio::ip::tcp, boost::asio::any_io_executor&gt;, true&gt;::write_some_op&lt;hquant::bench::SimVenue::Impl::WsSession::Write()::&#x27;lambda&#x27;(boost::system::error_code, unsigned long), boost::asio::mutable_buffer&gt;::operator()(boost::system::error_code, unsigned long, bool) — 271 samples (4.0%)</title>
+<rect x="657.97" y="282.00" width="85.50" height="20" fill="#eeb468"/>
+<text x="660.97" y="296.00">boost::bea…</text>
+</g>
+<g><title>boost::asio::detail::initiate_async_write&lt;boost::asio::basic_stream_socket&lt;boost::asio::ip::tcp, boost::asio::any_io_executor&gt;&gt;::operator()&lt;boost::beast::websocket::stream&lt;boost::asio::basic_stream_socket&lt;boost::asio::ip::tcp, boost::asio::any_io_executor&gt;, true&gt;::write_some_op&lt;hquant::bench::SimVenue::Impl::WsSession::Write()::&#x27;lambda&#x27;(boost::system::error_code, unsigned long), boost::asio::mutable_buffer&gt;, boost::beast::buffers_cat_view&lt;boost::asio::const_buffer, boost::asio::const_buffer, boost::beast::buffers_suffix&lt;boost::asio::mutable_buffer&gt;, boost::beast::buffers_prefix_view&lt;boost::beast::buffers_suffix&lt;boost::asio::mutable_buffer&gt;&gt;&gt;, boost::asio::detail::transfer_all_t&gt;(boost::beast::websocket::stream&lt;boost::asio::basic_stream_socket&lt;boost::asio::ip::tcp, boost::asio::any_io_executor&gt;, true&gt;::write_some_op&lt;hquant::bench::SimVenue::Impl::WsSession::Write()::&#x27;lambda&#x27;(boost::system::error_code, unsigned long), boost::asio::mutable_buffer&gt;&amp;&amp;, boost::beast::buffers_cat_view&lt;boost::asio::const_buffer, boost::asio::const_buffer, boost::beast::buffers_suffix&lt;boost::asio::mutable_buffer&gt;, boost::beast::buffers_prefix_view&lt;boost::beast::buffers_suffix&lt;boost::asio::mutable_buffer&gt;&gt;&gt; const&amp;, boost::asio::detail::transfer_all_t&amp;&amp;) const — 269 samples (3.9%)</title>
+<rect x="657.97" y="260.00" width="84.87" height="20" fill="#eeb468"/>
+<text x="660.97" y="274.00">boost::asi…</text>
+</g>
+<g><title>boost::asio::detail::reactive_socket_service_base::async_send&lt;boost::asio::detail::prepared_buffers&lt;boost::asio::const_buffer, 64ul&gt;, boost::asio::detail::write_op&lt;boost::asio::basic_stream_socket&lt;boost::asio::ip::tcp, boost::asio::any_io_executor&gt;, boost::beast::buffers_cat_view&lt;boost::asio::const_buffer, boost::asio::const_buffer, boost::beast::buffers_suffix&lt;boost::asio::mutable_buffer&gt;, boost::beast::buffers_prefix_view&lt;boost::beast::buffers_suffix&lt;boost::asio::mutable_buffer&gt;&gt;&gt;, boost::beast::buffers_cat_view&lt;boost::asio::const_buffer, boost::asio::const_buffer, boost::beast::buffers_suffix&lt;boost::asio::mutable_buffer&gt;, boost::beast::buffers_prefix_view&lt;boost::beast::buffers_suffix&lt;boost::asio::mutable_buffer&gt;&gt;&gt;::const_iterator, boost::asio::detail::transfer_all_t, boost::beast::websocket::stream&lt;boost::asio::basic_stream_socket&lt;boost::asio::ip::tcp, boost::asio::any_io_executor&gt;, true&gt;::write_some_op&lt;hquant::bench::SimVenue::Impl::WsSession::Write()::&#x27;lambda&#x27;(boost::system::error_code, unsigned long), boost::asio::mutable_buffer&gt;&gt;, boost::asio::any_io_executor&gt;(boost::asio::detail::reactive_socket_service_base::base_implementation_type&amp;, boost::asio::detail::prepared_buffers&lt;boost::asio::const_buffer, 64ul&gt; const&amp;, int, boost::asio::detail::write_op&lt;boost::asio::basic_stream_socket&lt;boost::asio::ip::tcp, boost::asio::any_io_executor&gt;, boost::beast::buffers_cat_view&lt;boost::asio::const_buffer, boost::asio::const_buffer, boost::beast::buffers_suffix&lt;boost::asio::mutable_buffer&gt;, boost::beast::buffers_prefix_view&lt;boost::beast::buffers_suffix&lt;boost::asio::mutable_buffer&gt;&gt;&gt;, boost::beast::buffers_cat_view&lt;boost::asio::const_buffer, boost::asio::const_buffer, boost::beast::buffers_suffix&lt;boost::asio::mutable_buffer&gt;, boost::beast::buffers_prefix_view&lt;boost::beast::buffers_suffix&lt;boost::asio::mutable_buffer&gt;&gt;&gt;::const_iterator, boost::asio::detail::transfer_all_t, boost::beast::websocket::stream&lt;boost::asio::basic_stream_socket&lt;boost::asio::ip::tcp, boost::asio::any_io_executor&gt;, true&gt;::write_some_op&lt;hquant::bench::SimVenue::Impl::WsSession::Write()::&#x27;lambda&#x27;(boost::system::error_code, unsigned long), boost::asio::mutable_buffer&gt;&gt;&amp;, boost::asio::any_io_executor const&amp;) — 260 samples (3.8%)</title>
+<rect x="657.97" y="238.00" width="82.03" height="20" fill="#eeb468"/>
+<text x="660.97" y="252.00">boost::asi…</text>
+</g>
+<g><title>boost::asio::detail::kqueue_reactor::start_op(int, int, boost::asio::detail::kqueue_reactor::descriptor_state*&amp;, boost::asio::detail::reactor_op*, bool, bool, void (*)(boost::asio::detail::scheduler_operation*, bool, void const*), void const*) — 255 samples (3.7%)</title>
+<rect x="657.97" y="216.00" width="80.46" height="20" fill="#b3a0cd"/>
+<text x="660.97" y="230.00">boost::as…</text>
+</g>
+<g><title>boost::asio::detail::reactive_socket_send_op_base&lt;boost::asio::detail::prepared_buffers&lt;boost::asio::const_buffer, 64ul&gt;&gt;::do_perform(boost::asio::detail::reactor_op*) — 251 samples (3.7%)</title>
+<rect x="657.97" y="194.00" width="79.19" height="20" fill="#b3a0cd"/>
+<text x="660.97" y="208.00">boost::as…</text>
+</g>
+<g><title>boost::asio::detail::socket_ops::non_blocking_send(int, iovec const*, unsigned long, int, boost::system::error_code&amp;, unsigned long&amp;) — 250 samples (3.7%)</title>
+<rect x="657.97" y="172.00" width="78.88" height="20" fill="#b3a0cd"/>
+<text x="660.97" y="186.00">boost::as…</text>
+</g>
+<g><title>__sendmsg — 250 samples (3.7%)</title>
+<rect x="657.97" y="150.00" width="78.88" height="20" fill="#d7c6b8"/>
+<text x="660.97" y="164.00">__sendmsg</text>
+</g>
+<g><title>boost::asio::detail::consuming_buffers&lt;boost::asio::const_buffer, boost::beast::buffers_cat_view&lt;boost::asio::const_buffer, boost::asio::const_buffer, boost::beast::buffers_suffix&lt;boost::asio::mutable_buffer&gt;, boost::beast::buffers_prefix_view&lt;boost::beast::buffers_suffix&lt;boost::asio::mutable_buffer&gt;&gt;&gt;, boost::beast::buffers_cat_view&lt;boost::asio::const_buffer, boost::asio::const_buffer, boost::beast::buffers_suffix&lt;boost::asio::mutable_buffer&gt;, boost::beast::buffers_prefix_view&lt;boost::beast::buffers_suffix&lt;boost::asio::mutable_buffer&gt;&gt;&gt;::const_iterator&gt;::consuming_buffers(boost::beast::buffers_cat_view&lt;boost::asio::const_buffer, boost::asio::const_buffer, boost::beast::buffers_suffix&lt;boost::asio::mutable_buffer&gt;, boost::beast::buffers_prefix_view&lt;boost::beast::buffers_suffix&lt;boost::asio::mutable_buffer&gt;&gt;&gt; const&amp;) — 4 samples (0.1%)</title>
+<rect x="740.00" y="238.00" width="1.26" height="20" fill="#b3a0cd"/>
+</g>
+<g><title>boost::asio::detail::buffer_size&lt;boost::beast::buffers_cat_view&lt;boost::asio::const_buffer, boost::asio::const_buffer, boost::beast::buffers_suffix&lt;boost::asio::mutable_buffer&gt;, boost::beast::buffers_prefix_view&lt;boost::beast::buffers_suffix&lt;boost::asio::mutable_buffer&gt;&gt;&gt;::const_iterator&gt;(boost::asio::detail::multiple_buffers, boost::beast::buffers_cat_view&lt;boost::asio::const_buffer, boost::asio::const_buffer, boost::beast::buffers_suffix&lt;boost::asio::mutable_buffer&gt;, boost::beast::buffers_prefix_view&lt;boost::beast::buffers_suffix&lt;boost::asio::mutable_buffer&gt;&gt;&gt;::const_iterator, boost::beast::buffers_cat_view&lt;boost::asio::const_buffer, boost::asio::const_buffer, boost::beast::buffers_suffix&lt;boost::asio::mutable_buffer&gt;, boost::beast::buffers_prefix_view&lt;boost::beast::buffers_suffix&lt;boost::asio::mutable_buffer&gt;&gt;&gt;::const_iterator) — 4 samples (0.1%)</title>
+<rect x="740.00" y="216.00" width="1.26" height="20" fill="#b3a0cd"/>
+</g>
+<g><title>boost::asio::detail::consuming_buffers&lt;boost::asio::const_buffer, boost::beast::buffers_cat_view&lt;boost::asio::const_buffer, boost::asio::const_buffer, boost::beast::buffers_suffix&lt;boost::asio::mutable_buffer&gt;, boost::beast::buffers_prefix_view&lt;boost::beast::buffers_suffix&lt;boost::asio::mutable_buffer&gt;&gt;&gt;, boost::beast::buffers_cat_view&lt;boost::asio::const_buffer, boost::asio::const_buffer, boost::beast::buffers_suffix&lt;boost::asio::mutable_buffer&gt;, boost::beast::buffers_prefix_view&lt;boost::beast::buffers_suffix&lt;boost::asio::mutable_buffer&gt;&gt;&gt;::const_iterator&gt;::prepare(unsigned long) — 4 samples (0.1%)</title>
+<rect x="741.26" y="238.00" width="1.26" height="20" fill="#b3a0cd"/>
+</g>
+<g><title>clock_gettime — 16 samples (0.2%)</title>
+<rect x="743.79" y="326.00" width="5.05" height="20" fill="#b9ccd5"/>
+</g>
+<g><title>_mach_boottime_usec — 16 samples (0.2%)</title>
+<rect x="743.79" y="304.00" width="5.05" height="20" fill="#bed1c2"/>
+</g>
+<g><title>gettimeofday — 16 samples (0.2%)</title>
+<rect x="743.79" y="282.00" width="5.05" height="20" fill="#b9ccd5"/>
+</g>
+<g><title>__commpage_gettimeofday_internal — 16 samples (0.2%)</title>
+<rect x="743.79" y="260.00" width="5.05" height="20" fill="#cbd5dd"/>
+</g>
+<g><title>mach_absolute_time — 15 samples (0.2%)</title>
+<rect x="743.79" y="238.00" width="4.73" height="20" fill="#cbd5dd"/>
+</g>
+<g><title>std::vector&lt;hquant::bench::SimLevel&gt;::push_back[abi:ne200100](hquant::bench::SimLevel&amp;&amp;) — 5 samples (0.1%)</title>
+<rect x="751.67" y="370.00" width="1.58" height="20" fill="#adc5d4"/>
+</g>
+<g><title>hquant::bench::MatchingEngine::Levels(std::basic_string&lt;char&gt; const&amp;, hquant::bench::Side) const — 1,770 samples (25.9%)</title>
+<rect x="754.51" y="392.00" width="558.46" height="20" fill="#e15241"/>
+<text x="757.51" y="406.00">hquant::bench::MatchingEngine::Levels(std::basic_string&lt;…&gt; const&amp;, hquant::bench…</text>
+</g>
+<g><title>std::vector&lt;hquant::bench::SimLevel&gt;::push_back[abi:ne200100](hquant::bench::SimLevel&amp;&amp;) — 106 samples (1.5%)</title>
+<rect x="754.51" y="370.00" width="33.44" height="20" fill="#adc5d4"/>
+<text x="757.51" y="384.00">std…</text>
+</g>
+<g><title>operator new(unsigned long) — 35 samples (0.5%)</title>
+<rect x="754.51" y="348.00" width="11.04" height="20" fill="#d4c5cc"/>
+</g>
+<g><title>&lt;deduplicated_symbol&gt; — 17 samples (0.2%)</title>
+<rect x="754.51" y="326.00" width="5.36" height="20" fill="#cbd5dd"/>
+</g>
+<g><title>_xzm_xzone_malloc — 11 samples (0.2%)</title>
+<rect x="759.88" y="326.00" width="3.47" height="20" fill="#cbd5dd"/>
+</g>
+<g><title>malloc_type_malloc — 4 samples (0.1%)</title>
+<rect x="763.35" y="326.00" width="1.26" height="20" fill="#bed1c2"/>
+</g>
+<g><title>_platform_memmove — 18 samples (0.3%)</title>
+<rect x="765.56" y="348.00" width="5.68" height="20" fill="#b9ccd5"/>
+</g>
+<g><title>_xzm_free — 17 samples (0.2%)</title>
+<rect x="771.24" y="348.00" width="5.36" height="20" fill="#bed1c2"/>
+</g>
+<g><title>__bzero — 3 samples (0.0%)</title>
+<rect x="771.24" y="326.00" width="0.95" height="20" fill="#b9ccd5"/>
+</g>
+<g><title>_free — 7 samples (0.1%)</title>
+<rect x="776.60" y="348.00" width="2.21" height="20" fill="#bed1c2"/>
+</g>
+<g><title>DYLD-STUB$$operator new(unsigned long) — 5 samples (0.1%)</title>
+<rect x="778.81" y="348.00" width="1.58" height="20" fill="#d7c6b8"/>
+</g>
+<g><title>DYLD-STUB$$memcpy — 3 samples (0.0%)</title>
+<rect x="780.39" y="348.00" width="0.95" height="20" fill="#d4c5cc"/>
+</g>
+<g><title>std::__hash_table&lt;std::__hash_value_type&lt;std::basic_string&lt;char&gt;, hquant::bench::MatchingEngine::Book&gt;&gt;::find&lt;std::basic_string&lt;char&gt;&gt;(std::basic_string&lt;char&gt; const&amp;) const — 71 samples (1.0%)</title>
+<rect x="787.96" y="370.00" width="22.40" height="20" fill="#adc5d4"/>
+</g>
+<g><title>std::__murmur2_or_cityhash&lt;unsigned long, 64ul&gt;::operator()[abi:ne200100](void const*, unsigned long) const — 8 samples (0.1%)</title>
+<rect x="787.96" y="348.00" width="2.52" height="20" fill="#adc5d4"/>
+</g>
+<g><title>_platform_memcmp — 3 samples (0.0%)</title>
+<rect x="790.48" y="348.00" width="0.95" height="20" fill="#d7c6b8"/>
+</g>
+<g><title>hquant::bench::SimVenue::Impl::ApplyPlace(unsigned long, hquant::bench::Side, hquant::bench::Owner, long long, long long, hquant::bench::(anonymous namespace)::AccountOrder*, bool) — 984 samples (14.4%)</title>
+<rect x="1312.97" y="392.00" width="310.46" height="20" fill="#eeb468"/>
+<text x="1315.97" y="406.00">hquant::bench::SimVenue::Impl::ApplyPlace(u…</text>
+</g>
+<g><title>hquant::bench::MatchingEngine::Levels(std::basic_string&lt;char&gt; const&amp;, hquant::bench::Side) const — 629 samples (9.2%)</title>
+<rect x="1312.97" y="370.00" width="198.46" height="20" fill="#e15241"/>
+<text x="1315.97" y="384.00">hquant::bench::MatchingEngi…</text>
+</g>
+<g><title>std::vector&lt;hquant::bench::SimLevel&gt;::push_back[abi:ne200100](hquant::bench::SimLevel&amp;&amp;) — 38 samples (0.6%)</title>
+<rect x="1312.97" y="348.00" width="11.99" height="20" fill="#adc5d4"/>
+</g>
+<g><title>_platform_memmove — 11 samples (0.2%)</title>
+<rect x="1312.97" y="326.00" width="3.47" height="20" fill="#b9ccd5"/>
+</g>
+<g><title>_xzm_free — 6 samples (0.1%)</title>
+<rect x="1316.44" y="326.00" width="1.89" height="20" fill="#bed1c2"/>
+</g>
+<g><title>operator new(unsigned long) — 6 samples (0.1%)</title>
+<rect x="1318.33" y="326.00" width="1.89" height="20" fill="#d4c5cc"/>
+</g>
+<g><title>_free — 4 samples (0.1%)</title>
+<rect x="1320.23" y="326.00" width="1.26" height="20" fill="#bed1c2"/>
+</g>
+<g><title>std::__hash_table&lt;std::__hash_value_type&lt;std::basic_string&lt;char&gt;, hquant::bench::MatchingEngine::Book&gt;&gt;::find&lt;std::basic_string&lt;char&gt;&gt;(std::basic_string&lt;char&gt; const&amp;) const — 12 samples (0.2%)</title>
+<rect x="1324.96" y="348.00" width="3.79" height="20" fill="#adc5d4"/>
+</g>
+<g><title>_xzm_free — 3 samples (0.0%)</title>
+<rect x="1328.75" y="348.00" width="0.95" height="20" fill="#bed1c2"/>
+</g>
+<g><title>hquant::bench::SimVenue::Impl::DepthFrame(unsigned long, std::vector&lt;hquant::bench::SimLevel&gt; const&amp;, std::vector&lt;hquant::bench::SimLevel&gt; const&amp;, unsigned long long, bool) — 133 samples (1.9%)</title>
+<rect x="1511.43" y="370.00" width="41.96" height="20" fill="#eeb468"/>
+<text x="1514.43" y="384.00">hqua…</text>
+</g>
+<g><title>hquant::bench::MatchingEngine::Levels(std::basic_string&lt;char&gt; const&amp;, hquant::bench::Side) const — 77 samples (1.1%)</title>
+<rect x="1511.43" y="348.00" width="24.29" height="20" fill="#e15241"/>
+</g>
+<g><title>std::vector&lt;hquant::bench::SimLevel&gt;::push_back[abi:ne200100](hquant::bench::SimLevel&amp;&amp;) — 7 samples (0.1%)</title>
+<rect x="1511.43" y="326.00" width="2.21" height="20" fill="#adc5d4"/>
+</g>
+<g><title>hquant::bench::SimVenue::Impl::LevelRows(std::vector&lt;hquant::bench::SimLevel&gt; const&amp;) const — 39 samples (0.6%)</title>
+<rect x="1535.72" y="348.00" width="12.30" height="20" fill="#eeb468"/>
+</g>
+<g><title>hquant::v1::BinanceDecimal(unsigned long long) — 16 samples (0.2%)</title>
+<rect x="1535.72" y="326.00" width="5.05" height="20" fill="#7dbb9d"/>
+</g>
+<g><title>std::to_string(unsigned long long) — 7 samples (0.1%)</title>
+<rect x="1535.72" y="304.00" width="2.21" height="20" fill="#adc5d4"/>
+</g>
+<g><title>&lt;deduplicated_symbol&gt; — 4 samples (0.1%)</title>
+<rect x="1535.72" y="282.00" width="1.26" height="20" fill="#cbd5dd"/>
+</g>
+<g><title>_platform_memmove — 3 samples (0.0%)</title>
+<rect x="1535.72" y="260.00" width="0.95" height="20" fill="#b9ccd5"/>
+</g>
+<g><title>std::basic_string&lt;char&gt;::append(char const*, unsigned long) — 3 samples (0.0%)</title>
+<rect x="1537.93" y="304.00" width="0.95" height="20" fill="#adc5d4"/>
+</g>
+<g><title>std::basic_string&lt;char&gt;::append(char const*, unsigned long) — 15 samples (0.2%)</title>
+<rect x="1540.77" y="326.00" width="4.73" height="20" fill="#adc5d4"/>
+</g>
+<g><title>_platform_memmove — 5 samples (0.1%)</title>
+<rect x="1540.77" y="304.00" width="1.58" height="20" fill="#b9ccd5"/>
+</g>
+<g><title>std::basic_string&lt;char&gt;::__grow_by_and_replace(unsigned long, unsigned long, unsigned long, unsigned long, unsigned long, unsigned long, char const*) — 4 samples (0.1%)</title>
+<rect x="1542.35" y="304.00" width="1.26" height="20" fill="#adc5d4"/>
+</g>
+<g><title>std::basic_string&lt;char&gt;::append(char const*, unsigned long) — 8 samples (0.1%)</title>
+<rect x="1548.03" y="348.00" width="2.52" height="20" fill="#adc5d4"/>
+</g>
+<g><title>std::basic_string&lt;char&gt;::__grow_by_and_replace(unsigned long, unsigned long, unsigned long, unsigned long, unsigned long, unsigned long, char const*) — 5 samples (0.1%)</title>
+<rect x="1548.03" y="326.00" width="1.58" height="20" fill="#adc5d4"/>
+</g>
+<g><title>_xzm_free — 4 samples (0.1%)</title>
+<rect x="1548.03" y="304.00" width="1.26" height="20" fill="#bed1c2"/>
+</g>
+<g><title>mach_absolute_time — 3 samples (0.0%)</title>
+<rect x="1548.03" y="282.00" width="0.95" height="20" fill="#cbd5dd"/>
+</g>
+<g><title>hquant::bench::SimVenue::Impl::SendPublic(unsigned long, std::basic_string&lt;char&gt;, unsigned long long) — 132 samples (1.9%)</title>
+<rect x="1553.39" y="370.00" width="41.65" height="20" fill="#eeb468"/>
+<text x="1556.39" y="384.00">hqua…</text>
+</g>
+<g><title>hquant::bench::SimVenue::Impl::WsSession::Write() — 121 samples (1.8%)</title>
+<rect x="1553.39" y="348.00" width="38.18" height="20" fill="#eeb468"/>
+<text x="1556.39" y="362.00">hqu…</text>
+</g>
+<g><title>boost::beast::websocket::stream&lt;boost::asio::basic_stream_socket&lt;boost::asio::ip::tcp, boost::asio::any_io_executor&gt;, true&gt;::run_write_some_op::operator()&lt;hquant::bench::SimVenue::Impl::WsSession::Write()::&#x27;lambda&#x27;(boost::system::error_code, unsigned long), boost::asio::mutable_buffer&gt;(hquant::bench::SimVenue::Impl::WsSession::Write()::&#x27;lambda&#x27;(boost::system::error_code, unsigned long)&amp;&amp;, bool, boost::asio::mutable_buffer const&amp;) — 108 samples (1.6%)</title>
+<rect x="1553.39" y="326.00" width="34.08" height="20" fill="#eeb468"/>
+<text x="1556.39" y="340.00">boo…</text>
+</g>
+<g><title>boost::beast::websocket::stream&lt;boost::asio::basic_stream_socket&lt;boost::asio::ip::tcp, boost::asio::any_io_executor&gt;, true&gt;::write_some_op&lt;hquant::bench::SimVenue::Impl::WsSession::Write()::&#x27;lambda&#x27;(boost::system::error_code, unsigned long), boost::asio::mutable_buffer&gt;::write_some_op&lt;hquant::bench::SimVenue::Impl::WsSession::Write()::&#x27;lambda&#x27;(boost::system::error_code, unsigned long)&gt;(hquant::bench::SimVenue::Impl::WsSession::Write()::&#x27;lambda&#x27;(boost::system::error_code, unsigned long)&amp;&amp;, boost::shared_ptr&lt;boost::beast::websocket::stream&lt;boost::asio::basic_stream_socket&lt;boost::asio::ip::tcp, boost::asio::any_io_executor&gt;, true&gt;::impl_type&gt; const&amp;, bool, boost::asio::mutable_buffer const&amp;) — 108 samples (1.6%)</title>
+<rect x="1553.39" y="304.00" width="34.08" height="20" fill="#eeb468"/>
+<text x="1556.39" y="318.00">boo…</text>
+</g>
+<g><title>boost::beast::websocket::stream&lt;boost::asio::basic_stream_socket&lt;boost::asio::ip::tcp, boost::asio::any_io_executor&gt;, true&gt;::write_some_op&lt;hquant::bench::SimVenue::Impl::WsSession::Write()::&#x27;lambda&#x27;(boost::system::error_code, unsigned long), boost::asio::mutable_buffer&gt;::operator()(boost::system::error_code, unsigned long, bool) — 108 samples (1.6%)</title>
+<rect x="1553.39" y="282.00" width="34.08" height="20" fill="#eeb468"/>
+<text x="1556.39" y="296.00">boo…</text>
+</g>
+<g><title>boost::asio::detail::initiate_async_write&lt;boost::asio::basic_stream_socket&lt;boost::asio::ip::tcp, boost::asio::any_io_executor&gt;&gt;::operator()&lt;boost::beast::websocket::stream&lt;boost::asio::basic_stream_socket&lt;boost::asio::ip::tcp, boost::asio::any_io_executor&gt;, true&gt;::write_some_op&lt;hquant::bench::SimVenue::Impl::WsSession::Write()::&#x27;lambda&#x27;(boost::system::error_code, unsigned long), boost::asio::mutable_buffer&gt;, boost::beast::buffers_cat_view&lt;boost::asio::const_buffer, boost::asio::const_buffer, boost::beast::buffers_suffix&lt;boost::asio::mutable_buffer&gt;, boost::beast::buffers_prefix_view&lt;boost::beast::buffers_suffix&lt;boost::asio::mutable_buffer&gt;&gt;&gt;, boost::asio::detail::transfer_all_t&gt;(boost::beast::websocket::stream&lt;boost::asio::basic_stream_socket&lt;boost::asio::ip::tcp, boost::asio::any_io_executor&gt;, true&gt;::write_some_op&lt;hquant::bench::SimVenue::Impl::WsSession::Write()::&#x27;lambda&#x27;(boost::system::error_code, unsigned long), boost::asio::mutable_buffer&gt;&amp;&amp;, boost::beast::buffers_cat_view&lt;boost::asio::const_buffer, boost::asio::const_buffer, boost::beast::buffers_suffix&lt;boost::asio::mutable_buffer&gt;, boost::beast::buffers_prefix_view&lt;boost::beast::buffers_suffix&lt;boost::asio::mutable_buffer&gt;&gt;&gt; const&amp;, boost::asio::detail::transfer_all_t&amp;&amp;) const — 106 samples (1.5%)</title>
+<rect x="1553.39" y="260.00" width="33.44" height="20" fill="#eeb468"/>
+<text x="1556.39" y="274.00">boo…</text>
+</g>
+<g><title>boost::asio::detail::reactive_socket_service_base::async_send&lt;boost::asio::detail::prepared_buffers&lt;boost::asio::const_buffer, 64ul&gt;, boost::asio::detail::write_op&lt;boost::asio::basic_stream_socket&lt;boost::asio::ip::tcp, boost::asio::any_io_executor&gt;, boost::beast::buffers_cat_view&lt;boost::asio::const_buffer, boost::asio::const_buffer, boost::beast::buffers_suffix&lt;boost::asio::mutable_buffer&gt;, boost::beast::buffers_prefix_view&lt;boost::beast::buffers_suffix&lt;boost::asio::mutable_buffer&gt;&gt;&gt;, boost::beast::buffers_cat_view&lt;boost::asio::const_buffer, boost::asio::const_buffer, boost::beast::buffers_suffix&lt;boost::asio::mutable_buffer&gt;, boost::beast::buffers_prefix_view&lt;boost::beast::buffers_suffix&lt;boost::asio::mutable_buffer&gt;&gt;&gt;::const_iterator, boost::asio::detail::transfer_all_t, boost::beast::websocket::stream&lt;boost::asio::basic_stream_socket&lt;boost::asio::ip::tcp, boost::asio::any_io_executor&gt;, true&gt;::write_some_op&lt;hquant::bench::SimVenue::Impl::WsSession::Write()::&#x27;lambda&#x27;(boost::system::error_code, unsigned long), boost::asio::mutable_buffer&gt;&gt;, boost::asio::any_io_executor&gt;(boost::asio::detail::reactive_socket_service_base::base_implementation_type&amp;, boost::asio::detail::prepared_buffers&lt;boost::asio::const_buffer, 64ul&gt; const&amp;, int, boost::asio::detail::write_op&lt;boost::asio::basic_stream_socket&lt;boost::asio::ip::tcp, boost::asio::any_io_executor&gt;, boost::beast::buffers_cat_view&lt;boost::asio::const_buffer, boost::asio::const_buffer, boost::beast::buffers_suffix&lt;boost::asio::mutable_buffer&gt;, boost::beast::buffers_prefix_view&lt;boost::beast::buffers_suffix&lt;boost::asio::mutable_buffer&gt;&gt;&gt;, boost::beast::buffers_cat_view&lt;boost::asio::const_buffer, boost::asio::const_buffer, boost::beast::buffers_suffix&lt;boost::asio::mutable_buffer&gt;, boost::beast::buffers_prefix_view&lt;boost::beast::buffers_suffix&lt;boost::asio::mutable_buffer&gt;&gt;&gt;::const_iterator, boost::asio::detail::transfer_all_t, boost::beast::websocket::stream&lt;boost::asio::basic_stream_socket&lt;boost::asio::ip::tcp, boost::asio::any_io_executor&gt;, true&gt;::write_some_op&lt;hquant::bench::SimVenue::Impl::WsSession::Write()::&#x27;lambda&#x27;(boost::system::error_code, unsigned long), boost::asio::mutable_buffer&gt;&gt;&amp;, boost::asio::any_io_executor const&amp;) — 101 samples (1.5%)</title>
+<rect x="1553.39" y="238.00" width="31.87" height="20" fill="#eeb468"/>
+</g>
+<g><title>boost::asio::detail::kqueue_reactor::start_op(int, int, boost::asio::detail::kqueue_reactor::descriptor_state*&amp;, boost::asio::detail::reactor_op*, bool, bool, void (*)(boost::asio::detail::scheduler_operation*, bool, void const*), void const*) — 101 samples (1.5%)</title>
+<rect x="1553.39" y="216.00" width="31.87" height="20" fill="#b3a0cd"/>
+</g>
+<g><title>boost::asio::detail::reactive_socket_send_op_base&lt;boost::asio::detail::prepared_buffers&lt;boost::asio::const_buffer, 64ul&gt;&gt;::do_perform(boost::asio::detail::reactor_op*) — 101 samples (1.5%)</title>
+<rect x="1553.39" y="194.00" width="31.87" height="20" fill="#b3a0cd"/>
+</g>
+<g><title>boost::asio::detail::socket_ops::non_blocking_send(int, iovec const*, unsigned long, int, boost::system::error_code&amp;, unsigned long&amp;) — 101 samples (1.5%)</title>
+<rect x="1553.39" y="172.00" width="31.87" height="20" fill="#b3a0cd"/>
+</g>
+<g><title>__sendmsg — 101 samples (1.5%)</title>
+<rect x="1553.39" y="150.00" width="31.87" height="20" fill="#d7c6b8"/>
+</g>
+<g><title>boost::asio::detail::consuming_buffers&lt;boost::asio::const_buffer, boost::beast::buffers_cat_view&lt;boost::asio::const_buffer, boost::asio::const_buffer, boost::beast::buffers_suffix&lt;boost::asio::mutable_buffer&gt;, boost::beast::buffers_prefix_view&lt;boost::beast::buffers_suffix&lt;boost::asio::mutable_buffer&gt;&gt;&gt;, boost::beast::buffers_cat_view&lt;boost::asio::const_buffer, boost::asio::const_buffer, boost::beast::buffers_suffix&lt;boost::asio::mutable_buffer&gt;, boost::beast::buffers_prefix_view&lt;boost::beast::buffers_suffix&lt;boost::asio::mutable_buffer&gt;&gt;&gt;::const_iterator&gt;::consuming_buffers(boost::beast::buffers_cat_view&lt;boost::asio::const_buffer, boost::asio::const_buffer, boost::beast::buffers_suffix&lt;boost::asio::mutable_buffer&gt;, boost::beast::buffers_prefix_view&lt;boost::beast::buffers_suffix&lt;boost::asio::mutable_buffer&gt;&gt;&gt; const&amp;) — 3 samples (0.0%)</title>
+<rect x="1585.26" y="238.00" width="0.95" height="20" fill="#b3a0cd"/>
+</g>
+<g><title>boost::asio::detail::buffer_size&lt;boost::beast::buffers_cat_view&lt;boost::asio::const_buffer, boost::asio::const_buffer, boost::beast::buffers_suffix&lt;boost::asio::mutable_buffer&gt;, boost::beast::buffers_prefix_view&lt;boost::beast::buffers_suffix&lt;boost::asio::mutable_buffer&gt;&gt;&gt;::const_iterator&gt;(boost::asio::detail::multiple_buffers, boost::beast::buffers_cat_view&lt;boost::asio::const_buffer, boost::asio::const_buffer, boost::beast::buffers_suffix&lt;boost::asio::mutable_buffer&gt;, boost::beast::buffers_prefix_view&lt;boost::beast::buffers_suffix&lt;boost::asio::mutable_buffer&gt;&gt;&gt;::const_iterator, boost::beast::buffers_cat_view&lt;boost::asio::const_buffer, boost::asio::const_buffer, boost::beast::buffers_suffix&lt;boost::asio::mutable_buffer&gt;, boost::beast::buffers_prefix_view&lt;boost::beast::buffers_suffix&lt;boost::asio::mutable_buffer&gt;&gt;&gt;::const_iterator) — 3 samples (0.0%)</title>
+<rect x="1585.26" y="216.00" width="0.95" height="20" fill="#b3a0cd"/>
+</g>
+<g><title>clock_gettime — 13 samples (0.2%)</title>
+<rect x="1587.47" y="326.00" width="4.10" height="20" fill="#b9ccd5"/>
+</g>
+<g><title>_mach_boottime_usec — 12 samples (0.2%)</title>
+<rect x="1587.47" y="304.00" width="3.79" height="20" fill="#bed1c2"/>
+</g>
+<g><title>gettimeofday — 12 samples (0.2%)</title>
+<rect x="1587.47" y="282.00" width="3.79" height="20" fill="#b9ccd5"/>
+</g>
+<g><title>__commpage_gettimeofday_internal — 12 samples (0.2%)</title>
+<rect x="1587.47" y="260.00" width="3.79" height="20" fill="#cbd5dd"/>
+</g>
+<g><title>mach_absolute_time — 12 samples (0.2%)</title>
+<rect x="1587.47" y="238.00" width="3.79" height="20" fill="#cbd5dd"/>
+</g>
+<g><title>hquant::bench::SimVenue::Impl::WsSession::Send(hquant::bench::(anonymous namespace)::QueuedFrame) — 3 samples (0.0%)</title>
+<rect x="1591.57" y="348.00" width="0.95" height="20" fill="#eeb468"/>
+</g>
+<g><title>hquant::bench::MatchingEngine::Place(std::basic_string&lt;char&gt;, hquant::bench::Side, hquant::bench::Owner, long long, long long) — 32 samples (0.5%)</title>
+<rect x="1595.04" y="370.00" width="10.10" height="20" fill="#7dbb9d"/>
+</g>
+<g><title>std::__tree_balance_after_insert[abi:ne200100]&lt;std::__tree_node_base&lt;void*&gt;*&gt;(std::__tree_node_base&lt;void*&gt;*, std::__tree_node_base&lt;void*&gt;*) — 8 samples (0.1%)</title>
+<rect x="1595.04" y="348.00" width="2.52" height="20" fill="#adc5d4"/>
+</g>
+<g><title>hquant::bench::MatchingEngine::Match&lt;std::map&lt;long long, std::deque&lt;unsigned long long&gt;, std::greater&lt;long long&gt;&gt;&gt;(hquant::bench::SimOrder&amp;, std::map&lt;long long, std::deque&lt;unsigned long long&gt;, std::greater&lt;long long&gt;&gt;&amp;, std::vector&lt;hquant::bench::SimFill&gt;&amp;) — 6 samples (0.1%)</title>
+<rect x="1597.56" y="348.00" width="1.89" height="20" fill="#7dbb9d"/>
+</g>
+<g><title>hquant::bench::MatchingEngine::Match&lt;std::map&lt;long long, std::deque&lt;unsigned long long&gt;&gt;&gt;(hquant::bench::SimOrder&amp;, std::map&lt;long long, std::deque&lt;unsigned long long&gt;&gt;&amp;, std::vector&lt;hquant::bench::SimFill&gt;&amp;) — 5 samples (0.1%)</title>
+<rect x="1599.46" y="348.00" width="1.58" height="20" fill="#7dbb9d"/>
+</g>
+<g><title>hquant::bench::SimVenue::Impl::TradeFrame(unsigned long, hquant::bench::SimFill const&amp;, hquant::bench::Side, unsigned long long) — 31 samples (0.5%)</title>
+<rect x="1605.14" y="370.00" width="9.78" height="20" fill="#eeb468"/>
+</g>
+<g><title>std::basic_string&lt;char&gt;::append(char const*, unsigned long) — 17 samples (0.2%)</title>
+<rect x="1605.14" y="348.00" width="5.36" height="20" fill="#adc5d4"/>
+</g>
+<g><title>std::basic_string&lt;char&gt;::__grow_by_and_replace(unsigned long, unsigned long, unsigned long, unsigned long, unsigned long, unsigned long, char const*) — 13 samples (0.2%)</title>
+<rect x="1605.14" y="326.00" width="4.10" height="20" fill="#adc5d4"/>
+</g>
+<g><title>_xzm_free — 5 samples (0.1%)</title>
+<rect x="1605.14" y="304.00" width="1.58" height="20" fill="#bed1c2"/>
+</g>
+<g><title>mach_absolute_time — 4 samples (0.1%)</title>
+<rect x="1605.14" y="282.00" width="1.26" height="20" fill="#cbd5dd"/>
+</g>
+<g><title>_platform_memmove — 3 samples (0.0%)</title>
+<rect x="1606.71" y="304.00" width="0.95" height="20" fill="#b9ccd5"/>
+</g>
+<g><title>hquant::v1::BinanceDecimal(unsigned long long) — 4 samples (0.1%)</title>
+<rect x="1610.50" y="348.00" width="1.26" height="20" fill="#7dbb9d"/>
+</g>
+<g><title>_xzm_free — 3 samples (0.0%)</title>
+<rect x="1611.76" y="348.00" width="0.95" height="20" fill="#bed1c2"/>
+</g>
+<g><title>std::to_string(unsigned long long) — 3 samples (0.0%)</title>
+<rect x="1612.71" y="348.00" width="0.95" height="20" fill="#adc5d4"/>
+</g>
+<g><title>&lt;deduplicated_symbol&gt; — 3 samples (0.0%)</title>
+<rect x="1612.71" y="326.00" width="0.95" height="20" fill="#cbd5dd"/>
+</g>
+<g><title>clock_gettime — 22 samples (0.3%)</title>
+<rect x="1614.92" y="370.00" width="6.94" height="20" fill="#b9ccd5"/>
+</g>
+<g><title>_mach_boottime_usec — 21 samples (0.3%)</title>
+<rect x="1614.92" y="348.00" width="6.63" height="20" fill="#bed1c2"/>
+</g>
+<g><title>gettimeofday — 15 samples (0.2%)</title>
+<rect x="1614.92" y="326.00" width="4.73" height="20" fill="#b9ccd5"/>
+</g>
+<g><title>__commpage_gettimeofday_internal — 14 samples (0.2%)</title>
+<rect x="1614.92" y="304.00" width="4.42" height="20" fill="#cbd5dd"/>
+</g>
+<g><title>mach_absolute_time — 14 samples (0.2%)</title>
+<rect x="1614.92" y="282.00" width="4.42" height="20" fill="#cbd5dd"/>
+</g>
+<g><title>mach_boottime_usec — 4 samples (0.1%)</title>
+<rect x="1619.65" y="326.00" width="1.26" height="20" fill="#bed1c2"/>
+</g>
+<g><title>std::vector&lt;hquant::bench::SimLevel&gt;::push_back[abi:ne200100](hquant::bench::SimLevel&amp;&amp;) — 3 samples (0.0%)</title>
+<rect x="1621.86" y="370.00" width="0.95" height="20" fill="#adc5d4"/>
+</g>
+<g><title>hquant::bench::SimVenue::Impl::DepthFrame(unsigned long, std::vector&lt;hquant::bench::SimLevel&gt; const&amp;, std::vector&lt;hquant::bench::SimLevel&gt; const&amp;, unsigned long long, bool) — 310 samples (4.5%)</title>
+<rect x="1623.44" y="392.00" width="97.81" height="20" fill="#eeb468"/>
+<text x="1626.44" y="406.00">hquant::benc…</text>
+</g>
+<g><title>hquant::bench::MatchingEngine::Levels(std::basic_string&lt;char&gt; const&amp;, hquant::bench::Side) const — 158 samples (2.3%)</title>
+<rect x="1623.44" y="370.00" width="49.85" height="20" fill="#e15241"/>
+<text x="1626.44" y="384.00">hquan…</text>
+</g>
+<g><title>std::vector&lt;hquant::bench::SimLevel&gt;::push_back[abi:ne200100](hquant::bench::SimLevel&amp;&amp;) — 25 samples (0.4%)</title>
+<rect x="1623.44" y="348.00" width="7.89" height="20" fill="#adc5d4"/>
+</g>
+<g><title>_xzm_free — 6 samples (0.1%)</title>
+<rect x="1623.44" y="326.00" width="1.89" height="20" fill="#bed1c2"/>
+</g>
+<g><title>operator new(unsigned long) — 6 samples (0.1%)</title>
+<rect x="1625.33" y="326.00" width="1.89" height="20" fill="#d4c5cc"/>
+</g>
+<g><title>_platform_memmove — 4 samples (0.1%)</title>
+<rect x="1627.22" y="326.00" width="1.26" height="20" fill="#b9ccd5"/>
+</g>
+<g><title>std::__hash_table&lt;std::__hash_value_type&lt;std::basic_string&lt;char&gt;, hquant::bench::MatchingEngine::Book&gt;&gt;::find&lt;std::basic_string&lt;char&gt;&gt;(std::basic_string&lt;char&gt; const&amp;) const — 4 samples (0.1%)</title>
+<rect x="1631.32" y="348.00" width="1.26" height="20" fill="#adc5d4"/>
+</g>
+<g><title>hquant::bench::SimVenue::Impl::LevelRows(std::vector&lt;hquant::bench::SimLevel&gt; const&amp;) const — 126 samples (1.8%)</title>
+<rect x="1673.29" y="370.00" width="39.75" height="20" fill="#eeb468"/>
+<text x="1676.29" y="384.00">hqu…</text>
+</g>
+<g><title>hquant::v1::BinanceDecimal(unsigned long long) — 53 samples (0.8%)</title>
+<rect x="1673.29" y="348.00" width="16.72" height="20" fill="#7dbb9d"/>
+</g>
+<g><title>std::to_string(unsigned long long) — 20 samples (0.3%)</title>
+<rect x="1673.29" y="326.00" width="6.31" height="20" fill="#adc5d4"/>
+</g>
+<g><title>&lt;deduplicated_symbol&gt; — 10 samples (0.1%)</title>
+<rect x="1673.29" y="304.00" width="3.16" height="20" fill="#cbd5dd"/>
+</g>
+<g><title>_platform_memmove — 8 samples (0.1%)</title>
+<rect x="1673.29" y="282.00" width="2.52" height="20" fill="#b9ccd5"/>
+</g>
+<g><title>std::__itoa::__base_10_u32[abi:ne200100](char*, unsigned int) — 9 samples (0.1%)</title>
+<rect x="1676.44" y="304.00" width="2.84" height="20" fill="#adc5d4"/>
+</g>
+<g><title>std::basic_string&lt;char&gt;::append(char const*, unsigned long) — 7 samples (0.1%)</title>
+<rect x="1679.60" y="326.00" width="2.21" height="20" fill="#adc5d4"/>
+</g>
+<g><title>_platform_memmove — 4 samples (0.1%)</title>
+<rect x="1679.60" y="304.00" width="1.26" height="20" fill="#b9ccd5"/>
+</g>
+<g><title>std::basic_string&lt;char&gt;::insert(unsigned long, unsigned long, char) — 3 samples (0.0%)</title>
+<rect x="1681.81" y="326.00" width="0.95" height="20" fill="#adc5d4"/>
+</g>
+<g><title>std::basic_string&lt;char&gt;::append(char const*, unsigned long) — 36 samples (0.5%)</title>
+<rect x="1690.01" y="348.00" width="11.36" height="20" fill="#adc5d4"/>
+</g>
+<g><title>std::basic_string&lt;char&gt;::__grow_by_and_replace(unsigned long, unsigned long, unsigned long, unsigned long, unsigned long, unsigned long, char const*) — 13 samples (0.2%)</title>
+<rect x="1690.01" y="326.00" width="4.10" height="20" fill="#adc5d4"/>
+</g>
+<g><title>_xzm_free — 4 samples (0.1%)</title>
+<rect x="1690.01" y="304.00" width="1.26" height="20" fill="#bed1c2"/>
+</g>
+<g><title>_platform_memmove — 9 samples (0.1%)</title>
+<rect x="1694.11" y="326.00" width="2.84" height="20" fill="#b9ccd5"/>
+</g>
+<g><title>std::basic_string&lt;char&gt;::insert(unsigned long, char const*, unsigned long) — 17 samples (0.2%)</title>
+<rect x="1701.37" y="348.00" width="5.36" height="20" fill="#adc5d4"/>
+</g>
+<g><title>_platform_memmove — 6 samples (0.1%)</title>
+<rect x="1701.37" y="326.00" width="1.89" height="20" fill="#b9ccd5"/>
+</g>
+<g><title>std::to_string(unsigned long long) — 5 samples (0.1%)</title>
+<rect x="1706.73" y="348.00" width="1.58" height="20" fill="#adc5d4"/>
+</g>
+<g><title>&lt;deduplicated_symbol&gt; — 3 samples (0.0%)</title>
+<rect x="1706.73" y="326.00" width="0.95" height="20" fill="#cbd5dd"/>
+</g>
+<g><title>std::basic_string&lt;char&gt;::push_back(char) — 3 samples (0.0%)</title>
+<rect x="1708.31" y="348.00" width="0.95" height="20" fill="#adc5d4"/>
+</g>
+<g><title>std::basic_string&lt;char&gt;::append(char const*, unsigned long) — 13 samples (0.2%)</title>
+<rect x="1713.04" y="370.00" width="4.10" height="20" fill="#adc5d4"/>
+</g>
+<g><title>std::basic_string&lt;char&gt;::__grow_by_and_replace(unsigned long, unsigned long, unsigned long, unsigned long, unsigned long, unsigned long, char const*) — 8 samples (0.1%)</title>
+<rect x="1713.04" y="348.00" width="2.52" height="20" fill="#adc5d4"/>
+</g>
+<g><title>_xzm_free — 3 samples (0.0%)</title>
+<rect x="1713.04" y="326.00" width="0.95" height="20" fill="#bed1c2"/>
+</g>
+<g><title>mach_absolute_time — 3 samples (0.0%)</title>
+<rect x="1713.04" y="304.00" width="0.95" height="20" fill="#cbd5dd"/>
+</g>
+<g><title>_xzm_free — 4 samples (0.1%)</title>
+<rect x="1717.14" y="370.00" width="1.26" height="20" fill="#bed1c2"/>
+</g>
+<g><title>hquant::bench::SimVenue::Impl::SendPublic(unsigned long, std::basic_string&lt;char&gt;, unsigned long long) — 283 samples (4.1%)</title>
+<rect x="1721.24" y="392.00" width="89.29" height="20" fill="#eeb468"/>
+<text x="1724.24" y="406.00">hquant::ben…</text>
+</g>
+<g><title>hquant::bench::SimVenue::Impl::WsSession::Write() — 277 samples (4.0%)</title>
+<rect x="1721.24" y="370.00" width="87.40" height="20" fill="#eeb468"/>
+<text x="1724.24" y="384.00">hquant::be…</text>
+</g>
+<g><title>boost::beast::websocket::stream&lt;boost::asio::basic_stream_socket&lt;boost::asio::ip::tcp, boost::asio::any_io_executor&gt;, true&gt;::run_write_some_op::operator()&lt;hquant::bench::SimVenue::Impl::WsSession::Write()::&#x27;lambda&#x27;(boost::system::error_code, unsigned long), boost::asio::mutable_buffer&gt;(hquant::bench::SimVenue::Impl::WsSession::Write()::&#x27;lambda&#x27;(boost::system::error_code, unsigned long)&amp;&amp;, bool, boost::asio::mutable_buffer const&amp;) — 265 samples (3.9%)</title>
+<rect x="1721.24" y="348.00" width="83.61" height="20" fill="#eeb468"/>
+<text x="1724.24" y="362.00">boost::bea…</text>
+</g>
+<g><title>boost::beast::websocket::stream&lt;boost::asio::basic_stream_socket&lt;boost::asio::ip::tcp, boost::asio::any_io_executor&gt;, true&gt;::write_some_op&lt;hquant::bench::SimVenue::Impl::WsSession::Write()::&#x27;lambda&#x27;(boost::system::error_code, unsigned long), boost::asio::mutable_buffer&gt;::write_some_op&lt;hquant::bench::SimVenue::Impl::WsSession::Write()::&#x27;lambda&#x27;(boost::system::error_code, unsigned long)&gt;(hquant::bench::SimVenue::Impl::WsSession::Write()::&#x27;lambda&#x27;(boost::system::error_code, unsigned long)&amp;&amp;, boost::shared_ptr&lt;boost::beast::websocket::stream&lt;boost::asio::basic_stream_socket&lt;boost::asio::ip::tcp, boost::asio::any_io_executor&gt;, true&gt;::impl_type&gt; const&amp;, bool, boost::asio::mutable_buffer const&amp;) — 264 samples (3.9%)</title>
+<rect x="1721.24" y="326.00" width="83.30" height="20" fill="#eeb468"/>
+<text x="1724.24" y="340.00">boost::bea…</text>
+</g>
+<g><title>boost::beast::websocket::stream&lt;boost::asio::basic_stream_socket&lt;boost::asio::ip::tcp, boost::asio::any_io_executor&gt;, true&gt;::write_some_op&lt;hquant::bench::SimVenue::Impl::WsSession::Write()::&#x27;lambda&#x27;(boost::system::error_code, unsigned long), boost::asio::mutable_buffer&gt;::operator()(boost::system::error_code, unsigned long, bool) — 262 samples (3.8%)</title>
+<rect x="1721.24" y="304.00" width="82.66" height="20" fill="#eeb468"/>
+<text x="1724.24" y="318.00">boost::bea…</text>
+</g>
+<g><title>boost::asio::detail::initiate_async_write&lt;boost::asio::basic_stream_socket&lt;boost::asio::ip::tcp, boost::asio::any_io_executor&gt;&gt;::operator()&lt;boost::beast::websocket::stream&lt;boost::asio::basic_stream_socket&lt;boost::asio::ip::tcp, boost::asio::any_io_executor&gt;, true&gt;::write_some_op&lt;hquant::bench::SimVenue::Impl::WsSession::Write()::&#x27;lambda&#x27;(boost::system::error_code, unsigned long), boost::asio::mutable_buffer&gt;, boost::beast::buffers_cat_view&lt;boost::asio::const_buffer, boost::asio::const_buffer, boost::beast::buffers_suffix&lt;boost::asio::mutable_buffer&gt;, boost::beast::buffers_prefix_view&lt;boost::beast::buffers_suffix&lt;boost::asio::mutable_buffer&gt;&gt;&gt;, boost::asio::detail::transfer_all_t&gt;(boost::beast::websocket::stream&lt;boost::asio::basic_stream_socket&lt;boost::asio::ip::tcp, boost::asio::any_io_executor&gt;, true&gt;::write_some_op&lt;hquant::bench::SimVenue::Impl::WsSession::Write()::&#x27;lambda&#x27;(boost::system::error_code, unsigned long), boost::asio::mutable_buffer&gt;&amp;&amp;, boost::beast::buffers_cat_view&lt;boost::asio::const_buffer, boost::asio::const_buffer, boost::beast::buffers_suffix&lt;boost::asio::mutable_buffer&gt;, boost::beast::buffers_prefix_view&lt;boost::beast::buffers_suffix&lt;boost::asio::mutable_buffer&gt;&gt;&gt; const&amp;, boost::asio::detail::transfer_all_t&amp;&amp;) const — 261 samples (3.8%)</title>
+<rect x="1721.24" y="282.00" width="82.35" height="20" fill="#eeb468"/>
+<text x="1724.24" y="296.00">boost::asi…</text>
+</g>
+<g><title>boost::asio::detail::reactive_socket_service_base::async_send&lt;boost::asio::detail::prepared_buffers&lt;boost::asio::const_buffer, 64ul&gt;, boost::asio::detail::write_op&lt;boost::asio::basic_stream_socket&lt;boost::asio::ip::tcp, boost::asio::any_io_executor&gt;, boost::beast::buffers_cat_view&lt;boost::asio::const_buffer, boost::asio::const_buffer, boost::beast::buffers_suffix&lt;boost::asio::mutable_buffer&gt;, boost::beast::buffers_prefix_view&lt;boost::beast::buffers_suffix&lt;boost::asio::mutable_buffer&gt;&gt;&gt;, boost::beast::buffers_cat_view&lt;boost::asio::const_buffer, boost::asio::const_buffer, boost::beast::buffers_suffix&lt;boost::asio::mutable_buffer&gt;, boost::beast::buffers_prefix_view&lt;boost::beast::buffers_suffix&lt;boost::asio::mutable_buffer&gt;&gt;&gt;::const_iterator, boost::asio::detail::transfer_all_t, boost::beast::websocket::stream&lt;boost::asio::basic_stream_socket&lt;boost::asio::ip::tcp, boost::asio::any_io_executor&gt;, true&gt;::write_some_op&lt;hquant::bench::SimVenue::Impl::WsSession::Write()::&#x27;lambda&#x27;(boost::system::error_code, unsigned long), boost::asio::mutable_buffer&gt;&gt;, boost::asio::any_io_executor&gt;(boost::asio::detail::reactive_socket_service_base::base_implementation_type&amp;, boost::asio::detail::prepared_buffers&lt;boost::asio::const_buffer, 64ul&gt; const&amp;, int, boost::asio::detail::write_op&lt;boost::asio::basic_stream_socket&lt;boost::asio::ip::tcp, boost::asio::any_io_executor&gt;, boost::beast::buffers_cat_view&lt;boost::asio::const_buffer, boost::asio::const_buffer, boost::beast::buffers_suffix&lt;boost::asio::mutable_buffer&gt;, boost::beast::buffers_prefix_view&lt;boost::beast::buffers_suffix&lt;boost::asio::mutable_buffer&gt;&gt;&gt;, boost::beast::buffers_cat_view&lt;boost::asio::const_buffer, boost::asio::const_buffer, boost::beast::buffers_suffix&lt;boost::asio::mutable_buffer&gt;, boost::beast::buffers_prefix_view&lt;boost::beast::buffers_suffix&lt;boost::asio::mutable_buffer&gt;&gt;&gt;::const_iterator, boost::asio::detail::transfer_all_t, boost::beast::websocket::stream&lt;boost::asio::basic_stream_socket&lt;boost::asio::ip::tcp, boost::asio::any_io_executor&gt;, true&gt;::write_some_op&lt;hquant::bench::SimVenue::Impl::WsSession::Write()::&#x27;lambda&#x27;(boost::system::error_code, unsigned long), boost::asio::mutable_buffer&gt;&gt;&amp;, boost::asio::any_io_executor const&amp;) — 256 samples (3.7%)</title>
+<rect x="1721.24" y="260.00" width="80.77" height="20" fill="#eeb468"/>
+<text x="1724.24" y="274.00">boost::as…</text>
+</g>
+<g><title>boost::asio::detail::kqueue_reactor::start_op(int, int, boost::asio::detail::kqueue_reactor::descriptor_state*&amp;, boost::asio::detail::reactor_op*, bool, bool, void (*)(boost::asio::detail::scheduler_operation*, bool, void const*), void const*) — 253 samples (3.7%)</title>
+<rect x="1721.24" y="238.00" width="79.82" height="20" fill="#b3a0cd"/>
+<text x="1724.24" y="252.00">boost::as…</text>
+</g>
+<g><title>boost::asio::detail::reactive_socket_send_op_base&lt;boost::asio::detail::prepared_buffers&lt;boost::asio::const_buffer, 64ul&gt;&gt;::do_perform(boost::asio::detail::reactor_op*) — 247 samples (3.6%)</title>
+<rect x="1721.24" y="216.00" width="77.93" height="20" fill="#b3a0cd"/>
+<text x="1724.24" y="230.00">boost::as…</text>
+</g>
+<g><title>boost::asio::detail::socket_ops::non_blocking_send(int, iovec const*, unsigned long, int, boost::system::error_code&amp;, unsigned long&amp;) — 245 samples (3.6%)</title>
+<rect x="1721.24" y="194.00" width="77.30" height="20" fill="#b3a0cd"/>
+<text x="1724.24" y="208.00">boost::as…</text>
+</g>
+<g><title>__sendmsg — 244 samples (3.6%)</title>
+<rect x="1721.24" y="172.00" width="76.99" height="20" fill="#d7c6b8"/>
+<text x="1724.24" y="186.00">__sendmsg</text>
+</g>
+<g><title>boost::asio::detail::consuming_buffers&lt;boost::asio::const_buffer, boost::beast::buffers_cat_view&lt;boost::asio::const_buffer, boost::asio::const_buffer, boost::beast::buffers_suffix&lt;boost::asio::mutable_buffer&gt;, boost::beast::buffers_prefix_view&lt;boost::beast::buffers_suffix&lt;boost::asio::mutable_buffer&gt;&gt;&gt;, boost::beast::buffers_cat_view&lt;boost::asio::const_buffer, boost::asio::const_buffer, boost::beast::buffers_suffix&lt;boost::asio::mutable_buffer&gt;, boost::beast::buffers_prefix_view&lt;boost::beast::buffers_suffix&lt;boost::asio::mutable_buffer&gt;&gt;&gt;::const_iterator&gt;::consuming_buffers(boost::beast::buffers_cat_view&lt;boost::asio::const_buffer, boost::asio::const_buffer, boost::beast::buffers_suffix&lt;boost::asio::mutable_buffer&gt;, boost::beast::buffers_prefix_view&lt;boost::beast::buffers_suffix&lt;boost::asio::mutable_buffer&gt;&gt;&gt; const&amp;) — 5 samples (0.1%)</title>
+<rect x="1802.02" y="260.00" width="1.58" height="20" fill="#b3a0cd"/>
+</g>
+<g><title>boost::asio::detail::buffer_size&lt;boost::beast::buffers_cat_view&lt;boost::asio::const_buffer, boost::asio::const_buffer, boost::beast::buffers_suffix&lt;boost::asio::mutable_buffer&gt;, boost::beast::buffers_prefix_view&lt;boost::beast::buffers_suffix&lt;boost::asio::mutable_buffer&gt;&gt;&gt;::const_iterator&gt;(boost::asio::detail::multiple_buffers, boost::beast::buffers_cat_view&lt;boost::asio::const_buffer, boost::asio::const_buffer, boost::beast::buffers_suffix&lt;boost::asio::mutable_buffer&gt;, boost::beast::buffers_prefix_view&lt;boost::beast::buffers_suffix&lt;boost::asio::mutable_buffer&gt;&gt;&gt;::const_iterator, boost::beast::buffers_cat_view&lt;boost::asio::const_buffer, boost::asio::const_buffer, boost::beast::buffers_suffix&lt;boost::asio::mutable_buffer&gt;, boost::beast::buffers_prefix_view&lt;boost::beast::buffers_suffix&lt;boost::asio::mutable_buffer&gt;&gt;&gt;::const_iterator) — 5 samples (0.1%)</title>
+<rect x="1802.02" y="238.00" width="1.58" height="20" fill="#b3a0cd"/>
+</g>
+<g><title>clock_gettime — 12 samples (0.2%)</title>
+<rect x="1804.86" y="348.00" width="3.79" height="20" fill="#b9ccd5"/>
+</g>
+<g><title>_mach_boottime_usec — 12 samples (0.2%)</title>
+<rect x="1804.86" y="326.00" width="3.79" height="20" fill="#bed1c2"/>
+</g>
+<g><title>gettimeofday — 11 samples (0.2%)</title>
+<rect x="1804.86" y="304.00" width="3.47" height="20" fill="#b9ccd5"/>
+</g>
+<g><title>__commpage_gettimeofday_internal — 11 samples (0.2%)</title>
+<rect x="1804.86" y="282.00" width="3.47" height="20" fill="#cbd5dd"/>
+</g>
+<g><title>mach_absolute_time — 11 samples (0.2%)</title>
+<rect x="1804.86" y="260.00" width="3.47" height="20" fill="#cbd5dd"/>
+</g>
+<g><title>hquant::bench::MatchingEngine::Find(unsigned long long) const — 180 samples (2.6%)</title>
+<rect x="1810.53" y="392.00" width="56.79" height="20" fill="#7dbb9d"/>
+<text x="1813.53" y="406.00">hquant…</text>
+</g>
+<g><title>boost::asio::detail::kqueue_reactor::schedule_timer&lt;boost::asio::detail::chrono_time_traits&lt;std::chrono::steady_clock, boost::asio::wait_traits&lt;std::chrono::steady_clock&gt;&gt;, boost::asio::execution_context::allocator&lt;void&gt;&gt;(boost::asio::detail::timer_queue&lt;boost::asio::detail::chrono_time_traits&lt;std::chrono::steady_clock, boost::asio::wait_traits&lt;std::chrono::steady_clock&gt;&gt;, boost::asio::execution_context::allocator&lt;void&gt;&gt;&amp;, boost::asio::detail::chrono_time_traits&lt;std::chrono::steady_clock, boost::asio::wait_traits&lt;std::chrono::steady_clock&gt;&gt;::time_type const&amp;, boost::asio::detail::timer_queue&lt;boost::asio::detail::chrono_time_traits&lt;std::chrono::steady_clock, boost::asio::wait_traits&lt;std::chrono::steady_clock&gt;&gt;, boost::asio::execution_context::allocator&lt;void&gt;&gt;::per_timer_data&amp;, boost::asio::detail::wait_op*) — 89 samples (1.3%)</title>
+<rect x="1867.33" y="392.00" width="28.08" height="20" fill="#b3a0cd"/>
+</g>
+<g><title>boost::asio::detail::kqueue_reactor::interrupt() — 85 samples (1.2%)</title>
+<rect x="1867.33" y="370.00" width="26.82" height="20" fill="#b3a0cd"/>
+</g>
+<g><title>write — 85 samples (1.2%)</title>
+<rect x="1867.33" y="348.00" width="26.82" height="20" fill="#d7c6b8"/>
+</g>
+<g><title>boost::asio::detail::timer_queue&lt;boost::asio::detail::chrono_time_traits&lt;std::chrono::steady_clock, boost::asio::wait_traits&lt;std::chrono::steady_clock&gt;&gt;, boost::asio::execution_context::allocator&lt;void&gt;&gt;::enqueue_timer(std::chrono::time_point&lt;std::chrono::steady_clock, std::chrono::duration&lt;long long, std::ratio&lt;1l, 1000000000l&gt;&gt;&gt; const&amp;, boost::asio::detail::timer_queue&lt;boost::asio::detail::chrono_time_traits&lt;std::chrono::steady_clock, boost::asio::wait_traits&lt;std::chrono::steady_clock&gt;&gt;, boost::asio::execution_context::allocator&lt;void&gt;&gt;::per_timer_data&amp;, boost::asio::detail::wait_op*) — 3 samples (0.0%)</title>
+<rect x="1894.15" y="370.00" width="0.95" height="20" fill="#b3a0cd"/>
+</g>
+<g><title>hquant::bench::MatchingEngine::Place(std::basic_string&lt;char&gt;, hquant::bench::Side, hquant::bench::Owner, long long, long long) — 25 samples (0.4%)</title>
+<rect x="1895.41" y="392.00" width="7.89" height="20" fill="#7dbb9d"/>
+</g>
+<g><title>operator new(unsigned long) — 11 samples (0.2%)</title>
+<rect x="1895.41" y="370.00" width="3.47" height="20" fill="#d4c5cc"/>
+</g>
+<g><title>&lt;deduplicated_symbol&gt; — 5 samples (0.1%)</title>
+<rect x="1895.41" y="348.00" width="1.58" height="20" fill="#cbd5dd"/>
+</g>
+<g><title>_xzm_xzone_malloc_tiny — 3 samples (0.0%)</title>
+<rect x="1896.99" y="348.00" width="0.95" height="20" fill="#d7c6b8"/>
+</g>
+<g><title>std::__tree_balance_after_insert[abi:ne200100]&lt;std::__tree_node_base&lt;void*&gt;*&gt;(std::__tree_node_base&lt;void*&gt;*, std::__tree_node_base&lt;void*&gt;*) — 6 samples (0.1%)</title>
+<rect x="1898.88" y="370.00" width="1.89" height="20" fill="#adc5d4"/>
+</g>
+<g><title>boost::asio::detail::kqueue_reactor::cancel_timer&lt;boost::asio::detail::chrono_time_traits&lt;std::chrono::steady_clock, boost::asio::wait_traits&lt;std::chrono::steady_clock&gt;&gt;, boost::asio::execution_context::allocator&lt;void&gt;&gt;(boost::asio::detail::timer_queue&lt;boost::asio::detail::chrono_time_traits&lt;std::chrono::steady_clock, boost::asio::wait_traits&lt;std::chrono::steady_clock&gt;&gt;, boost::asio::execution_context::allocator&lt;void&gt;&gt;&amp;, boost::asio::detail::timer_queue&lt;boost::asio::detail::chrono_time_traits&lt;std::chrono::steady_clock, boost::asio::wait_traits&lt;std::chrono::steady_clock&gt;&gt;, boost::asio::execution_context::allocator&lt;void&gt;&gt;::per_timer_data&amp;, unsigned long) — 7 samples (0.1%)</title>
+<rect x="1903.30" y="392.00" width="2.21" height="20" fill="#b3a0cd"/>
+</g>
+<g><title>boost::asio::detail::scheduler::post_deferred_completions(boost::asio::detail::op_queue&lt;boost::asio::detail::scheduler_operation&gt;&amp;) — 4 samples (0.1%)</title>
+<rect x="1903.30" y="370.00" width="1.26" height="20" fill="#b3a0cd"/>
+</g>
+<g><title>std::vector&lt;hquant::bench::SimLevel&gt;::push_back[abi:ne200100](hquant::bench::SimLevel&amp;&amp;) — 4 samples (0.1%)</title>
+<rect x="1905.50" y="392.00" width="1.26" height="20" fill="#adc5d4"/>
+</g>
+<g><title>boost::asio::detail::thread_context::top_of_thread_call_stack() — 11 samples (0.2%)</title>
+<rect x="1911.81" y="414.00" width="3.47" height="20" fill="#b3a0cd"/>
+</g>
+<g><title>_tlv_get_addr — 3 samples (0.0%)</title>
+<rect x="1911.81" y="392.00" width="0.95" height="20" fill="#d4c5cc"/>
+</g>
+<g><title>boost::asio::detail::kqueue_reactor::run(long, boost::asio::detail::op_queue&lt;boost::asio::detail::scheduler_operation&gt;&amp;) — 441 samples (6.4%)</title>
+<rect x="1920.65" y="436.00" width="139.14" height="20" fill="#b3a0cd"/>
+<text x="1923.65" y="450.00">boost::asio::detai…</text>
+</g>
+<g><title>boost::asio::detail::timer_queue&lt;boost::asio::detail::chrono_time_traits&lt;std::chrono::steady_clock, boost::asio::wait_traits&lt;std::chrono::steady_clock&gt;&gt;, boost::asio::execution_context::allocator&lt;void&gt;&gt;::get_ready_timers(boost::asio::detail::op_queue&lt;boost::asio::detail::scheduler_operation&gt;&amp;) — 260 samples (3.8%)</title>
+<rect x="1920.65" y="414.00" width="82.03" height="20" fill="#b3a0cd"/>
+<text x="1923.65" y="428.00">boost::asi…</text>
+</g>
+<g><title>std::chrono::steady_clock::now() — 219 samples (3.2%)</title>
+<rect x="1920.65" y="392.00" width="69.10" height="20" fill="#adc5d4"/>
+<text x="1923.65" y="406.00">std::chr…</text>
+</g>
+<g><title>clock_gettime — 175 samples (2.6%)</title>
+<rect x="1920.65" y="370.00" width="55.21" height="20" fill="#b9ccd5"/>
+<text x="1923.65" y="384.00">clock_…</text>
+</g>
+<g><title>clock_gettime_nsec_np — 136 samples (2.0%)</title>
+<rect x="1920.65" y="348.00" width="42.91" height="20" fill="#b9ccd5"/>
+<text x="1923.65" y="362.00">cloc…</text>
+</g>
+<g><title>mach_continuous_time — 92 samples (1.3%)</title>
+<rect x="1920.65" y="326.00" width="29.03" height="20" fill="#cbd5dd"/>
+</g>
+<g><title>mach_timebase_info — 31 samples (0.5%)</title>
+<rect x="1949.68" y="326.00" width="9.78" height="20" fill="#cbd5dd"/>
+</g>
+<g><title>DYLD-STUB$$mach_timebase_info — 4 samples (0.1%)</title>
+<rect x="1959.46" y="326.00" width="1.26" height="20" fill="#b9ccd5"/>
+</g>
+<g><title>DYLD-STUB$$clock_gettime — 23 samples (0.3%)</title>
+<rect x="1975.86" y="370.00" width="7.26" height="20" fill="#bed1c2"/>
+</g>
+<g><title>DYLD-STUB$$std::chrono::steady_clock::now() — 9 samples (0.1%)</title>
+<rect x="1989.75" y="392.00" width="2.84" height="20" fill="#b9ccd5"/>
+</g>
+<g><title>boost::asio::detail::timer_queue&lt;boost::asio::detail::chrono_time_traits&lt;std::chrono::steady_clock, boost::asio::wait_traits&lt;std::chrono::steady_clock&gt;&gt;, boost::asio::execution_context::allocator&lt;void&gt;&gt;::remove_timer(boost::asio::detail::timer_queue&lt;boost::asio::detail::chrono_time_traits&lt;std::chrono::steady_clock, boost::asio::wait_traits&lt;std::chrono::steady_clock&gt;&gt;, boost::asio::execution_context::allocator&lt;void&gt;&gt;::per_timer_data&amp;) — 3 samples (0.0%)</title>
+<rect x="1992.59" y="392.00" width="0.95" height="20" fill="#b3a0cd"/>
+</g>
+<g><title>read — 59 samples (0.9%)</title>
+<rect x="2002.68" y="414.00" width="18.62" height="20" fill="#bed1c2"/>
+</g>
+<g><title>pthread_mutex_lock — 43 samples (0.6%)</title>
+<rect x="2021.30" y="414.00" width="13.57" height="20" fill="#b9ccd5"/>
+</g>
+<g><title>DYLD-STUB$$pthread_mutex_lock — 16 samples (0.2%)</title>
+<rect x="2034.86" y="414.00" width="5.05" height="20" fill="#bed1c2"/>
+</g>
+<g><title>boost::asio::detail::timer_queue&lt;boost::asio::detail::chrono_time_traits&lt;std::chrono::steady_clock, boost::asio::wait_traits&lt;std::chrono::steady_clock&gt;&gt;, boost::asio::execution_context::allocator&lt;void&gt;&gt;::wait_duration_usec(long) const — 5 samples (0.1%)</title>
+<rect x="2039.91" y="414.00" width="1.58" height="20" fill="#b3a0cd"/>
+</g>
+<g><title>std::chrono::steady_clock::now() — 5 samples (0.1%)</title>
+<rect x="2039.91" y="392.00" width="1.58" height="20" fill="#adc5d4"/>
+</g>
+<g><title>clock_gettime — 5 samples (0.1%)</title>
+<rect x="2039.91" y="370.00" width="1.58" height="20" fill="#b9ccd5"/>
+</g>
+<g><title>clock_gettime_nsec_np — 5 samples (0.1%)</title>
+<rect x="2039.91" y="348.00" width="1.58" height="20" fill="#b9ccd5"/>
+</g>
+<g><title>mach_continuous_time — 3 samples (0.0%)</title>
+<rect x="2039.91" y="326.00" width="0.95" height="20" fill="#cbd5dd"/>
+</g>
+<g><title>DYLD-STUB$$read — 3 samples (0.0%)</title>
+<rect x="2041.49" y="414.00" width="0.95" height="20" fill="#d4c5cc"/>
+</g>
+<g><title>boost::asio::detail::reactive_socket_send_op&lt;boost::asio::detail::prepared_buffers&lt;boost::asio::const_buffer, 64ul&gt;, boost::asio::detail::write_op&lt;boost::asio::basic_stream_socket&lt;boost::asio::ip::tcp, boost::asio::any_io_executor&gt;, boost::beast::buffers_cat_view&lt;boost::asio::const_buffer, boost::asio::const_buffer, boost::beast::buffers_suffix&lt;boost::asio::mutable_buffer&gt;, boost::beast::buffers_prefix_view&lt;boost::beast::buffers_suffix&lt;boost::asio::mutable_buffer&gt;&gt;&gt;, boost::beast::buffers_cat_view&lt;boost::asio::const_buffer, boost::asio::const_buffer, boost::beast::buffers_suffix&lt;boost::asio::mutable_buffer&gt;, boost::beast::buffers_prefix_view&lt;boost::beast::buffers_suffix&lt;boost::asio::mutable_buffer&gt;&gt;&gt;::const_iterator, boost::asio::detail::transfer_all_t, boost::beast::websocket::stream&lt;boost::asio::basic_stream_socket&lt;boost::asio::ip::tcp, boost::asio::any_io_executor&gt;, true&gt;::write_some_op&lt;hquant::bench::SimVenue::Impl::WsSession::Write()::&#x27;lambda&#x27;(boost::system::error_code, unsigned long), boost::asio::mutable_buffer&gt;&gt;, boost::asio::any_io_executor&gt;::do_complete(void*, boost::asio::detail::scheduler_operation*, boost::system::error_code const&amp;, unsigned long) — 187 samples (2.7%)</title>
+<rect x="2059.79" y="436.00" width="59.00" height="20" fill="#eeb468"/>
+<text x="2062.79" y="450.00">boost:…</text>
+</g>
+<g><title>boost::asio::detail::write_op&lt;boost::asio::basic_stream_socket&lt;boost::asio::ip::tcp, boost::asio::any_io_executor&gt;, boost::beast::buffers_cat_view&lt;boost::asio::const_buffer, boost::asio::const_buffer, boost::beast::buffers_suffix&lt;boost::asio::mutable_buffer&gt;, boost::beast::buffers_prefix_view&lt;boost::beast::buffers_suffix&lt;boost::asio::mutable_buffer&gt;&gt;&gt;, boost::beast::buffers_cat_view&lt;boost::asio::const_buffer, boost::asio::const_buffer, boost::beast::buffers_suffix&lt;boost::asio::mutable_buffer&gt;, boost::beast::buffers_prefix_view&lt;boost::beast::buffers_suffix&lt;boost::asio::mutable_buffer&gt;&gt;&gt;::const_iterator, boost::asio::detail::transfer_all_t, boost::beast::websocket::stream&lt;boost::asio::basic_stream_socket&lt;boost::asio::ip::tcp, boost::asio::any_io_executor&gt;, true&gt;::write_some_op&lt;hquant::bench::SimVenue::Impl::WsSession::Write()::&#x27;lambda&#x27;(boost::system::error_code, unsigned long), boost::asio::mutable_buffer&gt;&gt;::operator()(boost::system::error_code, unsigned long, int) — 164 samples (2.4%)</title>
+<rect x="2059.79" y="414.00" width="51.74" height="20" fill="#eeb468"/>
+<text x="2062.79" y="428.00">boost…</text>
+</g>
+<g><title>boost::beast::websocket::stream&lt;boost::asio::basic_stream_socket&lt;boost::asio::ip::tcp, boost::asio::any_io_executor&gt;, true&gt;::write_some_op&lt;hquant::bench::SimVenue::Impl::WsSession::Write()::&#x27;lambda&#x27;(boost::system::error_code, unsigned long), boost::asio::mutable_buffer&gt;::operator()(boost::system::error_code, unsigned long, bool) — 154 samples (2.2%)</title>
+<rect x="2059.79" y="392.00" width="48.59" height="20" fill="#eeb468"/>
+<text x="2062.79" y="406.00">boost…</text>
+</g>
+<g><title>boost::beast::async_base&lt;hquant::bench::SimVenue::Impl::WsSession::Write()::&#x27;lambda&#x27;(boost::system::error_code, unsigned long), boost::asio::any_io_executor&gt;::complete&lt;boost::system::error_code&amp;, unsigned long&amp;&gt;(bool, boost::system::error_code&amp;, unsigned long&amp;) — 147 samples (2.1%)</title>
+<rect x="2059.79" y="370.00" width="46.38" height="20" fill="#eeb468"/>
+<text x="2062.79" y="384.00">boos…</text>
+</g>
+<g><title>hquant::bench::SimVenue::Impl::WsSession::Write()::&#x27;lambda&#x27;(boost::system::error_code, unsigned long)::operator()(boost::system::error_code, unsigned long) const — 144 samples (2.1%)</title>
+<rect x="2059.79" y="348.00" width="45.43" height="20" fill="#eeb468"/>
+<text x="2062.79" y="362.00">hqua…</text>
+</g>
+<g><title>hquant::bench::SimVenue::Impl::WsSession::Write() — 109 samples (1.6%)</title>
+<rect x="2059.79" y="326.00" width="34.39" height="20" fill="#eeb468"/>
+<text x="2062.79" y="340.00">hqu…</text>
+</g>
+<g><title>boost::beast::websocket::stream&lt;boost::asio::basic_stream_socket&lt;boost::asio::ip::tcp, boost::asio::any_io_executor&gt;, true&gt;::run_write_some_op::operator()&lt;hquant::bench::SimVenue::Impl::WsSession::Write()::&#x27;lambda&#x27;(boost::system::error_code, unsigned long), boost::asio::mutable_buffer&gt;(hquant::bench::SimVenue::Impl::WsSession::Write()::&#x27;lambda&#x27;(boost::system::error_code, unsigned long)&amp;&amp;, bool, boost::asio::mutable_buffer const&amp;) — 106 samples (1.5%)</title>
+<rect x="2059.79" y="304.00" width="33.44" height="20" fill="#eeb468"/>
+<text x="2062.79" y="318.00">boo…</text>
+</g>
+<g><title>boost::beast::websocket::stream&lt;boost::asio::basic_stream_socket&lt;boost::asio::ip::tcp, boost::asio::any_io_executor&gt;, true&gt;::write_some_op&lt;hquant::bench::SimVenue::Impl::WsSession::Write()::&#x27;lambda&#x27;(boost::system::error_code, unsigned long), boost::asio::mutable_buffer&gt;::write_some_op&lt;hquant::bench::SimVenue::Impl::WsSession::Write()::&#x27;lambda&#x27;(boost::system::error_code, unsigned long)&gt;(hquant::bench::SimVenue::Impl::WsSession::Write()::&#x27;lambda&#x27;(boost::system::error_code, unsigned long)&amp;&amp;, boost::shared_ptr&lt;boost::beast::websocket::stream&lt;boost::asio::basic_stream_socket&lt;boost::asio::ip::tcp, boost::asio::any_io_executor&gt;, true&gt;::impl_type&gt; const&amp;, bool, boost::asio::mutable_buffer const&amp;) — 106 samples (1.5%)</title>
+<rect x="2059.79" y="282.00" width="33.44" height="20" fill="#eeb468"/>
+<text x="2062.79" y="296.00">boo…</text>
+</g>
+<g><title>boost::beast::websocket::stream&lt;boost::asio::basic_stream_socket&lt;boost::asio::ip::tcp, boost::asio::any_io_executor&gt;, true&gt;::write_some_op&lt;hquant::bench::SimVenue::Impl::WsSession::Write()::&#x27;lambda&#x27;(boost::system::error_code, unsigned long), boost::asio::mutable_buffer&gt;::operator()(boost::system::error_code, unsigned long, bool) — 105 samples (1.5%)</title>
+<rect x="2059.79" y="260.00" width="33.13" height="20" fill="#eeb468"/>
+</g>
+<g><title>boost::asio::detail::initiate_async_write&lt;boost::asio::basic_stream_socket&lt;boost::asio::ip::tcp, boost::asio::any_io_executor&gt;&gt;::operator()&lt;boost::beast::websocket::stream&lt;boost::asio::basic_stream_socket&lt;boost::asio::ip::tcp, boost::asio::any_io_executor&gt;, true&gt;::write_some_op&lt;hquant::bench::SimVenue::Impl::WsSession::Write()::&#x27;lambda&#x27;(boost::system::error_code, unsigned long), boost::asio::mutable_buffer&gt;, boost::beast::buffers_cat_view&lt;boost::asio::const_buffer, boost::asio::const_buffer, boost::beast::buffers_suffix&lt;boost::asio::mutable_buffer&gt;, boost::beast::buffers_prefix_view&lt;boost::beast::buffers_suffix&lt;boost::asio::mutable_buffer&gt;&gt;&gt;, boost::asio::detail::transfer_all_t&gt;(boost::beast::websocket::stream&lt;boost::asio::basic_stream_socket&lt;boost::asio::ip::tcp, boost::asio::any_io_executor&gt;, true&gt;::write_some_op&lt;hquant::bench::SimVenue::Impl::WsSession::Write()::&#x27;lambda&#x27;(boost::system::error_code, unsigned long), boost::asio::mutable_buffer&gt;&amp;&amp;, boost::beast::buffers_cat_view&lt;boost::asio::const_buffer, boost::asio::const_buffer, boost::beast::buffers_suffix&lt;boost::asio::mutable_buffer&gt;, boost::beast::buffers_prefix_view&lt;boost::beast::buffers_suffix&lt;boost::asio::mutable_buffer&gt;&gt;&gt; const&amp;, boost::asio::detail::transfer_all_t&amp;&amp;) const — 104 samples (1.5%)</title>
+<rect x="2059.79" y="238.00" width="32.81" height="20" fill="#eeb468"/>
+</g>
+<g><title>boost::asio::detail::reactive_socket_service_base::async_send&lt;boost::asio::detail::prepared_buffers&lt;boost::asio::const_buffer, 64ul&gt;, boost::asio::detail::write_op&lt;boost::asio::basic_stream_socket&lt;boost::asio::ip::tcp, boost::asio::any_io_executor&gt;, boost::beast::buffers_cat_view&lt;boost::asio::const_buffer, boost::asio::const_buffer, boost::beast::buffers_suffix&lt;boost::asio::mutable_buffer&gt;, boost::beast::buffers_prefix_view&lt;boost::beast::buffers_suffix&lt;boost::asio::mutable_buffer&gt;&gt;&gt;, boost::beast::buffers_cat_view&lt;boost::asio::const_buffer, boost::asio::const_buffer, boost::beast::buffers_suffix&lt;boost::asio::mutable_buffer&gt;, boost::beast::buffers_prefix_view&lt;boost::beast::buffers_suffix&lt;boost::asio::mutable_buffer&gt;&gt;&gt;::const_iterator, boost::asio::detail::transfer_all_t, boost::beast::websocket::stream&lt;boost::asio::basic_stream_socket&lt;boost::asio::ip::tcp, boost::asio::any_io_executor&gt;, true&gt;::write_some_op&lt;hquant::bench::SimVenue::Impl::WsSession::Write()::&#x27;lambda&#x27;(boost::system::error_code, unsigned long), boost::asio::mutable_buffer&gt;&gt;, boost::asio::any_io_executor&gt;(boost::asio::detail::reactive_socket_service_base::base_implementation_type&amp;, boost::asio::detail::prepared_buffers&lt;boost::asio::const_buffer, 64ul&gt; const&amp;, int, boost::asio::detail::write_op&lt;boost::asio::basic_stream_socket&lt;boost::asio::ip::tcp, boost::asio::any_io_executor&gt;, boost::beast::buffers_cat_view&lt;boost::asio::const_buffer, boost::asio::const_buffer, boost::beast::buffers_suffix&lt;boost::asio::mutable_buffer&gt;, boost::beast::buffers_prefix_view&lt;boost::beast::buffers_suffix&lt;boost::asio::mutable_buffer&gt;&gt;&gt;, boost::beast::buffers_cat_view&lt;boost::asio::const_buffer, boost::asio::const_buffer, boost::beast::buffers_suffix&lt;boost::asio::mutable_buffer&gt;, boost::beast::buffers_prefix_view&lt;boost::beast::buffers_suffix&lt;boost::asio::mutable_buffer&gt;&gt;&gt;::const_iterator, boost::asio::detail::transfer_all_t, boost::beast::websocket::stream&lt;boost::asio::basic_stream_socket&lt;boost::asio::ip::tcp, boost::asio::any_io_executor&gt;, true&gt;::write_some_op&lt;hquant::bench::SimVenue::Impl::WsSession::Write()::&#x27;lambda&#x27;(boost::system::error_code, unsigned long), boost::asio::mutable_buffer&gt;&gt;&amp;, boost::asio::any_io_executor const&amp;) — 102 samples (1.5%)</title>
+<rect x="2059.79" y="216.00" width="32.18" height="20" fill="#eeb468"/>
+</g>
+<g><title>boost::asio::detail::kqueue_reactor::start_op(int, int, boost::asio::detail::kqueue_reactor::descriptor_state*&amp;, boost::asio::detail::reactor_op*, bool, bool, void (*)(boost::asio::detail::scheduler_operation*, bool, void const*), void const*) — 100 samples (1.5%)</title>
+<rect x="2059.79" y="194.00" width="31.55" height="20" fill="#b3a0cd"/>
+</g>
+<g><title>boost::asio::detail::reactive_socket_send_op_base&lt;boost::asio::detail::prepared_buffers&lt;boost::asio::const_buffer, 64ul&gt;&gt;::do_perform(boost::asio::detail::reactor_op*) — 96 samples (1.4%)</title>
+<rect x="2059.79" y="172.00" width="30.29" height="20" fill="#b3a0cd"/>
+</g>
+<g><title>boost::asio::detail::socket_ops::non_blocking_send(int, iovec const*, unsigned long, int, boost::system::error_code&amp;, unsigned long&amp;) — 94 samples (1.4%)</title>
+<rect x="2059.79" y="150.00" width="29.66" height="20" fill="#b3a0cd"/>
+</g>
+<g><title>__sendmsg — 92 samples (1.3%)</title>
+<rect x="2059.79" y="128.00" width="29.03" height="20" fill="#d7c6b8"/>
+</g>
+<g><title>_xzm_free — 25 samples (0.4%)</title>
+<rect x="2094.18" y="326.00" width="7.89" height="20" fill="#bed1c2"/>
+</g>
+<g><title>mach_absolute_time — 10 samples (0.1%)</title>
+<rect x="2094.18" y="304.00" width="3.16" height="20" fill="#cbd5dd"/>
+</g>
+<g><title>_platform_memset — 5 samples (0.1%)</title>
+<rect x="2097.34" y="304.00" width="1.58" height="20" fill="#b9ccd5"/>
+</g>
+<g><title>boost::asio::detail::consuming_buffers&lt;boost::asio::const_buffer, boost::beast::buffers_cat_view&lt;boost::asio::const_buffer, boost::asio::const_buffer, boost::beast::buffers_suffix&lt;boost::asio::mutable_buffer&gt;, boost::beast::buffers_prefix_view&lt;boost::beast::buffers_suffix&lt;boost::asio::mutable_buffer&gt;&gt;&gt;, boost::beast::buffers_cat_view&lt;boost::asio::const_buffer, boost::asio::const_buffer, boost::beast::buffers_suffix&lt;boost::asio::mutable_buffer&gt;, boost::beast::buffers_prefix_view&lt;boost::beast::buffers_suffix&lt;boost::asio::mutable_buffer&gt;&gt;&gt;::const_iterator&gt;::consume(unsigned long) — 9 samples (0.1%)</title>
+<rect x="2108.38" y="392.00" width="2.84" height="20" fill="#b3a0cd"/>
+</g>
+<g><title>boost::beast::buffers_cat_view&lt;boost::asio::const_buffer, boost::asio::const_buffer, boost::beast::buffers_suffix&lt;boost::asio::mutable_buffer&gt;, boost::beast::buffers_prefix_view&lt;boost::beast::buffers_suffix&lt;boost::asio::mutable_buffer&gt;&gt;&gt;::const_iterator::increment::next&lt;3ul&gt;(std::integral_constant&lt;unsigned long, 3ul&gt;) — 3 samples (0.0%)</title>
+<rect x="2108.38" y="370.00" width="0.95" height="20" fill="#b3a0cd"/>
+</g>
+<g><title>boost::asio::detail::reactive_socket_send_op&lt;boost::asio::detail::prepared_buffers&lt;boost::asio::const_buffer, 64ul&gt;, boost::asio::detail::write_op&lt;boost::asio::basic_stream_socket&lt;boost::asio::ip::tcp, boost::asio::any_io_executor&gt;, boost::beast::buffers_cat_view&lt;boost::asio::const_buffer, boost::asio::const_buffer, boost::beast::buffers_suffix&lt;boost::asio::mutable_buffer&gt;, boost::beast::buffers_prefix_view&lt;boost::beast::buffers_suffix&lt;boost::asio::mutable_buffer&gt;&gt;&gt;, boost::beast::buffers_cat_view&lt;boost::asio::const_buffer, boost::asio::const_buffer, boost::beast::buffers_suffix&lt;boost::asio::mutable_buffer&gt;, boost::beast::buffers_prefix_view&lt;boost::beast::buffers_suffix&lt;boost::asio::mutable_buffer&gt;&gt;&gt;::const_iterator, boost::asio::detail::transfer_all_t, boost::beast::websocket::stream&lt;boost::asio::basic_stream_socket&lt;boost::asio::ip::tcp, boost::asio::any_io_executor&gt;, true&gt;::write_some_op&lt;hquant::bench::SimVenue::Impl::WsSession::Write()::&#x27;lambda&#x27;(boost::system::error_code, unsigned long), boost::asio::mutable_buffer&gt;&gt;, boost::asio::any_io_executor&gt;::ptr::reset() — 11 samples (0.2%)</title>
+<rect x="2111.53" y="414.00" width="3.47" height="20" fill="#eeb468"/>
+</g>
+<g><title>boost::asio::any_io_executor::~any_io_executor() — 6 samples (0.1%)</title>
+<rect x="2111.53" y="392.00" width="1.89" height="20" fill="#b3a0cd"/>
+</g>
+<g><title>boost::asio::detail::write_op&lt;boost::asio::basic_stream_socket&lt;boost::asio::ip::tcp, boost::asio::any_io_executor&gt;, boost::beast::buffers_cat_view&lt;boost::asio::const_buffer, boost::asio::const_buffer, boost::beast::buffers_suffix&lt;boost::asio::mutable_buffer&gt;, boost::beast::buffers_prefix_view&lt;boost::beast::buffers_suffix&lt;boost::asio::mutable_buffer&gt;&gt;&gt;, boost::beast::buffers_cat_view&lt;boost::asio::const_buffer, boost::asio::const_buffer, boost::beast::buffers_suffix&lt;boost::asio::mutable_buffer&gt;, boost::beast::buffers_prefix_view&lt;boost::beast::buffers_suffix&lt;boost::asio::mutable_buffer&gt;&gt;&gt;::const_iterator, boost::asio::detail::transfer_all_t, boost::beast::websocket::stream&lt;boost::asio::basic_stream_socket&lt;boost::asio::ip::tcp, boost::asio::any_io_executor&gt;, true&gt;::write_some_op&lt;hquant::bench::SimVenue::Impl::WsSession::Write()::&#x27;lambda&#x27;(boost::system::error_code, unsigned long), boost::asio::mutable_buffer&gt;&gt;::write_op(boost::asio::detail::write_op&lt;boost::asio::basic_stream_socket&lt;boost::asio::ip::tcp, boost::asio::any_io_executor&gt;, boost::beast::buffers_cat_view&lt;boost::asio::const_buffer, boost::asio::const_buffer, boost::beast::buffers_suffix&lt;boost::asio::mutable_buffer&gt;, boost::beast::buffers_prefix_view&lt;boost::beast::buffers_suffix&lt;boost::asio::mutable_buffer&gt;&gt;&gt;, boost::beast::buffers_cat_view&lt;boost::asio::const_buffer, boost::asio::const_buffer, boost::beast::buffers_suffix&lt;boost::asio::mutable_buffer&gt;, boost::beast::buffers_prefix_view&lt;boost::beast::buffers_suffix&lt;boost::asio::mutable_buffer&gt;&gt;&gt;::const_iterator, boost::asio::detail::transfer_all_t, boost::beast::websocket::stream&lt;boost::asio::basic_stream_socket&lt;boost::asio::ip::tcp, boost::asio::any_io_executor&gt;, true&gt;::write_some_op&lt;hquant::bench::SimVenue::Impl::WsSession::Write()::&#x27;lambda&#x27;(boost::system::error_code, unsigned long), boost::asio::mutable_buffer&gt;&gt;&amp;&amp;) — 9 samples (0.1%)</title>
+<rect x="2115.00" y="414.00" width="2.84" height="20" fill="#eeb468"/>
+</g>
+<g><title>boost::asio::any_io_executor::any_io_executor(boost::asio::any_io_executor&amp;&amp;) — 6 samples (0.1%)</title>
+<rect x="2115.00" y="392.00" width="1.89" height="20" fill="#b3a0cd"/>
+</g>
+<g><title>boost::asio::detail::reactive_socket_recv_op&lt;boost::asio::mutable_buffer, boost::asio::detail::composed_op&lt;boost::beast::http::detail::read_some_op&lt;boost::asio::basic_stream_socket&lt;boost::asio::ip::tcp, boost::asio::any_io_executor&gt;, boost::beast::basic_flat_buffer&lt;std::allocator&lt;char&gt;&gt;, true&gt;, boost::asio::detail::composed_work&lt;void (boost::asio::any_io_executor)&gt;, boost::asio::detail::composed_op&lt;boost::beast::http::detail::read_op&lt;boost::asio::basic_stream_socket&lt;boost::asio::ip::tcp, boost::asio::any_io_executor&gt;, boost::beast::basic_flat_buffer&lt;std::allocator&lt;char&gt;&gt;, true, boost::beast::http::detail::parser_is_done&gt;, boost::asio::detail::composed_work&lt;void (boost::asio::any_io_executor)&gt;, boost::beast::http::detail::read_msg_op&lt;boost::asio::basic_stream_socket&lt;boost::asio::ip::tcp, boost::asio::any_io_executor&gt;, boost::beast::basic_flat_buffer&lt;std::allocator&lt;char&gt;&gt;, true, boost::beast::http::basic_string_body&lt;char&gt;, hquant::bench::SimVenue::Impl::HttpSession::Read()::&#x27;lambda&#x27;(boost::system::error_code, unsigned long)&gt;, void (boost::system::error_code, unsigned long)&gt;, void (boost::system::error_code, unsigned long)&gt;, boost::asio::any_io_executor&gt;::do_complete(void*, boost::asio::detail::scheduler_operation*, boost::system::error_code const&amp;, unsigned long) — 135 samples (2.0%)</title>
+<rect x="2118.79" y="436.00" width="42.59" height="20" fill="#eeb468"/>
+<text x="2121.79" y="450.00">boos…</text>
+</g>
+<g><title>boost::beast::http::detail::read_some_op&lt;boost::asio::basic_stream_socket&lt;boost::asio::ip::tcp, boost::asio::any_io_executor&gt;, boost::beast::basic_flat_buffer&lt;std::allocator&lt;char&gt;&gt;, true&gt;::operator()&lt;boost::asio::detail::composed_op&lt;boost::beast::http::detail::read_some_op&lt;boost::asio::basic_stream_socket&lt;boost::asio::ip::tcp, boost::asio::any_io_executor&gt;, boost::beast::basic_flat_buffer&lt;std::allocator&lt;char&gt;&gt;, true&gt;, boost::asio::detail::composed_work&lt;void (boost::asio::any_io_executor)&gt;, boost::asio::detail::composed_op&lt;boost::beast::http::detail::read_op&lt;boost::asio::basic_stream_socket&lt;boost::asio::ip::tcp, boost::asio::any_io_executor&gt;, boost::beast::basic_flat_buffer&lt;std::allocator&lt;char&gt;&gt;, true, boost::beast::http::detail::parser_is_done&gt;, boost::asio::detail::composed_work&lt;void (boost::asio::any_io_executor)&gt;, boost::beast::http::detail::read_msg_op&lt;boost::asio::basic_stream_socket&lt;boost::asio::ip::tcp, boost::asio::any_io_executor&gt;, boost::beast::basic_flat_buffer&lt;std::allocator&lt;char&gt;&gt;, true, boost::beast::http::basic_string_body&lt;char&gt;, hquant::bench::SimVenue::Impl::HttpSession::Read()::&#x27;lambda&#x27;(boost::system::error_code, unsigned long)&gt;, void (boost::system::error_code, unsigned long)&gt;, void (boost::system::error_code, unsigned long)&gt;&gt;(boost::asio::detail::composed_op&lt;boost::beast::http::detail::read_some_op&lt;boost::asio::basic_stream_socket&lt;boost::asio::ip::tcp, boost::asio::any_io_executor&gt;, boost::beast::basic_flat_buffer&lt;std::allocator&lt;char&gt;&gt;, true&gt;, boost::asio::detail::composed_work&lt;void (boost::asio::any_io_executor)&gt;, boost::asio::detail::composed_op&lt;boost::beast::http::detail::read_op&lt;boost::asio::basic_stream_socket&lt;boost::asio::ip::tcp, boost::asio::any_io_executor&gt;, boost::beast::basic_flat_buffer&lt;std::allocator&lt;char&gt;&gt;, true, boost::beast::http::detail::parser_is_done&gt;, boost::asio::detail::composed_work&lt;void (boost::asio::any_io_executor)&gt;, boost::beast::http::detail::read_msg_op&lt;boost::asio::basic_stream_socket&lt;boost::asio::ip::tcp, boost::asio::any_io_executor&gt;, boost::beast::basic_flat_buffer&lt;std::allocator&lt;char&gt;&gt;, true, boost::beast::http::basic_string_body&lt;char&gt;, hquant::bench::SimVenue::Impl::HttpSession::Read()::&#x27;lambda&#x27;(boost::system::error_code, unsigned long)&gt;, void (boost::system::error_code, unsigned long)&gt;, void (boost::system::error_code, unsigned long)&gt;&amp;, boost::system::error_code, unsigned long) — 133 samples (1.9%)</title>
+<rect x="2118.79" y="414.00" width="41.96" height="20" fill="#eeb468"/>
+<text x="2121.79" y="428.00">boos…</text>
+</g>
+<g><title>boost::beast::http::detail::read_op&lt;boost::asio::basic_stream_socket&lt;boost::asio::ip::tcp, boost::asio::any_io_executor&gt;, boost::beast::basic_flat_buffer&lt;std::allocator&lt;char&gt;&gt;, true, boost::beast::http::detail::parser_is_done&gt;::operator()&lt;boost::asio::detail::composed_op&lt;boost::beast::http::detail::read_op&lt;boost::asio::basic_stream_socket&lt;boost::asio::ip::tcp, boost::asio::any_io_executor&gt;, boost::beast::basic_flat_buffer&lt;std::allocator&lt;char&gt;&gt;, true, boost::beast::http::detail::parser_is_done&gt;, boost::asio::detail::composed_work&lt;void (boost::asio::any_io_executor)&gt;, boost::beast::http::detail::read_msg_op&lt;boost::asio::basic_stream_socket&lt;boost::asio::ip::tcp, boost::asio::any_io_executor&gt;, boost::beast::basic_flat_buffer&lt;std::allocator&lt;char&gt;&gt;, true, boost::beast::http::basic_string_body&lt;char&gt;, hquant::bench::SimVenue::Impl::HttpSession::Read()::&#x27;lambda&#x27;(boost::system::error_code, unsigned long)&gt;, void (boost::system::error_code, unsigned long)&gt;&gt;(boost::asio::detail::composed_op&lt;boost::beast::http::detail::read_op&lt;boost::asio::basic_stream_socket&lt;boost::asio::ip::tcp, boost::asio::any_io_executor&gt;, boost::beast::basic_flat_buffer&lt;std::allocator&lt;char&gt;&gt;, true, boost::beast::http::detail::parser_is_done&gt;, boost::asio::detail::composed_work&lt;void (boost::asio::any_io_executor)&gt;, boost::beast::http::detail::read_msg_op&lt;boost::asio::basic_stream_socket&lt;boost::asio::ip::tcp, boost::asio::any_io_executor&gt;, boost::beast::basic_flat_buffer&lt;std::allocator&lt;char&gt;&gt;, true, boost::beast::http::basic_string_body&lt;char&gt;, hquant::bench::SimVenue::Impl::HttpSession::Read()::&#x27;lambda&#x27;(boost::system::error_code, unsigned long)&gt;, void (boost::system::error_code, unsigned long)&gt;&amp;, boost::system::error_code, unsigned long) — 128 samples (1.9%)</title>
+<rect x="2118.79" y="392.00" width="40.39" height="20" fill="#eeb468"/>
+<text x="2121.79" y="406.00">boos…</text>
+</g>
+<g><title>boost::beast::http::detail::read_msg_op&lt;boost::asio::basic_stream_socket&lt;boost::asio::ip::tcp, boost::asio::any_io_executor&gt;, boost::beast::basic_flat_buffer&lt;std::allocator&lt;char&gt;&gt;, true, boost::beast::http::basic_string_body&lt;char&gt;, hquant::bench::SimVenue::Impl::HttpSession::Read()::&#x27;lambda&#x27;(boost::system::error_code, unsigned long)&gt;::operator()(boost::system::error_code, unsigned long) — 128 samples (1.9%)</title>
+<rect x="2118.79" y="370.00" width="40.39" height="20" fill="#eeb468"/>
+<text x="2121.79" y="384.00">boos…</text>
+</g>
+<g><title>hquant::bench::SimVenue::Impl::HttpSession::Read()::&#x27;lambda&#x27;(boost::system::error_code, unsigned long)::operator()(boost::system::error_code, unsigned long) const — 128 samples (1.9%)</title>
+<rect x="2118.79" y="348.00" width="40.39" height="20" fill="#eeb468"/>
+<text x="2121.79" y="362.00">hqua…</text>
+</g>
+<g><title>hquant::bench::SimVenue::Impl::Route(int, boost::beast::http::message&lt;true, boost::beast::http::basic_string_body&lt;char&gt;, boost::beast::http::basic_fields&lt;std::allocator&lt;char&gt;&gt;&gt; const&amp;) — 102 samples (1.5%)</title>
+<rect x="2118.79" y="326.00" width="32.18" height="20" fill="#eeb468"/>
+</g>
+<g><title>hquant::bench::SimVenue::Impl::ApplyPlace(unsigned long, hquant::bench::Side, hquant::bench::Owner, long long, long long, hquant::bench::(anonymous namespace)::AccountOrder*, bool) — 48 samples (0.7%)</title>
+<rect x="2118.79" y="304.00" width="15.14" height="20" fill="#eeb468"/>
+</g>
+<g><title>hquant::bench::SimVenue::Impl::DepthFrame(unsigned long, std::vector&lt;hquant::bench::SimLevel&gt; const&amp;, std::vector&lt;hquant::bench::SimLevel&gt; const&amp;, unsigned long long, bool) — 23 samples (0.3%)</title>
+<rect x="2118.79" y="282.00" width="7.26" height="20" fill="#eeb468"/>
+</g>
+<g><title>hquant::bench::SimVenue::Impl::LevelRows(std::vector&lt;hquant::bench::SimLevel&gt; const&amp;) const — 11 samples (0.2%)</title>
+<rect x="2118.79" y="260.00" width="3.47" height="20" fill="#eeb468"/>
+</g>
+<g><title>std::basic_string&lt;char&gt;::append(char const*, unsigned long) — 6 samples (0.1%)</title>
+<rect x="2118.79" y="238.00" width="1.89" height="20" fill="#adc5d4"/>
+</g>
+<g><title>_platform_memmove — 3 samples (0.0%)</title>
+<rect x="2118.79" y="216.00" width="0.95" height="20" fill="#b9ccd5"/>
+</g>
+<g><title>hquant::v1::BinanceDecimal(unsigned long long) — 3 samples (0.0%)</title>
+<rect x="2120.68" y="238.00" width="0.95" height="20" fill="#7dbb9d"/>
+</g>
+<g><title>hquant::bench::MatchingEngine::Levels(std::basic_string&lt;char&gt; const&amp;, hquant::bench::Side) const — 9 samples (0.1%)</title>
+<rect x="2122.26" y="260.00" width="2.84" height="20" fill="#e15241"/>
+</g>
+<g><title>hquant::bench::MatchingEngine::Levels(std::basic_string&lt;char&gt; const&amp;, hquant::bench::Side) const — 16 samples (0.2%)</title>
+<rect x="2126.05" y="282.00" width="5.05" height="20" fill="#e15241"/>
+</g>
+<g><title>hquant::bench::SimVenue::Impl::SendPublic(unsigned long, std::basic_string&lt;char&gt;, unsigned long long) — 6 samples (0.1%)</title>
+<rect x="2131.10" y="282.00" width="1.89" height="20" fill="#eeb468"/>
+</g>
+<g><title>hquant::bench::SimVenue::Impl::WsSession::Write() — 6 samples (0.1%)</title>
+<rect x="2131.10" y="260.00" width="1.89" height="20" fill="#eeb468"/>
+</g>
+<g><title>boost::beast::websocket::stream&lt;boost::asio::basic_stream_socket&lt;boost::asio::ip::tcp, boost::asio::any_io_executor&gt;, true&gt;::run_write_some_op::operator()&lt;hquant::bench::SimVenue::Impl::WsSession::Write()::&#x27;lambda&#x27;(boost::system::error_code, unsigned long), boost::asio::mutable_buffer&gt;(hquant::bench::SimVenue::Impl::WsSession::Write()::&#x27;lambda&#x27;(boost::system::error_code, unsigned long)&amp;&amp;, bool, boost::asio::mutable_buffer const&amp;) — 6 samples (0.1%)</title>
+<rect x="2131.10" y="238.00" width="1.89" height="20" fill="#eeb468"/>
+</g>
+<g><title>boost::beast::websocket::stream&lt;boost::asio::basic_stream_socket&lt;boost::asio::ip::tcp, boost::asio::any_io_executor&gt;, true&gt;::write_some_op&lt;hquant::bench::SimVenue::Impl::WsSession::Write()::&#x27;lambda&#x27;(boost::system::error_code, unsigned long), boost::asio::mutable_buffer&gt;::write_some_op&lt;hquant::bench::SimVenue::Impl::WsSession::Write()::&#x27;lambda&#x27;(boost::system::error_code, unsigned long)&gt;(hquant::bench::SimVenue::Impl::WsSession::Write()::&#x27;lambda&#x27;(boost::system::error_code, unsigned long)&amp;&amp;, boost::shared_ptr&lt;boost::beast::websocket::stream&lt;boost::asio::basic_stream_socket&lt;boost::asio::ip::tcp, boost::asio::any_io_executor&gt;, true&gt;::impl_type&gt; const&amp;, bool, boost::asio::mutable_buffer const&amp;) — 6 samples (0.1%)</title>
+<rect x="2131.10" y="216.00" width="1.89" height="20" fill="#eeb468"/>
+</g>
+<g><title>boost::beast::websocket::stream&lt;boost::asio::basic_stream_socket&lt;boost::asio::ip::tcp, boost::asio::any_io_executor&gt;, true&gt;::write_some_op&lt;hquant::bench::SimVenue::Impl::WsSession::Write()::&#x27;lambda&#x27;(boost::system::error_code, unsigned long), boost::asio::mutable_buffer&gt;::operator()(boost::system::error_code, unsigned long, bool) — 6 samples (0.1%)</title>
+<rect x="2131.10" y="194.00" width="1.89" height="20" fill="#eeb468"/>
+</g>
+<g><title>boost::asio::detail::initiate_async_write&lt;boost::asio::basic_stream_socket&lt;boost::asio::ip::tcp, boost::asio::any_io_executor&gt;&gt;::operator()&lt;boost::beast::websocket::stream&lt;boost::asio::basic_stream_socket&lt;boost::asio::ip::tcp, boost::asio::any_io_executor&gt;, true&gt;::write_some_op&lt;hquant::bench::SimVenue::Impl::WsSession::Write()::&#x27;lambda&#x27;(boost::system::error_code, unsigned long), boost::asio::mutable_buffer&gt;, boost::beast::buffers_cat_view&lt;boost::asio::const_buffer, boost::asio::const_buffer, boost::beast::buffers_suffix&lt;boost::asio::mutable_buffer&gt;, boost::beast::buffers_prefix_view&lt;boost::beast::buffers_suffix&lt;boost::asio::mutable_buffer&gt;&gt;&gt;, boost::asio::detail::transfer_all_t&gt;(boost::beast::websocket::stream&lt;boost::asio::basic_stream_socket&lt;boost::asio::ip::tcp, boost::asio::any_io_executor&gt;, true&gt;::write_some_op&lt;hquant::bench::SimVenue::Impl::WsSession::Write()::&#x27;lambda&#x27;(boost::system::error_code, unsigned long), boost::asio::mutable_buffer&gt;&amp;&amp;, boost::beast::buffers_cat_view&lt;boost::asio::const_buffer, boost::asio::const_buffer, boost::beast::buffers_suffix&lt;boost::asio::mutable_buffer&gt;, boost::beast::buffers_prefix_view&lt;boost::beast::buffers_suffix&lt;boost::asio::mutable_buffer&gt;&gt;&gt; const&amp;, boost::asio::detail::transfer_all_t&amp;&amp;) const — 6 samples (0.1%)</title>
+<rect x="2131.10" y="172.00" width="1.89" height="20" fill="#eeb468"/>
+</g>
+<g><title>boost::asio::detail::reactive_socket_service_base::async_send&lt;boost::asio::detail::prepared_buffers&lt;boost::asio::const_buffer, 64ul&gt;, boost::asio::detail::write_op&lt;boost::asio::basic_stream_socket&lt;boost::asio::ip::tcp, boost::asio::any_io_executor&gt;, boost::beast::buffers_cat_view&lt;boost::asio::const_buffer, boost::asio::const_buffer, boost::beast::buffers_suffix&lt;boost::asio::mutable_buffer&gt;, boost::beast::buffers_prefix_view&lt;boost::beast::buffers_suffix&lt;boost::asio::mutable_buffer&gt;&gt;&gt;, boost::beast::buffers_cat_view&lt;boost::asio::const_buffer, boost::asio::const_buffer, boost::beast::buffers_suffix&lt;boost::asio::mutable_buffer&gt;, boost::beast::buffers_prefix_view&lt;boost::beast::buffers_suffix&lt;boost::asio::mutable_buffer&gt;&gt;&gt;::const_iterator, boost::asio::detail::transfer_all_t, boost::beast::websocket::stream&lt;boost::asio::basic_stream_socket&lt;boost::asio::ip::tcp, boost::asio::any_io_executor&gt;, true&gt;::write_some_op&lt;hquant::bench::SimVenue::Impl::WsSession::Write()::&#x27;lambda&#x27;(boost::system::error_code, unsigned long), boost::asio::mutable_buffer&gt;&gt;, boost::asio::any_io_executor&gt;(boost::asio::detail::reactive_socket_service_base::base_implementation_type&amp;, boost::asio::detail::prepared_buffers&lt;boost::asio::const_buffer, 64ul&gt; const&amp;, int, boost::asio::detail::write_op&lt;boost::asio::basic_stream_socket&lt;boost::asio::ip::tcp, boost::asio::any_io_executor&gt;, boost::beast::buffers_cat_view&lt;boost::asio::const_buffer, boost::asio::const_buffer, boost::beast::buffers_suffix&lt;boost::asio::mutable_buffer&gt;, boost::beast::buffers_prefix_view&lt;boost::beast::buffers_suffix&lt;boost::asio::mutable_buffer&gt;&gt;&gt;, boost::beast::buffers_cat_view&lt;boost::asio::const_buffer, boost::asio::const_buffer, boost::beast::buffers_suffix&lt;boost::asio::mutable_buffer&gt;, boost::beast::buffers_prefix_view&lt;boost::beast::buffers_suffix&lt;boost::asio::mutable_buffer&gt;&gt;&gt;::const_iterator, boost::asio::detail::transfer_all_t, boost::beast::websocket::stream&lt;boost::asio::basic_stream_socket&lt;boost::asio::ip::tcp, boost::asio::any_io_executor&gt;, true&gt;::write_some_op&lt;hquant::bench::SimVenue::Impl::WsSession::Write()::&#x27;lambda&#x27;(boost::system::error_code, unsigned long), boost::asio::mutable_buffer&gt;&gt;&amp;, boost::asio::any_io_executor const&amp;) — 6 samples (0.1%)</title>
+<rect x="2131.10" y="150.00" width="1.89" height="20" fill="#eeb468"/>
+</g>
+<g><title>boost::asio::detail::kqueue_reactor::start_op(int, int, boost::asio::detail::kqueue_reactor::descriptor_state*&amp;, boost::asio::detail::reactor_op*, bool, bool, void (*)(boost::asio::detail::scheduler_operation*, bool, void const*), void const*) — 6 samples (0.1%)</title>
+<rect x="2131.10" y="128.00" width="1.89" height="20" fill="#b3a0cd"/>
+</g>
+<g><title>boost::asio::detail::reactive_socket_send_op_base&lt;boost::asio::detail::prepared_buffers&lt;boost::asio::const_buffer, 64ul&gt;&gt;::do_perform(boost::asio::detail::reactor_op*) — 6 samples (0.1%)</title>
+<rect x="2131.10" y="106.00" width="1.89" height="20" fill="#b3a0cd"/>
+</g>
+<g><title>boost::asio::detail::socket_ops::non_blocking_send(int, iovec const*, unsigned long, int, boost::system::error_code&amp;, unsigned long&amp;) — 6 samples (0.1%)</title>
+<rect x="2131.10" y="84.00" width="1.89" height="20" fill="#b3a0cd"/>
+</g>
+<g><title>__sendmsg — 6 samples (0.1%)</title>
+<rect x="2131.10" y="62.00" width="1.89" height="20" fill="#d7c6b8"/>
+</g>
+<g><title>hquant::bench::SimVenue::Impl::ApplyCancel(unsigned long, unsigned long long, bool) — 25 samples (0.4%)</title>
+<rect x="2133.94" y="304.00" width="7.89" height="20" fill="#eeb468"/>
+</g>
+<g><title>hquant::bench::MatchingEngine::Levels(std::basic_string&lt;char&gt; const&amp;, hquant::bench::Side) const — 11 samples (0.2%)</title>
+<rect x="2133.94" y="282.00" width="3.47" height="20" fill="#e15241"/>
+</g>
+<g><title>hquant::bench::SimVenue::Impl::DepthFrame(unsigned long, std::vector&lt;hquant::bench::SimLevel&gt; const&amp;, std::vector&lt;hquant::bench::SimLevel&gt; const&amp;, unsigned long long, bool) — 10 samples (0.1%)</title>
+<rect x="2137.41" y="282.00" width="3.16" height="20" fill="#eeb468"/>
+</g>
+<g><title>hquant::bench::MatchingEngine::Levels(std::basic_string&lt;char&gt; const&amp;, hquant::bench::Side) const — 6 samples (0.1%)</title>
+<rect x="2137.41" y="260.00" width="1.89" height="20" fill="#e15241"/>
+</g>
+<g><title>hquant::bench::SimVenue::Impl::LevelRows(std::vector&lt;hquant::bench::SimLevel&gt; const&amp;) const — 4 samples (0.1%)</title>
+<rect x="2139.30" y="260.00" width="1.26" height="20" fill="#eeb468"/>
+</g>
+<g><title>std::basic_string&lt;char&gt;::append(char const*, unsigned long) — 3 samples (0.0%)</title>
+<rect x="2139.30" y="238.00" width="0.95" height="20" fill="#adc5d4"/>
+</g>
+<g><title>hquant::bench::SimVenue::Impl::SendPublic(unsigned long, std::basic_string&lt;char&gt;, unsigned long long) — 3 samples (0.0%)</title>
+<rect x="2140.56" y="282.00" width="0.95" height="20" fill="#eeb468"/>
+</g>
+<g><title>hquant::bench::SimVenue::Impl::WsSession::Write() — 3 samples (0.0%)</title>
+<rect x="2140.56" y="260.00" width="0.95" height="20" fill="#eeb468"/>
+</g>
+<g><title>boost::beast::websocket::stream&lt;boost::asio::basic_stream_socket&lt;boost::asio::ip::tcp, boost::asio::any_io_executor&gt;, true&gt;::run_write_some_op::operator()&lt;hquant::bench::SimVenue::Impl::WsSession::Write()::&#x27;lambda&#x27;(boost::system::error_code, unsigned long), boost::asio::mutable_buffer&gt;(hquant::bench::SimVenue::Impl::WsSession::Write()::&#x27;lambda&#x27;(boost::system::error_code, unsigned long)&amp;&amp;, bool, boost::asio::mutable_buffer const&amp;) — 3 samples (0.0%)</title>
+<rect x="2140.56" y="238.00" width="0.95" height="20" fill="#eeb468"/>
+</g>
+<g><title>boost::beast::websocket::stream&lt;boost::asio::basic_stream_socket&lt;boost::asio::ip::tcp, boost::asio::any_io_executor&gt;, true&gt;::write_some_op&lt;hquant::bench::SimVenue::Impl::WsSession::Write()::&#x27;lambda&#x27;(boost::system::error_code, unsigned long), boost::asio::mutable_buffer&gt;::write_some_op&lt;hquant::bench::SimVenue::Impl::WsSession::Write()::&#x27;lambda&#x27;(boost::system::error_code, unsigned long)&gt;(hquant::bench::SimVenue::Impl::WsSession::Write()::&#x27;lambda&#x27;(boost::system::error_code, unsigned long)&amp;&amp;, boost::shared_ptr&lt;boost::beast::websocket::stream&lt;boost::asio::basic_stream_socket&lt;boost::asio::ip::tcp, boost::asio::any_io_executor&gt;, true&gt;::impl_type&gt; const&amp;, bool, boost::asio::mutable_buffer const&amp;) — 3 samples (0.0%)</title>
+<rect x="2140.56" y="216.00" width="0.95" height="20" fill="#eeb468"/>
+</g>
+<g><title>boost::beast::websocket::stream&lt;boost::asio::basic_stream_socket&lt;boost::asio::ip::tcp, boost::asio::any_io_executor&gt;, true&gt;::write_some_op&lt;hquant::bench::SimVenue::Impl::WsSession::Write()::&#x27;lambda&#x27;(boost::system::error_code, unsigned long), boost::asio::mutable_buffer&gt;::operator()(boost::system::error_code, unsigned long, bool) — 3 samples (0.0%)</title>
+<rect x="2140.56" y="194.00" width="0.95" height="20" fill="#eeb468"/>
+</g>
+<g><title>boost::asio::detail::initiate_async_write&lt;boost::asio::basic_stream_socket&lt;boost::asio::ip::tcp, boost::asio::any_io_executor&gt;&gt;::operator()&lt;boost::beast::websocket::stream&lt;boost::asio::basic_stream_socket&lt;boost::asio::ip::tcp, boost::asio::any_io_executor&gt;, true&gt;::write_some_op&lt;hquant::bench::SimVenue::Impl::WsSession::Write()::&#x27;lambda&#x27;(boost::system::error_code, unsigned long), boost::asio::mutable_buffer&gt;, boost::beast::buffers_cat_view&lt;boost::asio::const_buffer, boost::asio::const_buffer, boost::beast::buffers_suffix&lt;boost::asio::mutable_buffer&gt;, boost::beast::buffers_prefix_view&lt;boost::beast::buffers_suffix&lt;boost::asio::mutable_buffer&gt;&gt;&gt;, boost::asio::detail::transfer_all_t&gt;(boost::beast::websocket::stream&lt;boost::asio::basic_stream_socket&lt;boost::asio::ip::tcp, boost::asio::any_io_executor&gt;, true&gt;::write_some_op&lt;hquant::bench::SimVenue::Impl::WsSession::Write()::&#x27;lambda&#x27;(boost::system::error_code, unsigned long), boost::asio::mutable_buffer&gt;&amp;&amp;, boost::beast::buffers_cat_view&lt;boost::asio::const_buffer, boost::asio::const_buffer, boost::beast::buffers_suffix&lt;boost::asio::mutable_buffer&gt;, boost::beast::buffers_prefix_view&lt;boost::beast::buffers_suffix&lt;boost::asio::mutable_buffer&gt;&gt;&gt; const&amp;, boost::asio::detail::transfer_all_t&amp;&amp;) const — 3 samples (0.0%)</title>
+<rect x="2140.56" y="172.00" width="0.95" height="20" fill="#eeb468"/>
+</g>
+<g><title>boost::asio::detail::reactive_socket_service_base::async_send&lt;boost::asio::detail::prepared_buffers&lt;boost::asio::const_buffer, 64ul&gt;, boost::asio::detail::write_op&lt;boost::asio::basic_stream_socket&lt;boost::asio::ip::tcp, boost::asio::any_io_executor&gt;, boost::beast::buffers_cat_view&lt;boost::asio::const_buffer, boost::asio::const_buffer, boost::beast::buffers_suffix&lt;boost::asio::mutable_buffer&gt;, boost::beast::buffers_prefix_view&lt;boost::beast::buffers_suffix&lt;boost::asio::mutable_buffer&gt;&gt;&gt;, boost::beast::buffers_cat_view&lt;boost::asio::const_buffer, boost::asio::const_buffer, boost::beast::buffers_suffix&lt;boost::asio::mutable_buffer&gt;, boost::beast::buffers_prefix_view&lt;boost::beast::buffers_suffix&lt;boost::asio::mutable_buffer&gt;&gt;&gt;::const_iterator, boost::asio::detail::transfer_all_t, boost::beast::websocket::stream&lt;boost::asio::basic_stream_socket&lt;boost::asio::ip::tcp, boost::asio::any_io_executor&gt;, true&gt;::write_some_op&lt;hquant::bench::SimVenue::Impl::WsSession::Write()::&#x27;lambda&#x27;(boost::system::error_code, unsigned long), boost::asio::mutable_buffer&gt;&gt;, boost::asio::any_io_executor&gt;(boost::asio::detail::reactive_socket_service_base::base_implementation_type&amp;, boost::asio::detail::prepared_buffers&lt;boost::asio::const_buffer, 64ul&gt; const&amp;, int, boost::asio::detail::write_op&lt;boost::asio::basic_stream_socket&lt;boost::asio::ip::tcp, boost::asio::any_io_executor&gt;, boost::beast::buffers_cat_view&lt;boost::asio::const_buffer, boost::asio::const_buffer, boost::beast::buffers_suffix&lt;boost::asio::mutable_buffer&gt;, boost::beast::buffers_prefix_view&lt;boost::beast::buffers_suffix&lt;boost::asio::mutable_buffer&gt;&gt;&gt;, boost::beast::buffers_cat_view&lt;boost::asio::const_buffer, boost::asio::const_buffer, boost::beast::buffers_suffix&lt;boost::asio::mutable_buffer&gt;, boost::beast::buffers_prefix_view&lt;boost::beast::buffers_suffix&lt;boost::asio::mutable_buffer&gt;&gt;&gt;::const_iterator, boost::asio::detail::transfer_all_t, boost::beast::websocket::stream&lt;boost::asio::basic_stream_socket&lt;boost::asio::ip::tcp, boost::asio::any_io_executor&gt;, true&gt;::write_some_op&lt;hquant::bench::SimVenue::Impl::WsSession::Write()::&#x27;lambda&#x27;(boost::system::error_code, unsigned long), boost::asio::mutable_buffer&gt;&gt;&amp;, boost::asio::any_io_executor const&amp;) — 3 samples (0.0%)</title>
+<rect x="2140.56" y="150.00" width="0.95" height="20" fill="#eeb468"/>
+</g>
+<g><title>boost::asio::detail::kqueue_reactor::start_op(int, int, boost::asio::detail::kqueue_reactor::descriptor_state*&amp;, boost::asio::detail::reactor_op*, bool, bool, void (*)(boost::asio::detail::scheduler_operation*, bool, void const*), void const*) — 3 samples (0.0%)</title>
+<rect x="2140.56" y="128.00" width="0.95" height="20" fill="#b3a0cd"/>
+</g>
+<g><title>boost::asio::detail::reactive_socket_send_op_base&lt;boost::asio::detail::prepared_buffers&lt;boost::asio::const_buffer, 64ul&gt;&gt;::do_perform(boost::asio::detail::reactor_op*) — 3 samples (0.0%)</title>
+<rect x="2140.56" y="106.00" width="0.95" height="20" fill="#b3a0cd"/>
+</g>
+<g><title>boost::asio::detail::socket_ops::non_blocking_send(int, iovec const*, unsigned long, int, boost::system::error_code&amp;, unsigned long&amp;) — 3 samples (0.0%)</title>
+<rect x="2140.56" y="84.00" width="0.95" height="20" fill="#b3a0cd"/>
+</g>
+<g><title>__sendmsg — 3 samples (0.0%)</title>
+<rect x="2140.56" y="62.00" width="0.95" height="20" fill="#d7c6b8"/>
+</g>
+<g><title>hquant::bench::SimVenue::Impl::Signed(boost::beast::http::message&lt;true, boost::beast::http::basic_string_body&lt;char&gt;, boost::beast::http::basic_fields&lt;std::allocator&lt;char&gt;&gt;&gt; const&amp;, std::basic_string_view&lt;char&gt;) const — 13 samples (0.2%)</title>
+<rect x="2141.82" y="304.00" width="4.10" height="20" fill="#eeb468"/>
+</g>
+<g><title>hquant::v1::BinanceHmacSignature(std::basic_string_view&lt;char&gt;, std::basic_string_view&lt;char&gt;) — 12 samples (0.2%)</title>
+<rect x="2141.82" y="282.00" width="3.79" height="20" fill="#7dbb9d"/>
+</g>
+<g><title>HMAC — 10 samples (0.1%)</title>
+<rect x="2141.82" y="260.00" width="3.16" height="20" fill="#d4c5cc"/>
+</g>
+<g><title>EVP_Q_mac — 10 samples (0.1%)</title>
+<rect x="2141.82" y="238.00" width="3.16" height="20" fill="#b9ccd5"/>
+</g>
+<g><title>hquant::bench::SimVenue::Impl::SendBalances(std::vector&lt;std::basic_string&lt;char&gt;&gt; const&amp;) — 4 samples (0.1%)</title>
+<rect x="2145.92" y="304.00" width="1.26" height="20" fill="#eeb468"/>
+</g>
+<g><title>boost::beast::http::detail::write_msg_op&lt;hquant::bench::SimVenue::Impl::HttpSession::Read()::&#x27;lambda&#x27;(boost::system::error_code, unsigned long)::operator()(boost::system::error_code, unsigned long) const::&#x27;lambda&#x27;(boost::system::error_code, unsigned long), boost::asio::basic_stream_socket&lt;boost::asio::ip::tcp, boost::asio::any_io_executor&gt;, false, boost::beast::http::basic_string_body&lt;char&gt;, boost::beast::http::basic_fields&lt;std::allocator&lt;char&gt;&gt;&gt;::write_msg_op&lt;hquant::bench::SimVenue::Impl::HttpSession::Read()::&#x27;lambda&#x27;(boost::system::error_code, unsigned long)::operator()(boost::system::error_code, unsigned long) const::&#x27;lambda&#x27;(boost::system::error_code, unsigned long), boost::beast::http::message&lt;false, boost::beast::http::basic_string_body&lt;char&gt;, boost::beast::http::basic_fields&lt;std::allocator&lt;char&gt;&gt;&gt; const&amp;&gt;(hquant::bench::SimVenue::Impl::HttpSession::Read()::&#x27;lambda&#x27;(boost::system::error_code, unsigned long)::operator()(boost::system::error_code, unsigned long) const::&#x27;lambda&#x27;(boost::system::error_code, unsigned long)&amp;&amp;, boost::asio::basic_stream_socket&lt;boost::asio::ip::tcp, boost::asio::any_io_executor&gt;&amp;, boost::beast::http::message&lt;false, boost::beast::http::basic_string_body&lt;char&gt;, boost::beast::http::basic_fields&lt;std::allocator&lt;char&gt;&gt;&gt; const&amp;) — 18 samples (0.3%)</title>
+<rect x="2150.97" y="326.00" width="5.68" height="20" fill="#eeb468"/>
+</g>
+<g><title>boost::beast::http::detail::write_op&lt;boost::beast::http::detail::write_msg_op&lt;hquant::bench::SimVenue::Impl::HttpSession::Read()::&#x27;lambda&#x27;(boost::system::error_code, unsigned long)::operator()(boost::system::error_code, unsigned long) const::&#x27;lambda&#x27;(boost::system::error_code, unsigned long), boost::asio::basic_stream_socket&lt;boost::asio::ip::tcp, boost::asio::any_io_executor&gt;, false, boost::beast::http::basic_string_body&lt;char&gt;, boost::beast::http::basic_fields&lt;std::allocator&lt;char&gt;&gt;&gt;, boost::asio::basic_stream_socket&lt;boost::asio::ip::tcp, boost::asio::any_io_executor&gt;, boost::beast::http::detail::serializer_is_done, false, boost::beast::http::basic_string_body&lt;char&gt;, boost::beast::http::basic_fields&lt;std::allocator&lt;char&gt;&gt;&gt;::operator()(boost::system::error_code, unsigned long) — 17 samples (0.2%)</title>
+<rect x="2150.97" y="304.00" width="5.36" height="20" fill="#eeb468"/>
+</g>
+<g><title>boost::beast::http::detail::write_some_op&lt;boost::beast::http::detail::write_op&lt;boost::beast::http::detail::write_msg_op&lt;hquant::bench::SimVenue::Impl::HttpSession::Read()::&#x27;lambda&#x27;(boost::system::error_code, unsigned long)::operator()(boost::system::error_code, unsigned long) const::&#x27;lambda&#x27;(boost::system::error_code, unsigned long), boost::asio::basic_stream_socket&lt;boost::asio::ip::tcp, boost::asio::any_io_executor&gt;, false, boost::beast::http::basic_string_body&lt;char&gt;, boost::beast::http::basic_fields&lt;std::allocator&lt;char&gt;&gt;&gt;, boost::asio::basic_stream_socket&lt;boost::asio::ip::tcp, boost::asio::any_io_executor&gt;, boost::beast::http::detail::serializer_is_done, false, boost::beast::http::basic_string_body&lt;char&gt;, boost::beast::http::basic_fields&lt;std::allocator&lt;char&gt;&gt;&gt;, boost::asio::basic_stream_socket&lt;boost::asio::ip::tcp, boost::asio::any_io_executor&gt;, false, boost::beast::http::basic_string_body&lt;char&gt;, boost::beast::http::basic_fields&lt;std::allocator&lt;char&gt;&gt;&gt;::write_some_op&lt;boost::beast::http::detail::write_op&lt;boost::beast::http::detail::write_msg_op&lt;hquant::bench::SimVenue::Impl::HttpSession::Read()::&#x27;lambda&#x27;(boost::system::error_code, unsigned long)::operator()(boost::system::error_code, unsigned long) const::&#x27;lambda&#x27;(boost::system::error_code, unsigned long), boost::asio::basic_stream_socket&lt;boost::asio::ip::tcp, boost::asio::any_io_executor&gt;, false, boost::beast::http::basic_string_body&lt;char&gt;, boost::beast::http::basic_fields&lt;std::allocator&lt;char&gt;&gt;&gt;, boost::asio::basic_stream_socket&lt;boost::asio::ip::tcp, boost::asio::any_io_executor&gt;, boost::beast::http::detail::serializer_is_done, false, boost::beast::http::basic_string_body&lt;char&gt;, boost::beast::http::basic_fields&lt;std::allocator&lt;char&gt;&gt;&gt;&gt;(boost::beast::http::detail::write_op&lt;boost::beast::http::detail::write_msg_op&lt;hquant::bench::SimVenue::Impl::HttpSession::Read()::&#x27;lambda&#x27;(boost::system::error_code, unsigned long)::operator()(boost::system::error_code, unsigned long) const::&#x27;lambda&#x27;(boost::system::error_code, unsigned long), boost::asio::basic_stream_socket&lt;boost::asio::ip::tcp, boost::asio::any_io_executor&gt;, false, boost::beast::http::basic_string_body&lt;char&gt;, boost::beast::http::basic_fields&lt;std::allocator&lt;char&gt;&gt;&gt;, boost::asio::basic_stream_socket&lt;boost::asio::ip::tcp, boost::asio::any_io_executor&gt;, boost::beast::http::detail::serializer_is_done, false, boost::beast::http::basic_string_body&lt;char&gt;, boost::beast::http::basic_fields&lt;std::allocator&lt;char&gt;&gt;&gt;&amp;&amp;, boost::asio::basic_stream_socket&lt;boost::asio::ip::tcp, boost::asio::any_io_executor&gt;&amp;, boost::beast::http::serializer&lt;false, boost::beast::http::basic_string_body&lt;char&gt;, boost::beast::http::basic_fields&lt;std::allocator&lt;char&gt;&gt;&gt;&amp;) — 17 samples (0.2%)</title>
+<rect x="2150.97" y="282.00" width="5.36" height="20" fill="#eeb468"/>
+</g>
+<g><title>boost::beast::http::detail::write_some_op&lt;boost::beast::http::detail::write_op&lt;boost::beast::http::detail::write_msg_op&lt;hquant::bench::SimVenue::Impl::HttpSession::Read()::&#x27;lambda&#x27;(boost::system::error_code, unsigned long)::operator()(boost::system::error_code, unsigned long) const::&#x27;lambda&#x27;(boost::system::error_code, unsigned long), boost::asio::basic_stream_socket&lt;boost::asio::ip::tcp, boost::asio::any_io_executor&gt;, false, boost::beast::http::basic_string_body&lt;char&gt;, boost::beast::http::basic_fields&lt;std::allocator&lt;char&gt;&gt;&gt;, boost::asio::basic_stream_socket&lt;boost::asio::ip::tcp, boost::asio::any_io_executor&gt;, boost::beast::http::detail::serializer_is_done, false, boost::beast::http::basic_string_body&lt;char&gt;, boost::beast::http::basic_fields&lt;std::allocator&lt;char&gt;&gt;&gt;, boost::asio::basic_stream_socket&lt;boost::asio::ip::tcp, boost::asio::any_io_executor&gt;, false, boost::beast::http::basic_string_body&lt;char&gt;, boost::beast::http::basic_fields&lt;std::allocator&lt;char&gt;&gt;&gt;::operator()() — 17 samples (0.2%)</title>
+<rect x="2150.97" y="260.00" width="5.36" height="20" fill="#eeb468"/>
+</g>
+<g><title>boost::beast::http::serializer&lt;false, boost::beast::http::basic_string_body&lt;char&gt;, boost::beast::http::basic_fields&lt;std::allocator&lt;char&gt;&gt;&gt;::next&lt;boost::beast::http::detail::write_some_op&lt;boost::beast::http::detail::write_op&lt;boost::beast::http::detail::write_msg_op&lt;hquant::bench::SimVenue::Impl::HttpSession::Read()::&#x27;lambda&#x27;(boost::system::error_code, unsigned long)::operator()(boost::system::error_code, unsigned long) const::&#x27;lambda&#x27;(boost::system::error_code, unsigned long), boost::asio::basic_stream_socket&lt;boost::asio::ip::tcp, boost::asio::any_io_executor&gt;, false, boost::beast::http::basic_string_body&lt;char&gt;, boost::beast::http::basic_fields&lt;std::allocator&lt;char&gt;&gt;&gt;, boost::asio::basic_stream_socket&lt;boost::asio::ip::tcp, boost::asio::any_io_executor&gt;, boost::beast::http::detail::serializer_is_done, false, boost::beast::http::basic_string_body&lt;char&gt;, boost::beast::http::basic_fields&lt;std::allocator&lt;char&gt;&gt;&gt;, boost::asio::basic_stream_socket&lt;boost::asio::ip::tcp, boost::asio::any_io_executor&gt;, false, boost::beast::http::basic_string_body&lt;char&gt;, boost::beast::http::basic_fields&lt;std::allocator&lt;char&gt;&gt;&gt;::lambda&amp;&gt;(boost::system::error_code&amp;, boost::beast::http::detail::write_some_op&lt;boost::beast::http::detail::write_op&lt;boost::beast::http::detail::write_msg_op&lt;hquant::bench::SimVenue::Impl::HttpSession::Read()::&#x27;lambda&#x27;(boost::system::error_code, unsigned long)::operator()(boost::system::error_code, unsigned long) const::&#x27;lambda&#x27;(boost::system::error_code, unsigned long), boost::asio::basic_stream_socket&lt;boost::asio::ip::tcp, boost::asio::any_io_executor&gt;, false, boost::beast::http::basic_string_body&lt;char&gt;, boost::beast::http::basic_fields&lt;std::allocator&lt;char&gt;&gt;&gt;, boost::asio::basic_stream_socket&lt;boost::asio::ip::tcp, boost::asio::any_io_executor&gt;, boost::beast::http::detail::serializer_is_done, false, boost::beast::http::basic_string_body&lt;char&gt;, boost::beast::http::basic_fields&lt;std::allocator&lt;char&gt;&gt;&gt;, boost::asio::basic_stream_socket&lt;boost::asio::ip::tcp, boost::asio::any_io_executor&gt;, false, boost::beast::http::basic_string_body&lt;char&gt;, boost::beast::http::basic_fields&lt;std::allocator&lt;char&gt;&gt;&gt;::lambda&amp;) — 17 samples (0.2%)</title>
+<rect x="2150.97" y="238.00" width="5.36" height="20" fill="#eeb468"/>
+</g>
+<g><title>boost::asio::detail::reactive_socket_service_base::async_send&lt;boost::beast::detail::buffers_ref&lt;boost::beast::buffers_prefix_view&lt;boost::beast::buffers_suffix&lt;boost::beast::buffers_cat_view&lt;boost::beast::detail::buffers_ref&lt;boost::beast::buffers_cat_view&lt;boost::asio::const_buffer, boost::asio::const_buffer, boost::asio::const_buffer, boost::beast::http::basic_fields&lt;std::allocator&lt;char&gt;&gt;::writer::field_range, boost::beast::http::chunk_crlf&gt;&gt;, boost::asio::const_buffer&gt;&gt; const&amp;&gt;&gt;, boost::beast::http::detail::write_some_op&lt;boost::beast::http::detail::write_op&lt;boost::beast::http::detail::write_msg_op&lt;hquant::bench::SimVenue::Impl::HttpSession::Read()::&#x27;lambda&#x27;(boost::system::error_code, unsigned long)::operator()(boost::system::error_code, unsigned long) const::&#x27;lambda&#x27;(boost::system::error_code, unsigned long), boost::asio::basic_stream_socket&lt;boost::asio::ip::tcp, boost::asio::any_io_executor&gt;, false, boost::beast::http::basic_string_body&lt;char&gt;, boost::beast::http::basic_fields&lt;std::allocator&lt;char&gt;&gt;&gt;, boost::asio::basic_stream_socket&lt;boost::asio::ip::tcp, boost::asio::any_io_executor&gt;, boost::beast::http::detail::serializer_is_done, false, boost::beast::http::basic_string_body&lt;char&gt;, boost::beast::http::basic_fields&lt;std::allocator&lt;char&gt;&gt;&gt;, boost::asio::basic_stream_socket&lt;boost::asio::ip::tcp, boost::asio::any_io_executor&gt;, false, boost::beast::http::basic_string_body&lt;char&gt;, boost::beast::http::basic_fields&lt;std::allocator&lt;char&gt;&gt;&gt;, boost::asio::any_io_executor&gt;(boost::asio::detail::reactive_socket_service_base::base_implementation_type&amp;, boost::beast::detail::buffers_ref&lt;boost::beast::buffers_prefix_view&lt;boost::beast::buffers_suffix&lt;boost::beast::buffers_cat_view&lt;boost::beast::detail::buffers_ref&lt;boost::beast::buffers_cat_view&lt;boost::asio::const_buffer, boost::asio::const_buffer, boost::asio::const_buffer, boost::beast::http::basic_fields&lt;std::allocator&lt;char&gt;&gt;::writer::field_range, boost::beast::http::chunk_crlf&gt;&gt;, boost::asio::const_buffer&gt;&gt; const&amp;&gt;&gt; const&amp;, int, boost::beast::http::detail::write_some_op&lt;boost::beast::http::detail::write_op&lt;boost::beast::http::detail::write_msg_op&lt;hquant::bench::SimVenue::Impl::HttpSession::Read()::&#x27;lambda&#x27;(boost::system::error_code, unsigned long)::operator()(boost::system::error_code, unsigned long) const::&#x27;lambda&#x27;(boost::system::error_code, unsigned long), boost::asio::basic_stream_socket&lt;boost::asio::ip::tcp, boost::asio::any_io_executor&gt;, false, boost::beast::http::basic_string_body&lt;char&gt;, boost::beast::http::basic_fields&lt;std::allocator&lt;char&gt;&gt;&gt;, boost::asio::basic_stream_socket&lt;boost::asio::ip::tcp, boost::asio::any_io_executor&gt;, boost::beast::http::detail::serializer_is_done, false, boost::beast::http::basic_string_body&lt;char&gt;, boost::beast::http::basic_fields&lt;std::allocator&lt;char&gt;&gt;&gt;, boost::asio::basic_stream_socket&lt;boost::asio::ip::tcp, boost::asio::any_io_executor&gt;, false, boost::beast::http::basic_string_body&lt;char&gt;, boost::beast::http::basic_fields&lt;std::allocator&lt;char&gt;&gt;&gt;&amp;, boost::asio::any_io_executor const&amp;) — 17 samples (0.2%)</title>
+<rect x="2150.97" y="216.00" width="5.36" height="20" fill="#eeb468"/>
+</g>
+<g><title>boost::asio::detail::kqueue_reactor::start_op(int, int, boost::asio::detail::kqueue_reactor::descriptor_state*&amp;, boost::asio::detail::reactor_op*, bool, bool, void (*)(boost::asio::detail::scheduler_operation*, bool, void const*), void const*) — 17 samples (0.2%)</title>
+<rect x="2150.97" y="194.00" width="5.36" height="20" fill="#b3a0cd"/>
+</g>
+<g><title>boost::asio::detail::reactive_socket_send_op_base&lt;boost::beast::detail::buffers_ref&lt;boost::beast::buffers_prefix_view&lt;boost::beast::buffers_suffix&lt;boost::beast::buffers_cat_view&lt;boost::beast::detail::buffers_ref&lt;boost::beast::buffers_cat_view&lt;boost::asio::const_buffer, boost::asio::const_buffer, boost::asio::const_buffer, boost::beast::http::basic_fields&lt;std::allocator&lt;char&gt;&gt;::writer::field_range, boost::beast::http::chunk_crlf&gt;&gt;, boost::asio::const_buffer&gt;&gt; const&amp;&gt;&gt;&gt;::do_perform(boost::asio::detail::reactor_op*) — 17 samples (0.2%)</title>
+<rect x="2150.97" y="172.00" width="5.36" height="20" fill="#b3a0cd"/>
+</g>
+<g><title>boost::asio::detail::socket_ops::non_blocking_send(int, iovec const*, unsigned long, int, boost::system::error_code&amp;, unsigned long&amp;) — 15 samples (0.2%)</title>
+<rect x="2150.97" y="150.00" width="4.73" height="20" fill="#b3a0cd"/>
+</g>
+<g><title>__sendmsg — 15 samples (0.2%)</title>
+<rect x="2150.97" y="128.00" width="4.73" height="20" fill="#d7c6b8"/>
+</g>
+<g><title>boost::beast::http::basic_fields&lt;std::allocator&lt;char&gt;&gt;::set(boost::beast::http::field, boost::core::basic_string_view&lt;char&gt;) — 4 samples (0.1%)</title>
+<rect x="2156.65" y="326.00" width="1.26" height="20" fill="#b3a0cd"/>
+</g>
+<g><title>boost::beast::http::basic_fields&lt;std::allocator&lt;char&gt;&gt;::try_create_new_element(boost::beast::http::field, boost::core::basic_string_view&lt;char&gt;, boost::core::basic_string_view&lt;char&gt;, boost::system::error_code&amp;) — 3 samples (0.0%)</title>
+<rect x="2156.65" y="304.00" width="0.95" height="20" fill="#b3a0cd"/>
+</g>
+<g><title>operator new(unsigned long) — 3 samples (0.0%)</title>
+<rect x="2156.65" y="282.00" width="0.95" height="20" fill="#d4c5cc"/>
+</g>
+<g><title>boost::beast::http::basic_parser&lt;true&gt;::put(boost::asio::const_buffer, boost::system::error_code&amp;) — 5 samples (0.1%)</title>
+<rect x="2159.18" y="392.00" width="1.58" height="20" fill="#b3a0cd"/>
+</g>
+<g><title>boost::beast::http::basic_parser&lt;true&gt;::parse_fields(char const*&amp;, unsigned long, boost::system::error_code&amp;) — 3 samples (0.0%)</title>
+<rect x="2159.18" y="370.00" width="0.95" height="20" fill="#b3a0cd"/>
+</g>
+<g><title>boost::beast::http::basic_parser&lt;true&gt;::inner_parse_fields(char const*&amp;, char const*, boost::system::error_code&amp;) — 3 samples (0.0%)</title>
+<rect x="2159.18" y="348.00" width="0.95" height="20" fill="#b3a0cd"/>
+</g>
+<g><title>boost::asio::detail::scheduler::task_cleanup::~task_cleanup() — 7 samples (0.1%)</title>
+<rect x="2161.38" y="436.00" width="2.21" height="20" fill="#b3a0cd"/>
+</g>
+<g><title>boost::asio::detail::reactive_socket_send_op&lt;boost::beast::detail::buffers_ref&lt;boost::beast::buffers_prefix_view&lt;boost::beast::buffers_suffix&lt;boost::beast::buffers_cat_view&lt;boost::beast::detail::buffers_ref&lt;boost::beast::buffers_cat_view&lt;boost::asio::const_buffer, boost::asio::const_buffer, boost::asio::const_buffer, boost::beast::http::basic_fields&lt;std::allocator&lt;char&gt;&gt;::writer::field_range, boost::beast::http::chunk_crlf&gt;&gt;, boost::asio::const_buffer&gt;&gt; const&amp;&gt;&gt;, boost::beast::http::detail::write_some_op&lt;boost::beast::http::detail::write_op&lt;boost::beast::http::detail::write_msg_op&lt;hquant::bench::SimVenue::Impl::HttpSession::Read()::&#x27;lambda&#x27;(boost::system::error_code, unsigned long)::operator()(boost::system::error_code, unsigned long) const::&#x27;lambda&#x27;(boost::system::error_code, unsigned long), boost::asio::basic_stream_socket&lt;boost::asio::ip::tcp, boost::asio::any_io_executor&gt;, false, boost::beast::http::basic_string_body&lt;char&gt;, boost::beast::http::basic_fields&lt;std::allocator&lt;char&gt;&gt;&gt;, boost::asio::basic_stream_socket&lt;boost::asio::ip::tcp, boost::asio::any_io_executor&gt;, boost::beast::http::detail::serializer_is_done, false, boost::beast::http::basic_string_body&lt;char&gt;, boost::beast::http::basic_fields&lt;std::allocator&lt;char&gt;&gt;&gt;, boost::asio::basic_stream_socket&lt;boost::asio::ip::tcp, boost::asio::any_io_executor&gt;, false, boost::beast::http::basic_string_body&lt;char&gt;, boost::beast::http::basic_fields&lt;std::allocator&lt;char&gt;&gt;&gt;, boost::asio::any_io_executor&gt;::do_complete(void*, boost::asio::detail::scheduler_operation*, boost::system::error_code const&amp;, unsigned long) — 5 samples (0.1%)</title>
+<rect x="2163.59" y="436.00" width="1.58" height="20" fill="#eeb468"/>
+</g>
+<g><title>boost::asio::detail::handler_work&lt;boost::beast::http::detail::write_some_op&lt;boost::beast::http::detail::write_op&lt;boost::beast::http::detail::write_msg_op&lt;hquant::bench::SimVenue::Impl::HttpSession::Read()::&#x27;lambda&#x27;(boost::system::error_code, unsigned long)::operator()(boost::system::error_code, unsigned long) const::&#x27;lambda&#x27;(boost::system::error_code, unsigned long), boost::asio::basic_stream_socket&lt;boost::asio::ip::tcp, boost::asio::any_io_executor&gt;, false, boost::beast::http::basic_string_body&lt;char&gt;, boost::beast::http::basic_fields&lt;std::allocator&lt;char&gt;&gt;&gt;, boost::asio::basic_stream_socket&lt;boost::asio::ip::tcp, boost::asio::any_io_executor&gt;, boost::beast::http::detail::serializer_is_done, false, boost::beast::http::basic_string_body&lt;char&gt;, boost::beast::http::basic_fields&lt;std::allocator&lt;char&gt;&gt;&gt;, boost::asio::basic_stream_socket&lt;boost::asio::ip::tcp, boost::asio::any_io_executor&gt;, false, boost::beast::http::basic_string_body&lt;char&gt;, boost::beast::http::basic_fields&lt;std::allocator&lt;char&gt;&gt;&gt;, boost::asio::any_io_executor, void&gt;::complete&lt;boost::asio::detail::binder2&lt;boost::beast::http::detail::write_some_op&lt;boost::beast::http::detail::write_op&lt;boost::beast::http::detail::write_msg_op&lt;hquant::bench::SimVenue::Impl::HttpSession::Read()::&#x27;lambda&#x27;(boost::system::error_code, unsigned long)::operator()(boost::system::error_code, unsigned long) const::&#x27;lambda&#x27;(boost::system::error_code, unsigned long), boost::asio::basic_stream_socket&lt;boost::asio::ip::tcp, boost::asio::any_io_executor&gt;, false, boost::beast::http::basic_string_body&lt;char&gt;, boost::beast::http::basic_fields&lt;std::allocator&lt;char&gt;&gt;&gt;, boost::asio::basic_stream_socket&lt;boost::asio::ip::tcp, boost::asio::any_io_executor&gt;, boost::beast::http::detail::serializer_is_done, false, boost::beast::http::basic_string_body&lt;char&gt;, boost::beast::http::basic_fields&lt;std::allocator&lt;char&gt;&gt;&gt;, boost::asio::basic_stream_socket&lt;boost::asio::ip::tcp, boost::asio::any_io_executor&gt;, false, boost::beast::http::basic_string_body&lt;char&gt;, boost::beast::http::basic_fields&lt;std::allocator&lt;char&gt;&gt;&gt;, boost::system::error_code, unsigned long&gt;&gt;(boost::asio::detail::binder2&lt;boost::beast::http::detail::write_some_op&lt;boost::beast::http::detail::write_op&lt;boost::beast::http::detail::write_msg_op&lt;hquant::bench::SimVenue::Impl::HttpSession::Read()::&#x27;lambda&#x27;(boost::system::error_code, unsigned long)::operator()(boost::system::error_code, unsigned long) const::&#x27;lambda&#x27;(boost::system::error_code, unsigned long), boost::asio::basic_stream_socket&lt;boost::asio::ip::tcp, boost::asio::any_io_executor&gt;, false, boost::beast::http::basic_string_body&lt;char&gt;, boost::beast::http::basic_fields&lt;std::allocator&lt;char&gt;&gt;&gt;, boost::asio::basic_stream_socket&lt;boost::asio::ip::tcp, boost::asio::any_io_executor&gt;, boost::beast::http::detail::serializer_is_done, false, boost::beast::http::basic_string_body&lt;char&gt;, boost::beast::http::basic_fields&lt;std::allocator&lt;char&gt;&gt;&gt;, boost::asio::basic_stream_socket&lt;boost::asio::ip::tcp, boost::asio::any_io_executor&gt;, false, boost::beast::http::basic_string_body&lt;char&gt;, boost::beast::http::basic_fields&lt;std::allocator&lt;char&gt;&gt;&gt;, boost::system::error_code, unsigned long&gt;&amp;, boost::beast::http::detail::write_some_op&lt;boost::beast::http::detail::write_op&lt;boost::beast::http::detail::write_msg_op&lt;hquant::bench::SimVenue::Impl::HttpSession::Read()::&#x27;lambda&#x27;(boost::system::error_code, unsigned long)::operator()(boost::system::error_code, unsigned long) const::&#x27;lambda&#x27;(boost::system::error_code, unsigned long), boost::asio::basic_stream_socket&lt;boost::asio::ip::tcp, boost::asio::any_io_executor&gt;, false, boost::beast::http::basic_string_body&lt;char&gt;, boost::beast::http::basic_fields&lt;std::allocator&lt;char&gt;&gt;&gt;, boost::asio::basic_stream_socket&lt;boost::asio::ip::tcp, boost::asio::any_io_executor&gt;, boost::beast::http::detail::serializer_is_done, false, boost::beast::http::basic_string_body&lt;char&gt;, boost::beast::http::basic_fields&lt;std::allocator&lt;char&gt;&gt;&gt;, boost::asio::basic_stream_socket&lt;boost::asio::ip::tcp, boost::asio::any_io_executor&gt;, false, boost::beast::http::basic_string_body&lt;char&gt;, boost::beast::http::basic_fields&lt;std::allocator&lt;char&gt;&gt;&gt;&amp;) — 5 samples (0.1%)</title>
+<rect x="2163.59" y="414.00" width="1.58" height="20" fill="#eeb468"/>
+</g>
+<g><title>boost::beast::http::detail::write_op&lt;boost::beast::http::detail::write_msg_op&lt;hquant::bench::SimVenue::Impl::HttpSession::Read()::&#x27;lambda&#x27;(boost::system::error_code, unsigned long)::operator()(boost::system::error_code, unsigned long) const::&#x27;lambda&#x27;(boost::system::error_code, unsigned long), boost::asio::basic_stream_socket&lt;boost::asio::ip::tcp, boost::asio::any_io_executor&gt;, false, boost::beast::http::basic_string_body&lt;char&gt;, boost::beast::http::basic_fields&lt;std::allocator&lt;char&gt;&gt;&gt;, boost::asio::basic_stream_socket&lt;boost::asio::ip::tcp, boost::asio::any_io_executor&gt;, boost::beast::http::detail::serializer_is_done, false, boost::beast::http::basic_string_body&lt;char&gt;, boost::beast::http::basic_fields&lt;std::allocator&lt;char&gt;&gt;&gt;::operator()(boost::system::error_code, unsigned long) — 5 samples (0.1%)</title>
+<rect x="2163.59" y="392.00" width="1.58" height="20" fill="#eeb468"/>
+</g>
+<g><title>hquant::bench::SimVenue::Impl::HttpSession::Read() — 5 samples (0.1%)</title>
+<rect x="2163.59" y="370.00" width="1.58" height="20" fill="#eeb468"/>
+</g>
+<g><title>boost::beast::http::basic_fields&lt;std::allocator&lt;char&gt;&gt;::move_assign(boost::beast::http::basic_fields&lt;std::allocator&lt;char&gt;&gt;&amp;, std::integral_constant&lt;bool, true&gt;) — 3 samples (0.0%)</title>
+<rect x="2163.59" y="348.00" width="0.95" height="20" fill="#b3a0cd"/>
+</g>
+<g><title>_xzm_free — 3 samples (0.0%)</title>
+<rect x="2163.59" y="326.00" width="0.95" height="20" fill="#bed1c2"/>
+</g>
+<g><title>boost::asio::detail::kqueue_reactor::run(long, boost::asio::detail::op_queue&lt;boost::asio::detail::scheduler_operation&gt;&amp;) — 3 samples (0.0%)</title>
+<rect x="2178.11" y="458.00" width="0.95" height="20" fill="#b3a0cd"/>
+</g>
+</svg>

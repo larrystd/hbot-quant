@@ -30,6 +30,13 @@ enum class HistoryKind {
   Balance = 7,
   OrderRejected = 8,
   OrderPartiallyFilled = 9,
+  SubmitUnknown = 10,
+  CancelUnknown = 11,
+  CancelRejected = 12,
+  LocalRejected = 13,
+  PrivateReportApplied = 14,
+  SubmitWriting = 15,
+  CancelWriting = 16,
 };
 
 struct HistoryRecord {
@@ -55,6 +62,30 @@ struct HistoryRecord {
   bool perf_after_stop = false;
 };
 
+struct AccountHistoryRecord {
+  std::string run_id;
+  std::string account_id;
+  uint64_t sequence = 0;
+  ShardId shard;
+  std::string symbol;
+  int64_t at_us = 0;
+  uint64_t at_mono_ns = 0;
+  HistoryKind kind = HistoryKind::SubmitCommand;
+  std::string client_order_id;
+  uint64_t exchange_order_id = 0;
+  uint64_t trade_id = 0;
+  uint64_t source_bench_seq = 0;
+  uint64_t price_nanos = 0;
+  uint64_t quantity_nanos = 0;
+  uint64_t remaining_nanos = 0;
+  uint64_t fee_nanos = 0;
+  uint64_t total_nanos = 0;
+  uint64_t available_nanos = 0;
+  uint64_t locked_nanos = 0;
+  std::string asset;
+  std::string message;
+};
+
 struct HistoryPage {
   std::vector<HistoryRecord> records;
   uint64_t next_cursor = 0;
@@ -77,6 +108,7 @@ class SqliteHistory {
 
   absl::Status Start();
   bool TryPush(HistoryRecord record);
+  bool TryPushAccount(AccountHistoryRecord record);
   absl::StatusOr<HistoryPage> Query(uint32_t limit, uint64_t cursor);
   HistoryHealth Health() const;
   absl::Status FlushAndStop();
@@ -96,8 +128,10 @@ class SqliteHistory {
   void WriterLoop();
   void ReaderLoop();
   absl::Status WriteBatch(const std::vector<HistoryRecord>& records,
+                          const std::vector<AccountHistoryRecord>& account_records,
                           const std::vector<Gap>& gaps,
                           sqlite3_stmt* record_statement,
+                          sqlite3_stmt* account_statement,
                           sqlite3_stmt* gap_statement);
   absl::StatusOr<HistoryPage> ReadPage(uint32_t limit, uint64_t cursor);
 
@@ -109,6 +143,7 @@ class SqliteHistory {
   std::condition_variable writer_cv_;
   std::condition_variable space_cv_;
   std::deque<HistoryRecord> writer_queue_;
+  std::deque<AccountHistoryRecord> account_queue_;
   std::vector<Gap> gaps_;
   uint64_t dropped_ = 0;
   std::string error_;

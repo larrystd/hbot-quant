@@ -18,6 +18,7 @@ cc_library(
     deps = [
         ":order_book",
         "//hquant/src/base:ids",
+        "//hquant/src/trading:trading_event",
     ],
     visibility = ["//hquant/src:__subpackages__"],
 )
@@ -70,42 +71,7 @@ cc_library(
         "//hquant/src:config",
         "//hquant/src/base:fixed",
         "//hquant/src/base:ids",
-        "@abseil-cpp//absl/status:status",
-        "@abseil-cpp//absl/status:statusor",
-    ],
-    visibility = ["//hquant/src:__subpackages__"],
-)
-
-cc_library(
-    name = "paper_exchange",
-    srcs = ["paper_exchange.cc"],
-    hdrs = ["paper_exchange.h"],
-    strip_include_prefix = "/hquant/src",
-    include_prefix = "hquant",
-    deps = [
-        ":market_type",
-        ":strategy",
-        "//hquant/src:config",
-        "//hquant/src/base:fixed",
-        "//hquant/src/base:ids",
-        "@abseil-cpp//absl/status:status",
-        "@abseil-cpp//absl/status:statusor",
-    ],
-    visibility = ["//hquant/src:__subpackages__"],
-)
-
-cc_library(
-    name = "executor",
-    srcs = ["executor.cc"],
-    hdrs = ["executor.h"],
-    strip_include_prefix = "/hquant/src",
-    include_prefix = "hquant",
-    deps = [
-        ":market_type",
-        ":paper_exchange",
-        ":strategy",
-        "//hquant/src:config",
-        "//hquant/src/base:fixed",
+        "//hquant/src/trading:trading_event",
         "@abseil-cpp//absl/status:status",
         "@abseil-cpp//absl/status:statusor",
     ],
@@ -119,14 +85,13 @@ cc_library(
     strip_include_prefix = "/hquant/src",
     include_prefix = "hquant",
     deps = [
-        ":executor",
         ":market",
         ":market_type",
-        ":paper_exchange",
         ":strategy",
         "//hquant/src:config",
-        "//hquant/src:sqlite_history",
         "//hquant/src:perf_probe",
+        "//hquant/src/base:log",
+        "//hquant/src/trading:trading_account",
         "@abseil-cpp//absl/status:status",
         "@abseil-cpp//absl/status:statusor",
         "@boost.asio//:boost.asio",
