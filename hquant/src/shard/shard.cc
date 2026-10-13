@@ -13,11 +13,14 @@
 #include "boost/asio/detached.hpp"
 #include "boost/asio/post.hpp"
 #include "hquant/base/log.h"
+#include "hquant/trading/client_order_id.h"
 
 namespace hquant::v1 {
 
 Shard::Shard(boost::asio::io_context& io, const ShardConfig& config,
-             const InputConfig& input, ShardPerf* perf, TradingAccount* account)
+             const InputConfig& input, const AccountConfig& account_config,
+             ShardAllocation allocation, ShardPerf* perf,
+             TradingAccount* account)
     : config_(config),
       input_(input),
       io_(io),
@@ -26,42 +29,24 @@ Shard::Shard(boost::asio::io_context& io, const ShardConfig& config,
           io_, config_.market, input_,
           [this](const MarketNotice& notice) { OnMarket(notice); }, perf),
       strategy_(config_.strategy),
+      trading_(config_, std::move(allocation), account_config.risk,
+               account_config.maker_fee_rate_ppb),
       account_(account),
       strategy_timer_(io_),
       stop_timer_(io_),
-      perf_(perf) {
-  if (account_) {
-    base_asset_view_ = account_->AssetView(config_.market.base_asset);
-    quote_asset_view_ = account_->AssetView(config_.market.quote_asset);
-    asset_revision_ = account_->AssetRevision();
-  }
-}
+      perf_(perf) {}
 
 Shard::AssetPair Shard::ReadAssetViews() const {
   AssetPair values;
-  for (;;) {
-    const uint64_t before = asset_revision_
-                                ? asset_revision_->load(std::memory_order_seq_cst)
-                                : 0;
-    if (before & 1) continue;
-    if (base_asset_view_) {
-      values.base = base_asset_view_->Read();
-    } else {
-      values.base.total_nanos = account_view_.base_total_nanos;
-      values.base.available_nanos = account_view_.base_available_nanos;
-      values.base.budget_nanos = account_view_.base_budget_nanos;
-    }
-    if (quote_asset_view_) {
-      values.quote = quote_asset_view_->Read();
-    } else {
-      values.quote.total_nanos = account_view_.quote_total_nanos;
-      values.quote.available_nanos = account_view_.quote_available_nanos;
-      values.quote.budget_nanos = account_view_.quote_budget_nanos;
-    }
-    if (!asset_revision_ ||
-        asset_revision_->load(std::memory_order_seq_cst) == before)
-      return values;
-  }
+  values.base.total_nanos = trading_.Total(config_.market.base_asset);
+  values.base.available_nanos =
+      trading_.Available(config_.market.base_asset);
+  values.base.budget_nanos = trading_.Budget(config_.market.base_asset);
+  values.quote.total_nanos = trading_.Total(config_.market.quote_asset);
+  values.quote.available_nanos =
+      trading_.Available(config_.market.quote_asset);
+  values.quote.budget_nanos = trading_.Budget(config_.market.quote_asset);
+  return values;
 }
 
 Shard::~Shard() {
@@ -90,8 +75,8 @@ absl::StatusOr<uint64_t> Shard::RunStrategyDecision(LiveHandlerPhases*,
 }
 
 absl::StatusOr<uint64_t> Shard::RunAccountDecision(uint64_t source_bench_seq) {
-  if (!account_ || pending_account_requests_ != 0 ||
-      account_view_.pending_operation || !account_view_.ready) {
+  if (!account_ || trading_.Pending() || !account_view_.ready ||
+      !account_->AdmissionEnabled(account_view_.revision)) {
     return uint64_t{0};
   }
   const MonoTime now =
@@ -100,7 +85,7 @@ absl::StatusOr<uint64_t> Shard::RunAccountDecision(uint64_t source_bench_seq) {
           : std::chrono::time_point_cast<std::chrono::microseconds>(
                 std::chrono::steady_clock::now());
   ExecutionView view;
-  view.active_order_ids = account_view_.open_order_ids;
+  view.active_order_ids = trading_.OpenOrders();
   const AssetPair assets = ReadAssetViews();
   view.base_available_nanos = assets.base.available_nanos;
   view.quote_available_nanos = assets.quote.available_nanos;
@@ -134,63 +119,138 @@ absl::StatusOr<uint64_t> Shard::RunAccountDecision(uint64_t source_bench_seq) {
   if (const auto* cancel = std::get_if<CancelOrders>(&*decision)) {
     awaiting_cancel_ = true;
     for (OrderId id : cancel->ids) {
-      ++pending_account_requests_;
-      const bool queued = account_->TryCancel(
-          config_.id, id, source_bench_seq,
-          [this](bool admitted, std::string reason) {
-            boost::asio::post(io_,
-                              [this, admitted, reason = std::move(reason)] {
-                                AccountRequestDone(admitted, reason);
-                              });
-          });
-      if (!queued) {
-        --pending_account_requests_;
+      auto command = trading_.BeginCancel(id, source_bench_seq);
+      if (!command.ok()) {
         strategy_.ResetRefresh();
-        last_error_ = "account cancel queue full";
-      } else {
-        ++sent;
+        last_error_ = std::string(command.status().message());
+        continue;
       }
+      const TrackedOrder* order = trading_.FindLocal(id);
+      const bool handled = account_->CancelFromShard(
+          config_.id, *command, source_bench_seq,
+          order ? order->cancel_requested_ms : 0);
+      if (!handled) {
+        (void)trading_.AbortCancel(command->client_order_id);
+        strategy_.ResetRefresh();
+        last_error_ = "account cancel unavailable";
+        continue;
+      }
+      ++sent;
     }
     if (sent == 0) awaiting_cancel_ = false;
   } else {
     const auto& submit = std::get<SubmitOrders>(*decision);
     for (const LimitOrderRequest& request : submit.orders) {
-      ++pending_account_requests_;
-      const bool queued = account_->TrySubmit(
-          config_.id, config_.market.id, request, source_bench_seq,
-          [this](bool admitted, std::string reason) {
-            boost::asio::post(io_,
-                              [this, admitted, reason = std::move(reason)] {
-                                AccountRequestDone(admitted, reason);
-                              });
-          });
-      if (!queued) {
-        --pending_account_requests_;
+      const uint64_t requested_ns = perf_ ? BenchClockNowNs() : 0;
+      auto id = NewClientOrderId();
+      if (!id.ok()) {
         strategy_.ResetRefresh();
-        last_error_ = "account submit queue full";
-      } else {
-        ++sent;
+        last_error_ = std::string(id.status().message());
+        continue;
       }
+      const uint64_t id_ready_ns = perf_ ? BenchClockNowNs() : 0;
+      auto admitted =
+          trading_.BeginSubmit(std::move(*id), request, source_bench_seq);
+      if (!admitted.ok()) {
+        strategy_.ResetRefresh();
+        last_error_ = std::string(admitted.status().message());
+        continue;
+      }
+      const uint64_t started_ns = perf_ ? BenchClockNowNs() : 0;
+      const bool handled = account_->SubmitFromShard(
+          admitted->order, admitted->asset, admitted->amount_nanos,
+          account_view_.revision);
+      if (!handled) {
+        (void)trading_.AbortSubmit(admitted->order.client_order_id);
+        strategy_.ResetRefresh();
+        last_error_ = "account submit unavailable";
+        continue;
+      }
+      if (perf_) {
+        LOG_INFO(Logger(),
+                 "shard_submit_trace client_id={} requested_ns={} "
+                 "id_ready_ns={} started_ns={} finished_ns={} shard={} "
+                 "bench_seq={}",
+                 admitted->order.client_order_id.value, requested_ns,
+                 id_ready_ns, started_ns, BenchClockNowNs(),
+                 config_.id.value, source_bench_seq);
+      }
+      ++sent;
     }
   }
   return sent;
 }
 
-void Shard::AccountRequestDone(bool admitted, std::string reason) {
-  if (pending_account_requests_ > 0) --pending_account_requests_;
-  if (!admitted) {
-    strategy_.ResetRefresh();
-    last_error_ = std::move(reason);
-  }
-  if (pending_account_requests_ == 0 && awaiting_cancel_ &&
-      !account_view_.pending_operation &&
-      account_view_.open_order_ids.empty()) {
-    awaiting_cancel_ = false;
-    auto result = RunStrategyDecision();
-    if (!result.ok()) StopFromError(result.status());
-  }
-  if (stopped_on_thread_) StopAccountOrders();
-  MaybeCompleteReplay();
+void Shard::PostTradeEvent(AccountEvent event) {
+  boost::asio::post(io_, [this, event = std::move(event)]() mutable {
+    if (auto status = trading_.ApplyEvent(event); !status.ok()) {
+      if (account_) account_->ReportShardError(config_.id, status);
+      StopFromError(status);
+      return;
+    }
+    if (stopped_on_thread_) StopAccountOrders();
+    if (awaiting_cancel_ && !trading_.Pending() &&
+        trading_.OpenOrders().empty()) {
+      awaiting_cancel_ = false;
+      auto result = RunStrategyDecision();
+      if (!result.ok()) StopFromError(result.status());
+    }
+    MaybeCompleteReplay();
+  });
+}
+
+void Shard::PostTradeResponse(ClientOrderId id, bool cancel,
+                              TradeResponse response) {
+  boost::asio::post(io_, [this, id = std::move(id), cancel,
+                          response = std::move(response)] {
+    if (auto status = trading_.ApplyResponse(id, cancel, response);
+        !status.ok()) {
+      if (account_) account_->ReportShardError(config_.id, status);
+      StopFromError(status);
+      return;
+    }
+    if (stopped_on_thread_) StopAccountOrders();
+    MaybeCompleteReplay();
+  });
+}
+
+void Shard::PostTradeWriting(ClientOrderId id, bool cancel) {
+  boost::asio::post(io_, [this, id = std::move(id), cancel] {
+    if (auto status = trading_.MarkWriting(id, cancel); !status.ok()) {
+      if (account_) account_->ReportShardError(config_.id, status);
+      StopFromError(status);
+    }
+  });
+}
+
+void Shard::PostCancelAll(std::function<void(uint64_t)> done) {
+  boost::asio::post(io_, [this, done = std::move(done)]() mutable {
+    uint64_t admitted = 0;
+    if (account_) {
+      for (OrderId local_id : trading_.OpenOrders()) {
+        const TrackedOrder* current = trading_.FindLocal(local_id);
+        if (!current || current->cancel == CancelPhase::Pending ||
+            current->cancel == CancelPhase::Unknown)
+          continue;
+        auto command = trading_.BeginCancel(local_id, 0);
+        if (!command.ok()) continue;
+        const TrackedOrder* order = trading_.FindLocal(local_id);
+        if (account_->CancelFromShard(
+                config_.id, *command, 0,
+                order ? order->cancel_requested_ms : 0)) {
+          ++admitted;
+        } else {
+          (void)trading_.AbortCancel(command->client_order_id);
+        }
+      }
+    }
+    done(admitted);
+  });
+}
+
+absl::Status Shard::RestoreTradingJournal(
+    const std::vector<JournalEntry>& entries) {
+  return trading_.RestoreJournal(entries);
 }
 
 void Shard::PostAccountView(AccountView view) {
@@ -202,14 +262,14 @@ void Shard::PostAccountView(AccountView view) {
 void Shard::OnAccountView(AccountView view) {
   if (view.revision < account_view_.revision) return;
   account_view_ = std::move(view);
+  trading_.SetVenueRule(account_view_.venue_rule);
   if (stopped_on_thread_) {
     StopAccountOrders();
     MaybeCompleteReplay();
     return;
   }
-  if (!stop_requested_ && awaiting_cancel_ && pending_account_requests_ == 0 &&
-      !account_view_.pending_operation &&
-      account_view_.open_order_ids.empty()) {
+  if (!stop_requested_ && awaiting_cancel_ && !trading_.Pending() &&
+      trading_.OpenOrders().empty()) {
     awaiting_cancel_ = false;
     const uint64_t decision_begin = perf_ ? PerfNowNs() : 0;
     auto result = RunStrategyDecision();
@@ -222,9 +282,14 @@ void Shard::OnAccountView(AccountView view) {
     }
     if (!result.ok()) StopFromError(result.status());
   }
-  if (awaiting_cancel_ && pending_account_requests_ == 0 &&
-      !account_view_.rejected_cancel_ids.empty()) {
-    awaiting_cancel_ = false;
+  if (awaiting_cancel_ && !trading_.Pending()) {
+    for (OrderId id : trading_.OpenOrders()) {
+      const TrackedOrder* order = trading_.FindLocal(id);
+      if (order && order->cancel == CancelPhase::Rejected) {
+        awaiting_cancel_ = false;
+        break;
+      }
+    }
   }
   MaybeCompleteReplay();
 }
@@ -350,9 +415,7 @@ void Shard::PostReplay(ReplayRecord record,
 }
 
 void Shard::MaybeCompleteReplay() {
-  if (!replay_done_ || pending_account_requests_ != 0) {
-    return;
-  }
+  if (!replay_done_) return;
   auto done = std::move(replay_done_);
   replay_done_ = {};
   boost::asio::post(io_, std::move(done));
@@ -376,7 +439,7 @@ ShardStatus Shard::CaptureStatus() const {
   status.market_notices = market_notices_;
   status.strategy_timer_ticks = strategy_timer_ticks_;
   status.config_version = config_version_;
-  status.active_orders = account_view_.open_order_ids.size();
+  status.active_orders = trading_.OpenOrders().size();
   const AssetPair assets = ReadAssetViews();
   status.base_total_nanos = assets.base.total_nanos;
   status.base_available_nanos = assets.base.available_nanos;
@@ -455,7 +518,7 @@ void Shard::StopOnThread() {
   stop_timer_.expires_after(std::chrono::seconds(30));
   stop_timer_.async_wait([this](const boost::system::error_code& error) {
     if (error) return;
-    if (!account_view_.open_order_ids.empty()) {
+    if (!trading_.OpenOrders().empty()) {
       last_error_ = "shutdown left unconfirmed account orders";
     }
     FinishStopOnThread();
@@ -465,31 +528,26 @@ void Shard::StopOnThread() {
 
 void Shard::StopAccountOrders() {
   if (!stopped_on_thread_ || !account_) return;
-  if (account_view_.open_order_ids.empty() && pending_account_requests_ == 0) {
+  const auto open = trading_.OpenOrders();
+  if (open.empty()) {
     FinishStopOnThread();
     return;
   }
-  if (account_view_.pending_operation) return;
-  for (OrderId id : account_view_.open_order_ids) {
+  if (trading_.Pending()) return;
+  for (OrderId id : open) {
     if (!stop_cancel_attempted_.insert(id.value).second) continue;
-    ++pending_account_requests_;
-    if (!account_->TryCancel(
-            config_.id, id, [this, id](bool admitted, std::string reason) {
-              boost::asio::post(
-                  io_, [this, id, admitted, reason = std::move(reason)] {
-                    if (pending_account_requests_ > 0)
-                      --pending_account_requests_;
-                    if (!admitted) {
-                      stop_cancel_attempted_.erase(id.value);
-                      last_error_ = std::move(reason);
-                      return;
-                    }
-                    StopAccountOrders();
-                  });
-            })) {
-      --pending_account_requests_;
+    auto command = trading_.BeginCancel(id, 0);
+    if (!command.ok()) {
       stop_cancel_attempted_.erase(id.value);
-      last_error_ = "account shutdown cancel queue full";
+      last_error_ = std::string(command.status().message());
+      continue;
+    }
+    const TrackedOrder* order = trading_.FindLocal(id);
+    if (!account_->CancelFromShard(config_.id, *command, 0,
+                                   order ? order->cancel_requested_ms : 0)) {
+      (void)trading_.AbortCancel(command->client_order_id);
+      stop_cancel_attempted_.erase(id.value);
+      last_error_ = "account shutdown cancel unavailable";
     }
   }
 }

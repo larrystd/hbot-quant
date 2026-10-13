@@ -27,4 +27,4 @@ python3 hquant/bench/market/validate_market_cases.py /tmp/hquant-market-cases/ss
 python3 hquant/bench/market/validate_market_cases.py /tmp/hquant-market-cases/stress
 ```
 
-每组输出 `replay.json`、`market_shards.yaml`、`manifest.json`。校验器核对全部 1000 只股票的订阅、每条消息的时间、每条快照的 20 档、序号、成交价格与数量、总数和最终买卖一。`trade_chain_bench.py` 在运行时从 `market_shards.yaml` 生成实际 `config.yaml`；目录分工见 [Bench 说明](../hquant/bench/README.md)。
+每组输出 `replay.json`、`market_shards.yaml`、`manifest.json`。校验器核对全部 1000 只股票的订阅、每条消息的时间、每条快照的 20 档、序号、成交价格与数量、总数和最终买卖一。`trade_chain_bench.py` 在运行时从 `market_shards.yaml` 生成实际 `config.yaml`；目录分工见 [Bench 说明](../../hquant/bench/README.md)。

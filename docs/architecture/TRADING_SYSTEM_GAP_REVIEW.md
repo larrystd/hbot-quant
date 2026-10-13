@@ -2,7 +2,7 @@
 
 本评估以单交易所、单账户的现货做市系统为参照。它讨论系统的交易正确性和运行可靠性，不评价策略是否赚钱。
 
-> 本文是首轮设计前的差距分析；当前代码进展与剩余门禁见[后续开发记录](TRADING_CHAIN_FOLLOWUP.md)。
+> 本文是首轮设计前的差距分析；当前代码进展与剩余门禁见[后续开发记录](../development/TRADING_CHAIN_FOLLOWUP.md)。
 
 ## 当前项目处于什么阶段
 
@@ -10,7 +10,7 @@
 
 当前仍只支持模拟盘。`PaperExchange` 保存订单和余额；`Executor` 直接调用它；`Shard::OnAccountEvent` 收到回报后主要写历史。配置会拒绝 `live`。因此，增加外部订单 socket 后，项目可以验证外部交易链路，但还不能据此视为可安全运行的实盘系统。
 
-相关代码：[Executor](../hquant/src/shard/executor.cc)、[账户事件](../hquant/src/shard/shard.cc)、[配置校验](../hquant/src/config.cc)、[现有设计](DESIGN.md)。
+相关代码：旧 `Executor` 已移除；现见[账户事件](../../hquant/src/shard/shard.cc)、[配置校验](../../hquant/src/config.cc)和[旧版设计](DESIGN.md)。
 
 ## 1. 账户级订单管理系统是最大的架构缺口
 
@@ -40,7 +40,7 @@
 
 实盘需要可靠的发送意图日志：在可能发往交易所之前保存订单 ID、账户、标的、命令及状态；回报应用和资金变化应可重放，必要时配合快照。持久化故障应触发停止新单，而不是继续交易并留下不可恢复的历史缺口。审计历史可以继续异步写，但不能替代恢复日志。
 
-相关代码：[历史记录与队列](../hquant/src/sqlite_history.h)、[实时队列行为](../hquant/src/sqlite_history.cc)、[启动与停止](../hquant/src/runtime.cc)。
+相关代码：[历史记录与队列](../../hquant/src/sqlite_history.h)、[实时队列行为](../../hquant/src/sqlite_history.cc)、[启动与停止](../../hquant/src/runtime.cc)。
 
 ## 5. 交易所适配器不止是收发 socket
 

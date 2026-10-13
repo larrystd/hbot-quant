@@ -11,6 +11,34 @@
 
 namespace hquant::v1 {
 
+namespace {
+uint64_t WireClockNs() {
+  timespec now{};
+  ::clock_gettime(CLOCK_MONOTONIC, &now);
+  return static_cast<uint64_t>(now.tv_sec) * 1'000'000'000ULL +
+         static_cast<uint64_t>(now.tv_nsec);
+}
+
+template <typename Stream>
+struct TimedWriteStream {
+  using executor_type = typename Stream::executor_type;
+  Stream& stream;
+  HttpWriteTrace& trace;
+
+  executor_type get_executor() const noexcept { return stream.get_executor(); }
+
+  template <typename Buffers, typename Handler>
+  void async_write_some(const Buffers& buffers, Handler&& handler) {
+    if (trace.first_write_call_ns == 0)
+      trace.first_write_call_ns = WireClockNs();
+    ++trace.write_calls;
+    stream.async_write_some(buffers, std::forward<Handler>(handler));
+    if (trace.first_write_return_ns == 0)
+      trace.first_write_return_ns = WireClockNs();
+  }
+};
+}  // namespace
+
 uint64_t BenchKeventReadReadyNs(int fd) {
   using Probe = uint64_t (*)(int);
   static Probe probe = reinterpret_cast<Probe>(
@@ -209,12 +237,24 @@ asio::awaitable<absl::StatusOr<HttpResponse>> HttpClient::Send(
     if (request.on_write_start) request.on_write_start();
     if (plain_) {
       plain_->expires_at(request.deadline);
-      co_await http::async_write(*plain_, wire,
-                                 asio::redirect_error(asio::use_awaitable, ec));
+      if (request.write_trace) {
+        TimedWriteStream stream{*plain_, *request.write_trace};
+        co_await http::async_write(
+            stream, wire, asio::redirect_error(asio::use_awaitable, ec));
+      } else {
+        co_await http::async_write(
+            *plain_, wire, asio::redirect_error(asio::use_awaitable, ec));
+      }
     } else {
       beast::get_lowest_layer(*secure_).expires_at(request.deadline);
-      co_await http::async_write(*secure_, wire,
-                                 asio::redirect_error(asio::use_awaitable, ec));
+      if (request.write_trace) {
+        TimedWriteStream stream{*secure_, *request.write_trace};
+        co_await http::async_write(
+            stream, wire, asio::redirect_error(asio::use_awaitable, ec));
+      } else {
+        co_await http::async_write(
+            *secure_, wire, asio::redirect_error(asio::use_awaitable, ec));
+      }
     }
     if (request.on_write) {
       request.on_write(write_begin, std::chrono::steady_clock::now());

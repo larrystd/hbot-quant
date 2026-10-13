@@ -109,6 +109,7 @@ AccountView AccountViewPublisher::View(ShardId shard) const {
   view.rule = market.rule;
   const auto venue_rule = inputs_.venue_rules.find(market.id.symbol);
   if (venue_rule != inputs_.venue_rules.end()) {
+    view.venue_rule = venue_rule->second;
     view.rule.price_increment_nanos =
         std::max(view.rule.price_increment_nanos,
                  venue_rule->second.price_increment_nanos);

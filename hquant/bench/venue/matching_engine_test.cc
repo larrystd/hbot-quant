@@ -60,5 +60,43 @@ int main() {
   Check(bids.size() == 1 && bids[0].quantity_nanos == 1 * unit,
         "public book differs from matching book");
 
+  MatchingEngine cancellation;
+  auto first_bid = cancellation.Place("BTCUSDT", Side::Buy, Owner::External,
+                                      100 * unit, 3 * unit);
+  auto second_bid = cancellation.Place("BTCUSDT", Side::Buy, Owner::Account,
+                                       100 * unit, 2 * unit);
+  auto other_symbol = cancellation.Place("ETHUSDT", Side::Buy,
+                                         Owner::External, 100 * unit, unit);
+  bids = cancellation.Levels("BTCUSDT", Side::Buy);
+  Check(bids.size() == 1 && bids[0].quantity_nanos == 5 * unit,
+        "same-price book quantities did not aggregate");
+  Check(cancellation.Cancel(first_bid.order_id) == 3 * unit &&
+            !cancellation.Cancel(first_bid.order_id),
+        "cancellation did not release exactly once");
+  bids = cancellation.Levels("BTCUSDT", Side::Buy);
+  Check(bids.size() == 1 && bids[0].quantity_nanos == 2 * unit,
+        "canceled quantity remains in public book");
+  auto external_sell = cancellation.Place("BTCUSDT", Side::Sell,
+                                          Owner::External, 100 * unit, unit);
+  Check(external_sell.fills.size() == 1 &&
+            external_sell.fills[0].maker_id == second_bid.order_id &&
+            external_sell.fills[0].maker_owner == Owner::Account &&
+            external_sell.fills[0].taker_owner == Owner::External,
+        "external sweep did not identify the account maker");
+  Check(cancellation.Cancel(second_bid.order_id) == unit &&
+            cancellation.Levels("BTCUSDT", Side::Buy).empty() &&
+            cancellation.Levels("ETHUSDT", Side::Buy).size() == 1 &&
+            cancellation.Find(other_symbol.order_id)->remaining_nanos == unit,
+        "cancel did not remove the empty level or isolated symbol changed");
+
+  MatchingEngine public_only;
+  public_only.Place("BTCUSDT", Side::Sell, Owner::External, 100 * unit, unit);
+  auto external_cross = public_only.Place("BTCUSDT", Side::Buy,
+                                           Owner::External, 100 * unit, unit);
+  Check(external_cross.fills.size() == 1 &&
+            external_cross.fills[0].maker_owner == Owner::External &&
+            external_cross.fills[0].taker_owner == Owner::External,
+        "external-only public trade was attributed to the account");
+
   std::cout << "matching engine tests passed\n";
 }

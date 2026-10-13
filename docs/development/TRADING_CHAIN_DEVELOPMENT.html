@@ -37,7 +37,7 @@
   <p>把交易链路设计落到跨模块契约、订单与资金状态、异步队列、协议适配、可靠恢复、文件任务和分阶段验收。</p>
   <ul class="facts"><li>首个验收 <b>1000 标的 · 30 秒已通过</b></li><li>交付路径 <b>P0–P5</b></li><li>文件范围 <b>首节点约 27 个新增或迁移文件</b></li><li>状态 <b>首轮已实现</b></li></ul>
 </header>
-<article><p class="lead">状态：P0–P2 的首轮核心链路已实现并完成 1000 标的、30 秒验收；私有事件协议夹具、完整查询和更细的队列水位指标仍需补齐。P3–P5 的可靠恢复、账户风控和实盘门禁尚未实现，<code>live</code> 仍禁止启动。实测结果和当前目录见<a href="TRADING_CHAIN_IMPLEMENTATION.md">首轮实施记录</a>。本文保留原开发契约与后续任务；架构与前后目录全图见<a href="TRADING_CHAIN_DESIGN.md">交易链路设计</a>。</p>
+<article><p class="lead">状态：P0–P2 的首轮核心链路已实现并完成 1000 标的、30 秒验收；私有事件协议夹具、完整查询和更细的队列水位指标仍需补齐。P3–P5 的可靠恢复、账户风控和实盘门禁尚未实现，<code>live</code> 仍禁止启动。实测结果和当前目录见<a href="TRADING_CHAIN_IMPLEMENTATION.md">首轮实施记录</a>。本文保留原开发契约与后续任务；架构与前后目录全图见<a href="../architecture/TRADING_CHAIN_DESIGN.md">交易链路设计</a>。</p>
 <h2 id="s1">1. 起点、目标和边界</h2>
 <div class="table"><table><thead><tr><th scope="col">项目</th><th scope="col">当前代码</th><th scope="col">目标代码</th></tr></thead><tbody><tr><td>账户归属</td><td><code>Shard</code> 各自持有 <code>PaperExchange</code>；配置拒绝账户复用</td><td><code>Runtime</code> 每个账户构建一个 <code>TradingAccount</code>，多个 Shard 引用同一账户</td></tr><tr><td>下单语义</td><td><code>Executor::Dispatch</code> 同步调用 <code>PaperExchange::Place/Cancel</code></td><td>Shard 提交意图；账户统一预留资金、分配 ID、异步发送；交易所回报决定最终状态</td></tr><tr><td>撤单换单</td><td><code>RunDecisionCycle</code> 撤单返回后立即再决策</td><td>撤单进入 <code>PendingCancel</code>；确认释放资金后通知所属 Shard 再决策</td></tr><tr><td>订单与资金</td><td>Paper 自己保存活动订单和余额；<code>OnAccountEvent</code> 主要写历史</td><td><code>OrderState</code> 和 <code>FundsState</code> 由账户串行更新；Paper 和外部交易所都发标准化回报</td></tr><tr><td>外部交易</td><td>只有公开行情连接，<code>live</code> 校验时被拒绝</td><td>一个账户复用交易 REST 连接和一条私有 WS；第一轮只连本机模拟交易所</td></tr><tr><td>历史和恢复</td><td><code>SqliteHistory::TryPush</code> 可产生缺口，不能做恢复依据</td><td>历史继续用于查询；实盘另有可靠 <code>OrderJournal</code>，重启先同步后开新单</td></tr></tbody></table></div>
 <p>第一轮不改策略报价公式和原始行情样本。<code>external_sim</code> 使用 Binance Spot 的交易请求及账户事件格式，模拟交易所保存独立账本。<code>live</code> 在第一轮仍拒绝启动。Paper v1 配置与回放继续可用。</p>
@@ -138,7 +138,7 @@
 <h2 id="s11">11. 开发时的检查清单</h2>
 <ol><li>编译 <code>//hquant/src:hquant_server</code>；运行现有 <code>//hquant/test:end_to_end</code>，作为每阶段回归基线。</li><li>每次移动中立类型后检查 Bazel 依赖方向：<code>trading_event</code> 不依赖 shard、sim 或 venue；TradingAccount 不包含 Binance 或 Paper 实现头。</li><li>每个会导致发送的路径都能指出唯一的账户级资金检查、队列接纳点和对应 client_order_id；每个释放预留的路径都能指出明确的交易所事实。</li><li>每个网络超时、私有流断线和日志失败分支都能说明账户状态、是否允许新单、是否仍可撤单／查询。</li><li>每条压测订单能从 <code>bench_seq</code>（若有）追到客户端意图、模拟交易所收包、私有回报、账户应用和 SQLite；无订单的行情只参与行情指标。</li></ol>
 <p>本文件是实施顺序和验收契约；后续若 Binance 官方字段或订阅方式变化，先更新协议夹具、适配器测试与模拟交易所，再更新本文对应接口，不让 Mock 协议单独漂移。</p></article>
-<footer>HTML 版根据 <a href="TRADING_CHAIN_DEVELOPMENT.md">TRADING_CHAIN_DEVELOPMENT.md</a> 生成。页面可离线阅读；内容以 Markdown 开发文档为准。另见 <a href="TRADING_CHAIN_DESIGN.html">架构设计</a>。</footer>
+<footer>HTML 版根据 <a href="TRADING_CHAIN_DEVELOPMENT.md">TRADING_CHAIN_DEVELOPMENT.md</a> 生成。页面可离线阅读；内容以 Markdown 开发文档为准。另见 <a href="../architecture/TRADING_CHAIN_DESIGN.html">架构设计</a>。</footer>
 </main>
 </div>
 <script>

@@ -230,7 +230,7 @@ footer.note { margin-top: 64px; font-size: 13px; color: var(--muted); border-top
   </nav>
   <main>
     <header class="masthead">
-      <div class="kicker">hummingbot/ · hquant/src · docs/PYTHON_VS_CPP.md</div>
+      <div class="kicker">hummingbot/ · hquant/src · docs/architecture/PYTHON_VS_CPP.md</div>
       <h1>Python hummingbot 与 hquant 对照</h1>
       <ul class="facts">
         <li>Python <b>Clock 每秒 tick</b></li>
@@ -422,7 +422,7 @@ absl::StatusOr&lt;StrategyDecision&gt; Decide(const BookView&amp; book,
 <p><strong>hquant</strong>：函数返回 <code>absl::Status</code> / <code>StatusOr</code>。撮合或决策返回错误时，<code>Shard::StopFromError</code> 停掉这个 Shard，不带着错误状态继续交易。</p>
 <h3 id="s6-5">历史和控制</h3>
 <div class="table"><table><thead><tr><th></th><th>Python</th><th>hquant</th></tr></thead><tbody><tr><td>历史</td><td>SQLAlchemy，<code>Order</code>、<code>TradeFill</code>、<code>MarketState</code> 等多张表，另写 CSV</td><td>一张 <code>history_records</code> 表，<code>kind</code> 区分 9 种记录；后台线程批量写；每个 Shard 序号连续</td></tr><tr><td>改参数</td><td>CLI 输入 <code>config bid_spread 0.2</code></td><td><code>set_strategy</code> 请求，带 <code>expected_version</code>，版本不符就拒绝</td></tr></tbody></table></div>
-    <footer class="note">由 docs/PYTHON_VS_CPP.md 生成；内容以 Markdown 版本为准。</footer>
+    <footer class="note">由 docs/architecture/PYTHON_VS_CPP.md 生成；内容以 Markdown 版本为准。</footer>
   </main>
 </div>
 <script>

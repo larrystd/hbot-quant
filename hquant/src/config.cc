@@ -414,6 +414,7 @@ absl::Status ValidateConfig(const AppConfig& config) {
     return Invalid("shards must contain one to 1000 entries");
   }
   std::set<uint16_t> ids;
+  std::set<std::pair<std::string, std::string>> account_symbols;
   std::set<std::string> accounts;
   bool demo = false;
   {
@@ -512,6 +513,9 @@ absl::Status ValidateConfig(const AppConfig& config) {
     if (shard.account_id.empty() || !accounts.contains(shard.account_id)) {
       return Invalid("shard references missing account");
     }
+    if (!account_symbols.emplace(shard.account_id, market.id.symbol).second) {
+      return Invalid("duplicate trading symbol within account");
+    }
     const auto account =
         std::find_if(config.accounts.begin(), config.accounts.end(),
                      [&](const AccountConfig& value) {
@@ -526,7 +530,118 @@ absl::Status ValidateConfig(const AppConfig& config) {
       }
     }
   }
+  if (auto allocations = ResolveShardAllocations(config); !allocations.ok()) {
+    return allocations.status();
+  }
   return absl::OkStatus();
+}
+
+absl::StatusOr<std::map<uint16_t, ShardAllocation>> ResolveShardAllocations(
+    const AppConfig& config) {
+  std::map<uint16_t, ShardAllocation> result;
+  for (const AccountConfig& account : config.accounts) {
+    std::vector<const ShardConfig*> members;
+    for (const ShardConfig& shard : config.shards) {
+      if (shard.account_id == account.id) {
+        members.push_back(&shard);
+        result.try_emplace(shard.id.value);
+      }
+    }
+    if (members.empty()) continue;
+
+    for (const auto& [asset, initial] : account.initial_balances_nanos) {
+      const auto hard = account.hard_limits_nanos.find(asset);
+      const uint64_t limit =
+          hard == account.hard_limits_nanos.end()
+              ? initial
+              : std::min(initial, hard->second);
+      bool market_asset = false;
+      for (const ShardConfig* shard : members) {
+        market_asset |= shard->market.base_asset == asset ||
+                        shard->market.quote_asset == asset;
+      }
+      std::vector<const ShardConfig*> automatic;
+      uint64_t explicit_total = 0;
+      for (const ShardConfig* shard : members) {
+        const auto configured = shard->asset_limits_nanos.find(asset);
+        if (configured != shard->asset_limits_nanos.end()) {
+          if (configured->second > limit - explicit_total) {
+            return Invalid("shard asset allocations exceed account limit: " +
+                           asset);
+          }
+          explicit_total += configured->second;
+          result.at(shard->id.value).assets_nanos[asset] = configured->second;
+        } else if (!market_asset || shard->market.base_asset == asset ||
+                   shard->market.quote_asset == asset) {
+          automatic.push_back(shard);
+        }
+      }
+      const uint64_t remaining = limit - explicit_total;
+      for (size_t i = 0; i < automatic.size(); ++i) {
+        result.at(automatic[i]->id.value).assets_nanos[asset] =
+            remaining / automatic.size() +
+            (i < remaining % automatic.size() ? 1 : 0);
+      }
+    }
+    for (const ShardConfig* shard : members) {
+      for (const auto& [asset, amount] : shard->asset_limits_nanos) {
+        (void)amount;
+        if (!account.initial_balances_nanos.contains(asset)) {
+          return Invalid("shard allocation uses unconfigured asset: " + asset);
+        }
+      }
+    }
+
+    const auto distribute = [&](const std::vector<const ShardConfig*>& group,
+                                uint64_t global_limit, bool active)
+        -> absl::Status {
+      uint64_t explicit_total = 0;
+      std::vector<const ShardConfig*> automatic;
+      for (const ShardConfig* shard : group) {
+        const auto configured = active ? shard->max_active_orders
+                                       : shard->max_open_value_per_quote_nanos;
+        if (configured) {
+          if (global_limit != 0 && *configured > global_limit - explicit_total)
+            return Invalid(active ? "shard active order limits exceed account"
+                                  : "shard quote limits exceed account");
+          if (*configured > std::numeric_limits<uint64_t>::max() -
+                                explicit_total)
+            return Invalid("shard risk allocation overflow");
+          explicit_total += *configured;
+          (active ? result.at(shard->id.value).max_active_orders
+                  : result.at(shard->id.value)
+                        .max_open_value_per_quote_nanos) = *configured;
+        } else {
+          automatic.push_back(shard);
+        }
+      }
+      if (global_limit == 0) return absl::OkStatus();
+      const uint64_t remaining = global_limit - explicit_total;
+      for (size_t i = 0; i < automatic.size(); ++i) {
+        (active ? result.at(automatic[i]->id.value).max_active_orders
+                : result.at(automatic[i]->id.value)
+                      .max_open_value_per_quote_nanos) =
+            remaining / automatic.size() +
+            (i < remaining % automatic.size() ? 1 : 0);
+      }
+      return absl::OkStatus();
+    };
+    if (auto status = distribute(members, account.risk.max_active_orders, true);
+        !status.ok())
+      return status;
+    std::map<std::string, std::vector<const ShardConfig*>> quote_groups;
+    for (const ShardConfig* shard : members) {
+      quote_groups[shard->market.quote_asset].push_back(shard);
+    }
+    for (const auto& [quote, group] : quote_groups) {
+      (void)quote;
+      if (auto status = distribute(
+              group, account.risk.max_open_value_per_quote_nanos, false);
+          !status.ok())
+        return status;
+    }
+  }
+  return result;
 }
 
 absl::StatusOr<AppConfig> ParseConfig(std::string_view yaml_text,
@@ -566,7 +681,8 @@ absl::StatusOr<AppConfig> ParseConfig(std::string_view yaml_text,
     }
     for (const YAML::Node& node : shards_node) {
       if (auto status =
-              CheckKeys(node, {"id", "market", "strategy", "account_id"});
+              CheckKeys(node, {"id", "market", "strategy", "account_id",
+                               "allocation"});
           !status.ok())
         return status;
       auto id = Unsigned(node, "id");
@@ -588,6 +704,30 @@ absl::StatusOr<AppConfig> ParseConfig(std::string_view yaml_text,
       auto account_id = Scalar(node, "account_id");
       if (!account_id.ok()) return account_id.status();
       shard.account_id = *account_id;
+      if (node["allocation"]) {
+        auto allocation = MapField(node, "allocation");
+        if (!allocation.ok()) return allocation.status();
+        if (auto status = CheckKeys(
+                *allocation,
+                {"assets", "max_active_orders", "max_open_value_per_quote"});
+            !status.ok())
+          return status;
+        if ((*allocation)["assets"]) {
+          auto assets = FixedMap(*allocation, "assets");
+          if (!assets.ok()) return assets.status();
+          shard.asset_limits_nanos = std::move(*assets);
+        }
+        if ((*allocation)["max_active_orders"]) {
+          auto value = Unsigned(*allocation, "max_active_orders");
+          if (!value.ok()) return value.status();
+          shard.max_active_orders = *value;
+        }
+        if ((*allocation)["max_open_value_per_quote"]) {
+          auto value = Fixed(*allocation, "max_open_value_per_quote");
+          if (!value.ok()) return value.status();
+          shard.max_open_value_per_quote_nanos = *value;
+        }
+      }
       config.shards.push_back(std::move(shard));
     }
     if (auto status = ValidateConfig(config); !status.ok()) return status;

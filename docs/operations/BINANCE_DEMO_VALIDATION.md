@@ -6,8 +6,8 @@ Binance 官方要求使用同一套 Spot API 文档并替换为 Demo 域名，�
 
 ## 配置文件
 
-- [服务配置](../hquant/examples/binance_demo.yaml)：默认 `max_submissions_per_run: 0`，只读。交易请求限为每分钟 200 权重、每 10 秒 1 次挂单；程序拒绝更高值。公开行情使用 Demo WS，深度快照只取一个标的、100 档且整次运行最多请求三次。
-- [密钥模板](../hquant/examples/binance_demo_credentials.yaml.example)：凭据放在被 `.gitignore` 排除的 `hquant/local/binance_demo_credentials.yaml`。程序要求普通文件且只有文件所有者有访问权限；不会将密钥写到日志。当前测试文件已经填好，权限为 `0600`。测试后宜轮换此前在聊天中出现过的密钥。
+- [服务配置](../../hquant/examples/binance_demo.yaml)：默认 `max_submissions_per_run: 0`，只读。交易请求限为每分钟 200 权重、每 10 秒 1 次挂单；程序拒绝更高值。公开行情使用 Demo WS，深度快照只取一个标的、100 档且整次运行最多请求三次。
+- [密钥模板](../../hquant/examples/binance_demo_credentials.yaml.example)：凭据放在被 `.gitignore` 排除的 `hquant/local/binance_demo_credentials.yaml`。程序要求普通文件且只有文件所有者有访问权限；不会将密钥写到日志。当前测试文件已经填好，权限为 `0600`。测试后宜轮换此前在聊天中出现过的密钥。
 - 新状态目录的 `initial_balances` 必须填写该 Demo 账户**所有非零资产**的当前总额（`free + locked`），本次只读账户还包含 USDC。服务启动时逐项对账；不一致会保持暂停。重启已有状态目录时必须保留它首次启动时的原始余额基线：可靠日志会重放其后的成交，再次把当前余额写作基线会重复计算。`hard_limits` 是策略可用额度，不等于账户总余额。
 - `demo_preflight.py` 的 `configured_balances_match` 只适合**新状态目录的入场检查**。已有成交的状态目录应保留原始基线，用独立账户查询和服务内恢复对账确认当前余额；不要为了让预检显示匹配而修改旧目录的基线。
 
@@ -31,7 +31,9 @@ chmod 600 hquant/local/binance_demo_credentials.yaml
    ```
 
    先观察 `status.accounts`：私有连接成功、同步结束、余额和交易规则匹配。只读模式下 `ready=false`、`error="demo read-only validation"` 是预期门禁；不会发挂单。一个市场连接和一个私有连接足够；不要用 1000 标的压力配置访问 Demo。
+   可用 [demo_readonly_service.py](../../hquant/test/demo_readonly_service.py) 在新状态目录自动核对只读状态与两份 SQLite。
 4. 读写验证前先在 `0` 的配置下再次运行私有预检；通过后才将 `max_submissions_per_run` 改为 `1`，使用**另一个空状态目录**启动。第一笔限价单保持未成交：核对挂单响应、`executionReport: NEW`、`GET /api/v3/order`，再通过 `cancel_all` 触发该订单的 `DELETE /api/v3/order`，核对撤单响应、`executionReport: CANCELED`、未结订单、余额和 SQLite。若订单自行成交，按实际终态核对，不能把未发生的撤单标为通过。完成后恢复 `max_submissions_per_run: 0`。
+   [demo_single_order_check.py](../../hquant/test/demo_single_order_check.py) 可从只读配置在新状态目录临时生成一笔上限配置，清场后独立查单、查成交、查余额，并删除临时配置。
 5. 成交路径单独验收：使用新的状态目录和最多一笔小额订单，等待真实 Demo 撮合后核对 `executionReport: TRADE`、`GET /api/v3/myTrades` 非空、资金变化和 SQLite。当前策略只在中间价两侧挂单，不能保证自然成交；2026-10-11 的 V2 测试已取得一笔真实 Demo 成交样本。
 
 `--market --private` 同时使用时，预检最多五次 REST 请求、一条公开 WS 和一次私有 WS 订阅；服务账户同步每轮依次查询单标的规则、全账户未结订单和余额，每 60 秒才周期重查。行情快照请求另设整次运行最多三次的门禁。预检与服务分别计预算，连续运行时至少间隔一分钟。任何 429/418、规则差异、余额差异、连接失败或未知订单都停止下单并人工核对，不自动扩大请求量。
@@ -40,17 +42,17 @@ chmod 600 hquant/local/binance_demo_credentials.yaml
 
 | 接口 | 用途 | Demo 实测状态 |
 | --- | --- | --- |
-| `GET /api/v3/time` | 预检本机时钟；服务本身不调用 | 已通过，2026-10-11 |
-| `GET /api/v3/exchangeInfo?symbol=BTCUSDT` | 读取交易规则 | 已通过，2026-10-11 |
-| `GET /api/v3/depth?symbol=BTCUSDT&limit=100` | 建立本地订单簿快照 | 已通过公开探测和服务内同步，2026-10-11 |
-| `wss://demo-stream.binance.com/stream?streams=btcusdt@depth/btcusdt@trade` | 接收深度增量和逐笔交易 | 已通过公开探测和服务内处理，2026-10-11 |
-| `GET /api/v3/account` | 同步资金 | 已通过签名预检、服务内同步、撤单后及两笔 Demo 成交后余额对账，2026-10-11 |
-| `GET /api/v3/openOrders` | 同步全账户未结订单 | 已通过签名预检、服务内同步和撤单后空订单核对，2026-10-11 |
-| `wss://demo-ws-api.binance.com/ws-api/v3` 的 `userDataStream.subscribe.signature` | 订阅 `executionReport`、`outboundAccountPosition`、`balanceUpdate` 等回报 | 已接收并应用真实 Demo 挂单、撤单与两笔成交的 `TRADE` 回报，2026-10-11 |
-| `POST /api/v3/order` | 限价挂单 | 四笔小额 Demo 限价单已接受，其中两笔成交，2026-10-11 |
-| `GET /api/v3/order` | 按 `origClientOrderId` 对账订单 | 已查询 `CANCELED` 和 V2 的 `FILLED`，订单 ID 匹配，2026-10-11 |
-| `DELETE /api/v3/order` | 按 `origClientOrderId` 撤单 | 两笔未成交 Demo 订单均已撤销，2026-10-11 |
-| `GET /api/v3/myTrades` | 按 `orderId` 对账成交 | 新版本成交订单返回一笔，ID、数量、价格、手续费及成交时间与可靠日志和历史一致，2026-10-11 |
+| `GET /api/v3/time` | 预检本机时钟；服务本身不调用 | 2026-10-13 预检通过，时钟偏差 157 ms |
+| `GET /api/v3/exchangeInfo?symbol=BTCUSDT` | 读取交易规则 | 2026-10-13 预检通过 |
+| `GET /api/v3/depth?symbol=BTCUSDT&limit=100` | 建立本地订单簿快照 | 2026-10-13 服务内盘口同步通过 |
+| `wss://demo-stream.binance.com/stream?streams=btcusdt@depth/btcusdt@trade` | 接收深度增量和逐笔交易 | 2026-10-13 服务内处理公开 WS 124 帧；2026-10-12 公开成交已单独验证 |
+| `GET /api/v3/account` | 同步资金 | 2026-10-13 撤单后独立查询与本地余额逐资产一致；2026-10-12 成交后对账也通过 |
+| `GET /api/v3/openOrders` | 同步全账户未结订单 | 2026-10-13 撤单后独立查询为空 |
+| `wss://demo-ws-api.binance.com/ws-api/v3` 的 `userDataStream.subscribe.signature` | 订阅 `executionReport`、`outboundAccountPosition`、`balanceUpdate` 等回报 | 2026-10-13 `NEW`、`CANCELED` 已接收并入账；2026-10-12 `TRADE/FILLED` 也通过 |
+| `POST /api/v3/order` | 限价挂单 | 2026-10-13 一笔小额虚拟资金订单获接受；此前成交分支也通过 |
+| `GET /api/v3/order` | 按 `origClientOrderId` 对账订单 | 2026-10-13 独立查询为 `CANCELED`，订单 ID 匹配 |
+| `DELETE /api/v3/order` | 按 `origClientOrderId` 撤单 | 2026-10-13 `cancel_all` 逐笔撤单成功 |
+| `GET /api/v3/myTrades` | 按 `orderId` 对账成交 | 2026-10-13 撤单订单返回空；2026-10-12 成交 ID、数量和手续费核对通过 |
 
 项目没有调用 `POST /api/v3/order/test` 或 `DELETE /api/v3/openOrders`。本地 Control 的 `cancel_all` 会对已知订单逐笔调用 `DELETE /api/v3/order`。公开接口探测只核对网络、响应结构和配置规则，不能替代服务内解析、状态更新和 SQLite 对账。
 
@@ -74,9 +76,35 @@ V2 修改后再次使用只读配置运行 `demo_preflight.py --private`：2 次
 
 再间隔一分钟，用恢复为 `max_submissions_per_run: 0` 的**原配置余额基线**在同一订单状态目录重启 C++ 服务：私有流连接且全账户同步结束，BTC `0.00019980`、USDT `4983.38227500`、USDC `5000.00000000` 与独立查询一致；活动／未知订单 0。正常停机退出码 0，可靠日志从 1724 续到 3436 条且序号连续，历史缺口 0，原挂单与成交各只有一条，没有新订单。结果在 `restart_check.json`。这一轮的新版本 C++ Demo 正常成交、私有回报、交易查询、资金归因、两份 SQLite 和重启回放已闭合。
 
+2026-10-12 正确性补测第一次只读预检：使用旧 `binance_demo_run.yaml` 执行 `demo_preflight.py --market --private`，完成 5 次 REST（其中 2 次签名 GET）、公开与私有 WS 各 1 条，订单 0；规则、时钟（偏差 276 ms）、深度快照及公开 `depthUpdate`/`trade`、私有订阅均通过，未结订单 0。查到账户 BTC `0.00019980`、USDT `4983.38227500`、USDC `5000.00000000`；旧配置仍是上次成交前的 BTC `0.00009990`、USDT `4991.69867500`，因此余额基线校验按设计失败。未修改旧状态目录的基线；下一步用独立新配置和新状态目录复检。
+
+2026-10-12 第二次只读预检：在忽略目录中新建 `binance_demo_correctness_20261012.yaml`，以当前三项资产总额作为**新状态目录**的基线，`max_submissions_per_run: 0`。`demo_preflight.py --private` 完成 4 次 REST（2 次签名 GET）和 1 次私有 WS 订阅，零订单、零未结订单；规则与余额均匹配，退出码 0。旧配置和旧状态目录基线未改。
+
+2026-10-12 首次 C++ 只读服务检查：新状态目录 `/private/tmp/hquant-demo-correctness-20261012-readonly`；服务完成私有连接、账户同步及盘口同步，并正常退出，日志未见交易请求。验收脚本在服务退出后错误地要求普通 Demo 运行生成压测专用的 `probe.json`，因此脚本退出 1；这是验收脚本错误，不计作服务通过。已移除该要求，待用另一个新状态目录复跑。
+
+2026-10-12 C++ 只读复跑通过：使用 [只读验收脚本](../../hquant/test/demo_readonly_service.py)和新状态目录 `/private/tmp/hquant-demo-correctness-20261012-readonly-b`。私有连接成功、盘口 `live`（深度 4 条、公开成交 33 条），账户同步完成，`ready=false` 且只读门禁有效；活动／未知订单 0，BTC、USDT、USDC 三项余额与独立签名预检一致。服务退出码 0；`history.sqlite` 无缺口或订单事件，`order_journal.sqlite` 有 1712 条连续记录且无订单意图，两库 `integrity_check=ok`；实际下单 0。机器可读结果见该目录 `result.json`。
+
+2026-10-12 单笔订单前再次执行只读私有预检时，Demo `/api/v3/account` 返回 HTTP 400；脚本未重试，也未启动下单服务。当前无法将这次预检计为通过；已给预检脚本增加只打印 Binance 错误码的诊断，待间隔后复查。
+
+间隔后再次执行同一只读预检：4 次 REST（其中 2 次签名 GET）、1 次私有 WS 订阅，余额与配置匹配，未结订单 0，退出码 0；上一轮 HTTP 400 未复现，原因未确认。该次仍未发送订单。
+
+随后执行一次单笔小额 Demo 验收，状态目录 `/private/tmp/hquant-demo-correctness-20261012-order`。C++ 服务只发送 1 笔 BTCUSDT 订单 `hqcbc59c31b54eeea3648eef34ae3d0219`，Demo 订单 ID `72624963969`；私有 `NEW` 和 `CANCELED` 均写入本地历史，未成交。验收脚本的 `cancel_all` 控制请求遗漏必填的 `account_id/operator/reason`，因而脚本退出 1；服务停止清场时成功撤单并正常退出。两份 SQLite `integrity_check=ok`，本地各有 1 次提交和撤单；尚需独立 Demo 查单、查余额后才能判为通过。控制请求脚本已修正。
+
+对这笔订单的首次独立查询中，`GET /api/v3/order` 和 `GET /api/v3/myTrades` 返回后，`GET /api/v3/openOrders` 返回 HTTP 400、Binance 错误码 `-1021`，故未完成全账户对账；没有重试或发送新订单。独立只读查询的签名有效期已从 5 秒增至 10 秒（8 秒网络超时），待间隔后完成剩余核对。
+
+间隔后对同一订单完成四次独立签名 GET（查单、成交、全账户未结订单、余额）：订单 `CANCELED`，`myTrades` 为空，未结订单 0；BTC `0.00019980`、USDT `4983.38227500`、USDC `5000.00000000` 的 `free/locked/total` 与 `history.sqlite` 最后余额事件逐项相等，三项锁定额均为 0。`history.sqlite` 与 `order_journal.sqlite` 各有 1726 条连续记录、`integrity_check=ok`，订单只提交一次、撤单一次、无成交；结果见 `/private/tmp/hquant-demo-correctness-20261012-order/independent_check.json`，`valid=true`。整个补测仅新增这一笔 Demo 虚拟资金订单，且已撤销。
+
+真实成交分支补测前，用独立的零笔配置 `binance_demo_correctness_fill_20261012.yaml`（报价价差 `0`、刷新 120 秒；余额基线仍是上次查得的三项资产）执行只读私有预检：4 次 REST（2 次签名 GET）、1 次私有 WS 订阅，余额匹配，未结订单 0，退出码 0。该配置本身不下单；后续脚本只会在新状态目录临时启用一笔上限。
+
+2026-10-12 真实成交补测通过：新状态目录 `/private/tmp/hquant-demo-correctness-20261012-fill` 仅发一笔 BTCUSDT 买单 `hq52d4d13c13d23c7d04ea3584a01d75dd`，Demo 订单 ID `72626673505`。私有流收到 `NEW` 和 `TRADE/FILLED`；成交 ID `321511253`，`0.00010000 BTC × 82739.22 USDT`，手续费 `0.00000010 BTC`。验收脚本的 `result.json` 为 `valid=true`：订单 1、成交 1、撤单 0、未结／未知订单 0；两份 SQLite 各 1725 条记录、序号连续且完整、历史缺口 0。间隔后 4 次独立签名 GET 核对查单、成交、全账户未结订单及余额，`independent_check.json` 也为 `valid=true`；最终 BTC `0.00029970`、USDT `4975.10835300`、USDC `5000.00000000`，全部可用且锁定为 0，与本地逐资产相等。测试仅使用 Demo 虚拟资金。
+
+同一状态目录以原始余额基线、`max_submissions_per_run: 0` 只读重启后，私有连接和盘口恢复，余额仍与独立查询一致；活动／未知订单 0，没有再次发单或重复记成交。前次 `cancel_all` 留下的持久状态显示 `manually paused`；这不影响零笔门禁和对账。重启后的 `order_journal.sqlite` 共 5149 条连续记录，挂单意图与成交各仍只有 1 条；`history.sqlite` 三次运行分别有 1725、1712、1712 条连续记录，历史缺口 0，两库完整性检查通过。结果见 `restart_check.json`。
+
+2026-10-13 Demo 客户端延迟采样：旧只读配置的余额基线仍是上次成交前数值，第一次私有预检按设计报不匹配，**未启动下单服务**。新建权限 `0600` 的 `hquant/local/binance_demo_latency_20261013.yaml`，以 BTC `0.00029970`、USDT `4975.10835300`、USDC `5000.00000000` 为新状态目录基线；私有预检通过：4 次 REST（2 次签名 GET）、1 次私有 WS 订阅、未结订单 0、挂单 0。间隔后运行 Release C++ 服务，状态目录 `/private/tmp/hquant-demo-latency-20261013-a1`：服务内交易 REST 6 次（查询 4、挂单 1、撤单 1），另有公开盘口快照；独立对账再做 4 次签名 GET。唯一订单 `hqcd09873e0b6f5b7e6b22b282ac4b3e1b`、交易所订单 ID `72750884979`，收到 `NEW → CANCELED`，成交 0，未结／未知订单 0；两库完整且序号连续，`result.json` 为 `valid=true`。取消是修正后的 `cancel_all` 控制请求触发，本次该控制链路通过。探针 `probe.json`、`rest_client_trace.csv`、`private_client_trace.csv` 和 [逐段结果](/private/tmp/hquant-demo-latency-20261013-a1/latency.json)记录客户端单笔耗时：下单 REST 入队→完整 HTTP 响应 212.051 ms，订单请求→私有 `NEW` 本地记录 212.680 ms；服务端收单时间不可见。订单观察 2 秒后撤销，私有 `CANCELED` 时间不代表成交速度；本轮没有新增 `FILLED` 延迟样本。
+
 ## 尚未完成的验收
 
-V2 旧版本的一笔 Demo 成交与重启结果保存在其原状态目录的 `restart_validation_result.json`。本轮新版本的单笔成交、独立查询和同目录只读重启已经通过。当前 Demo 配置均恢复为零笔挂单；`binance_demo_run.yaml` 和本轮的 `binance_demo_acceptance.yaml` 纳入 USDC，其他旧配置再次使用前要按状态目录的原始基线和全账户非零资产核对。1000 标的、30 秒场景只对本机模拟交易所运行。
+V2 旧版本的一笔 Demo 成交与重启结果保存在其原状态目录的 `restart_validation_result.json`。2026-10-12 的单笔撤单、单笔成交、独立查询和成交后同目录只读重启均已通过。当前 Demo 补测配置已恢复为零笔挂单；旧配置再次使用前要按状态目录的原始基线和全账户非零资产核对。1000 标的、30 秒场景只对本机模拟交易所运行。
 
 以下表格是**尚未完成的验收清单**，不是已有 Demo 结果。本机模拟交易所覆盖了部分故障，但本机通过不能替代 Demo 验证。状态只在取得可复核的请求、回报、账户和 SQLite 证据后改为通过；无法在 Demo 可控复现的场景保持“Demo 未验证”，不能用一次正常运行推定通过。
 

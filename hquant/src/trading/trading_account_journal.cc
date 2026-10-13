@@ -14,20 +14,25 @@ bool TradingAccount::Persist(JournalEntry entry,
     done(absl::OkStatus());
     return true;
   }
+  std::lock_guard journal_lock(journal_mutex_);
   if (journal_sequence_ ==
       static_cast<uint64_t>(std::numeric_limits<int64_t>::max())) {
     return false;
   }
   entry.sequence = ++journal_sequence_;
-  if (journal_->Append(config_.id, std::move(entry), io_,
-                       [this, done = std::move(done)](absl::Status status) {
-                         --pending_journal_;
-                         done(std::move(status));
-                       })) {
-    ++pending_journal_;
-    journal_pending_peak_ = std::max(journal_pending_peak_, pending_journal_);
+  const size_t pending = pending_journal_.fetch_add(1) + 1;
+  if (journal_->Append(
+          config_.id, std::move(entry), io_,
+          GuardState([this, done = std::move(done)](absl::Status status) {
+            --pending_journal_;
+            done(std::move(status));
+          }))) {
+    size_t peak = journal_pending_peak_.load();
+    while (pending > peak &&
+           !journal_pending_peak_.compare_exchange_weak(peak, pending)) {}
     return true;
   }
+  --pending_journal_;
   ++journal_rejections_;
   --journal_sequence_;
   return false;
@@ -49,6 +54,7 @@ void TradingAccount::PersistSubmitResponse(ClientOrderId id,
                 std::string(status.message()));
           return;
         }
+        NotifyResponse(id, false, response);
         SubmitResponse(id, std::move(response));
       })) {
     Pause("submit response journal queue unavailable");
@@ -72,6 +78,7 @@ void TradingAccount::PersistCancelResponse(ClientOrderId id,
                 std::string(status.message()));
           return;
         }
+        NotifyResponse(id, true, response);
         CancelResponse(id, std::move(response));
       })) {
     Pause("cancel response journal queue unavailable");

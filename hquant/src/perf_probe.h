@@ -132,12 +132,6 @@ struct TradePerfSnapshot {
     uint64_t finished_ns = 0;
     size_t shard_count = 0;
   };
-  struct AccountSubmitTrace {
-    std::string client_id;
-    uint64_t requested_ns = 0;
-    uint64_t started_ns = 0;
-    uint64_t finished_ns = 0;
-  };
   struct RestRequestTrace {
     std::string client_id;
     bool cancel = false;
@@ -148,6 +142,10 @@ struct TradePerfSnapshot {
     uint64_t posted_ns = 0;
     size_t queued_before_post = 0;
     size_t active_lanes_on_post = 0;
+    uint64_t first_write_call_ns = 0;
+    uint64_t first_write_return_ns = 0;
+    uint32_t write_calls = 0;
+    uint64_t response_done_ns = 0;
   };
   struct PrivateClientTrace {
     uint64_t frame_seq = 0;
@@ -166,7 +164,6 @@ struct TradePerfSnapshot {
     uint64_t callback_done_ns = 0;
     uint64_t frame_bytes = 0;
   };
-  std::vector<AccountSubmitTrace> account_submit_trace;
   std::vector<SharedViewFlushTrace> shared_view_flush_trace;
   std::vector<RestRequestTrace> rest_request_trace;
   std::vector<PrivateClientTrace> private_client_trace;
@@ -191,11 +188,6 @@ class TradePerf {
   void RecordSharedViewFlush(TradePerfSnapshot::SharedViewFlushTrace trace) {
     std::lock_guard lock(mutex_);
     samples_.shared_view_flush_trace.push_back(trace);
-  }
-
-  void RecordAccountSubmit(TradePerfSnapshot::AccountSubmitTrace trace) {
-    std::lock_guard lock(mutex_);
-    samples_.account_submit_trace.push_back(std::move(trace));
   }
 
   void RecordRestRequest(TradePerfSnapshot::RestRequestTrace trace) {

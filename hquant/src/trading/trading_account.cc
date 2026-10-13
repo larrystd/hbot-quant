@@ -18,11 +18,14 @@
 #include "hquant/base/log.h"
 #include "hquant/trading/account_sync.h"
 #include "hquant/trading/account_view_publisher.h"
-#include "hquant/trading/client_order_id.h"
-#include "hquant/trading/risk_limits.h"
 
 namespace hquant::v1 {
 namespace {
+
+const bool kTraceSubmitStages = [] {
+  const char* value = std::getenv("HQUANT_SUBMIT_STAGE_TRACE");
+  return value != nullptr && value[0] == '1' && value[1] == '\0';
+}();
 
 JournalEntry JournalForEvent(const AccountEvent& event) {
   JournalEntry entry;
@@ -102,9 +105,14 @@ TradingAccount::TradingAccount(boost::asio::io_context& io,
           [this](const std::string& asset) { return Budget(asset); }},
       shards);
   sync_ = std::make_unique<AccountSync>(AccountSync::Inputs{
-      io_, config_, markets_, venue_rules_, funds_, order_manager_, journal_,
+      io_, state_mutex_, config_, markets_, venue_rules_, funds_, order_manager_,
+      journal_,
       [this] { return port_.get(); }, order_query_timer_, private_connected_,
-      manual_paused_, quiescing_, ready_, error_,
+      manual_paused_, quiescing_, ready_,
+      [this] { DisableAdmission(); },
+      [this] { EnableAdmission(); },
+      [this] { return AccountQueueEmpty(); },
+      [this] { return pending_private_events_.load(); }, error_,
       [this](AccountEvent event, bool from_venue,
              std::function<void(absl::Status)> done) {
         return PersistAndApply(std::move(event), from_venue, std::move(done));
@@ -123,8 +131,299 @@ void TradingAccount::SetPort(std::unique_ptr<TradePort> port) {
   port_ = std::move(port);
 }
 
+TradePort* TradingAccount::AddShardPort(std::unique_ptr<TradePort> port) {
+  TradePort* result = port.get();
+  extra_ports_.push_back(std::move(port));
+  return result;
+}
+
+void TradingAccount::SetShardPort(ShardId shard, TradePort* port) {
+  shard_ports_[shard.value] = port;
+}
+
 void TradingAccount::SetViewSink(ShardId shard, ViewSink sink) {
   views_->SetSink(shard, std::move(sink));
+}
+
+void TradingAccount::SetTradeSink(ShardId shard, TradeSink sink) {
+  trade_sinks_[shard.value] = std::move(sink);
+}
+
+bool TradingAccount::SubmitFromShard(const TrackedOrder& order,
+                                     std::string asset,
+                                     uint64_t amount_nanos,
+                                     uint64_t view_revision) {
+  const bool trace_submit = trade_perf_ != nullptr && kTraceSubmitStages;
+  const uint64_t entered_ns = trace_submit ? BenchClockNowNs() : 0;
+  std::shared_lock admission_lock(admission_gate_mutex_);
+  if (order.shard.value >= kMaxShards) return false;
+  TradePort* const port = shard_ports_[order.shard.value]
+                              ? shard_ports_[order.shard.value]
+                              : port_.get();
+  const auto market_it = markets_.find(order.shard.value);
+  if (!AdmissionEnabled(view_revision) || !port || !journal_ ||
+      market_it == markets_.end() || market_it->second.id != order.market)
+    return false;
+  if (config_.mode == TradingMode::OnlineSim) {
+    uint64_t submissions = demo_submissions_.load();
+    do {
+      if (submissions >= config_.max_submissions_per_run) return false;
+    } while (!demo_submissions_.compare_exchange_weak(submissions,
+                                                       submissions + 1));
+  }
+  const uint64_t checked_ns = trace_submit ? BenchClockNowNs() : 0;
+  const ClientOrderId id = order.client_order_id;
+  const bool mirror_queued = TryEnqueue([this, order, asset, amount_nanos] {
+        if (auto status = funds_.ReserveAllocated(order.client_order_id, asset,
+                                                  amount_nanos);
+            !status.ok()) {
+          Pause("account mirror reservation failed: " +
+                std::string(status.message()));
+          return;
+        }
+        if (auto status = order_manager_.Begin(order); !status.ok()) {
+          (void)funds_.Release(order.client_order_id);
+          Pause("account mirror order failed: " +
+                std::string(status.message()));
+          return;
+        }
+        AccountHistoryRecord command;
+        command.shard = order.shard;
+        command.symbol = order.market.symbol;
+        command.kind = HistoryKind::SubmitCommand;
+        command.client_order_id = order.client_order_id.value;
+        command.source_bench_seq = order.source_bench_seq;
+        command.price_nanos = order.price_nanos;
+        command.quantity_nanos = order.quantity_nanos;
+        command.remaining_nanos = order.quantity_nanos;
+        Record(std::move(command));
+        MarkAssetDirty(asset);
+        views_->MarkShardDirty(order.shard);
+        FlushViews();
+      });
+  const uint64_t mirror_queued_ns = trace_submit ? BenchClockNowNs() : 0;
+  if (!mirror_queued) return false;
+
+  const auto abort_mirror = [this, &order, &asset] {
+    auto abort = [this, id = order.client_order_id, shard = order.shard,
+                  market = order.market, source = order.source_bench_seq,
+                  asset] {
+      if (order_manager_.Find(id)) {
+        (void)order_manager_.AbortSubmit(id);
+        (void)funds_.Release(id);
+        AccountHistoryRecord rejected;
+        rejected.shard = shard;
+        rejected.symbol = market.symbol;
+        rejected.kind = HistoryKind::LocalRejected;
+        rejected.client_order_id = id.value;
+        rejected.source_bench_seq = source;
+        rejected.message = "trading send queue unavailable";
+        Record(std::move(rejected));
+        MarkAssetDirty(asset);
+        views_->MarkShardDirty(shard);
+        FlushViews();
+      }
+    };
+    if (!TryEnqueue(abort)) boost::asio::post(io_, GuardState(abort));
+  };
+  JournalEntry intent;
+  intent.kind = JournalKind::SubmitIntent;
+  intent.client_id = id.value;
+  intent.symbol = order.market.symbol;
+  intent.asset = asset;
+  intent.local_id = order.local_order_id.value;
+  intent.shard = order.shard.value;
+  intent.side = order.side == Side::Buy ? 0 : 1;
+  intent.price = order.price_nanos;
+  intent.quantity = order.quantity_nanos;
+  intent.amount = amount_nanos;
+  intent.source_bench_seq = order.source_bench_seq;
+  const bool intent_queued = Persist(std::move(intent), [this, id](absl::Status status) {
+        if (status.ok()) return;
+        Pause("submit intent journal failed: " +
+              std::string(status.message()));
+        if (const TrackedOrder* order = order_manager_.Find(id);
+            order && order->status == OrderStatus::PendingSubmit) {
+          (void)order_manager_.MarkSubmitUnknown(id);
+          ScheduleOrderQuery();
+        }
+      });
+  const uint64_t intent_queued_ns = trace_submit ? BenchClockNowNs() : 0;
+  if (!intent_queued) {
+    abort_mirror();
+    return false;
+  }
+  const bool queued = port->Submit(
+      SubmitCommand{order.market, id,
+                    LimitOrderRequest{order.side, order.price_nanos,
+                                      order.quantity_nanos}},
+      [this, id](TradeResponse response) {
+        if (!TryEnqueue([this, id, response = std::move(response)]() mutable {
+              PersistSubmitResponse(id, std::move(response));
+            })) {
+          boost::asio::post(io_, GuardState([this] {
+            Pause("submit response queue unavailable");
+          }));
+        }
+      },
+      [this, id] {
+        if (!TryEnqueue([this, id] {
+              OnWriting(id, false);
+              NotifyWriting(id, false);
+            })) {
+          boost::asio::post(io_, GuardState([this] {
+            Pause("submit write callback queue unavailable");
+          }));
+        }
+      });
+  const uint64_t rest_returned_ns = trace_submit ? BenchClockNowNs() : 0;
+  if (!queued) {
+    JournalEntry abort;
+    abort.kind = JournalKind::SubmitAbort;
+    abort.client_id = id.value;
+    if (!Persist(std::move(abort), [this](absl::Status status) {
+          if (!status.ok()) Pause("submit abort journal failed");
+        }))
+      boost::asio::post(io_, GuardState([this] {
+        Pause("submit abort journal queue unavailable");
+      }));
+    abort_mirror();
+  }
+  if (trace_submit && queued) {
+    LOG_INFO(Logger(),
+             "submit_stage_trace client_id={} bench_seq={} check_ns={} "
+             "mirror_enqueue_ns={} intent_enqueue_ns={} rest_submit_ns={} "
+             "total_ns={}",
+             id.value, order.source_bench_seq, checked_ns - entered_ns,
+             mirror_queued_ns - checked_ns,
+             intent_queued_ns - mirror_queued_ns,
+             rest_returned_ns - intent_queued_ns,
+             rest_returned_ns - entered_ns);
+  }
+  return queued;
+}
+
+bool TradingAccount::CancelFromShard(ShardId shard, CancelCommand command,
+                                     uint64_t source_bench_seq,
+                                     uint64_t requested_ms) {
+  if (shard.value >= kMaxShards) return false;
+  TradePort* const port = shard_ports_[shard.value]
+                              ? shard_ports_[shard.value]
+                              : port_.get();
+  if (!port || !journal_) return false;
+  const ClientOrderId id = command.client_order_id;
+  if (!TryEnqueue([this, id, source_bench_seq, requested_ms] {
+        if (auto status = order_manager_.BeginCancel(
+                id, source_bench_seq, requested_ms);
+            !status.ok()) {
+          Pause("account mirror cancel failed: " +
+                std::string(status.message()));
+          return;
+        }
+        const TrackedOrder* order = order_manager_.Find(id);
+        AccountHistoryRecord history;
+        history.shard = order->shard;
+        history.symbol = order->market.symbol;
+        history.kind = HistoryKind::CancelCommand;
+        history.client_order_id = id.value;
+        history.exchange_order_id = order->exchange_order_id.value;
+        history.source_bench_seq = source_bench_seq;
+        history.remaining_nanos = order->Remaining();
+        Record(std::move(history));
+        views_->MarkShardDirty(order->shard);
+        FlushViews();
+      }))
+    return false;
+  const auto abort_mirror = [this, id, shard] {
+    auto abort = [this, id, shard] {
+      if (const TrackedOrder* order = order_manager_.Find(id);
+          order && order->cancel == CancelPhase::Pending) {
+        (void)order_manager_.AbortCancel(id);
+        views_->MarkShardDirty(shard);
+        FlushViews();
+      }
+    };
+    if (!TryEnqueue(abort)) boost::asio::post(io_, GuardState(abort));
+  };
+  JournalEntry intent;
+  intent.kind = JournalKind::CancelIntent;
+  intent.client_id = id.value;
+  intent.source_bench_seq = source_bench_seq;
+  intent.transaction_ms = requested_ms;
+  if (!Persist(std::move(intent), [this, id](absl::Status status) {
+        if (!status.ok()) {
+          Pause("cancel intent journal failed: " +
+                std::string(status.message()));
+          if (const TrackedOrder* order = order_manager_.Find(id);
+              order && !order->Terminal() &&
+              order->cancel == CancelPhase::Pending) {
+            (void)order_manager_.MarkCancelUnknown(id);
+            ScheduleOrderQuery();
+          }
+        }
+      })) {
+    abort_mirror();
+    return false;
+  }
+  const bool queued = port->Cancel(
+      std::move(command),
+      [this, id](TradeResponse response) {
+        if (!TryEnqueue([this, id, response = std::move(response)]() mutable {
+              PersistCancelResponse(id, std::move(response));
+            })) {
+          boost::asio::post(io_, GuardState([this] {
+            Pause("cancel response queue unavailable");
+          }));
+        }
+      },
+      [this, id] {
+        if (!TryEnqueue([this, id] {
+              OnWriting(id, true);
+              NotifyWriting(id, true);
+            })) {
+          boost::asio::post(io_, GuardState([this] {
+            Pause("cancel write callback queue unavailable");
+          }));
+        }
+      });
+  if (!queued) {
+    JournalEntry abort;
+    abort.kind = JournalKind::CancelAbort;
+    abort.client_id = id.value;
+    if (!Persist(std::move(abort), [this](absl::Status status) {
+          if (!status.ok()) Pause("cancel abort journal failed");
+        }))
+      boost::asio::post(io_, GuardState([this] {
+        Pause("cancel abort journal queue unavailable");
+      }));
+    abort_mirror();
+  }
+  return queued;
+}
+
+void TradingAccount::DisableAdmission() {
+  std::unique_lock lock(admission_gate_mutex_);
+  admission_enabled_ = false;
+}
+
+void TradingAccount::EnableAdmission() {
+  std::unique_lock lock(admission_gate_mutex_);
+  min_ready_revision_ = views_->Revision();
+  admission_enabled_ = true;
+}
+
+bool TradingAccount::AccountQueueEmpty() const {
+  std::lock_guard lock(queue_mutex_);
+  return queue_.empty();
+}
+
+void TradingAccount::ReportShardError(ShardId shard, absl::Status error) {
+  DisableAdmission();
+  std::string message = "shard " + std::to_string(shard.value) +
+                        " trading state failed: " + error.ToString();
+  if (!TryEnqueue([this, message] { Pause(message); })) {
+    boost::asio::post(io_, GuardState([this, message] { Pause(message); }));
+  }
 }
 
 std::shared_ptr<const PublishedAssetView> TradingAccount::AssetView(
@@ -137,19 +436,13 @@ std::shared_ptr<const std::atomic<uint64_t>> TradingAccount::AssetRevision()
   return views_->AssetRevision();
 }
 
-bool TradingAccount::TryEnqueue(std::function<void()> task,
-                                QueueProbe* probe) {
+bool TradingAccount::TryEnqueue(std::function<void()> task) {
   bool schedule = false;
   {
     std::lock_guard lock(queue_mutex_);
     if (stopped_ || queue_.size() >= queue_capacity_) {
       ++queue_rejections_;
       return false;
-    }
-    if (probe) {
-      probe->enqueued_ns = BenchClockNowNs();
-      probe->tasks_ahead = queue_.size();
-      probe->drain_scheduled = drain_scheduled_;
     }
     queue_.push_back(std::move(task));
     queue_peak_ = std::max(queue_peak_, queue_.size());
@@ -176,54 +469,11 @@ void TradingAccount::Drain() {
       task = std::move(queue_.front());
       queue_.pop_front();
     }
-    // 执行任务时不持有队列锁。
+    // 队列锁只管队列；回报和控制任务与 Shard 提交共用状态锁。
+    std::lock_guard state_lock(state_mutex_);
     task();
   }
   boost::asio::post(io_, [this] { Drain(); });
-}
-
-bool TradingAccount::TrySubmit(ShardId shard, MarketId market,
-                               LimitOrderRequest order,
-                               uint64_t source_bench_seq, Admission done) {
-  const uint64_t requested_ns = trade_perf_ ? BenchClockNowNs() : 0;
-  static const bool account_queue_log_enabled =
-      std::getenv("HQUANT_ACCOUNT_QUEUE_LOG") != nullptr;
-  const bool sample = account_queue_log_enabled && trade_perf_ &&
-                      source_bench_seq != 0 && source_bench_seq % 16 == 0;
-  QueueProbe probe;
-  const bool accepted = TryEnqueue([this, shard, market = std::move(market), order,
-                     source_bench_seq, requested_ns,
-                     done = std::move(done), sample]() mutable {
-    const uint64_t started_ns = trade_perf_ ? BenchClockNowNs() : 0;
-    ProcessSubmit(shard, market, order, source_bench_seq, requested_ns,
-                  started_ns, std::move(done));
-    if (sample)
-      LOG_INFO(Logger(),
-               "account_probe execute seq={} shard={} side={} requested_ns={} "
-               "started_ns={} finished_ns={}",
-               source_bench_seq, shard.value, static_cast<int>(order.side),
-               requested_ns, started_ns, BenchClockNowNs());
-  }, sample ? &probe : nullptr);
-  if (sample && accepted)
-    LOG_INFO(Logger(),
-             "account_probe enqueue seq={} shard={} side={} requested_ns={} "
-             "enqueued_ns={} tasks_ahead={} drain_scheduled={}",
-             source_bench_seq, shard.value, static_cast<int>(order.side),
-             requested_ns, probe.enqueued_ns, probe.tasks_ahead,
-             probe.drain_scheduled);
-  return accepted;
-}
-
-bool TradingAccount::TryCancel(ShardId shard, OrderId order, Admission done) {
-  return TryCancel(shard, order, 0, std::move(done));
-}
-
-bool TradingAccount::TryCancel(ShardId shard, OrderId order,
-                               uint64_t source_bench_seq, Admission done) {
-  return TryEnqueue(
-      [this, shard, order, source_bench_seq, done = std::move(done)]() mutable {
-        ProcessCancel(shard, order, source_bench_seq, std::move(done));
-      });
 }
 
 bool TradingAccount::PostView(ShardId shard, ViewSink done) {
@@ -243,7 +493,7 @@ bool TradingAccount::PostFinalStatus(std::function<void(AccountStatus)> done) {
       return;
     }
     if (!port_->QueryBalances(
-            [this,
+            GuardState([this,
              done](absl::StatusOr<std::vector<BalanceUpdate>> result) mutable {
               if (!result.ok()) {
                 Pause("final account balance query failed: " +
@@ -253,7 +503,7 @@ bool TradingAccount::PostFinalStatus(std::function<void(AccountStatus)> done) {
               }
               port_->Stop();
               FinishFinalStatus(std::move(*result), std::move(done));
-            })) {
+            }))) {
       Pause("final account balance query queue unavailable");
       done(Status());
     }
@@ -291,6 +541,7 @@ bool TradingAccount::PostControl(
               action == AccountAction::CancelAll) {
             manual_paused_ = true;
             ready_ = false;
+            DisableAdmission();
             error_ = "manually paused: " + reason;
             MarkAllDirty();
             FlushViews();
@@ -315,26 +566,25 @@ bool TradingAccount::PostControl(
               done(uint64_t{0});
             }
           } else {
-            std::vector<std::pair<ShardId, OrderId>> to_cancel;
-            for (const auto& [id, order] : order_manager_.Orders()) {
-              if (!order.Terminal() && order.cancel != CancelPhase::Pending &&
-                  order.cancel != CancelPhase::Unknown) {
-                to_cancel.emplace_back(order.shard, order.local_order_id);
-              }
-            }
-            if (to_cancel.empty()) {
+            if (trade_sinks_.empty()) {
               done(uint64_t{0});
               return;
             }
-            auto remaining = std::make_shared<size_t>(to_cancel.size());
+            auto remaining = std::make_shared<size_t>(trade_sinks_.size());
             auto admitted = std::make_shared<uint64_t>(0);
-            for (const auto& [shard, id] : to_cancel) {
-              ProcessCancel(
-                  shard, id, 0,
-                  [remaining, admitted, done](bool accepted, std::string) {
-                    if (accepted) ++*admitted;
-                    if (--*remaining == 0) done(*admitted);
-                  });
+            for (const auto& [shard, sink] : trade_sinks_) {
+              (void)shard;
+              if (!sink.cancel_all) {
+                if (--*remaining == 0) done(*admitted);
+                continue;
+              }
+              sink.cancel_all([this, remaining, admitted, done](uint64_t count) {
+                boost::asio::post(io_, GuardState(
+                    [remaining, admitted, done, count] {
+                      *admitted += count;
+                      if (--*remaining == 0) done(*admitted);
+                    }));
+              });
             }
           }
         })) {
@@ -352,12 +602,12 @@ void TradingAccount::FinishFinalStatus(
     if (pending_journal_ != 0 || !queue_.empty()) {
       final_status_timer_.expires_after(std::chrono::milliseconds(1));
       final_status_timer_.async_wait(
-          [this, balances = std::move(balances), done = std::move(done)](
+          GuardState([this, balances = std::move(balances), done = std::move(done)](
               const boost::system::error_code& error) mutable {
             if (!error) {
               FinishFinalStatus(std::move(balances), std::move(done));
             }
-          });
+          }));
       return;
     }
   }
@@ -455,263 +705,6 @@ Order TradingAccount::ReportOrder(const TrackedOrder& tracked) const {
   return result;
 }
 
-void TradingAccount::ProcessSubmit(ShardId shard, const MarketId& market_id,
-                                   const LimitOrderRequest& request,
-                                   uint64_t source_bench_seq,
-                                   uint64_t requested_ns, uint64_t started_ns,
-                                   Admission done) {
-  const auto market = markets_.find(shard.value);
-  if (!port_ || market == markets_.end() || market->second.id != market_id ||
-      !ready_ || quiescing_) {
-    done(false, "account unavailable");
-    return;
-  }
-  if (config_.mode == TradingMode::OnlineSim &&
-      demo_submissions_ >= config_.max_submissions_per_run) {
-    done(false, "demo submission cap reached");
-    return;
-  }
-  const auto venue_rule = venue_rules_.find(market_id.symbol);
-  if (auto status = RiskLimits::Check(
-          config_.risk, market->second, request, markets_,
-          order_manager_.State(),
-          venue_rule == venue_rules_.end() ? nullptr : &venue_rule->second);
-      !status.ok()) {
-    done(false, std::string(status.message()));
-    return;
-  }
-  auto amount = ReserveAmount(market->second, request);
-  if (!amount.ok()) {
-    done(false, std::string(amount.status().message()));
-    return;
-  }
-  const std::string asset = request.side == Side::Buy
-                                ? market->second.quote_asset
-                                : market->second.base_asset;
-  if (Budget(asset) < *amount) {
-    done(false, "account budget exhausted");
-    return;
-  }
-  auto local = order_manager_.NextLocalOrderId();
-  if (!local.ok()) {
-    done(false, std::string(local.status().message()));
-    return;
-  }
-  auto generated_id = NewClientOrderId();
-  if (!generated_id.ok()) {
-    done(false, std::string(generated_id.status().message()));
-    return;
-  }
-  ClientOrderId id = std::move(*generated_id);
-  // 网络结果未明前先占用资金，防止其他 Shard 重复使用。
-  if (auto status = funds_.Reserve(id, asset, *amount); !status.ok()) {
-    done(false, std::string(status.message()));
-    return;
-  }
-  TrackedOrder order;
-  order.client_order_id = id;
-  order.local_order_id = *local;
-  order.shard = shard;
-  order.market = market_id;
-  order.side = request.side;
-  order.price_nanos = request.price_nanos;
-  order.quantity_nanos = request.quantity_nanos;
-  order.source_bench_seq = source_bench_seq;
-  if (auto status = order_manager_.Begin(order); !status.ok()) {
-    (void)funds_.Release(id);
-    done(false, std::string(status.message()));
-    return;
-  }
-  LOG_TRACE_L1(Logger(),
-               "submit intent account={} client_id={} shard={} bench_seq={}",
-               config_.id, id.value, shard.value, source_bench_seq);
-  if (config_.mode == TradingMode::OnlineSim) ++demo_submissions_;
-  MarkAssetDirty(asset);
-  AccountHistoryRecord command;
-  command.shard = shard;
-  command.symbol = market_id.symbol;
-  command.kind = HistoryKind::SubmitCommand;
-  command.client_order_id = id.value;
-  command.source_bench_seq = source_bench_seq;
-  command.price_nanos = request.price_nanos;
-  command.quantity_nanos = request.quantity_nanos;
-  command.remaining_nanos = request.quantity_nanos;
-  views_->MarkShardDirty(shard);
-  JournalEntry intent;
-  intent.kind = JournalKind::SubmitIntent;
-  intent.client_id = id.value;
-  intent.symbol = market_id.symbol;
-  intent.asset = asset;
-  intent.local_id = order.local_order_id.value;
-  intent.shard = shard.value;
-  intent.side = request.side == Side::Buy ? 0 : 1;
-  intent.price = request.price_nanos;
-  intent.quantity = request.quantity_nanos;
-  intent.amount = *amount;
-  intent.source_bench_seq = source_bench_seq;
-  // 入日志队列后立即发送；提交失败只影响恢复能力，不能把已发送订单当作未发送。
-  if (!Persist(std::move(intent), [this, id](absl::Status status) {
-        if (status.ok()) return;
-        Pause(std::format("submit intent journal failed client_id={}: {}",
-                          id.value, std::string(status.message())));
-        const TrackedOrder* order = order_manager_.Find(id);
-        if (order && order->status == OrderStatus::PendingSubmit) {
-          (void)order_manager_.MarkSubmitUnknown(id);
-          ScheduleOrderQuery();
-        }
-      })) {
-    (void)order_manager_.AbortSubmit(id);
-    (void)funds_.Release(id);
-    MarkAssetDirty(asset);
-    FlushViews();
-    done(false, "order journal queue unavailable");
-    return;
-  }
-  Record(std::move(command));
-  processing_port_ = true;
-  const bool queued = port_->Submit(
-      SubmitCommand{market_id, id, request},
-      [this, id](TradeResponse response) {
-        PersistSubmitResponse(id, std::move(response));
-      },
-      [this, id] { OnWriting(id, false); });
-  processing_port_ = false;
-  LOG_TRACE_L1(Logger(), "submit send queue account={} client_id={} queued={}",
-               config_.id, id.value, queued);
-  if (!queued) {
-    JournalEntry event;
-    event.kind = JournalKind::SubmitAbort;
-    event.client_id = id.value;
-    if (!Persist(std::move(event), [this, id](absl::Status status) {
-          if (!status.ok()) {
-            Pause(std::format("submit abort journal failed client_id={}: {}",
-                              id.value, std::string(status.message())));
-          }
-        })) {
-      Pause("submit abort journal queue unavailable");
-    }
-    (void)order_manager_.AbortSubmit(id);
-    (void)funds_.Release(id);
-    AccountHistoryRecord rejected;
-    rejected.shard = shard;
-    rejected.symbol = market_id.symbol;
-    rejected.kind = HistoryKind::LocalRejected;
-    rejected.client_order_id = id.value;
-    rejected.source_bench_seq = source_bench_seq;
-    rejected.message = "trading send queue full";
-    Record(std::move(rejected));
-    MarkAssetDirty(asset);
-    FlushViews();
-    done(false, "trading send queue full");
-    return;
-  }
-  FlushViews();
-  if (trade_perf_)
-    trade_perf_->RecordAccountSubmit(
-        {id.value, requested_ns, started_ns, BenchClockNowNs()});
-  done(true, "");
-}
-
-void TradingAccount::ProcessCancel(ShardId shard, OrderId local_id,
-                                   uint64_t source_bench_seq, Admission done) {
-  const TrackedOrder* order = order_manager_.FindLocal(local_id);
-  if (!port_ || !order) {
-    done(false, "order not found");
-    return;
-  }
-  if (order->shard != shard) {
-    done(false, "order does not belong to shard");
-    return;
-  }
-  if (auto status = order_manager_.BeginCancel(
-          order->client_order_id, source_bench_seq,
-          static_cast<uint64_t>(
-              std::chrono::duration_cast<std::chrono::milliseconds>(
-                  std::chrono::system_clock::now().time_since_epoch())
-                  .count()));
-      !status.ok()) {
-    done(false, std::string(status.message()));
-    return;
-  }
-  // PendingCancel 仍保留原订单的资金预留，直到终态回报确认。
-  const CancelCommand command{order->market, order->client_order_id,
-                              order->exchange_order_id};
-  AccountHistoryRecord history;
-  history.shard = shard;
-  history.symbol = order->market.symbol;
-  history.kind = HistoryKind::CancelCommand;
-  history.client_order_id = order->client_order_id.value;
-  history.exchange_order_id = order->exchange_order_id.value;
-  history.source_bench_seq = source_bench_seq;
-  history.remaining_nanos = order->Remaining();
-  views_->MarkShardDirty(shard);
-  const ClientOrderId id = order->client_order_id;
-  LOG_TRACE_L1(Logger(),
-               "cancel intent account={} client_id={} shard={} bench_seq={}",
-               config_.id, id.value, shard.value, source_bench_seq);
-  JournalEntry intent;
-  intent.kind = JournalKind::CancelIntent;
-  intent.client_id = id.value;
-  intent.source_bench_seq = source_bench_seq;
-  intent.transaction_ms = order_manager_.Find(id)->cancel_requested_ms;
-  if (!Persist(std::move(intent), [this, id](absl::Status status) {
-        if (status.ok()) return;
-        Pause(std::format("cancel intent journal failed client_id={}: {}",
-                          id.value, std::string(status.message())));
-        const TrackedOrder* order = order_manager_.Find(id);
-        if (order && !order->Terminal() &&
-            order->cancel == CancelPhase::Pending) {
-          (void)order_manager_.MarkCancelUnknown(id);
-          ScheduleOrderQuery();
-        }
-      })) {
-    (void)order_manager_.AbortCancel(id);
-    views_->MarkShardDirty(shard);
-    FlushViews();
-    done(false, "order journal queue unavailable");
-    return;
-  }
-  Record(std::move(history));
-  processing_port_ = true;
-  const bool queued = port_->Cancel(
-      command,
-      [this, id](TradeResponse response) {
-        PersistCancelResponse(id, std::move(response));
-      },
-      [this, id] { OnWriting(id, true); });
-  processing_port_ = false;
-  LOG_TRACE_L1(Logger(), "cancel send queue account={} client_id={} queued={}",
-               config_.id, id.value, queued);
-  if (!queued) {
-    JournalEntry event;
-    event.kind = JournalKind::CancelAbort;
-    event.client_id = id.value;
-    if (!Persist(std::move(event), [this, id](absl::Status status) {
-          if (!status.ok()) {
-            Pause(std::format("cancel abort journal failed client_id={}: {}",
-                              id.value, std::string(status.message())));
-          }
-        })) {
-      Pause("cancel abort journal queue unavailable");
-    }
-    (void)order_manager_.AbortCancel(id);
-    AccountHistoryRecord rejected;
-    rejected.shard = shard;
-    rejected.symbol = command.market.symbol;
-    rejected.kind = HistoryKind::LocalRejected;
-    rejected.client_order_id = id.value;
-    rejected.source_bench_seq = source_bench_seq;
-    rejected.message = "trading send queue full";
-    Record(std::move(rejected));
-    views_->MarkShardDirty(shard);
-    FlushViews();
-    done(false, "trading send queue full");
-    return;
-  }
-  FlushViews();
-  done(true, "");
-}
-
 void TradingAccount::SubmitResponse(ClientOrderId id, TradeResponse response) {
   LOG_TRACE_L1(Logger(), "submit response account={} client_id={} result={}",
                config_.id, id.value, static_cast<int>(response.result));
@@ -780,7 +773,7 @@ void TradingAccount::SubmitResponse(ClientOrderId id, TradeResponse response) {
     ApplyEvent(OrderReport{std::move(report_order), OrderStatus::Accepted});
   }
   ScheduleOrderQuery();
-  if (!processing_port_) FlushViews();
+  FlushViews();
 }
 
 void TradingAccount::CancelResponse(ClientOrderId id, TradeResponse response) {
@@ -844,7 +837,7 @@ void TradingAccount::CancelResponse(ClientOrderId id, TradeResponse response) {
       // REST can report the final cumulative fill before the ordered private
       // trade event arrives. Keep PendingCancel and its reservation until the
       // trade and terminal report are applied by the user stream.
-      if (!processing_port_) FlushViews();
+      FlushViews();
       return;
     }
     Order report_order = ReportOrder(*order);
@@ -854,7 +847,7 @@ void TradingAccount::CancelResponse(ClientOrderId id, TradeResponse response) {
     ApplyEvent(OrderReport{std::move(report_order), OrderStatus::Cancelled});
   }
   ScheduleOrderQuery();
-  if (!processing_port_) FlushViews();
+  FlushViews();
 }
 
 void TradingAccount::OnWriting(ClientOrderId id, bool cancel) {
@@ -889,16 +882,52 @@ void TradingAccount::OnWriting(ClientOrderId id, bool cancel) {
                config_.id, id.value, cancel);
 }
 
+void TradingAccount::NotifyResponse(const ClientOrderId& id, bool cancel,
+                                    TradeResponse response) {
+  const TrackedOrder* order = order_manager_.Find(id);
+  if (!order) return;
+  const auto found = trade_sinks_.find(order->shard.value);
+  if (found != trade_sinks_.end() && found->second.response) {
+    found->second.response(id, cancel, std::move(response));
+  }
+}
+
+void TradingAccount::NotifyWriting(const ClientOrderId& id, bool cancel) {
+  const TrackedOrder* order = order_manager_.Find(id);
+  if (!order) return;
+  const auto found = trade_sinks_.find(order->shard.value);
+  if (found != trade_sinks_.end() && found->second.writing) {
+    found->second.writing(id, cancel);
+  }
+}
+
+void TradingAccount::NotifyEvent(const AccountEvent& event) {
+  if (replaying_) return;
+  const ClientOrderId* id = nullptr;
+  if (const auto* report = std::get_if<OrderReport>(&event))
+    id = &report->order.client_order_id;
+  else if (const auto* fill = std::get_if<Fill>(&event))
+    id = &fill->client_order_id;
+  if (!id) return;
+  const TrackedOrder* order = order_manager_.Find(*id);
+  if (!order) return;
+  const auto found = trade_sinks_.find(order->shard.value);
+  if (found != trade_sinks_.end() && found->second.event) {
+    found->second.event(event);
+  }
+}
+
 void TradingAccount::OnConnectionState(bool connected, std::string reason) {
   if (!io_.get_executor().running_in_this_thread()) {
     if (!TryEnqueue([this, connected, reason = std::move(reason)] {
           OnConnectionState(connected, reason);
         })) {
-      boost::asio::post(io_,
-                        [this] { Pause("connection state queue overflow"); });
+      boost::asio::post(io_, GuardState(
+          [this] { Pause("connection state queue overflow"); }));
     }
     return;
   }
+  std::lock_guard state_lock(state_mutex_);
   if (!connected) {
     private_connected_ = false;
     sync_->Disconnect();
@@ -946,7 +975,7 @@ bool TradingAccount::PersistAndApply(AccountEvent event, bool from_venue,
                      config_.id, event.index());
       }
       ScheduleOrderQuery();
-      if (!processing_port_) FlushViews();
+      FlushViews();
       if (!error_.empty()) status = absl::DataLossError(error_);
     }
     if (done) done(std::move(status));
@@ -961,9 +990,9 @@ void TradingAccount::ScheduleOrderQuery() {
   const auto due = order_manager_.NextDeadline();
   if (!due) return;
   order_query_timer_.expires_at(*due);
-  order_query_timer_.async_wait([this](const boost::system::error_code& error) {
+  order_query_timer_.async_wait(GuardState([this](const boost::system::error_code& error) {
     if (!error) QueryDueOrder();
-  });
+  }));
 }
 
 void TradingAccount::QueryDueOrder() {
@@ -976,9 +1005,9 @@ void TradingAccount::QueryDueOrder() {
   LOG_TRACE_L1(Logger(), "order query account={} client_id={}", config_.id,
                query->client_order_id.value);
   auto send_query = [this, query = *query] {
-    if (!port_->Query(query, [this, query](absl::StatusOr<OrderReport> result) {
+    if (!port_->Query(query, GuardState([this, query](absl::StatusOr<OrderReport> result) {
           QueryOrderResult(query, std::move(result));
-        })) {
+        }))) {
       order_manager_.QueryFinished(query.client_order_id);
       ScheduleOrderQuery();
     }
@@ -1052,7 +1081,7 @@ void TradingAccount::QueryOrderResult(QueryCommand query,
   }
   query.exchange_order_id = report.order.exchange_order_id;
   if (!port_->QueryTrades(
-          query, [this, query, report = std::move(report)](
+          query, GuardState([this, query, report = std::move(report)](
                      absl::StatusOr<std::vector<Fill>> trades) mutable {
             if (!trades.ok()) {
               order_manager_.QueryFinished(query.client_order_id);
@@ -1060,7 +1089,7 @@ void TradingAccount::QueryOrderResult(QueryCommand query,
               return;
             }
             ApplyQueriedTrades(query, std::move(report), std::move(*trades), 0);
-          })) {
+          }))) {
     order_manager_.QueryFinished(query.client_order_id);
     ScheduleOrderQuery();
   }
@@ -1093,24 +1122,21 @@ void TradingAccount::ApplyQueriedTrades(QueryCommand query, OrderReport report,
 }
 
 void TradingAccount::OnVenueEvent(AccountEvent event) {
-  if (io_.get_executor().running_in_this_thread()) {
-    if (sync_->Syncing()) {
-      if (!sync_->BufferPrivate(std::move(event), queue_capacity_)) {
-        Pause("private event buffer overflow during synchronization");
-      }
-      return;
-    }
-    if (!PersistAndApply(std::move(event), true)) {
-      Pause("private event journal queue unavailable");
-    }
-    return;
-  }
-  if (!TryEnqueue([this, event = std::move(event)] {
-        OnVenueEvent(std::move(event));
+  ++pending_private_events_;
+  if (!TryEnqueue([this, event = std::move(event)]() mutable {
+        --pending_private_events_;
+        if (sync_->Syncing()) {
+          if (!sync_->BufferPrivate(std::move(event), queue_capacity_)) {
+            Pause("private event buffer overflow during synchronization");
+          }
+        } else if (!PersistAndApply(std::move(event), true)) {
+          Pause("private event journal queue unavailable");
+        }
       })) {
-    boost::asio::post(io_, [this] {
+    --pending_private_events_;
+    boost::asio::post(io_, GuardState([this] {
       Pause("account event queue overflow; state synchronization required");
-    });
+    }));
   }
 }
 
@@ -1326,6 +1352,7 @@ void TradingAccount::ApplyEvent(const AccountEvent& event, bool from_venue) {
       Pause("external balance delta requires reconciliation: " + delta->asset);
     }
   }
+  NotifyEvent(event);
 }
 
 void TradingAccount::MarkAssetDirty(const std::string& asset) {
@@ -1354,6 +1381,12 @@ AccountStatus TradingAccount::Status() const {
   status.journal_pending_peak = journal_pending_peak_;
   status.journal_rejections = journal_rejections_;
   if (port_) status.trade_queue = port_->QueueHealth();
+  for (const auto& extra : extra_ports_) {
+    const auto health = extra->QueueHealth();
+    status.trade_queue.queued += health.queued;
+    status.trade_queue.peak += health.peak;
+    status.trade_queue.rejected += health.rejected;
+  }
   status.error = error_;
   status.balances = funds_.Assets();
   for (const auto& [asset, balance] : status.balances) {
@@ -1381,9 +1414,10 @@ void TradingAccount::Pause(std::string error) {
               error);
   }
   ready_ = false;
+  DisableAdmission();
   error_ = std::move(error);
   MarkAllDirty();
-  if (!processing_port_) FlushViews();
+  FlushViews();
 }
 
 void TradingAccount::Record(AccountHistoryRecord record) {
@@ -1408,6 +1442,7 @@ void TradingAccount::Record(AccountHistoryRecord record) {
 
 void TradingAccount::RequestStop() {
   quiescing_ = true;
+  DisableAdmission();
   {
     std::lock_guard lock(queue_mutex_);
     if (stop_requested_) return;
@@ -1418,6 +1453,7 @@ void TradingAccount::RequestStop() {
       sync_->CancelTimer();
       order_query_timer_.cancel();
       if (port_) port_->Stop();
+      for (const auto& extra : extra_ports_) extra->Stop();
       MarkAllDirty();
       FlushViews();
       {
@@ -1434,7 +1470,8 @@ void TradingAccount::RequestStop() {
 
 void TradingAccount::PrepareStop() {
   quiescing_ = true;
-  boost::asio::post(io_, [this] { sync_->CancelTimer(); });
+  DisableAdmission();
+  boost::asio::post(io_, GuardState([this] { sync_->CancelTimer(); }));
 }
 
 }  // namespace hquant::v1

@@ -25,6 +25,7 @@
 #include <string>
 #include <thread>
 #include <unordered_map>
+#include <unordered_set>
 #include <utility>
 #include <vector>
 
@@ -52,6 +53,11 @@ struct Ack {
   uint64_t parsed_ns = 0;
   uint64_t done_ns = 0;
   uint64_t recv_ns = 0;
+  uint64_t read_armed_ns = 0;
+  uint64_t first_socket_read_ns = 0;
+  uint64_t last_socket_read_ns = 0;
+  uint64_t socket_reads = 0;
+  uint64_t kevent_read_ready_ns = 0;
 };
 
 uint64_t ClockNs() {
@@ -118,7 +124,10 @@ class AckReceiver {
       }
       acks_.emplace(
           id, Ack{Network64(packet + 8), Network64(packet + 16),
-                  Network64(packet + 24), Network64(packet + 32), received});
+                  Network64(packet + 24), Network64(packet + 32), received,
+                  Network64(packet + 56), Network64(packet + 64),
+                  Network64(packet + 72), Network64(packet + 80),
+                  Network64(packet + 88)});
       ++count_;
     }
   }
@@ -338,6 +347,8 @@ struct LocalEvent {
   uint64_t source_seq = 0;
   uint64_t at_ns = 0;
   uint64_t trade_id = 0;
+  uint64_t quantity_nanos = 0;
+  uint64_t remaining_nanos = 0;
 };
 
 struct PrivateClientStamp {
@@ -357,32 +368,50 @@ struct RestClientStamp {
   uint64_t dispatched_ns = 0;
   uint64_t write_start_ns = 0;
   uint64_t write_done_ns = 0;
+  uint64_t first_write_call_ns = 0;
 };
 
 struct AccountSubmitStamp {
   uint64_t requested_ns = 0;
+  uint64_t id_ready_ns = 0;
   uint64_t started_ns = 0;
 };
 
 std::unordered_map<std::string, AccountSubmitStamp> ReadAccountSubmitTrace(
-    const fs::path& path) {
-  std::ifstream input(path);
-  if (!input) throw std::runtime_error("missing account_submit_trace.csv");
+    const fs::path& state) {
+  std::ifstream input(state / "server.stderr");
+  if (!input) throw std::runtime_error("missing server.stderr");
+  std::ofstream csv(state / "shard_submit_trace.csv");
+  if (!csv) throw std::runtime_error("cannot write shard_submit_trace.csv");
+  csv << "client_id,requested_ns,id_ready_ns,started_ns,finished_ns\n";
   std::string line;
-  std::getline(input, line);
   std::unordered_map<std::string, AccountSubmitStamp> result;
   while (std::getline(input, line)) {
-    std::istringstream stream(line);
-    std::string client, requested, started;
-    if (!std::getline(stream, client, ',') ||
-        !std::getline(stream, requested, ',') ||
-        !std::getline(stream, started, ','))
-      throw std::runtime_error("invalid account submit trace row");
-    if (!result.emplace(std::move(client),
+    const auto marker = line.find("shard_submit_trace client_id=");
+    if (marker == std::string::npos) continue;
+    std::istringstream stream(line.substr(marker));
+    std::string label, client, requested, id_ready, started, finished;
+    if (!(stream >> label >> client >> requested >> id_ready >> started >> finished))
+      throw std::runtime_error("invalid account submit log row");
+    auto value = [](const std::string& field, const std::string& name) {
+      const std::string prefix = name + "=";
+      if (!field.starts_with(prefix))
+        throw std::runtime_error("invalid account submit log field");
+      return field.substr(prefix.size());
+    };
+    client = value(client, "client_id");
+    requested = value(requested, "requested_ns");
+    id_ready = value(id_ready, "id_ready_ns");
+    started = value(started, "started_ns");
+    finished = value(finished, "finished_ns");
+    if (!result.emplace(client,
                         AccountSubmitStamp{std::stoull(requested),
+                                           std::stoull(id_ready),
                                            std::stoull(started)})
              .second)
-      throw std::runtime_error("duplicate account submit trace row");
+      throw std::runtime_error("duplicate account submit log row");
+    csv << client << ',' << requested << ',' << id_ready << ',' << started << ',' << finished
+        << '\n';
   }
   return result;
 }
@@ -396,17 +425,23 @@ std::vector<RestClientStamp> ReadRestClientTrace(const fs::path& path) {
   while (std::getline(input, line)) {
     std::istringstream stream(line);
     std::string client, kind, queued, dispatched, stamp, write_done;
+    std::string posted, queued_before_post, active_lanes, first_write_call;
     if (!std::getline(stream, client, ',') ||
         !std::getline(stream, kind, ',') ||
         !std::getline(stream, queued, ',') ||
         !std::getline(stream, dispatched, ',') ||
         !std::getline(stream, stamp, ',') ||
         !std::getline(stream, write_done, ',') ||
+        !std::getline(stream, posted, ',') ||
+        !std::getline(stream, queued_before_post, ',') ||
+        !std::getline(stream, active_lanes, ',') ||
+        !std::getline(stream, first_write_call, ',') ||
         (kind != "SUBMIT" && kind != "CANCEL"))
       throw std::runtime_error("invalid REST client trace row");
     result.push_back({std::move(client), std::move(kind),
                       std::stoull(queued), std::stoull(dispatched),
-                      std::stoull(stamp), std::stoull(write_done)});
+                      std::stoull(stamp), std::stoull(write_done),
+                      std::stoull(first_write_call)});
   }
   return result;
 }
@@ -465,7 +500,8 @@ std::vector<LocalEvent> ReadEvents(const fs::path& db_path) {
   sqlite3_stmt* statement = nullptr;
   const char* query =
       "SELECT kind,client_order_id,message,source_bench_seq,"
-      "at_mono_ns,trade_id FROM account_events ORDER BY account_sequence";
+      "at_mono_ns,trade_id,quantity_nanos,remaining_nanos "
+      "FROM account_events ORDER BY account_sequence";
   if (sqlite3_prepare_v2(db, query, -1, &statement, nullptr) != SQLITE_OK)
     throw std::runtime_error(sqlite3_errmsg(db));
   auto value = [&](int col) -> std::string {
@@ -484,6 +520,10 @@ std::vector<LocalEvent> ReadEvents(const fs::path& db_path) {
     row.at_ns = ns.empty() ? 0 : std::stoull(ns);
     const std::string trade_id = value(5);
     row.trade_id = trade_id.empty() ? 0 : std::stoull(trade_id);
+    const std::string quantity = value(6);
+    row.quantity_nanos = quantity.empty() ? 0 : std::stoull(quantity);
+    const std::string remaining = value(7);
+    row.remaining_nanos = remaining.empty() ? 0 : std::stoull(remaining);
     rows.push_back(std::move(row));
   }
   sqlite3_finalize(statement);
@@ -491,7 +531,110 @@ std::vector<LocalEvent> ReadEvents(const fs::path& db_path) {
   return rows;
 }
 
-void VerifyBalances(const fs::path& state, const VenueTrace& venue) {
+void VerifyTradeEvents(const std::vector<LocalEvent>& events,
+                       const VenueTrace& venue) {
+  struct OrderAudit {
+    uint64_t quantity = 0;
+    uint64_t filled = 0;
+    uint64_t last_remaining = 0;
+    size_t submits = 0;
+    size_t cancels = 0;
+    size_t fills = 0;
+    size_t private_reports = 0;
+    size_t new_reports = 0;
+    size_t terminal_reports = 0;
+    int phase = 0;
+  };
+  std::unordered_map<std::string, OrderAudit> orders;
+  std::unordered_map<uint64_t, std::string> venue_trades;
+  std::unordered_set<uint64_t> matched_trades;
+  for (const auto& match : venue.matches)
+    if (!match.trade_id || !matched_trades.insert(match.trade_id).second)
+      throw std::runtime_error("duplicate venue account trade ID");
+  if (matched_trades.size() != venue.account_fills)
+    throw std::runtime_error("venue account fill trace is incomplete");
+  for (const auto& report : venue.reports) {
+    if (!report.trade_id) continue;
+    if ((report.status != "PARTIALLY_FILLED" && report.status != "FILLED") ||
+        !matched_trades.contains(report.trade_id) ||
+        !venue_trades.emplace(report.trade_id, report.client_id).second)
+      throw std::runtime_error("invalid venue fill report");
+  }
+  if (venue_trades.size() != matched_trades.size())
+    throw std::runtime_error("venue trade is missing a private fill report");
+  for (const auto& row : events) {
+    if (row.kind != 1) continue;
+    auto& audit = orders[row.client];
+    if (++audit.submits != 1 || row.quantity_nanos == 0)
+      throw std::runtime_error("duplicate or empty submit: " + row.client);
+    audit.quantity = row.quantity_nanos;
+    audit.last_remaining = row.quantity_nanos;
+  }
+  std::unordered_set<uint64_t> local_trades;
+  size_t cancels = 0, fills = 0, reports = 0;
+  for (const auto& row : events) {
+    if (row.kind != 2 && row.kind != 6 && row.kind != 14) continue;
+    auto found = orders.find(row.client);
+    if (found == orders.end())
+      throw std::runtime_error("event without submit: " + row.client);
+    auto& audit = found->second;
+    if (row.kind == 2) {
+      ++cancels;
+      if (++audit.cancels != 1)
+        throw std::runtime_error("duplicate cancel: " + row.client);
+    } else if (row.kind == 6) {
+      ++fills;
+      auto venue_fill = venue_trades.find(row.trade_id);
+      if (!row.trade_id || !row.quantity_nanos ||
+          !local_trades.insert(row.trade_id).second ||
+          venue_fill == venue_trades.end() ||
+          venue_fill->second != row.client ||
+          row.quantity_nanos > audit.quantity - audit.filled)
+        throw std::runtime_error("unmatched or excess fill: " + row.client);
+      audit.filled += row.quantity_nanos;
+      ++audit.fills;
+    } else {
+      ++reports;
+      ++audit.private_reports;
+      if (row.status == "2") {
+        if (++audit.new_reports != 1 || audit.phase != 0 ||
+            row.remaining_nanos != audit.quantity)
+          throw std::runtime_error("invalid NEW report: " + row.client);
+        audit.phase = 1;
+      } else if (row.status == "3") {
+        if (audit.phase < 1 || audit.phase == 3 ||
+            row.remaining_nanos >= audit.last_remaining)
+          throw std::runtime_error("invalid partial fill: " + row.client);
+        audit.phase = 2;
+      } else if (row.status == "4" || row.status == "5") {
+        if (audit.phase < 1 || audit.phase == 3 ||
+            (row.status == "4" && row.remaining_nanos != 0))
+          throw std::runtime_error("invalid terminal report: " + row.client);
+        audit.phase = 3;
+        ++audit.terminal_reports;
+      } else {
+        throw std::runtime_error("unexpected private order status: " +
+                                 row.status);
+      }
+      audit.last_remaining = row.remaining_nanos;
+    }
+  }
+  if (orders.size() != venue.account_submits ||
+      cancels != venue.account_cancels || fills != venue.account_fills ||
+      reports != venue.private_reports ||
+      local_trades.size() != venue_trades.size())
+    throw std::runtime_error("venue/local order event count mismatch");
+  for (const auto& [client, audit] : orders) {
+    if (audit.new_reports != 1 || audit.terminal_reports != 1 ||
+        audit.last_remaining != audit.quantity - audit.filled ||
+        audit.private_reports != audit.fills + 1 + audit.cancels ||
+        (audit.filled == audit.quantity && audit.cancels != 0))
+      throw std::runtime_error("order did not settle exactly once: " + client);
+  }
+}
+
+void VerifyBalances(const fs::path& state, const VenueTrace& venue,
+                    uint32_t duration_seconds) {
   std::ifstream stream(state / "probe.json");
   if (!stream) throw std::runtime_error("missing probe.json");
   const std::string json((std::istreambuf_iterator<char>(stream)),
@@ -517,6 +660,16 @@ void VerifyBalances(const fs::path& state, const VenueTrace& venue) {
       account["error"].get(error) ||
       error != "manually paused: benchmark settlement")
     throw std::runtime_error("final account is not settled");
+  uint64_t live_wire = 0, bench_acks = 0, ack_errors = 0;
+  if (root["live_wire_messages"].get(live_wire) ||
+      root["bench_ack_sent"].get(bench_acks) ||
+      root["bench_ack_errors"].get(ack_errors) ||
+      bench_acks != venue.market_messages || ack_errors != 0 ||
+      live_wire < venue.market_messages + venue.balances.size() - 1)
+    throw std::runtime_error("server market frame/ACK count mismatch");
+  if (venue.balances.size() == 1001 && duration_seconds == 30 &&
+      live_wire != 318'200)
+    throw std::runtime_error("full replay public WS frame count changed");
   for (const auto& stamp : venue.balances) {
     simdjson::dom::element row;
     uint64_t total = 0, free = 0, locked = 0;
@@ -546,6 +699,30 @@ void VerifyBalances(const fs::path& state, const VenueTrace& venue) {
 void Analyze(const fs::path& state, const VenueTrace& venue,
              const std::map<uint64_t, Ack>& acks, uint64_t malformed,
              uint32_t duration_seconds) {
+  if (venue.balances.size() < 2)
+    throw std::runtime_error("venue has no symbols");
+  const size_t symbols = venue.balances.size() - 1;
+  const uint64_t scheduled_actions =
+      uint64_t(duration_seconds) * 1000 * symbols / 120;
+  uint64_t expected_public_trades = 0;
+  for (uint64_t action = 0; action < scheduled_actions; ++action) {
+    if ((action / symbols) % 5 == 4)
+      expected_public_trades += action % symbols % 10 == 0 ? 2 : 1;
+  }
+  if (venue.market_messages != scheduled_actions + expected_public_trades ||
+      venue.market_send_ns.size() != venue.market_messages + 1 ||
+      acks.size() != venue.market_messages || malformed)
+    throw std::runtime_error("scheduled depth/trade/ACK count mismatch");
+  for (uint64_t seq = 1; seq <= venue.market_messages; ++seq) {
+    const auto found = acks.find(seq);
+    const uint64_t sent = venue.market_send_ns[seq];
+    if (found == acks.end() || sent == 0 || found->second.frame_ns < sent ||
+        found->second.parsed_ns < found->second.frame_ns ||
+        found->second.done_ns < found->second.parsed_ns ||
+        found->second.recv_ns < found->second.done_ns)
+      throw std::runtime_error("missing or out-of-order market ACK: " +
+                               std::to_string(seq));
+  }
   std::vector<uint64_t> end_to_end, wire, send_to_frame, frame_to_done;
   std::vector<uint64_t> frame_to_read, read_to_parse, parse_to_done;
   std::vector<uint64_t> done_to_ack, read_to_done, market_to_order;
@@ -561,11 +738,16 @@ void Analyze(const fs::path& state, const VenueTrace& venue,
                   << report.exchange_order_id << ',' << report.trade_id
                   << '\n';
   std::ofstream rest_venue(state / "rest_venue_trace.csv");
-  rest_venue << "client_id,kind,request_complete_ns\n";
+  rest_venue << "client_id,kind,request_complete_ns,first_socket_read_ns,"
+                "last_socket_read_ns,socket_reads,read_ready_ns\n";
   for (const auto& request : venue.requests)
     rest_venue << request.client_id << ',' << request.status << ','
-               << request.at_ns << '\n';
-  market << "bench_seq,send_ns,frame_ns,read_ns,parsed_ns,done_ns,recv_ns\n";
+               << request.at_ns << ',' << request.first_socket_read_ns << ','
+               << request.last_socket_read_ns << ',' << request.socket_reads
+               << ',' << request.read_ready_ns << '\n';
+  market << "bench_seq,send_ns,frame_ns,read_ns,parsed_ns,done_ns,recv_ns,"
+            "read_armed_ns,first_socket_read_ns,last_socket_read_ns,"
+            "socket_reads,kevent_read_ready_ns\n";
   for (size_t seq = 1; seq < venue.market_send_ns.size(); ++seq) {
     auto it = acks.find(seq);
     if (it == acks.end()) continue;
@@ -573,6 +755,9 @@ void Analyze(const fs::path& state, const VenueTrace& venue,
     const Ack& ack = it->second;
     market << seq << ',' << sent << ',' << ack.frame_ns << ',' << ack.read_ns
            << ',' << ack.parsed_ns << ',' << ack.done_ns << ',' << ack.recv_ns
+           << ',' << ack.read_armed_ns << ',' << ack.first_socket_read_ns
+           << ',' << ack.last_socket_read_ns << ',' << ack.socket_reads
+           << ',' << ack.kevent_read_ready_ns
            << '\n';
     if (sent && ack.recv_ns >= sent) end_to_end.push_back(ack.recv_ns - sent);
     if (sent && ack.done_ns >= sent) wire.push_back(ack.done_ns - sent);
@@ -601,7 +786,7 @@ void Analyze(const fs::path& state, const VenueTrace& venue,
     requests[{event.client_id, event.status}].push_back(event.at_ns);
   auto wire_requests = requests;
   const auto account_submits =
-      ReadAccountSubmitTrace(state / "account_submit_trace.csv");
+      ReadAccountSubmitTrace(state);
   std::unordered_map<std::string, RestClientStamp> rest_submits;
   std::vector<uint64_t> submit_request_total, cancel_request_total;
   std::vector<uint64_t> submit_request_wire, cancel_request_wire;
@@ -628,15 +813,19 @@ void Analyze(const fs::path& state, const VenueTrace& venue,
       cancel_request_wire.size() != venue.account_cancels ||
       account_submits.size() != venue.account_submits)
     throw std::runtime_error("REST request trace count mismatch");
-  std::vector<uint64_t> all_account_queue, all_account_process;
+  std::vector<uint64_t> all_client_id_generation, all_account_lock_wait;
+  std::vector<uint64_t> all_account_process;
   for (const auto& [client, rest] : rest_submits) {
     auto account = account_submits.find(client);
     if (account == account_submits.end() ||
-        account->second.requested_ns > account->second.started_ns ||
+        account->second.requested_ns > account->second.id_ready_ns ||
+        account->second.id_ready_ns > account->second.started_ns ||
         account->second.started_ns > rest.enqueued_ns)
       throw std::runtime_error("unmatched account submit trace");
-    all_account_queue.push_back(account->second.started_ns -
-                                account->second.requested_ns);
+    all_client_id_generation.push_back(account->second.id_ready_ns -
+                                       account->second.requested_ns);
+    all_account_lock_wait.push_back(account->second.started_ns -
+                                    account->second.id_ready_ns);
     all_account_process.push_back(rest.enqueued_ns -
                                   account->second.started_ns);
   }
@@ -672,16 +861,21 @@ void Analyze(const fs::path& state, const VenueTrace& venue,
   std::vector<uint64_t> market_to_private_frame;
   std::vector<uint64_t> order_market_to_frame, order_frame_to_parse;
   std::vector<uint64_t> order_parse_to_account_request;
-  std::vector<uint64_t> order_account_queue, order_account_process;
+  std::vector<uint64_t> order_client_id_generation, order_account_lock_wait;
+  std::vector<uint64_t> order_account_process;
   std::vector<uint64_t> order_rest_queue, order_rest_prepare, order_rest_wire;
+  std::unordered_map<uint64_t, std::vector<std::string>> quote_order_pairs;
   std::vector<uint64_t> rest_receive_to_private_write;
   std::vector<uint64_t> venue_write_start_to_private_frame;
   std::vector<uint64_t> private_frame_to_apply;
-  for (const auto& row : ReadEvents(state / "history.sqlite")) {
+  const auto events = ReadEvents(state / "history.sqlite");
+  VerifyTradeEvents(events, venue);
+  for (const auto& row : events) {
     if (row.kind == 1) {
       ++submits;
       source[row.client] = row.source_seq;
       if (row.source_seq != 0) {
+        quote_order_pairs[row.source_seq].push_back(row.client);
         auto market = acks.find(row.source_seq);
         auto account = account_submits.find(row.client);
         auto rest = rest_submits.find(row.client);
@@ -696,7 +890,8 @@ void Analyze(const fs::path& state, const VenueTrace& venue,
         if (!(send_ns <= ack.frame_ns &&
               ack.frame_ns <= ack.parsed_ns &&
               ack.parsed_ns <= task.requested_ns &&
-              task.requested_ns <= task.started_ns &&
+              task.requested_ns <= task.id_ready_ns &&
+              task.id_ready_ns <= task.started_ns &&
               task.started_ns <= request.enqueued_ns &&
               request.enqueued_ns <= request.dispatched_ns &&
               request.dispatched_ns <= request.write_start_ns &&
@@ -706,7 +901,8 @@ void Analyze(const fs::path& state, const VenueTrace& venue,
         order_frame_to_parse.push_back(ack.parsed_ns - ack.frame_ns);
         order_parse_to_account_request.push_back(task.requested_ns -
                                                  ack.parsed_ns);
-        order_account_queue.push_back(task.started_ns - task.requested_ns);
+        order_client_id_generation.push_back(task.id_ready_ns - task.requested_ns);
+        order_account_lock_wait.push_back(task.started_ns - task.id_ready_ns);
         order_account_process.push_back(request.enqueued_ns - task.started_ns);
         order_rest_queue.push_back(request.dispatched_ns -
                                    request.enqueued_ns);
@@ -815,6 +1011,28 @@ void Analyze(const fs::path& state, const VenueTrace& venue,
               << ',' << row.trade_id << ',' << match_seq << ',' << match_ns
               << '\n';
   }
+  size_t quote_pairs = 0;
+  size_t first_write_before_second_start = 0;
+  size_t second_write_before_first_write_done = 0;
+  for (auto& pair : quote_order_pairs) {
+    auto& clients = pair.second;
+    if (clients.size() != 2)
+      throw std::runtime_error("market quote did not produce two orders: " +
+                               std::to_string(pair.first));
+    ++quote_pairs;
+    if (account_submits.at(clients[1]).requested_ns <
+        account_submits.at(clients[0]).requested_ns)
+      std::swap(clients[0], clients[1]);
+    const auto& first = rest_submits.at(clients[0]);
+    const auto& second = rest_submits.at(clients[1]);
+    if (first.first_write_call_ns == 0 || second.first_write_call_ns == 0)
+      throw std::runtime_error("missing quote pair socket write trace");
+    if (first.first_write_call_ns <
+        account_submits.at(clients[1]).requested_ns)
+      ++first_write_before_second_start;
+    if (second.first_write_call_ns < first.write_done_ns)
+      ++second_write_before_first_write_done;
+  }
   auto* logger = hquant::v1::Logger();
   LOG_INFO(logger, "market messages={} ACK={} actions={} rate={}/s malformed={}",
            venue.market_messages, acks.size(), venue.market_actions,
@@ -832,9 +1050,11 @@ void Analyze(const fs::path& state, const VenueTrace& venue,
   LOG_INFO(logger,
            "PRIMARY quant DELETE enqueued -> venue HTTP request complete: {}",
            Distribution(cancel_request_total));
-  LOG_INFO(logger, "all submits account task queue wait: {}",
-           Distribution(all_account_queue));
-  LOG_INFO(logger, "all submits account process -> REST enqueue: {}",
+  LOG_INFO(logger, "all submits client ID generation: {}",
+           Distribution(all_client_id_generation));
+  LOG_INFO(logger, "all submits shard local admission: {}",
+           Distribution(all_account_lock_wait));
+  LOG_INFO(logger, "all submits local admission -> REST enqueue: {}",
            Distribution(all_account_process));
   LOG_INFO(logger, "market-triggered submit market send -> frame: {}",
            Distribution(order_market_to_frame));
@@ -842,9 +1062,11 @@ void Analyze(const fs::path& state, const VenueTrace& venue,
            Distribution(order_frame_to_parse));
   LOG_INFO(logger, "market-triggered submit parsed -> account request: {}",
            Distribution(order_parse_to_account_request));
-  LOG_INFO(logger, "market-triggered submit account task queue wait: {}",
-           Distribution(order_account_queue));
-  LOG_INFO(logger, "market-triggered submit account process -> REST enqueue: {}",
+  LOG_INFO(logger, "market-triggered submit client ID generation: {}",
+           Distribution(order_client_id_generation));
+  LOG_INFO(logger, "market-triggered submit shard local admission: {}",
+           Distribution(order_account_lock_wait));
+  LOG_INFO(logger, "market-triggered submit local admission -> REST enqueue: {}",
            Distribution(order_account_process));
   LOG_INFO(logger, "market-triggered submit REST enqueue -> dispatch: {}",
            Distribution(order_rest_queue));
@@ -852,6 +1074,11 @@ void Analyze(const fs::path& state, const VenueTrace& venue,
            Distribution(order_rest_prepare));
   LOG_INFO(logger, "market-triggered submit REST write start -> venue receive: {}",
            Distribution(order_rest_wire));
+  LOG_INFO(logger,
+           "quote pairs={} first write before second order starts={} "
+           "second write before first write callback={}",
+           quote_pairs, first_write_before_second_start,
+           second_write_before_first_write_done);
   LOG_INFO(logger,
            "quant REST POST write start -> venue HTTP request complete: {}",
            Distribution(submit_request_wire));
@@ -941,16 +1168,32 @@ void Analyze(const fs::path& state, const VenueTrace& venue,
   LOG_INFO(logger, "trace: {} {} {} {} {} {} {} {}",
            (state / "market_trace.csv").string(),
            (state / "account_trace.csv").string(),
-           (state / "account_submit_trace.csv").string(),
+           (state / "shard_submit_trace.csv").string(),
            (state / "shared_view_flush_trace.csv").string(),
            (state / "rest_client_trace.csv").string(),
            (state / "rest_venue_trace.csv").string(),
            (state / "private_venue_trace.csv").string(),
            (state / "private_client_trace.csv").string());
   if (acks.size() != venue.market_messages || malformed ||
-      fills != venue.account_fills || applied != venue.private_reports)
+      fills != venue.account_fills || applied != venue.private_reports ||
+      submits != venue.account_submits || cancels != venue.account_cancels ||
+      timeouts != 0 || queue_expired != 0)
     throw std::runtime_error("market/account trace count mismatch");
-  VerifyBalances(state, venue);
+  for (const auto& [key, queue] : reports)
+    if (!queue.empty())
+      throw std::runtime_error("unapplied venue private report: " + key.first);
+  for (const auto& [key, queue] : private_client.orders)
+    if (!queue.empty())
+      throw std::runtime_error("unapplied client private report: " + key.first);
+  for (const auto& [key, queue] : requests)
+    if (!queue.empty())
+      throw std::runtime_error("REST request missing local event: " + key.first);
+  if (symbols == 1000 && duration_seconds == 30 &&
+      (submits != 3800 || cancels != 3600 || fills != 400 ||
+       applied != 7800 || quote_pairs != 1000 ||
+       venue.market_actions != 262'200))
+    throw std::runtime_error("full replay trading scenario counts changed");
+  VerifyBalances(state, venue, duration_seconds);
 }
 
 Options Parse(int argc, char** argv) {
@@ -1052,6 +1295,10 @@ int main(int argc, char** argv) {
       throw std::runtime_error("hquant_server failed during stop");
     child = -1;
     const VenueTrace trace = venue.StopAndCollect();
+    LOG_INFO(hquant::v1::Logger(),
+             "venue performance QoS requested={} market_io_status={} rest_io_status={}",
+             trace.performance_qos_requested, trace.market_io_qos_status,
+             trace.rest_io_qos_status);
     receiver.Stop();
     const uint64_t malformed = receiver.malformed();
     Analyze(opts.state, trace, receiver.Take(), malformed, opts.seconds);

@@ -91,6 +91,12 @@ struct TlsConfig {
   std::string server_name;
 };
 
+struct HttpWriteTrace {
+  uint64_t first_write_call_ns = 0;
+  uint64_t first_write_return_ns = 0;
+  uint32_t write_calls = 0;
+};
+
 // Verification is enabled by default. server_name overrides the endpoint host
 // for both certificate hostname checking and SNI.
 absl::Status ConfigureTlsContext(boost::asio::ssl::context& context,
@@ -104,6 +110,8 @@ struct HttpRequest {
   std::chrono::steady_clock::time_point deadline;
   // Called immediately before the first socket write attempt.
   std::function<void()> on_write_start;
+  // Optional benchmark probe for the first async_write_some initiation.
+  HttpWriteTrace* write_trace = nullptr;
   // Optional transport timing hook. Called once an HTTP write finishes.
   std::function<void(std::chrono::steady_clock::time_point,
                      std::chrono::steady_clock::time_point)> on_write;

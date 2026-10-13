@@ -4,7 +4,7 @@
 
 ## 范围与环境
 
-本次测量覆盖 `ReadReplayFile → Runtime → Shard → Market → PaperExchange → Strategy → Executor → SqliteHistory`，并用本地 Binance REST/WebSocket 模拟服务覆盖公开行情接入、Control 和 SQLite 历史。构建为 Bazel 9.2.0 的 `--config=release`（`-c opt -g1`）；机器为 Apple M2 MacBook Air（8 核、24 GB 内存），macOS 26.1。每个性能场景各运行 3 次带计时探针的基准进程和 3 次正式 `hquant_server` 进程，表中为各指标的中位数。完整原始结果见 [perf_results_2026-10-06.json](perf_results_2026-10-06.json)。
+本次测量覆盖 `ReadReplayFile → Runtime → Shard → Market → PaperExchange → Strategy → Executor → SqliteHistory`，并用本地 Binance REST/WebSocket 模拟服务覆盖公开行情接入、Control 和 SQLite 历史。构建为 Bazel 9.2.0 的 `--config=release`（`-c opt -g1`）；机器为 Apple M2 MacBook Air（8 核、24 GB 内存），macOS 26.1。每个性能场景各运行 3 次带计时探针的基准进程和 3 次正式 `hquant_server` 进程，表中为各指标的中位数。完整原始结果见 [perf_results_2026-10-06.json](data/perf_results_2026-10-06.json)。
 
 当前入口只实现本地 PaperExchange 下单。Binance 接入只消费公开行情，因此以下“端到端正确”指当前实现的完整运行路径，不代表真实交易所私有订单回报或真实网络吞吐已经验证。
 
@@ -84,6 +84,6 @@ macOS 无 Linux `perf`，使用系统 `/usr/bin/sample` 以 1 ms 间隔采样。
 
 ## 历史数据
 
-原始测量保留在 [perf_results_2026-10-06.json](perf_results_2026-10-06.json)。旧的串行回放基准工具已移除；新的吞吐和延迟测量使用 WebSocket 发送器与服务端完成通知。
+原始测量保留在 [perf_results_2026-10-06.json](data/perf_results_2026-10-06.json)。旧的串行回放基准工具已移除；新的吞吐和延迟测量使用 WebSocket 发送器与服务端完成通知。
 
 原始数据的 `benchmark_runs` 和 `production_runs` 含每次运行的分布、阶段计时、CPU 时间、最大 RSS、SQLite 行数/类型数及各 Shard 序号。吞吐与延迟是这台机器在这些确定性回放负载上的摸底值；真实网络、交易所响应和行情突发分布需要另测。

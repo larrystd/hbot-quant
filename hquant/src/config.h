@@ -93,6 +93,17 @@ struct ShardConfig {
   MarketConfig market;
   StrategyConfig strategy;
   std::string account_id;
+  // A shard spends only its own allocation. Missing entries are divided among
+  // shards of the same account when the runtime creates them.
+  std::map<std::string, uint64_t> asset_limits_nanos;
+  std::optional<uint64_t> max_active_orders;
+  std::optional<uint64_t> max_open_value_per_quote_nanos;
+};
+
+struct ShardAllocation {
+  std::map<std::string, uint64_t> assets_nanos;
+  std::optional<uint64_t> max_active_orders;
+  std::optional<uint64_t> max_open_value_per_quote_nanos;
 };
 
 struct AppConfig {
@@ -120,6 +131,8 @@ absl::StatusOr<ApiCredentials> LoadApiCredentialsFile(const std::string& path);
 absl::Status ApplyStrategyOverrides(AppConfig& config,
                                     const StrategyOverrides& overrides);
 absl::Status ValidateConfig(const AppConfig& config);
+absl::StatusOr<std::map<uint16_t, ShardAllocation>> ResolveShardAllocations(
+    const AppConfig& config);
 absl::Status ValidateStrategyConfig(const StrategyConfig& config);
 
 }  // namespace hquant::v1

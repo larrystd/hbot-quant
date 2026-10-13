@@ -16,8 +16,8 @@
 
 namespace hquant::v1 {
 
-// 每账户的订单索引与查单计划；状态迁移交给 OrderState。
-// TradingAccount 串行调用，本类不发请求、不写数据库。
+// 订单索引与查单计划；状态迁移交给 OrderState。
+// 每个实例只由其所属 worker 调用，本类不发请求、不写数据库。
 class OrderManager {
  public:
   using Clock = std::chrono::steady_clock;

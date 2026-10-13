@@ -1,0 +1,621 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="hquant/src 当前实现的架构说明：运行路径、异常处理、逐模块说明。">
+<title>hquant 架构：路径与模块</title>
+<style>
+:root{color-scheme:light dark;--bg:#f4f6f9;--paper:#fff;--ink:#17232d;--muted:#536674;--line:#d9e1e8;--soft:#edf3f7;--accent:#145b74;--accent-soft:#d9edf3;--warn:#fff3d8;--warn-line:#e6c97a;--ok:#e3f3e6;--shadow:0 10px 28px #17314b0c;
+--t-shard:#2f7d5b;--t-account:#8a5a14;--t-private:#6b4fa3;--t-journal:#a03c4a;--t-other:#536674}
+@media(prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#101920;--paper:#1a2730;--ink:#e8f0f4;--muted:#afc0ca;--line:#35454d;--soft:#21343d;--accent:#91d0e5;--accent-soft:#244450;--warn:#443b24;--warn-line:#7d6a35;--ok:#20372a;--shadow:none;--t-shard:#7fd1a8;--t-account:#e3b56b;--t-private:#b9a2ea;--t-journal:#ec98a3;--t-other:#afc0ca}}
+:root[data-theme="dark"]{--bg:#101920;--paper:#1a2730;--ink:#e8f0f4;--muted:#afc0ca;--line:#35454d;--soft:#21343d;--accent:#91d0e5;--accent-soft:#244450;--warn:#443b24;--warn-line:#7d6a35;--ok:#20372a;--shadow:none;--t-shard:#7fd1a8;--t-account:#e3b56b;--t-private:#b9a2ea;--t-journal:#ec98a3;--t-other:#afc0ca}
+*{box-sizing:border-box}html{scroll-behavior:smooth}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.75 system-ui,-apple-system,"PingFang SC","Microsoft YaHei",sans-serif}
+.layout{max-width:1500px;margin:auto;display:grid;grid-template-columns:240px minmax(0,1fr);gap:32px;padding:28px 26px 90px}
+.sidebar{position:sticky;top:20px;align-self:start;max-height:calc(100vh - 40px);overflow:auto}
+.sidebar-label{font:800 11px ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:.13em;text-transform:uppercase;color:var(--muted);padding:0 10px 10px}
+.sidebar a{display:block;color:var(--muted);text-decoration:none;font-size:12.5px;line-height:1.45;padding:6px 10px;border-radius:7px}
+.sidebar a:hover{background:var(--soft);color:var(--accent)}
+.sidebar .l2{font-weight:750;color:var(--ink);margin-top:8px}.sidebar .l3{padding-left:22px}
+main{min-width:0;max-width:1120px}
+.hero{padding:30px 36px;background:linear-gradient(135deg,var(--paper),var(--accent-soft));border:1px solid var(--line);border-radius:18px;box-shadow:var(--shadow)}
+.eyebrow{font:700 11px ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:.15em;text-transform:uppercase;color:var(--accent)}
+h1{font-size:clamp(28px,3.4vw,40px);line-height:1.22;margin:10px 0 12px}
+.hero p{color:var(--muted);margin:0 0 6px}
+section{margin-top:28px;padding:26px 34px;background:var(--paper);border:1px solid var(--line);border-radius:16px;box-shadow:var(--shadow)}
+h2{font-size:24px;margin:0 0 6px;line-height:1.3}h2 .num{color:var(--accent);font-family:ui-monospace,SFMono-Regular,Menlo,monospace;margin-right:8px}
+h3{font-size:18px;margin:30px 0 8px;padding-top:18px;border-top:1px dashed var(--line)}h3:first-of-type{border-top:none;padding-top:0}
+h4{font-size:15px;margin:18px 0 6px;color:var(--accent)}
+.lead{color:var(--muted);margin-top:0}
+code{font:13px ui-monospace,SFMono-Regular,Menlo,monospace;background:var(--soft);padding:1px 5px;border-radius:5px;overflow-wrap:anywhere}
+pre{background:var(--soft);border:1px solid var(--line);border-radius:10px;padding:14px 16px;overflow:auto;font:12.5px/1.6 ui-monospace,SFMono-Regular,Menlo,monospace}
+pre code{background:none;padding:0}
+table{width:100%;border-collapse:collapse;margin:12px 0;font-size:14px}
+th,td{border-bottom:1px solid var(--line);padding:8px 10px;text-align:left;vertical-align:top}
+th{background:var(--soft);font-weight:700;white-space:nowrap}
+.tw{overflow-x:auto}
+.note{background:var(--warn);border:1px solid var(--warn-line);border-radius:10px;padding:10px 14px;margin:14px 0}
+.ok{background:var(--ok);border-radius:10px;padding:10px 14px;margin:14px 0}
+.rule{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px;margin:14px 0}
+.rule div{border:1px solid var(--line);border-radius:12px;padding:12px 14px;background:var(--soft)}
+.rule>div>b:first-child{display:block;margin-bottom:4px}
+.th{display:inline-block;font:700 11px ui-monospace,SFMono-Regular,Menlo,monospace;padding:1px 7px;border-radius:99px;border:1px solid currentColor;white-space:nowrap}
+.th.shard{color:var(--t-shard)}.th.account{color:var(--t-account)}.th.private{color:var(--t-private)}.th.journal{color:var(--t-journal)}.th.other{color:var(--t-other)}
+ol.steps{counter-reset:s;list-style:none;padding:0;margin:12px 0}
+ol.steps>li{counter-increment:s;position:relative;padding:8px 0 10px 44px;border-left:2px solid var(--line);margin-left:14px}
+ol.steps>li::before{content:counter(s);position:absolute;left:-15px;top:6px;width:28px;height:28px;border-radius:50%;background:var(--accent);color:var(--paper);font:700 13px/28px ui-monospace,monospace;text-align:center}
+ol.steps>li:last-child{border-left-color:transparent}
+.where{font-size:12.5px;color:var(--muted)}
+.mod{border:1px solid var(--line);border-radius:12px;padding:14px 18px;margin:14px 0}
+.mod h4{margin-top:0}
+.mod dl{display:grid;grid-template-columns:88px 1fr;gap:4px 12px;margin:8px 0 0}
+.mod dt{color:var(--muted);font-size:13px}.mod dd{margin:0}
+svg{max-width:100%;height:auto;display:block;margin:14px auto}
+svg text{font-family:system-ui,-apple-system,"PingFang SC",sans-serif;fill:var(--ink)}
+svg .box{fill:var(--paper);stroke:var(--line);stroke-width:1.5}
+svg .lane{fill:var(--soft);stroke:var(--line)}
+svg .lbl{font-size:12px;font-weight:700}
+svg .sm{font-size:11px;fill:var(--muted)}
+svg .arr{stroke:var(--accent);stroke-width:1.6;fill:none;marker-end:url(#a)}
+svg .arr2{stroke:var(--t-private);stroke-width:1.6;fill:none;marker-end:url(#a2);stroke-dasharray:5 3}
+svg .arr3{stroke:var(--t-journal);stroke-width:1.4;fill:none;marker-end:url(#a3)}
+@media(max-width:900px){.layout{grid-template-columns:1fr;padding:16px}.sidebar{display:none}section{padding:20px 16px}.hero{padding:22px 18px}.mod dl{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar">
+<div class="sidebar-label">目录</div>
+<a class="l2" href="#overview">0 总览</a>
+<a class="l3" href="#layers">分层与依赖</a>
+<a class="l3" href="#threads">线程模型</a>
+<a class="l3" href="#rules">三条贯穿规则</a>
+<a class="l2" href="#paths">A 路径篇</a>
+<a class="l3" href="#p-start">A1 启动与就绪</a>
+<a class="l3" href="#p-market">A2 行情</a>
+<a class="l3" href="#p-submit">A3 下单（热路径）</a>
+<a class="l3" href="#p-response">A4 请求结果回程</a>
+<a class="l3" href="#p-private">A5 私有回报</a>
+<a class="l3" href="#p-refresh">A6 刷新循环与撤单</a>
+<a class="l3" href="#p-unknown">A7 超时与未知结果</a>
+<a class="l3" href="#p-sync">A8 断线与全量对账</a>
+<a class="l3" href="#p-control">A9 控制面</a>
+<a class="l3" href="#p-replay">A10 文件回放</a>
+<a class="l3" href="#p-stop">A11 停机</a>
+<a class="l2" href="#failures">B 异常篇</a>
+<a class="l3" href="#e-pause">B0 先理解暂停</a>
+<a class="l3" href="#e-hang">B1 请求发出无返回</a>
+<a class="l3" href="#e-order">B2 下单与撤单</a>
+<a class="l3" href="#e-conn">B3 交易所连接</a>
+<a class="l3" href="#e-local">B4 本地资源与持久化</a>
+<a class="l3" href="#e-state">B5 状态不一致</a>
+<a class="l3" href="#e-proc">B6 进程级</a>
+<a class="l2" href="#modules">C 模块篇</a>
+<a class="l3" href="#m-base">C1 base/</a>
+<a class="l3" href="#m-shard">C2 shard/</a>
+<a class="l3" href="#m-trading">C3 trading/</a>
+<a class="l3" href="#m-venue">C4 venue/binance/</a>
+<a class="l3" href="#m-top">C5 顶层</a>
+<a class="l2" href="#tradeoffs">D 设计取舍</a>
+</nav>
+<main>
+
+<header class="hero">
+<div class="eyebrow">hquant · architecture · 2026-10-13</div>
+<h1>hquant 架构：路径与模块</h1>
+<p>本文按 <code>hquant/src</code> 当前代码写成（约 1.1 万行，Bazel 构建）。分三篇：<b>路径篇</b>讲一条消息或一笔订单在系统里怎么走；<b>异常篇</b>按"异常、行为、处理与恢复"讲出错时系统做什么；<b>模块篇</b>讲每个文件负责什么、归哪个线程、守哪些规则。</p>
+<p>代码位置写作 <code>目录/文件:行号</code>，相对 <code>hquant/src/</code>。</p>
+</header>
+
+<!-- ============================ 0 总览 ============================ -->
+<section id="overview">
+<h2><span class="num">0</span>总览</h2>
+<p class="lead">hquant 是一个做市进程：每个 <b>Shard</b> 负责一个交易对，接 Binance 公开行情，用一个简单的双边挂单策略产生订单；订单经 <b>TradingAccount</b> 和 <b>TradePort</b> 发给交易所。交易模式只有两种模拟：<code>PressureSim</code>（连本地模拟交易所 <code>bench/venue</code>，压测用）和 <code>OnlineSim</code>（连 Binance Spot Demo，虚拟资金），见 <code>config.h:44</code>。</p>
+
+<h3 id="layers">分层与依赖</h3>
+<p>依赖只能从上往下。<code>trading/</code> 不认识 Binance，只认识抽象接口 <code>TradePort</code>；<code>venue/binance/</code> 实现这个接口；<code>runtime</code> 在启动时把两边接起来。</p>
+<pre><code>main.cc
+  └─ runtime            组装：创建线程、账户、Shard、交易客户端，连好回调
+       ├─ control_server   Unix socket 控制面
+       ├─ sqlite_history   观察用历史（可丢，异步）
+       ├─ replay_reader    文件回放输入
+       ├─ shard/           行情 → 策略 → Shard 本地交易状态
+       │    └─ 依赖 trading/（含具体类 TradingAccount）
+       ├─ venue/binance/   TradePort 的 Binance 实现：REST、私有流、签名、限频
+       │    └─ 依赖 trading/trade_port.h
+       └─ trading/         与交易所无关：订单状态机、资金、风控、可靠日志、账户
+            └─ base/       定点数、ID 类型、网络、日志</code></pre>
+
+<h3 id="threads">线程模型</h3>
+<p>理解 hquant 最关键的一张表。每个对象只归一个线程所有，跨线程基本都靠 <code>boost::asio::post</code> 投递任务。线程在 <code>runtime.cc:195</code> 的 <code>Runtime::Start</code> 里创建。</p>
+<div class="tw"><table>
+<tr><th>线程</th><th>数量</th><th>拥有/运行的东西</th></tr>
+<tr><td><span class="th shard">Shard worker</span></td><td><code>min(8, shard 数)</code></td><td>多个 Shard 共用一个 <code>io_context</code>。行情协程（<code>BinanceFeed</code>）、<code>Market</code>、<code>Strategy</code>、<code>ShardTradingState</code>；以及绑定到这个 worker 的 <code>BinanceTradeClient</code> 的 REST 连接（下单请求在这里写出）。</td></tr>
+<tr><td><span class="th account">Account worker</span></td><td><code>min(2, 账户数)</code></td><td><code>TradingAccount</code> 的任务队列、对账副本（<code>OrderManager</code> + <code>FundsState</code>）、<code>AccountSync</code>、<code>AccountViewPublisher</code>、REST 回调。空闲时先忙等 50 µs 再睡（<code>RunAccountContext</code>，<code>runtime.cc:44</code>）。</td></tr>
+<tr><td><span class="th private">私有流线程</span></td><td>每账户 1 个</td><td>Binance user data WebSocket（<code>BinanceUserStream</code>），只在第一个 <code>BinanceTradeClient</code> 上开启。</td></tr>
+<tr><td><span class="th other">REST 线程</span></td><td>0 或 1 / client</td><td>只有不绑定 Shard worker 的 client 才自建（账户下没有 Shard 时）。</td></tr>
+<tr><td><span class="th journal">OrderJournal</span></td><td>1</td><td>SQLite 可靠日志写线程，凑批提交（最多等 250 µs 或 256 条）。</td></tr>
+<tr><td><span class="th other">SqliteHistory</span></td><td>1 写 + 1 读</td><td>观察用历史记录，异步写入。</td></tr>
+<tr><td><span class="th other">ControlServer</span></td><td>1</td><td>Unix socket，按行读 JSON 请求。</td></tr>
+<tr><td><span class="th other">主线程</span></td><td>1</td><td>回放模式下逐条读文件；实时模式下等待信号。</td></tr>
+</table></div>
+
+<svg viewBox="0 0 980 470" role="img" aria-label="线程与数据流总图">
+<defs>
+<marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0L10,5L0,10z" fill="var(--accent)"/></marker>
+<marker id="a2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0L10,5L0,10z" fill="var(--t-private)"/></marker>
+<marker id="a3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0L10,5L0,10z" fill="var(--t-journal)"/></marker>
+</defs>
+<!-- shard lane -->
+<rect class="lane" x="10" y="10" width="600" height="190" rx="12"/>
+<text class="lbl" x="24" y="150" style="fill:var(--t-shard)">Shard worker</text>
+<text class="lbl" x="24" y="166" style="fill:var(--t-shard)">线程</text>
+<rect class="box" x="24" y="48" width="110" height="52" rx="8"/><text class="lbl" x="36" y="70">BinanceFeed</text><text class="sm" x="36" y="88">WS + REST 快照</text>
+<rect class="box" x="160" y="48" width="100" height="52" rx="8"/><text class="lbl" x="172" y="70">Market</text><text class="sm" x="172" y="88">Syncing/Live</text>
+<rect class="box" x="286" y="48" width="100" height="52" rx="8"/><text class="lbl" x="298" y="70">Strategy</text><text class="sm" x="298" y="88">纯函数 Decide</text>
+<rect class="box" x="412" y="48" width="180" height="52" rx="8"/><text class="lbl" x="424" y="70">ShardTradingState</text><text class="sm" x="424" y="88">风控 + 独占额度预留</text>
+<rect class="box" x="160" y="128" width="226" height="56" rx="8"/><text class="lbl" x="172" y="150">SubmitFromShard（同步调用）</text><text class="sm" x="172" y="168">账户方法，在 Shard 线程上执行</text>
+<rect class="box" x="412" y="128" width="180" height="56" rx="8"/><text class="lbl" x="424" y="150">REST lane（TradeClient）</text><text class="sm" x="424" y="168">按优先级排队 + 限频</text>
+<path class="arr" d="M134,74H158"/><path class="arr" d="M260,74H284"/><path class="arr" d="M386,74H410"/>
+<path class="arr" d="M500,100V112H273V126"/><path class="arr" d="M386,156H410"/>
+<!-- venue -->
+<rect class="box" x="650" y="30" width="150" height="56" rx="8"/><text class="lbl" x="662" y="52">公开行情</text><text class="sm" x="662" y="70">depth / trade 流</text>
+<path class="arr" d="M650,40H600Q590,40 590,30V22H79V46"/>
+<rect class="box" x="650" y="128" width="150" height="56" rx="8"/><text class="lbl" x="662" y="150">交易所</text><text class="sm" x="662" y="168">Binance / 本地模拟</text>
+<path class="arr" d="M592,156H648"/>
+<!-- account lane -->
+<rect class="lane" x="10" y="240" width="600" height="210" rx="12"/>
+<text class="lbl" x="24" y="440" style="fill:var(--t-account)">Account worker 线程</text>
+<rect class="box" x="24" y="278" width="150" height="56" rx="8"/><text class="lbl" x="36" y="300">任务队列 Drain</text><text class="sm" x="36" y="318">每批 ≤64，持状态锁</text>
+<rect class="box" x="200" y="278" width="190" height="56" rx="8"/><text class="lbl" x="212" y="300">PersistAndApply</text><text class="sm" x="212" y="318">先日志提交，再改状态</text>
+<rect class="box" x="416" y="278" width="176" height="56" rx="8"/><text class="lbl" x="428" y="300">OrderManager+FundsState</text><text class="sm" x="428" y="318">交易所对账副本</text>
+<rect class="box" x="24" y="356" width="150" height="56" rx="8"/><text class="lbl" x="36" y="378">AccountSync</text><text class="sm" x="36" y="396">全量对账 / 就绪</text>
+<rect class="box" x="200" y="356" width="190" height="56" rx="8"/><text class="lbl" x="212" y="378">ViewPublisher</text><text class="sm" x="212" y="396">AccountView 版本 +1</text>
+<rect class="box" x="416" y="356" width="176" height="56" rx="8"/><text class="lbl" x="428" y="378">Shard 通知</text><text class="sm" x="428" y="396">视图/结果/回报 post</text>
+<path class="arr" d="M174,306H198"/><path class="arr" d="M390,306H414"/><path class="arr" d="M504,334V354"/><path class="arr" d="M390,384H414"/>
+<!-- cross-thread -->
+<path class="arr" d="M200,184V214H60V276"/><text class="sm" x="66" y="210">镜像任务入队</text>
+<path class="arr" d="M470,184V226H140V276"/><text class="sm" x="300" y="222">HTTP 结果 post 回账户</text>
+<path class="arr" d="M592,384H604V74H594"/><text class="sm" x="614" y="240">post 到 Shard</text>
+<!-- private stream -->
+<rect class="box" x="650" y="300" width="150" height="56" rx="8"/><text class="lbl" x="662" y="322" style="fill:var(--t-private)">私有流线程</text><text class="sm" x="662" y="340">user data WS</text>
+<path class="arr2" d="M725,184V298"/>
+<path class="arr2" d="M650,328H625V250H99V276"/>
+<!-- journal -->
+<rect class="box" x="820" y="278" width="150" height="56" rx="8"/><text class="lbl" x="832" y="300" style="fill:var(--t-journal)">OrderJournal 线程</text><text class="sm" x="832" y="318">SQLite WAL FULL</text>
+<path class="arr3" d="M295,334V346H630V430H895V336"/><text class="sm" x="680" y="446">写日志 → COMMIT 后回调账户</text>
+</svg>
+<p class="where">实线：同线程调用或 post；虚线：私有回报；红线：可靠日志。图里省略了控制面和历史记录线程。</p>
+
+<h3 id="rules">三条贯穿规则</h3>
+<div class="rule">
+<div><b>① 单线程所有权</b>Shard 的状态只在 Shard 线程改，账户的状态只在账户线程改。别的线程想改，就 post 一个任务过去。例外只有一处：<code>SubmitFromShard</code>/<code>CancelFromShard</code> 在 Shard 线程直接调用账户方法，靠锁和"只入队、不改状态"保证安全。</div>
+<div><b>② 先日志，后状态</b>交易所来的事实（请求结果、回报、成交、余额、查单结果）先写 <code>OrderJournal</code>，<code>COMMIT</code> 成功后才应用到状态（<code>trading/trading_account.cc:944</code>）。进程崩溃后靠日志重建。</div>
+<div><b>③ 热路径本地准入</b>账户的资金在启动时就按 Shard 切好（<code>ResolveShardAllocations</code>）。下单时 Shard 只查自己那一份，不用等账户线程回话；账户线程事后异步更新自己的对账副本。</div>
+</div>
+</section>
+
+<!-- ============================ A 路径篇 ============================ -->
+<section id="paths">
+<h2><span class="num">A</span>路径篇：一件事在系统里怎么走</h2>
+<p class="lead">每条路径按时间顺序列步骤，标出执行线程和代码位置。建议按 A1 → A2 → A3 → A4 → A5 的顺序读，后面几条是在这几条基础上的分支。</p>
+
+<!-- A1 -->
+<h3 id="p-start">A1 启动与就绪</h3>
+<p>目标：进程起来之后，Shard 什么时候才允许下第一笔单。答案：<b>私有流连上并完成一次全量对账之后</b>。</p>
+<ol class="steps">
+<li><span class="th other">主线程</span> <code>main.cc:487</code> 解析 gflags（<code>--config</code>、<code>--state_dir</code>、策略覆盖参数、压测参数），<code>LoadConfig</code> 读 YAML 并校验，然后构造 <code>Runtime</code>。</li>
+<li><span class="th other">主线程</span> <b>Runtime 构造</b>（<code>runtime.cc</code> 约 95–190 行）：
+  <ul>
+  <li>创建 <code>SqliteHistory</code>（容量 <code>max(8192, shard 数×64)</code>）、<code>OrderJournal</code>（与 history 同目录的 <code>order_journal.sqlite</code>）、<code>ControlServer</code>（把各个控制请求接到 Runtime 的成员函数上）。</li>
+  <li>算线程数：账户 worker <code>min(2, 账户数)</code>，Shard worker <code>min(8, Shard 数)</code>；每个线程一个 <code>io_context</code>。</li>
+  <li><code>ResolveShardAllocations</code>（<code>config.cc:539</code>）把每个账户的资金切给它的 Shard：显式配置的先扣，剩下的在相关 Shard 间平分（余数给前几个）。</li>
+  <li>账户轮流分到账户 worker；Shard 按"同一账户内轮转，可用 worker 数 = <code>min(Shard worker 数, rest_connections)</code>"分到 Shard worker。</li>
+  <li>对每个 Shard 调 <code>account-&gt;SetViewSink</code> 和 <code>SetTradeSink</code>：账户以后要通知这个 Shard 时，就调这些 lambda，lambda 内部是 <code>Shard::PostXxx</code>，即 post 到 Shard 线程。</li>
+  </ul></li>
+<li><span class="th other">主线程</span> <b>恢复</b>（<code>Runtime::Start</code>，<code>runtime.cc:195</code>）：<code>journal_.Start()</code>，对每个账户 <code>journal_.Load(id)</code> 读出全部日志条目，先 <code>TradingAccount::RestoreJournal</code>，再对该账户的每个 Shard 调 <code>RestoreTradingJournal</code>。两边各自从同一份日志重建自己的订单和资金状态。</li>
+<li><span class="th other">主线程</span> <b>建交易客户端</b>：所有账户共用一个 <code>RequestScheduler</code>（限额取各账户配置里最小的非零值）。对每个账户，按它的 Shard 所在的 Shard worker 建一个 <code>BinanceTradeClient</code>，REST 连接数在这些 client 间平分，REST 协程跑在<b>对应 Shard worker 的 io_context</b> 上；只有第一个 client 开私有流、拉交易规则。<code>SetPort</code>/<code>AddShardPort</code>/<code>SetShardPort</code> 记下"哪个 Shard 用哪个 client"。</li>
+<li><span class="th other">主线程</span> 启动 history 线程和所有 io worker 线程；<code>shard-&gt;Start()</code>：实时模式下 <code>co_spawn(market_.RunBinance())</code> 并启动策略定时器（<code>shard/shard.cc:57</code>）。然后给每个 Shard 投递一份初始 <code>AccountView</code>，最后启动控制面。</li>
+<li><span class="th private">私有流线程</span> user stream 连上，回调 <code>on_health(true)</code> → <code>TradingAccount::OnConnectionState</code>（<code>trading/trading_account.cc:920</code>）。不在账户线程就先入队转过去。</li>
+<li><span class="th account">账户线程</span> <code>SyncFromVenue</code> → <code>AccountSync::Start</code>（<code>trading/account_sync.cc:54</code>）：关准入，依次查交易规则 → 挂单 → 逐单查单和成交 → 余额。每一条查到的事实都走 <code>PersistAndApply</code>（先日志再应用）。</li>
+<li><span class="th account">账户线程</span> <code>FinishSync</code>（<code>account_sync.cc:387</code>）：如果对账期间又来了私有回报，就整轮重来（最多 3 次）。否则 <code>ready = true</code>，<code>EnableAdmission()</code>，并把 <code>min_ready_revision_</code> 设成当前视图版本，再发布全部视图。60 秒后再做一次周期对账。</li>
+<li><span class="th shard">Shard 线程</span> 收到 <code>ready=true</code> 且版本 ≥ <code>min_ready_revision_</code> 的 <code>AccountView</code>。从这一刻起，<code>RunAccountDecision</code> 的门控才放行。</li>
+</ol>
+<div class="note"><b>为什么要比较视图版本</b>：准入是原子变量，Shard 却是凭自己手里的 <code>AccountView</code> 来下单的。如果 Shard 手里还是对账前的旧视图，就算准入已经打开，<code>AdmissionEnabled(view_revision)</code> 也会因为版本太旧而拒绝。</div>
+
+<!-- A2 -->
+<h3 id="p-market">A2 行情：一帧 WebSocket 消息怎么变成策略调用</h3>
+<p>整条路径都在<b>同一个 Shard worker 线程</b>上同步完成，中间没有队列。</p>
+<ol class="steps">
+<li><span class="th shard">Shard 线程</span> <code>BinanceFeed::RunCycle</code>（<code>shard/binance_feed.cc:350</code>）是一个协程。每次（重）连接先 <code>++epoch_</code> 并发出 <code>FeedConnected{epoch}</code>，然后连 WebSocket。</li>
+<li>先读 WS，直到拿到<b>第一条 depthUpdate</b>，记下它的 <code>first_sequence</code>（这期间的成交照常转发）。</li>
+<li>再发 REST <code>GET /api/v3/depth</code> 拿快照（最多 3 次）。如果快照比第一条增量还旧（<code>last+1 &lt; first_update</code>）就重拿。遇到 429/418 记下退避时间。</li>
+<li>进入主循环：每帧用 simdjson 解析，按 <code>e</code> 字段分成 <code>BookDiff</code> 或 <code>PublicTrade</code>。价格和数量在解析时就换算成整数 tick/lot。</li>
+<li>调 <code>on_input_</code> → <code>Market::HandleInput</code>（<code>shard/market.cc:241</code>），按类型分派：
+  <ul>
+  <li><code>OnDiff</code>：<b>Live</b> 时检查序号是否接得上（<code>first ≤ seq+1</code>）。接得上就 <code>OrderBook::ApplyDiff</code>，更新 <code>BookView</code>，发 <code>BookChanged</code>。<b>Syncing</b> 时先缓冲，交给 <code>ApplyBuffered</code> 等快照对齐。</li>
+  <li><code>OnSnapshot</code>：只在 Syncing 时有效，重建盘口后接缓冲的增量，<b>至少接上一条增量才切到 Live</b>。</li>
+  <li><code>OnTrade</code>：不改盘口，只更新 <code>last_trade</code>，发 <code>PublicTrade</code> 通知。</li>
+  </ul></li>
+<li>出现序号缺口、盘口交叉或单边为空、缓冲满、市场不匹配时，<code>EnterSyncing(reason, reconnect=true)</code>：清空盘口，设 <code>needs_resync_</code>。<code>on_input_</code> 把这个标志返回给 Feed，Feed 结束本轮，等退避后重连（回到第 1 步）。之前是 Live 的话，还会发一次 <code>BookUnavailable</code>。</li>
+<li>另有 <code>StaleLoop</code> 协程，周期为 <code>min(stale_after_ms/2, 1s)</code>。Live 状态下超过 <code>stale_after_ms</code>（默认 5 s）没更新，就进入 Syncing 并取消 WS 读，触发重连。</li>
+<li><code>notify_</code> → <code>Shard::OnMarket</code>（<code>shard/shard.cc:306</code>）→ <code>RunStrategyDecision</code>。<b>每次盘口变化和每笔公开成交都会让策略跑一次</b>，策略自己靠 <code>refresh_ms</code> 节流。</li>
+</ol>
+
+<!-- A3 -->
+<h3 id="p-submit">A3 下单：从策略决定到 HTTP 请求写出</h3>
+<p>这是延迟最敏感的一段，几乎全部在 <span class="th shard">Shard 线程</span> 上完成。</p>
+<ol class="steps">
+<li><b>门控</b>（<code>shard/shard.cc:77</code>）：以下任一成立就直接返回：有提交或撤单还在等确认（<code>trading_.Pending()</code>）；<code>account_view_.ready</code> 为假；<code>AdmissionEnabled(revision)</code> 为假。所以同一个 Shard <b>同一时刻只有一批请求在途</b>。</li>
+<li><b>组装 ExecutionView</b>：活跃订单 ID、本 Shard 的 base/quote 可用额和预算（来自 <code>ShardTradingState</code> 自己的余额，不读账户线程的数据）、手续费率、价格和数量精度、最小下单量和最小下单金额。</li>
+<li><b>策略</b> <code>Strategy::Decide</code>（<code>shard/strategy.cc:11</code>）。逻辑见 A6，输出 <code>SubmitOrders{买单, 卖单}</code>。</li>
+<li><b>生成客户订单号</b> <code>NewClientOrderId</code>（<code>trading/client_order_id.cc</code>）：<code>"hq"</code> + 16 字节随机数的十六进制，共 34 个字符。</li>
+<li><b>本地准入</b> <code>ShardTradingState::BeginSubmit</code>（<code>shard/trading_state.cc</code>）：
+  <ul>
+  <li><code>RiskLimits::Check</code>：价格和数量精度、最小下单金额、交易所当前规则（<code>VenueRule</code>）、单笔金额上限、活跃订单数、同一计价资产的挂单总值。检查对象是<b>本 Shard 自己的订单表</b>。</li>
+  <li><code>ReserveAmount</code>：卖单占用 base 数量；买单占用 <code>ceil(价×量) + ceil(手续费)</code>，费率非零时再加一点余量。</li>
+  <li><code>Reserve</code>：从本 Shard 的额度里扣出这笔占用，不够就拒绝。</li>
+  <li>本地订单号 = <code>(shard_id+1) &lt;&lt; 40 | 序号</code>，订单以 <code>PendingSubmit</code> 状态记入 <code>OrderManager</code>。</li>
+  </ul></li>
+<li><b>交给账户</b> <code>TradingAccount::SubmitFromShard</code>（<code>trading/trading_account.cc:152</code>），<b>仍在 Shard 线程上执行</b>：
+  <ul>
+  <li>加读锁 <code>admission_gate_mutex_</code>，再查一次准入和视图版本；选 TradePort（优先用本 Shard 绑定的那个）。</li>
+  <li>OnlineSim 模式下用 CAS 检查本次运行的下单次数上限（<code>max_submissions_per_run</code>）。</li>
+  <li><code>TryEnqueue(镜像任务)</code>：往账户队列放一个 lambda，<b>稍后在账户线程上</b>执行 <code>funds_.ReserveAllocated</code> + <code>order_manager_.Begin</code> + 写历史 + 刷新视图。</li>
+  <li><code>Persist(SubmitIntent)</code>：给日志条目编序号，<code>journal_-&gt;Append</code> <b>只入队</b>，落盘结果稍后回调。</li>
+  <li><code>port-&gt;Submit(command, done, write_started)</code>。</li>
+  </ul>
+  任何一步失败都会回滚：Shard 侧 <code>AbortSubmit</code> 释放占用；账户侧补一个 abort 镜像任务，必要时写 <code>SubmitAbort</code>。</li>
+<li><b>REST 排队</b> <code>BinanceTradeClient::Enqueue</code>（<code>venue/binance/trade_client.cc:309</code>）：队列容量按类型留了余量（下单最多用到 <code>容量 − 2×容量/8</code>，撤单最多用到 <code>容量 − 容量/8</code>），保证队列快满时撤单和查询仍能进来。因为 REST io 就是当前 Shard worker，直接 <code>QueueOnRest</code>，放进 6 个优先级队列之一（撤单 &gt; 查单 &gt; 查成交 &gt; 挂单/规则 &gt; 余额 &gt; 下单），然后为空闲的连接 <code>co_spawn(Drain)</code>。</li>
+<li><b>发送</b> <code>Drain</code>（<code>trade_client.cc:554</code>）：取最高优先级的请求。下单在队列里超时（PressureSim 30 s，OnlineSim 5 s）就直接返回 <code>NotSent</code>。<code>scheduler_-&gt;Reserve</code> 预扣请求权重和下单次数，不够就等定时器。<code>MakeRequest</code> 用 HMAC 签名，然后 <code>co_await http.Send</code>。<b>开始写 socket 的那一刻</b>，<code>on_write_start</code> 把 <code>write_started</code> post 到账户线程（见 A4）。</li>
+</ol>
+<div class="note"><b>两份订单状态</b>：这笔订单此刻同时在 Shard 的 <code>ShardTradingState</code>（决定能不能再下单）和账户的 <code>OrderManager</code>（与交易所对账、查单）里。两份都由同一串事件推进：账户先收到并落日志，再通知 Shard。</div>
+
+<!-- A4 -->
+<h3 id="p-response">A4 请求结果回程：HTTP 响应 → 账户 → Shard</h3>
+<ol class="steps">
+<li><span class="th shard">Shard 线程</span> <b>结果分类</b> <code>BinanceTradeClient::Complete</code>（<code>trade_client.cc:660</code>）把 HTTP 结果归为 4 种 <code>TradeResponse::Result</code>：
+  <div class="tw"><table>
+  <tr><th>情况</th><th>结果</th></tr>
+  <tr><td>网络错误，且还没开始写</td><td><code>NotSent</code>（确定没发出）</td></tr>
+  <tr><td>网络错误，已开始写；或 5xx/408/429/418；或响应体表明执行状态未知</td><td><code>Unknown</code>（可能已成交，需要查单）</td></tr>
+  <tr><td>其它非 200：下单</td><td><code>Rejected</code></td></tr>
+  <tr><td>其它非 200：撤单</td><td><code>Unknown</code>（撤单失败不代表订单状态确定）</td></tr>
+  <tr><td>200 且客户订单号一致</td><td><code>Confirmed</code> + 交易所订单号；撤单还会带回剩余数量 = <code>origQty − executedQty</code></td></tr>
+  </table></div>
+  然后 <code>CompleteTrade</code> 把 <code>done</code> post 到账户 io。</li>
+<li><span class="th account">账户线程</span> <code>done</code> → <code>TryEnqueue(PersistSubmitResponse)</code>，经 <code>Drain</code> 在状态锁下执行。</li>
+<li><span class="th account">账户线程</span> <code>PersistSubmitResponse</code>（<code>trading/trading_account_journal.cc:41</code>）写 <code>SubmitOutcome</code>。</li>
+<li><span class="th journal">日志线程</span> 凑批，<code>BEGIN IMMEDIATE … COMMIT</code>（<code>trading/order_journal.cc:287</code>）。提交后把回调 post 回账户 io。</li>
+<li><span class="th account">账户线程</span> 提交成功后两件事：
+  <ul>
+  <li><code>NotifyResponse</code> → TradeSink → <code>Shard::PostTradeResponse</code>，post 到 Shard 线程。</li>
+  <li><code>SubmitResponse</code>（<code>trading_account.cc:708</code>）更新账户副本：<code>NotSent</code> 释放占用；<code>Unknown</code> 标记 <code>submit_unknown</code> 并安排查单；<code>Rejected</code>/<code>Confirmed</code> 转成一条 <code>OrderReport</code> 应用。如果私有回报已经先到了，迟到的 HTTP 超时不会把已确认的订单改回未知。</li>
+  </ul></li>
+<li><span class="th shard">Shard 线程</span> <code>ShardTradingState::ApplyResponse</code>（<code>shard/trading_state.cc</code>）按同样的规则推进 Shard 侧订单；订单进入终态就释放占用。<code>Pending()</code> 变为假后，下一次行情或定时器触发就能再做决策。</li>
+</ol>
+<p><b>写出通知</b>这条支线：<code>on_write_start</code> → <span class="th account">账户线程</span> <code>OnWriting</code>（<code>trading_account.cc:853</code>）：标记 <code>submit_writing</code>，<code>Arm</code> 一个 2 秒后的查单计划，写 <code>SubmitWriting</code> 日志；再 <code>NotifyWriting</code> → Shard <code>MarkWriting</code>。有了这个标记，"请求根本没发出"和"已经写到网络上但结果未知"就能区分开：已经 writing 的订单如果收到 <code>NotSent</code>，会被当作数据错误。</p>
+
+<!-- A5 -->
+<h3 id="p-private">A5 私有回报：交易所推送 → 账户 → Shard</h3>
+<ol class="steps">
+<li><span class="th private">私有流线程</span> <code>BinanceUserStream</code> 用签名方式订阅 <code>userDataStream.subscribe.signature</code>，<code>ParseBinanceUserFrame</code> 解析出 <code>AccountEvent</code>：<code>executionReport</code> → <code>OrderReport</code>，有成交时再加一个 <code>Fill</code>；<code>outboundAccountPosition</code> → <code>BalanceUpdate</code>；<code>balanceUpdate</code>/<code>externalLockUpdate</code> → <code>BalanceDelta</code>。</li>
+<li><span class="th private">私有流线程</span> <code>TradingAccount::OnVenueEvent</code>（<code>trading_account.cc:1124</code>）：<code>++pending_private_events_</code>，<code>TryEnqueue</code>。队列满就暂停账户（<code>Pause</code>），要求重新对账。</li>
+<li><span class="th account">账户线程</span> 正在对账时，事件先存进 <code>AccountSync</code> 的缓冲（对账结束时如有缓冲就整轮重来）；否则调 <code>PersistAndApply(event, from_venue=true)</code>。</li>
+<li><span class="th journal">日志线程</span> 写 <code>OrderReport</code>/<code>Fill</code>/<code>Balance</code>/<code>BalanceDelta</code> 条目并提交。</li>
+<li><span class="th account">账户线程</span> 提交成功后 <code>ApplyEvent</code>（<code>trading_account.cc:1143</code>）：
+  <ul>
+  <li><code>OrderReport</code>：<code>order_manager_.ApplyReport</code> 推进状态；订单未终结时 <code>funds_.MarkVenueAccepted</code>，表示交易所的 locked 余额已经包含这笔占用。</li>
+  <li><code>Fill</code>：成交 ID 去重，<code>FundsState</code> 记成交借记和投影总额。</li>
+  <li><code>BalanceUpdate</code>：和"成交推算出来的总额"对比；乱序的旧余额回报直接忽略。</li>
+  <li>来自交易所的 <code>BalanceDelta</code>（外部充提或锁定）：直接暂停，要求重新对账。</li>
+  <li>最后调 <code>NotifyEvent</code>：只有 <code>OrderReport</code>/<code>Fill</code> 会转给订单所属的 Shard。</li>
+  </ul>
+  之后 <code>ScheduleOrderQuery()</code>、<code>FlushViews()</code>。</li>
+<li><span class="th shard">Shard 线程</span> <code>Shard::PostTradeEvent</code>（<code>shard/shard.cc:184</code>）→ <code>ShardTradingState::ApplyEvent</code>：
+  <ul>
+  <li>回报：订单进入终态就释放占用。</li>
+  <li>成交：在<b>本 Shard 的余额</b>上，买单扣 quote 加 base，卖单反过来，再扣手续费；然后把占用缩到剩余数量对应的金额。</li>
+  </ul>
+  Shard 侧任何一处不一致（比如成交超出了本 Shard 的额度）都会 <code>ReportShardError</code>：账户关准入并暂停，这个 Shard 停止。</li>
+<li><span class="th shard">Shard 线程</span> 如果正在等撤单完成（<code>awaiting_cancel_</code>），并且已经没有在途请求、也没有挂单，就立刻再跑一次策略（见 A6）。</li>
+</ol>
+<p><b>账户视图</b>：<code>FlushViews</code> → <code>AccountViewPublisher::Flush</code>（<code>trading/account_view_publisher.cc:79</code>），只给"脏"的 Shard 发一份新 <code>AccountView</code>（版本号 +1）。视图包含 ready、交易规则、手续费、挂单和撤单状态、账户余额。Shard 在 <code>OnAccountView</code>（<code>shard/shard.cc:262</code>）里丢弃比手里更旧的版本。</p>
+
+<!-- A6 -->
+<h3 id="p-refresh">A6 刷新循环与撤单：策略如何"撤旧挂新"</h3>
+<p>策略本身是无状态的纯函数，只记一个 <code>next_refresh_at_</code>。<code>Strategy::Decide</code>（<code>shard/strategy.cc:11</code>）的判断顺序：</p>
+<ol class="steps">
+<li>盘口不是 Live：有活跃订单就全部撤（<code>CancelOrders</code>），否则 <code>NoAction</code>。同时清掉刷新时间，盘口恢复后立刻重新报价。</li>
+<li>还没到 <code>next_refresh_at_</code>：<code>NoAction</code>。</li>
+<li>有活跃订单：<b>全部撤掉</b>。这时刷新时间不更新，所以撤完以后立刻满足"到时间了"。</li>
+<li>没有活跃订单：设 <code>next_refresh_at_ = now + refresh_ms</code>；计算中间价 <code>mid = bid + (ask−bid)/2</code>；买价 = <code>mid×(1−bid_spread)</code> 向下取整到价格精度，卖价 = <code>mid×(1+ask_spread)</code> 向上取整；数量 = <code>order_amount</code> 向下取整到数量精度。买单要求金额 ≥ 最小下单金额，且 <code>金额+手续费 ≤ quote 预算</code>；卖单要求数量 ≤ base 预算。</li>
+</ol>
+<p>Shard 侧把它串成一个循环：</p>
+<pre><code>定时器(refresh_ms) 或 行情通知
+  → Decide = CancelOrders  → 对每个订单 BeginCancel + CancelFromShard，awaiting_cancel_ = true
+  → 撤单结果和回报陆续到达（A4/A5）
+  → PostTradeEvent / OnAccountView 发现：awaiting_cancel_ 且无在途且无挂单
+  → 立刻再 Decide = SubmitOrders（新的一对买卖单）</code></pre>
+<p><code>CancelFromShard</code>（<code>trading_account.cc:306</code>）和下单是同一个模式：账户镜像任务入队（<code>BeginCancel</code>）+ <code>CancelIntent</code> 日志 + <code>port-&gt;Cancel</code>。如果撤单被交易所拒绝（订单仍在），<code>OnAccountView</code> 里会清掉 <code>awaiting_cancel_</code>，避免一直卡在等撤单的状态。</p>
+
+<!-- A7 -->
+<h3 id="p-unknown">A7 超时与未知结果：查单兜底</h3>
+<p class="where">每种结局怎么处理，见 <a href="#e-hang">B1</a>。</p>
+<ol class="steps">
+<li><span class="th account">账户线程</span> 订单开始写网络时 <code>OrderManager::Arm</code>，2 秒后到期（<code>trading/order_manager.cc:137</code>）。只有"提交待确认、撤单待确认/未知、提交未知"的订单才会有查单计划。</li>
+<li><code>ScheduleOrderQuery</code> 把唯一的 <code>order_query_timer_</code> 设到最早的到期时间；对账中、私有流断开、停机中都不查。</li>
+<li>到期 <code>QueryDueOrder</code>（<code>trading_account.cc:998</code>）：如果订单还在等 HTTP 结果，就先当作超时，写一条 <code>Unknown</code> 结果日志（原因：local response timeout），并走一遍 A4 的结果处理。然后 <code>port-&gt;Query</code> 查单。</li>
+<li>查单结果 → <code>QueryOrderResult</code>，查到的订单状态（以及需要补查的成交）同样经 <code>PersistAndApply</code> 应用。查不到或查询失败<b>不会编造拒单</b>，只按 1、2、4…32 秒指数退避重查。</li>
+</ol>
+
+<!-- A8 -->
+<h3 id="p-sync">A8 断线与全量对账</h3>
+<p class="where">完整的异常清单见 <a href="#failures">B 异常篇</a>。</p>
+<ul>
+<li>私有流断开 → <code>OnConnectionState(false)</code>：取消对账和查单，<code>Pause</code>（ready=false、关准入、发布视图）。<b>Shard 收到视图后不再下新单</b>，已有订单原样保留。</li>
+<li>重新连上 → 走 A1 的第 7–8 步，完成全量对账后自动恢复准入（人工暂停的除外）。</li>
+<li>对账期间的私有回报会先缓冲；对账结束时缓冲非空或还有未处理的回报，就整轮重来，最多 3 次，超过就暂停。</li>
+<li>队列溢出、日志写失败、对账副本前后矛盾等情况都调用 <code>Pause(reason)</code>（<code>trading_account.cc:1411</code>）。原因可以在状态接口里的 <code>error</code> 字段看到。</li>
+</ul>
+
+<!-- A9 -->
+<h3 id="p-control">A9 控制面</h3>
+<p><span class="th other">控制线程</span> <code>ControlServer</code> 监听 Unix socket，每行一个 JSON 请求（<code>control_server.cc</code> 约 318–491 行），由 <code>op</code> 字段分派：</p>
+<div class="tw"><table>
+<tr><th>op</th><th>去向</th><th>说明</th></tr>
+<tr><td><code>clock</code> / <code>status</code></td><td><code>Runtime::Status</code> → 每个 Shard <code>PostStatus</code>；账户 <code>PostStatus</code></td><td>在各自线程上取快照，控制线程用 future 等结果。</td></tr>
+<tr><td><code>history</code></td><td><code>SqliteHistory::Query</code></td><td>分页读观察历史。</td></tr>
+<tr><td><code>set_strategy</code></td><td><code>Shard::PostStrategyUpdate</code>（<code>shard/shard.cc:465</code>）</td><td>带 <code>expected_version</code>，版本不一致就拒绝；校验通过后版本 +1，重置刷新时间并立刻决策一次。</td></tr>
+<tr><td><code>pause_new_orders</code> / <code>resume_trading</code> / <code>sync_account_state</code> / <code>cancel_all</code></td><td><code>TradingAccount::PostControl</code>（<code>trading_account.cc:513</code>）</td><td>必须带操作人和原因；先写 <code>Control</code> 日志再执行。恢复交易会触发全量对账；全撤会通知每个 Shard 执行 <code>PostCancelAll</code>，并汇总被受理的撤单数。</td></tr>
+<tr><td><code>account_controls</code></td><td><code>OrderJournal::QueryControls</code></td><td>查看人工操作记录。</td></tr>
+<tr><td><code>stop</code></td><td><code>Runtime::RequestStop</code></td><td>同 A11。</td></tr>
+</table></div>
+
+<!-- A10 -->
+<h3 id="p-replay">A10 文件回放</h3>
+<ol class="steps">
+<li><span class="th other">主线程</span> <code>Runtime::RunReplay</code>（<code>runtime.cc:405</code>）→ <code>ReadReplayFile</code>：按文件顺序解析每条 <code>ReplayRecord{target, time, MarketInput 或 TimerTick}</code>。</li>
+<li>每条记录 <code>PostReplay</code> 到目标 Shard，然后<b>用 future 等它处理完</b>，才解析下一条。所以全局严格串行，结果可复现。</li>
+<li><span class="th shard">Shard 线程</span> <code>Shard::PostReplay</code>（<code>shard/shard.cc:356</code>）检查时间单调；行情走 <code>Market::OnReplayInput</code>（回放的快照可以在 Live 状态下整体替换盘口），定时 tick 走 <code>CheckStale</code> 或 <code>OnStrategyTimer</code>。策略的"现在"取记录里的时间，不读系统时钟。</li>
+<li>处理结束后通过 <code>MaybeCompleteReplay</code> 回报完成；如果 Shard 遇到致命错误，就把错误状态返回给读文件的循环。</li>
+</ol>
+
+<!-- A11 -->
+<h3 id="p-stop">A11 停机</h3>
+<ol class="steps">
+<li>SIGINT/SIGTERM 或控制面 <code>stop</code> → <code>Runtime::RequestStop</code>（<code>runtime.cc:424</code>）：所有账户 <code>PrepareStop</code>（进入静默，不再做新的对账和查单），所有 Shard <code>RequestStop</code>。</li>
+<li><span class="th shard">Shard 线程</span> <code>StopOnThread</code>（<code>shard/shard.cc:513</code>）：停行情、停定时器，对所有挂单发撤单；每次回报或视图到达都再检查一遍，直到没有挂单为止，最多等 30 秒，超时会记一条错误。</li>
+<li><code>Runtime::Wait</code>（<code>runtime.cc:431</code>）：等每个 Shard 停完 → 每个账户 <code>PostFinalStatus</code>（查一次最终余额并写日志）→ 账户 <code>RequestStop</code> → join 所有线程 → <code>history_.FlushAndStop()</code> 和日志收尾。</li>
+</ol>
+</section>
+
+<!-- ============================ B 异常篇 ============================ -->
+<section id="failures">
+<h2><span class="num">B</span>异常篇：出错时系统做什么、怎么恢复</h2>
+<p class="lead">每种异常按三列写：<b>异常</b>是什么情况；<b>行为</b>是代码实际做了什么；<b>处理与恢复</b>说明会不会自动恢复、什么时候需要人工介入。先看 B0，大多数异常最后都会落到"暂停"这个状态。</p>
+
+<h3 id="e-pause">B0 先理解"暂停"（Pause）</h3>
+<div class="rule">
+<div><b>暂停时做了什么</b><code>TradingAccount::Pause(reason)</code>（<code>trading/trading_account.cc:1411</code>）：<code>ready=false</code>、关准入、把原因记进 <code>error</code>、给所有 Shard 发一份新视图。</div>
+<div><b>Shard 的表现</b><code>RunAccountDecision</code> 的门控看到 <code>ready=false</code> 就直接返回，<b>既不下单也不撤单</b>。已经挂着的订单留在交易所，仍可能成交；成交回报照常处理。</div>
+<div><b>暂停期间怎么撤单</b><code>CancelFromShard</code> 不检查准入，所以控制面的 <code>cancel_all</code> 和停机流程仍然能把撤单发出去。这是暂停期间唯一的主动撤单手段。</div>
+<div><b>怎么恢复</b>成功完成一次全量对账（<code>AccountSync::FinishSync</code>）就会自动恢复，人工暂停的除外。触发对账的方式有三种：私有流重连；60 秒周期定时器（<b>只有上一次对账成功才会安排下一次</b>）；控制面 <code>resume_trading</code> / <code>sync_account_state</code>。</div>
+</div>
+<div class="note">所以有两类暂停要区分。<b>周期对账能修复的</b>，比如外部余额变动、账户队列溢出，60 秒内会自动恢复。<b>对账本身会失败的</b>，比如交易所查不到某笔订单、交易所上有本地不认识的挂单、日志写不进去，会一直停着，直到人工处理。</div>
+
+<h3 id="e-hang">B1 重点：请求已发出，迟迟没有返回</h3>
+<p>这是最需要说清楚的一种情况：请求已经开始写 socket，但一直没有响应。系统不知道交易所到底收到没有，所以既不能当作成功，也不能当作失败。下面按时间顺序说明一笔下单会经历什么，撤单的流程相同。</p>
+<pre><code>t = 0     开始写 socket
+          → 账户 OnWriting：submit_writing = true，写 SubmitWriting 日志，
+            Arm 一个查单计划（2 秒后到期）；Shard 侧 MarkWriting
+t = 2 s   查单定时器到期，订单仍是 PendingSubmit
+          → QueryDueOrder 判定本地超时：写 SubmitOutcome(Unknown, "local response timeout")，
+            账户副本标记 submit_unknown，并发出第一次查单
+t = 5 s   HTTP deadline 到期（MakeRequest 设的 5 秒）
+          → 因为已经开始写，结果分类为 Unknown → 写日志 → 通知 Shard → Shard 标记 submit_unknown
+          （如果在这之前迟到的 200 回来了，就是 Confirmed → 订单变为 Accepted）
+之后       查单按 1、2、4、8、16、32 秒退避，32 秒封顶，一直重查
+          任何时候私有流的回报先到，都直接确定订单状态，查单计划随之撤销</code></pre>
+<div class="tw"><table>
+<tr><th>结局</th><th>行为</th><th>处理与恢复</th></tr>
+<tr><td>查到订单（已挂、已成交或已撤）</td><td>查单结果和补查到的成交经 <code>PersistAndApply</code> 应用（<code>trading_account.cc:1052</code>），通知 Shard，订单得到确定状态</td><td>自动恢复。Shard 的 <code>Pending()</code> 变为假，下一次决策照常进行</td></tr>
+<tr><td>查不到（订单其实没到交易所），或查询一直失败</td><td>代码<b>不会编造拒单</b>（见注释 "it never invents a rejection"），只会一直退避重查。订单保持未决，<b>这个 Shard 一直不能下新单</b>（<code>PendingFor</code> 把 PendingSubmit 和 Unknown 都算作在途）</td><td>下一次周期对账会逐单查询，查询失败就暂停账户（"restored order query failed"），之后不会自动恢复。需要人工确认这笔单在交易所确实不存在，再处理</td></tr>
+</table></div>
+<p class="where">补充一点：2 秒的本地超时只更新账户副本，不通知 Shard。Shard 要到 5 秒的 HTTP 结果到达时才标记 Unknown。但 Shard 的门控对 PendingSubmit 和 Unknown 一视同仁，所以这段时间里两边的实际行为是一样的。</p>
+
+<h3 id="e-order">B2 下单与撤单请求的异常</h3>
+<div class="tw"><table>
+<tr><th>异常</th><th>行为</th><th>处理与恢复</th></tr>
+<tr><td>请求在本地队列里积压（限频等待中，或连接都在忙）</td><td>下单等待超过 30 秒（PressureSim）或 5 秒（OnlineSim）还没发出，<code>Drain</code> 直接返回 <code>NotSent</code>（<code>trade_client.cc:554</code>）。撤单没有排队超时</td><td>账户和 Shard 都释放占用、删除这笔订单，历史记一条 <code>LocalRejected</code>。策略到下个刷新周期重新报价</td></tr>
+<tr><td>本地发送队列满</td><td><code>port-&gt;Submit</code> 返回 false：写 <code>SubmitAbort</code>，账户补一个 abort 镜像任务，Shard <code>AbortSubmit</code>，记 <code>last_error="account submit unavailable"</code> 并重置刷新时间</td><td>下一次行情事件就会重试。撤单和查询在队列里有预留容量，不会被下单挤掉</td></tr>
+<tr><td>连接失败，或在开始写之前出错</td><td><code>NotSent</code>（依据是 <code>write_begin</code> 还没被设置）</td><td>同第一行，确定没发出去，直接释放</td></tr>
+<tr><td>HTTP 5xx / 408 / 429 / 418，或 Binance 错误码 -1000/-1001/-1006/-1007</td><td><code>Unknown</code>（<code>trade_client.cc:700</code>）。429/418 还会让 <code>RequestScheduler</code> 暂停<b>所有</b>出口请求：有 <code>Retry-After</code> 就按它，否则 429 等 1 秒、418 等 2 分钟</td><td>走 B1 的查单兜底；限频解除后排队的请求自动继续发送</td></tr>
+<tr><td>下单被拒（其它 4xx）</td><td><code>Rejected</code>：订单进入终态，释放占用</td><td>策略下个周期再报价。如果是规则类拒绝（精度、金额等），会每个周期重复被拒，需要看 <code>last_error</code> 和历史记录来排查</td></tr>
+<tr><td>下单前就违反风控或交易所规则</td><td><code>BeginSubmit</code> 返回错误，请求不会发出；Shard 记 <code>last_error</code> 并重置刷新时间</td><td>不影响账户状态。交易所规则在每次对账时更新</td></tr>
+<tr><td>200，但客户订单号对不上或响应解析失败</td><td><code>Unknown</code></td><td>走 B1 的查单兜底</td></tr>
+<tr><td>撤单返回非 200</td><td>一律 <code>Unknown</code>，因为撤单失败也可能是订单已经成交或已经撤掉。记 <code>CancelUnknown</code>，安排查单</td><td>由查单结果决定：已撤或已成交就进入终态。间隔两次查询都显示订单仍挂着，就判定为 <code>CancelRejected</code>（"order remains open after repeated query"），Shard 清除等待撤单状态，下一轮重新撤</td></tr>
+<tr><td>撤单成功，但返回的剩余数量比本地少（有成交还没推送过来）</td><td>保持撤单待确认和资金占用，不提前进入终态（<code>trading_account.cc:779</code>）</td><td>自动：等私有流把成交和终态回报推过来</td></tr>
+<tr><td>撤单因连接失败没有发出（NotSent）</td><td>撤销撤单状态，订单仍是挂着的</td><td>Shard 仍在等撤单，下一次行情事件会再做一次撤单决策，也就是每个行情事件都会重试</td></tr>
+</table></div>
+
+<h3 id="e-conn">B3 交易所连接异常</h3>
+<div class="tw"><table>
+<tr><th>异常</th><th>行为</th><th>处理与恢复</th></tr>
+<tr><td>公开行情 WS 断开、30 秒读不到数据、或消息解析失败</td><td><code>Fault</code> → <code>FeedDisconnected</code> → Market 回到 Syncing 并清空盘口；如果之前是 Live，还会发 <code>BookUnavailable</code>。策略看到盘口不是 Live，就要求撤掉全部挂单（账户就绪时才会真的发出撤单）</td><td>自动重连：退避从 250 毫秒开始翻倍，最长 30 秒（<code>binance_feed.cc:506</code>），然后重新走快照对齐。Live 后自动恢复报价。注意：这个退避在整个进程生命周期内<b>不会重置</b>，断过几次之后，每次重连都要等 30 秒</td></tr>
+<tr><td>盘口过期（Live 状态下 5 秒没有更新）</td><td><code>StaleLoop</code> → 进入 Syncing 并取消 WS 读</td><td>同上</td></tr>
+<tr><td>序号缺口、盘口交叉或单边为空、增量缓冲满</td><td><code>EnterSyncing(reason, reconnect=true)</code> → Feed 断开</td><td>同上，重连后从快照重新对齐</td></tr>
+<tr><td>快照接口返回 429/418</td><td>本轮失败，下次重连至少等 1 分钟（429）或 5 分钟（418）</td><td>自动。如果配置的 <code>max_snapshot_requests_per_run</code> 用完了，行情协程会退出，这个 Shard 从此没有行情</td></tr>
+<tr><td><b>私有流断开</b></td><td><code>on_health(false)</code> → <code>OnConnectionState(false)</code>（<code>trading_account.cc:920</code>）：中止进行中的对账，取消查单定时器，然后 <code>Pause("private stream unavailable")</code>。所有 Shard 停止决策，挂单留在交易所，未决订单也暂停查单</td><td>自动重连：退避从 100 毫秒开始翻倍，最长 30 秒；连接保持超过 1 分钟后退避重置。连上后做全量对账，成功就自动恢复。断线期间要撤单只能用 <code>cancel_all</code></td></tr>
+<tr><td>私有流订阅被拒（鉴权失败）</td><td>返回 <code>PermissionDenied</code>，<b>不再重连</b>（<code>user_stream.cc:239</code>）</td><td>账户一直处于暂停状态。修好 API key 或权限后重启进程</td></tr>
+<tr><td><b>交易所完全连不上</b>（REST 和 WS 都不通）</td><td>私有流断开 → 账户暂停（见上）。还没开始写的请求返回 <code>NotSent</code>，已经写出的返回 <code>Unknown</code>，进入查单；查单同样失败，按退避重试。行情也断开，盘口回到 Syncing</td><td>交易所恢复后：行情自动重新对齐；私有流重连并全量对账，逐单确认所有未决订单，然后恢复交易。如果断网期间有订单其实没送到交易所，会落到 B1 的"查不到"那种结局，需要人工处理</td></tr>
+<tr><td>只有 REST 不通，私有流正常</td><td>账户不会暂停。新下单返回 <code>NotSent</code> 并被释放，撤单也发不出去（每个行情事件都会重试）</td><td>REST 恢复后自动恢复。这段时间里旧挂单撤不掉，策略也挂不上新单</td></tr>
+</table></div>
+
+<h3 id="e-local">B4 本地资源与持久化异常</h3>
+<div class="tw"><table>
+<tr><th>异常</th><th>行为</th><th>处理与恢复</th></tr>
+<tr><td>可靠日志写失败（磁盘满、IO 错误）</td><td>错误会一直保留：之后所有 <code>Append</code> 都返回同一个错误（<code>order_journal.h</code> 注释）。所有依赖日志的动作都会触发 <code>Pause</code>：下单意图、请求结果、回报、人工控制</td><td><b>不能自动恢复</b>，因为对账结果也要写日志。修复磁盘后重启进程，重启时从已提交的日志恢复</td></tr>
+<tr><td>日志队列满（32768 条）</td><td><code>Persist</code> 返回 false。下单时就直接放弃这笔单（abort）；处理回报时就暂停</td><td>积压消化后，通过对账恢复</td></tr>
+<tr><td>账户任务队列满（8192 条）</td><td>私有回报一条都不能丢，所以直接 <code>Pause("account event queue overflow; state synchronization required")</code>（<code>trading_account.cc:1124</code>）</td><td>下一次对账时自动恢复：周期定时器、重连，或人工 <code>sync_account_state</code></td></tr>
+<tr><td>对账期间私有回报的缓冲满了</td><td>放弃本轮对账并暂停（"private event buffer overflow during synchronization"）</td><td>重连或人工 <code>sync_account_state</code></td></tr>
+<tr><td>观察历史（SqliteHistory）队列满</td><td>记一个缺口（Gap），不影响交易</td><td>不需要处理。回放模式下会等待队列空出，不会丢记录</td></tr>
+</table></div>
+
+<h3 id="e-state">B5 状态不一致</h3>
+<div class="tw"><table>
+<tr><th>异常</th><th>行为</th><th>处理与恢复</th></tr>
+<tr><td>外部余额变动（充值、提现、外部锁定）</td><td>交易所推来 <code>BalanceDelta</code> → <code>Pause("external balance delta requires reconciliation")</code></td><td>60 秒周期对账自动恢复。Shard 的额度是启动时定好的，不会因为充值而增加</td></tr>
+<tr><td>交易所上有本地不认识的挂单，或同一笔单的价格、数量、订单号对不上</td><td>对账在 <code>SyncOpenOrders</code> 这一步暂停（"unrecognized or conflicting exchange open order"）</td><td><b>需要人工处理</b>：到交易所查清这笔单（必要时撤掉），然后 <code>resume_trading</code></td></tr>
+<tr><td>本地有未终结订单，但交易所查不到</td><td>对账逐单查询失败 → 暂停（"restored order query failed"）</td><td>需要人工处理，见 B1</td></tr>
+<tr><td>三轮对账都被新到的私有回报打断</td><td>暂停（"private events changed during three account sync attempts"）</td><td>因为对账没有成功，周期定时器不会再安排。需要人工 <code>sync_account_state</code>，或等到私有流重连</td></tr>
+<tr><td>账户副本出现矛盾（收到未知订单号的回报、查单返回了别的订单、NotSent 但订单已经开始写）</td><td><code>Pause(具体原因)</code></td><td>通过对账恢复。如果对账也对不上，就需要人工处理</td></tr>
+<tr><td>Shard 侧状态矛盾（成交超出本 Shard 额度、不该出现的 NotSent 等）</td><td>Shard 调 <code>ReportShardError</code>：账户关准入并暂停。这个 Shard 执行 <code>StopFromError</code>：停行情、撤掉自己的挂单、<b>永久停止</b></td><td>Shard 不会自己重启，需要重启进程。其它 Shard 等账户对账成功后自动恢复</td></tr>
+<tr><td>策略计算溢出（定点运算报错）</td><td><code>Decide</code> 返回错误 → 该 Shard 执行 <code>StopFromError</code></td><td>检查策略参数和精度配置，然后重启</td></tr>
+</table></div>
+
+<h3 id="e-proc">B6 进程级异常</h3>
+<div class="tw"><table>
+<tr><th>异常</th><th>行为</th><th>处理与恢复</th></tr>
+<tr><td>进程崩溃</td><td>已提交的日志条目都还在，内存状态全部丢失</td><td>重启后：<code>Load</code> 日志，重建账户和 Shard 两份状态 → 等私有流连上 → 全量对账，逐单确认未终结订单 → 都对得上就自动恢复。有两种情况会停在暂停状态：① "请求已发出、意图还没落盘"窗口里的订单，在交易所上会被当成本地不认识的挂单（见 D 节）；② 本地记了意图、但交易所从没收到的订单，查单会失败。这两种都需要人工处理</td></tr>
+<tr><td>停机时交易所连不上</td><td>Shard 的撤单发不出去，等 30 秒后放弃，记录 "shutdown left unconfirmed account orders"</td><td>挂单可能还留在交易所，需要人工检查</td></tr>
+<tr><td>OnlineSim 达到 <code>max_submissions_per_run</code></td><td><code>SubmitFromShard</code> 返回 false，不再下单。上限设为 0 时，账户以只读验证方式运行，永远不就绪</td><td>这是设计行为，用来保护 Demo 账户</td></tr>
+</table></div>
+</section>
+
+<!-- ============================ C 模块篇 ============================ -->
+<section id="modules">
+<h2><span class="num">C</span>模块篇：每个文件负责什么</h2>
+<p class="lead">每个模块写清职责、主要类型、归属线程和它守的规则。行数是 <code>.cc</code> 文件的大致行数。</p>
+
+<!-- B1 base -->
+<h3 id="m-base">C1 base/：基础设施</h3>
+<div class="mod"><h4>fixed.h / fixed.cc：定点数</h4>
+<dl><dt>职责</dt><dd>所有金额和比例统一用 <code>uint64_t</code> 表示，单位 1e-9（<code>kFixedScale</code>），字段名带 <code>_nanos</code> 或 <code>_ppb</code>。提供 <code>ParseFixed</code>、<code>CheckedAdd/Subtract</code>、<code>MulDivFloor/Ceil</code>（中间结果用 128 位）、<code>RoundUp</code>，溢出时返回错误而不是截断。</dd>
+<dt>注意</dt><dd>盘口价格和数量<b>不用</b>这个单位，用整数 tick/lot；两者通过 <code>price_per_tick_nanos</code>/<code>amount_per_lot_nanos</code> 换算。</dd></dl></div>
+<div class="mod"><h4>ids.h：强类型 ID 与时间</h4>
+<dl><dt>职责</dt><dd><code>ShardId</code>（uint16，上限 <code>kMaxShards=1000</code>）、<code>MarketId</code>、<code>OrderId</code>（本地订单号）、<code>ClientOrderId</code>（发给交易所的字符串）、<code>ExchangeOrderId</code>（交易所订单号）。每种 ID 都包成独立的结构体，防止传错参数。<code>MonoTime</code> 是微秒精度的单调时钟；<code>InputTime{at_us, ordinal}</code> 用于回放排序。</dd></dl></div>
+<div class="mod"><h4>net.h / net.cc：HTTP 与 WebSocket 客户端（约 600 行）</h4>
+<dl><dt>职责</dt><dd>基于 Boost.Beast 和 OpenSSL 的 <code>HttpClient</code>（长连接、deadline、<code>on_write_start</code> 钩子）和 <code>WebSocketClient</code>（<code>Reconnect</code>/<code>Read</code>/<code>Cancel</code>），接口都是协程。<code>TimedTcpStream</code> 和各种 Trace 结构给压测打点用。</dd>
+<dt>线程</dt><dd>运行在创建它时传入的 <code>io_context</code> 所在的线程上。</dd></dl></div>
+<div class="mod"><h4>log.h / log.cc</h4>
+<dl><dt>职责</dt><dd>第一次调用 <code>Logger()</code> 时启动 Quill 异步日志，进程退出时等日志写完。</dd></dl></div>
+
+<!-- B2 shard -->
+<h3 id="m-shard">C2 shard/：一个交易对的完整闭环</h3>
+<div class="mod"><h4>market_type.h：行情值类型</h4>
+<dl><dt>职责</dt><dd><code>MarketInput</code> 是一个 variant，包含 <code>FeedConnected</code>、<code>BookSnapshot</code>、<code>BookDiff</code>、<code>PublicTrade</code>、<code>FeedDisconnected</code>，都带 <code>connection_epoch</code>，用来丢弃旧连接残留的消息。<code>BookView</code> 是给策略看的只读视图（状态、序号、最优买卖价、最近成交、最近更新时间）。<code>MarketNotice</code> 是 Market 发给 Shard 的通知。</dd></dl></div>
+<div class="mod"><h4>order_book.h / .cc：盘口</h4>
+<dl><dt>职责</dt><dd>两个 <code>absl::btree_map&lt;tick, lot&gt;</code>。数量为 0 表示删除这个价位。<code>ApplySnapshot</code>/<code>ApplyDiff</code> 应用后检查盘口是否可交易（两边非空且不交叉），不可交易就返回 false，由 Market 触发重同步。</dd></dl></div>
+<div class="mod"><h4>binance_feed.h / .cc：公开行情接入（约 535 行）</h4>
+<dl><dt>职责</dt><dd>一个协程完成"连 WS → 等第一条增量 → 拿 REST 快照 → 主循环"，过程见 A2。解析用 simdjson，价格和数量在解析时直接换算成 tick/lot。出错就返回 <code>Fault</code>，<code>Run</code> 按退避时间重来。</dd>
+<dt>线程</dt><dd><span class="th shard">Shard worker</span></dd>
+<dt>另外</dt><dd>其中不少代码是压测打点（<code>SendBenchAck</code>、<code>RecordWireTiming</code>），只在开启 perf 时运行。</dd></dl></div>
+<div class="mod"><h4>market.h / .cc：盘口同步状态机（约 310 行）</h4>
+<dl><dt>职责</dt><dd>维护 Syncing/Live 两种状态，以及快照与增量的序号对齐、缓冲区、过期检测。对盘口序列和成交序列各算一个 FNV 摘要（<code>depth_digest_</code>/<code>trade_digest_</code>），回放时可以用来比对结果是否一致。</dd>
+<dt>规则</dt><dd>单有快照不算 Live，必须接上至少一条增量；增量和已应用部分重叠是安全的（每个价位给的是绝对数量）；只有 <code>reconnect=true</code> 才会让 Feed 断开重连。</dd></dl></div>
+<div class="mod"><h4>strategy.h / .cc：策略（约 80 行）</h4>
+<dl><dt>职责</dt><dd><code>Decide(BookView, ExecutionView, now) → NoAction | CancelOrders | SubmitOrders</code>，不做任何 IO，逻辑见 A6。<code>ExecutionView</code> 是 Shard 为策略准备的执行约束（活跃订单、预算、精度、手续费）。</dd>
+<dt>规则</dt><dd>价格计算全部用定点数，并带溢出检查；买价向下取整，卖价向上取整，保证不会因为取整越过中间价。</dd></dl></div>
+<div class="mod"><h4>trading_state.h / .cc：Shard 本地交易状态（约 400 行）</h4>
+<dl><dt>职责</dt><dd>本 Shard 的余额（初值来自分配额度，之后只随成交变化）、按资产汇总的占用、每笔订单的 <code>Hold</code>，以及一个只记录本 Shard 订单的 <code>OrderManager</code>。负责下单准入（<code>BeginSubmit</code>）、撤单（<code>BeginCancel</code>）、写出标记、结果和回报的应用，以及从日志恢复（<code>RestoreJournal</code>）。</dd>
+<dt>线程</dt><dd><span class="th shard">只由 Shard worker 写</span>（头文件注释写明了这一点）</dd>
+<dt>规则</dt><dd>余额<b>只认成交</b>。<code>BalanceUpdate</code> 这类账户级余额事件不改 Shard 余额，因为 Shard 只管自己那一份额度。任何矛盾都返回 <code>DataLossError</code>，导致这个 Shard 停止。</dd></dl></div>
+<div class="mod"><h4>shard.h / .cc：Shard 外壳与事件入口（约 600 行）</h4>
+<dl><dt>职责</dt><dd>把 <code>Market</code>、<code>Strategy</code>、<code>ShardTradingState</code> 组装在一起，并提供所有跨线程入口：<code>PostTradeEvent</code>、<code>PostTradeResponse</code>、<code>PostTradeWriting</code>、<code>PostAccountView</code>、<code>PostCancelAll</code>、<code>PostStrategyUpdate</code>、<code>PostStatus</code>、<code>PostReplay</code>。这些入口都只做一件事：post 到本 Shard 的 io 上执行。</dd>
+<dt>触发决策的地方</dt><dd>行情通知（<code>OnMarket</code>）、刷新定时器（<code>OnStrategyTimer</code>）、撤单全部完成（<code>PostTradeEvent</code>/<code>OnAccountView</code>）、策略参数更新。</dd>
+<dt>停机</dt><dd><code>StopOnThread</code> → 撤掉所有挂单 → 没有挂单或等满 30 秒 → <code>CompleteStop</code> 唤醒所有等待者。</dd></dl></div>
+
+<!-- B3 trading -->
+<h3 id="m-trading">C3 trading/：与交易所无关的交易核心</h3>
+<div class="mod"><h4>trading_event.h：交易事实</h4>
+<dl><dt>职责</dt><dd><code>LimitOrderRequest</code>、<code>Order</code>、<code>OrderStatus</code>（PendingSubmit/Rejected/Accepted/PartiallyFilled/Filled/Cancelled）、<code>OrderReport</code>、<code>Fill</code>、<code>BalanceUpdate</code>（余额绝对值）、<code>BalanceDelta</code>（余额增减）。<code>AccountEvent</code> 是后四种的 variant，私有流、查单、对账产生的都是它。</dd></dl></div>
+<div class="mod"><h4>trade_port.h：交易所抽象接口</h4>
+<dl><dt>职责</dt><dd><code>Submit</code>/<code>Cancel</code>（带完成回调和写出回调）、<code>Query</code>/<code>QueryTrades</code>/<code>QueryBalances</code>/<code>QueryOpenOrders</code>/<code>QueryRules</code>、<code>QueueHealth</code>、<code>Stop</code>。<code>TradeResponse</code> 的四种结果见 A4。<code>VenueRule</code> 是交易所下发的交易规则。</dd>
+<dt>约定</dt><dd>返回 <code>true</code> 表示本地有界队列接受了请求，完成回调稍后才到；返回 <code>false</code> 时<b>不得</b>调用完成回调。私有回报和完成回调各走各的路，到达顺序不保证。</dd></dl></div>
+<div class="mod"><h4>client_order_id.h / .cc</h4>
+<dl><dt>职责</dt><dd>生成 <code>hq</code> + 32 位十六进制的客户订单号，随机数来自 OpenSSL <code>RAND_bytes</code>。</dd></dl></div>
+<div class="mod"><h4>order_state.h / .cc：订单状态机（约 230 行）</h4>
+<dl><dt>职责</dt><dd><code>TrackedOrder</code> 记录一笔订单的全部本地信息：状态、撤单阶段 <code>CancelPhase</code>（None/Pending/Unknown/Rejected/Confirmed）、<code>submit_unknown</code>、<code>submit_writing</code>/<code>cancel_writing</code>、已成交数量、已处理的成交 ID 集合（用于去重）。<code>OrderState</code> 只负责状态迁移，不做 IO。</dd>
+<dt>规则</dt><dd>回报按时间戳防止乱序；同一成交 ID 只计一次；终态订单不再改变。</dd></dl></div>
+<div class="mod"><h4>order_manager.h / .cc：订单索引与查单计划（约 220 行）</h4>
+<dl><dt>职责</dt><dd>包装 <code>OrderState</code>，加了三样东西：本地订单号到客户订单号的映射、按 Shard 分组的活跃订单集合（<code>OpenFor</code>/<code>PendingFor</code>）、查单计划（<code>Arm</code>/<code>TakeDue</code>/<code>QueryFinished</code>，2 秒首查，之后指数退避，上限 32 秒）。</dd>
+<dt>线程</dt><dd>一个实例只归一个线程：Shard 和账户各有一个实例。</dd></dl></div>
+<div class="mod"><h4>risk_limits.h / .cc：下单前风控</h4>
+<dl><dt>职责</dt><dd>静态函数 <code>Check</code>，检查顺序：配置里的价格和数量精度 → 最小金额 → 交易所实时规则 → 单笔金额上限 → 活跃订单总数、同交易对订单数、同计价资产挂单总值。</dd>
+<dt>用在哪</dt><dd>只在 <code>ShardTradingState::BeginSubmit</code> 里调用，传入的是 Shard 自己的订单表，所以"活跃订单数"等限额是<b>按 Shard 生效</b>的（Shard 级覆盖值来自 <code>ShardAllocation</code>）。</dd></dl></div>
+<div class="mod"><h4>funds_state.h / .cc：账户资金对账（约 420 行）</h4>
+<dl><dt>职责</dt><dd>账户级资金状态。交易所余额（free/locked）用来算可用额，成交推算出来的总额用来对账。公式：<code>可用 = max(0, free − 交易所还没反映的订单占用 − 交易所还没反映的成交借记)</code>。区分一笔占用"已被交易所 locked 覆盖"和"尚未覆盖"，避免重复扣除。</dd>
+<dt>用法</dt><dd>Shard 已经按自己的额度准入过了，所以账户副本用 <code>ReserveAllocated</code>（不再检查可用额）；余额回报来了用 <code>MatchesProjectedTotal</code> 系列函数判断是否和成交推算一致。</dd></dl></div>
+<div class="mod"><h4>order_journal.h / .cc：可靠日志（约 380 行）</h4>
+<dl><dt>职责</dt><dd>13 种 <code>JournalKind</code>，覆盖意图、撤销、请求结果、回报、成交、余额、人工控制、写出。SQLite 开 <code>WAL</code> + <code>synchronous=FULL</code>。<code>Append</code> 只入队；写线程最多等 250 µs 或凑满 256 条，一批一个事务，<b>COMMIT 成功后</b>才把回调 post 回调用方的 io。条目用自定义二进制格式编码（带格式版本号）。</dd>
+<dt>线程</dt><dd><span class="th journal">独立写线程</span>，另有一个读连接给 <code>Load</code>/<code>QueryControls</code> 用。</dd>
+<dt>规则</dt><dd>第一次写失败后就不再写入，之后排队的条目都收到同一个错误。</dd></dl></div>
+<div class="mod"><h4>trading_account.h / .cc（+ _journal.cc）：账户（约 1700 行）</h4>
+<dl><dt>职责</dt><dd>每个交易账户一个实例。维护与交易所对账的副本（<code>OrderManager</code> + <code>FundsState</code>）、准入开关、任务队列；把交易所事实先写日志再应用；把结果、回报、视图分发给各 Shard；负责查单、暂停和人工控制。</dd>
+<dt>线程</dt><dd>状态归 <span class="th account">账户 worker</span>。<code>SubmitFromShard</code>/<code>CancelFromShard</code> 是从 Shard 线程调用的。</dd>
+<dt>锁</dt><dd><code>queue_mutex_</code> 只保护任务队列；<code>state_mutex_</code>（递归锁）在 Drain 执行任务和各种回调时持有，因为 TradePort 可能同步回调、发生重入；<code>admission_gate_mutex_</code> 是读写锁，Shard 下单持读锁，开关准入持写锁；<code>journal_mutex_</code> 保证日志序号和入队顺序一致。</dd>
+<dt>队列</dt><dd><code>TryEnqueue</code> 有容量上限（8192）；<code>Drain</code> 每批最多执行 64 个任务，然后让出线程，给 socket 和定时器执行机会。入队失败的处理一般是 <code>Pause</code>。</dd></dl></div>
+<div class="mod"><h4>account_sync.h / .cc：全量对账（约 420 行）</h4>
+<dl><dt>职责</dt><dd>在启动、重连、人工同步和每 60 秒时运行：查规则 → 查挂单 → 逐单查单和成交 → 查余额 → <code>FinishSync</code>。用 <code>generation_</code> 让上一轮还没返回的查询回调失效。对账期间收到的私有回报先缓冲。</dd>
+<dt>结果</dt><dd>对账成功才会 <code>EnableAdmission</code>。OnlineSim 模式下如果 <code>max_submissions_per_run=0</code>，账户以只读验证方式运行，永远不就绪。</dd></dl></div>
+<div class="mod"><h4>account_view_publisher.h / .cc：视图分发</h4>
+<dl><dt>职责</dt><dd>记录哪些 Shard、哪些资产"脏"了，<code>Flush</code> 时版本号 +1，只给脏的 Shard 发 <code>AccountView</code>。同时用 seqlock 发布每个资产的 <code>PublishedAssetView</code>（总额、可用、预算）。</dd>
+<dt>现状</dt><dd><code>PublishedAssetView</code> 目前只有测试在读，Shard 的预算读的是自己 <code>ShardTradingState</code> 里的数据（<code>Shard::ReadAssetViews</code>，<code>shard/shard.cc:39</code>）。</dd></dl></div>
+
+<!-- B4 venue -->
+<h3 id="m-venue">C4 venue/binance/：TradePort 的 Binance 实现</h3>
+<div class="mod"><h4>auth.h / .cc</h4>
+<dl><dt>职责</dt><dd>HMAC-SHA256 签名（<code>BinanceHmacSignature</code>）和时间戳；所有签名请求都带 <code>recvWindow=5000</code>。</dd></dl></div>
+<div class="mod"><h4>rules.h / .cc</h4>
+<dl><dt>职责</dt><dd>把 <code>exchangeInfo</code> 解析成 <code>VenueRule</code>：交易状态、价格精度和范围、数量精度和范围、最小/最大下单金额。</dd></dl></div>
+<div class="mod"><h4>request_scheduler.h / .cc：出口限频</h4>
+<dl><dt>职责</dt><dd>同一出口 IP 共用一个实例（所以是全局的）。按请求权重（挂单列表 80、余额/成交/规则 20、查单 4、下单撤单 1）累计每分钟用量，另外单独统计每 10 秒的下单次数。<code>Reserve</code> 原子地检查并预扣，不够就返回需要等待的时长。遇到 429/418 时，按 <code>Retry-After</code> 或默认值整体暂停。</dd>
+<dt>线程</dt><dd>多个 REST lane 共享，内部用 mutex 保护。</dd></dl></div>
+<div class="mod"><h4>trade_client.h / .cc：REST 交易客户端（约 790 行）</h4>
+<dl><dt>职责</dt><dd>实现 <code>TradePort</code>。包含 6 个优先级队列和 N 个 <code>RestLane</code>（每个 lane 一条 HTTP 长连接，加一个限频等待定时器）。每个 lane 跑一个 <code>Drain</code> 协程，循环"取最高优先级请求 → 限频 → 发送 → 分类结果"。查成交会自动翻页（每页 1000 条）。</dd>
+<dt>线程</dt><dd>REST 在 <span class="th shard">Shard worker</span> 上（如果绑定了 Shard），否则在自建线程上；私有流在 <span class="th private">自建线程</span>；<b>所有完成回调都 post 到账户 io</b>（<code>OnAccount</code> 包装）。</dd>
+<dt>规则</dt><dd>队列里给撤单和查询预留了容量；下单在队列里超时就返回 <code>NotSent</code>；HTTP 结果按"能确定的才确定"的原则分类（A4 的表）。</dd></dl></div>
+<div class="mod"><h4>user_stream.h / .cc：私有回报流（约 340 行）</h4>
+<dl><dt>职责</dt><dd>连 WS API，用签名订阅用户数据流，解析 <code>executionReport</code>、<code>outboundAccountPosition</code>、<code>balanceUpdate</code>、<code>externalLockUpdate</code>，通过 <code>on_event</code> 和 <code>on_health</code> 回调交给账户。断线自动重连，连接状态变化时通知账户。</dd></dl></div>
+
+<!-- B5 top -->
+<h3 id="m-top">C5 顶层：组装、配置、控制、观测</h3>
+<div class="mod"><h4>config.h / .cc：配置（约 825 行）</h4>
+<dl><dt>职责</dt><dd>YAML（schema v2）解析和校验：<code>InputConfig</code>（Replay 或 BinancePublic）、<code>AccountConfig</code>（模式、初始余额、硬上限、手续费、REST/WS 地址、连接数、凭证来源、风控、限频）、<code>ShardConfig</code>（交易对、精度、策略参数、所属账户、可选的显式额度）。<code>ResolveShardAllocations</code> 把账户资金切给 Shard；<code>ApplyStrategyOverrides</code> 处理命令行覆盖。</dd></dl></div>
+<div class="mod"><h4>runtime.h / .cc：组装器（约 580 行）</h4>
+<dl><dt>职责</dt><dd>创建全部对象，决定谁跑在哪个线程，把账户和 Shard 的回调连起来（A1）；负责回放驱动、状态汇总、策略更新和账户控制的转发，以及有序停机（A11）。</dd>
+<dt>附带</dt><dd>压测时可以把 worker 线程设成 macOS 的 <code>QOS_CLASS_USER_INTERACTIVE</code> 或实时调度策略，由环境变量 <code>HQUANT_BENCH_*</code> 控制。</dd></dl></div>
+<div class="mod"><h4>control_server.h / .cc：控制面（约 500 行）</h4>
+<dl><dt>职责</dt><dd>Unix socket，独立线程，一行一个 JSON 请求，用 simdjson 解析，通过 <code>ControlHandlers</code> 回调进 Runtime。支持的命令见 A9。</dd></dl></div>
+<div class="mod"><h4>sqlite_history.h / .cc：观察历史（约 650 行）</h4>
+<dl><dt>职责</dt><dd>16 种 <code>HistoryKind</code>（下单/撤单命令、各种回报、未知、本地拒绝、写出……），用于事后分析和压测统计。<code>TryPush</code> 不阻塞，队列满就记一个"缺口"（Gap）。<b>它不是可靠日志</b>：恢复只靠 <code>OrderJournal</code>。回放模式下队列满时会等待（<code>wait_for_space</code>），保证记录完整。</dd></dl></div>
+<div class="mod"><h4>replay_reader.h / .cc</h4>
+<dl><dt>职责</dt><dd>逐条解析回放文件，交给回调，并等回调完成后再读下一条（A10）。</dd></dl></div>
+<div class="mod"><h4>perf_probe.h：压测探针</h4>
+<dl><dt>职责</dt><dd><code>ShardPerf</code>、<code>TradePerf</code>、<code>HistoryPerf</code> 等采样容器。各模块里 <code>if (perf_)</code> 包起来的打点都写到这里，进程退出时由 <code>main.cc</code> 输出 JSON。不开压测时这个指针是空的，打点代码不执行。</dd></dl></div>
+<div class="mod"><h4>main.cc</h4>
+<dl><dt>职责</dt><dd>解析命令行参数、加载配置、装信号处理、构造并启动 Runtime，回放或等待，最后输出最终账户状态和压测结果。</dd></dl></div>
+</section>
+
+<!-- ============================ D 取舍 ============================ -->
+<section id="tradeoffs">
+<h2><span class="num">D</span>设计取舍与阅读提示</h2>
+<div class="tw"><table>
+<tr><th>选择</th><th>得到什么</th><th>代价</th></tr>
+<tr><td>资金按 Shard 预先切分，Shard 本地准入</td><td>热路径不跨线程、不等待；一个 Shard 出问题不会占用别人的额度</td><td>额度不能在 Shard 间动态调配；同一笔资金有两份账（Shard 一份、账户一份），两份必须由同一串事件推进</td></tr>
+<tr><td>REST 连接跑在 Shard worker 上</td><td>下单从决策到写 socket 不换线程</td><td>HTTP 收发会占用 Shard 线程的时间；每个 Shard worker 各有一个 TradeClient 实例，REST 连接数在实例间分摊</td></tr>
+<tr><td>一个 Shard 同时只有一批在途请求（<code>Pending()</code> 门控）</td><td>状态简单，不会叠单</td><td>撤单完成之前不会挂新单；一个周期内的报价更新受往返延迟限制</td></tr>
+<tr><td>交易所事实先写日志、再应用</td><td>崩溃后可以重建；人工控制可追溯</td><td>每个回报都要等一次 SQLite 提交（批量提交摊薄成本）</td></tr>
+<tr><td>下单意图日志"入队即发送"</td><td>不把落盘延迟放进下单热路径</td><td><code>SubmitIntent</code> 入队后马上就 <code>port-&gt;Submit</code>，不等 COMMIT。所以存在一个短窗口：请求已经发出，但意图还没落盘。这个窗口里崩溃的话，重启后对账会在交易所上发现一笔本地不认识的挂单，账户随即暂停，需要人工处理（见 B5）</td></tr>
+<tr><td>Shard 依赖具体的 <code>TradingAccount</code> 类</td><td>调用直接，没有多余的间接层</td><td>Shard 与账户耦合，单测 Shard 需要一个真实的账户对象；交易所那一侧则有 <code>TradePort</code> 抽象</td></tr>
+<tr><td>出错一律 <code>Pause</code> 并要求重新对账</td><td>宁可停也不带着错的状态继续交易</td><td>任何一处队列满或日志失败都会让整个账户停止接单，需要监控 <code>error</code> 字段</td></tr>
+</table></div>
+<div class="ok"><b>建议的读代码顺序</b>：<code>shard/strategy.cc</code>（80 行，先看清决策）→ <code>shard/market.cc</code>（状态机）→ <code>shard/shard.cc:77</code>（热路径）→ <code>trading/trading_account.cc:152</code>（SubmitFromShard）→ <code>venue/binance/trade_client.cc:554</code>（Drain）→ <code>trading/trading_account.cc:944</code>（PersistAndApply）→ <code>shard/trading_state.cc</code>（Shard 侧如何应用结果）→ <code>trading/account_sync.cc</code>（对账与就绪）。</div>
+</section>
+
+</main>
+</div>
+</body>
+</html>

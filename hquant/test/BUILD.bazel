@@ -1,6 +1,15 @@
 load("@rules_cc//cc:defs.bzl", "cc_test")
 
 cc_test(
+    name = "shard_allocation_test",
+    srcs = ["shard_allocation_test.cc"],
+    deps = [
+        "//hquant/src:config",
+        "//hquant/src/shard:trading_state",
+    ],
+)
+
+cc_test(
     name = "demo_config_test",
     srcs = ["demo_config_test.cc"],
     data = ["//hquant/examples:binance_demo.yaml"],

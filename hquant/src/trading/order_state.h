@@ -42,7 +42,7 @@ struct TrackedOrder {
   uint64_t Remaining() const { return quantity_nanos - filled_nanos; }
 };
 
-// Pure order lifecycle logic. TradingAccount is its only writer.
+// Pure order lifecycle logic. Each instance has one owning worker.
 class OrderState {
  public:
   absl::Status Begin(TrackedOrder order);

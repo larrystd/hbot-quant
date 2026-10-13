@@ -2,7 +2,7 @@
 
 > 历史报告：本次执行使用逐条等待完成的文件回放。旧基准入口已清理；当前 WebSocket 链路的测试见 [TEST_REPORT_2026-10-06.html](TEST_REPORT_2026-10-06.html)。
 
-数据定义见 [MARKET_CASES.md](MARKET_CASES.md)，本次原始探针结果及 SQLite 核对见 [market_case_results_2026-10-06.json](market_case_results_2026-10-06.json)。运行环境沿用 [此前性能报告](PERFORMANCE_2026-10-06.md) 的 Apple M2 MacBook Air、24 GB 内存和 macOS 26.1；Bazel 使用 `--config=release`。以下性能数据每组只有 **1 次测量**。
+数据定义见 [MARKET_CASES.md](MARKET_CASES.md)，本次原始探针结果及 SQLite 核对见 [market_case_results_2026-10-06.json](data/market_case_results_2026-10-06.json)。运行环境沿用 [此前性能报告](PERFORMANCE_2026-10-06.md) 的 Apple M2 MacBook Air、24 GB 内存和 macOS 26.1；Bazel 使用 `--config=release`。以下性能数据每组只有 **1 次测量**。
 
 ## 数据与端到端正确性
 

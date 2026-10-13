@@ -78,13 +78,25 @@ uint64_t FundsState::Reserved(const std::string& asset) const {
 
 absl::Status FundsState::Reserve(const ClientOrderId& id, std::string asset,
                                  uint64_t amount_nanos) {
+  return ReserveImpl(id, std::move(asset), amount_nanos, true);
+}
+
+absl::Status FundsState::ReserveAllocated(const ClientOrderId& id,
+                                          std::string asset,
+                                          uint64_t amount_nanos) {
+  return ReserveImpl(id, std::move(asset), amount_nanos, false);
+}
+
+absl::Status FundsState::ReserveImpl(const ClientOrderId& id,
+                                     std::string asset, uint64_t amount_nanos,
+                                     bool check_available) {
   if (id.value.empty() || asset.empty() || amount_nanos == 0) {
     return absl::InvalidArgumentError("invalid funds reservation");
   }
   if (holds_.contains(id.value)) {
     return absl::AlreadyExistsError("duplicate funds reservation");
   }
-  if (Available(asset) < amount_nanos) {
+  if (check_available && Available(asset) < amount_nanos) {
     return absl::ResourceExhaustedError("account funds exhausted");
   }
   AssetTracking& tracking = asset_tracking_[asset];

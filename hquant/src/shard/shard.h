@@ -21,6 +21,7 @@
 #include "hquant/shard/market.h"
 #include "hquant/shard/market_type.h"
 #include "hquant/shard/strategy.h"
+#include "hquant/shard/trading_state.h"
 #include "hquant/trading/trading_account.h"
 
 namespace hquant::v1 {
@@ -74,7 +75,8 @@ struct ShardStatus {
 class Shard {
  public:
   Shard(boost::asio::io_context& io, const ShardConfig& config,
-        const InputConfig& input,
+        const InputConfig& input, const AccountConfig& account_config,
+        ShardAllocation allocation,
         ShardPerf* perf = nullptr,
         TradingAccount* account = nullptr);
   ~Shard();
@@ -85,6 +87,12 @@ class Shard {
   void PostReplay(ReplayRecord record, std::function<void(absl::Status)> done);
   void PostStatus(std::function<void(ShardStatus)> done);
   void PostAccountView(AccountView view);
+  void PostTradeEvent(AccountEvent event);
+  void PostTradeResponse(ClientOrderId id, bool cancel,
+                         TradeResponse response);
+  void PostTradeWriting(ClientOrderId id, bool cancel);
+  void PostCancelAll(std::function<void(uint64_t)> done);
+  absl::Status RestoreTradingJournal(const std::vector<JournalEntry>& entries);
   void PostStrategyUpdate(
       uint64_t expected_version, StrategyPatch patch,
       std::function<void(absl::StatusOr<StrategyUpdateResult>)> done);
@@ -106,7 +114,6 @@ class Shard {
       uint64_t source_bench_seq = 0);
   void OnAccountView(AccountView view);
   absl::StatusOr<uint64_t> RunAccountDecision(uint64_t source_bench_seq);
-  void AccountRequestDone(bool admitted, std::string reason);
   struct AssetPair {
     AssetViewValues base;
     AssetViewValues quote;
@@ -123,12 +130,9 @@ class Shard {
       work_guard_;
   Market market_;
   Strategy strategy_;
+  ShardTradingState trading_;
   TradingAccount* account_ = nullptr;
   AccountView account_view_;
-  std::shared_ptr<const PublishedAssetView> base_asset_view_;
-  std::shared_ptr<const PublishedAssetView> quote_asset_view_;
-  std::shared_ptr<const std::atomic<uint64_t>> asset_revision_;
-  uint64_t pending_account_requests_ = 0;
   bool awaiting_cancel_ = false;
   std::function<void()> replay_done_;
   boost::asio::steady_timer strategy_timer_;

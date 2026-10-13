@@ -68,6 +68,7 @@ class Runtime {
   std::vector<AccountStatus> final_account_statuses_;
   std::vector<std::unique_ptr<Shard>> shards_;
   std::array<Shard*, kMaxShards> shard_by_id_{};
+  std::array<size_t, kMaxShards> shard_worker_by_id_{};
   std::atomic<bool> stop_requested_{false};
   bool started_ = false;
   bool waited_ = false;

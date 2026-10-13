@@ -1,6 +1,6 @@
 # hquant 账户级交易链路开发文档
 
-状态：P0–P4 的本机实现和 P5 本机故障、30 秒及 180 秒验收已完成；非生产交易所账户验证尚未进行，`live` 仍禁止启动。实测与文件变更见[首轮实施记录](TRADING_CHAIN_IMPLEMENTATION.md)及[后续开发记录](TRADING_CHAIN_FOLLOWUP.md)。本文保留原开发契约；架构与前后目录全图见[交易链路设计](TRADING_CHAIN_DESIGN.md)。
+状态：P0–P4 的本机实现和 P5 本机故障、30 秒及 180 秒验收已完成；非生产交易所账户验证尚未进行，`live` 仍禁止启动。实测与文件变更见[首轮实施记录](TRADING_CHAIN_IMPLEMENTATION.md)及[后续开发记录](TRADING_CHAIN_FOLLOWUP.md)。本文保留原开发契约；架构与前后目录全图见[交易链路设计](../architecture/TRADING_CHAIN_DESIGN.md)。
 
 ## 1. 起点、目标和边界
 

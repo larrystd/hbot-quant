@@ -127,11 +127,9 @@ cc_library(
     strip_include_prefix = "/hquant/src",
     include_prefix = "hquant",
     deps = [
-        ":client_order_id",
         ":funds_state",
         ":order_journal",
         ":order_manager",
-        ":risk_limits",
         ":trade_port",
         "//hquant/src:config",
         "//hquant/src:sqlite_history",

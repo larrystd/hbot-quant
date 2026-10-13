@@ -42,7 +42,7 @@ hquant/
   test/e2e_trade.py  test/run_trade_e2e.cc
 ```
 
-`paper_exchange.*` 从 `src/shard/` 迁移到 `src/sim/`；`src/` 根目录没有新增交易类。完整前后目录及后续计划见[交易链路设计](TRADING_CHAIN_DESIGN.md)和[开发文档](TRADING_CHAIN_DEVELOPMENT.md)。
+`paper_exchange.*` 从 `src/shard/` 迁移到 `src/sim/`；`src/` 根目录没有新增交易类。完整前后目录及后续计划见[交易链路设计](../architecture/TRADING_CHAIN_DESIGN.md)和[开发文档](TRADING_CHAIN_DEVELOPMENT.md)。
 
 ## 验收方式与结果
 

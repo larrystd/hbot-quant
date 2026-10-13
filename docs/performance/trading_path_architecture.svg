@@ -1,0 +1,97 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 720" role="img" aria-labelledby="title desc">
+  <title id="title">hquant 压测场景的线程与数据流</title>
+  <desc id="desc">左侧是模拟交易所的撮合与 REST 接收线程；中间是八个 Shard 工作线程上的行情、策略、本地准入和 REST 发送；右侧是账户、私有 WebSocket、日志和历史记录的异步处理。蓝色实线是发单主路径，金色虚线是异步任务或回报。</desc>
+  <defs>
+    <marker id="hot-arrow" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto"><path d="M0 0 L9 4.5 L0 9 Z" fill="#0b6c91"/></marker>
+    <marker id="async-arrow" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto"><path d="M0 0 L9 4.5 L0 9 Z" fill="#a46c16"/></marker>
+    <style>
+      text{font-family:system-ui,-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;fill:#173042}
+      .title{font-size:25px;font-weight:750}.sub{font-size:13px;fill:#4e6472}
+      .proc{fill:#f7fafc;stroke:#c5d7e1;stroke-width:2}.group{fill:#eaf5fa;stroke:#8ab6c9;stroke-width:1.5}.async-group{fill:#fff8e9;stroke:#d8bc83;stroke-width:1.5}
+      .node{fill:#fff;stroke:#a9c5d1;stroke-width:1.5}.async-node{fill:#fff;stroke:#d5ba85;stroke-width:1.5}
+      .head{font-size:18px;font-weight:750}.group-head{font-size:15px;font-weight:750;fill:#145b74}.node-head{font-size:15px;font-weight:700}.small{font-size:12px;fill:#526b79}.edge{font-size:12px;font-weight:700;fill:#0b6c91}.edge-async{font-size:12px;font-weight:700;fill:#946214}
+      .hot{fill:none;stroke:#0b6c91;stroke-width:3;marker-end:url(#hot-arrow)}.async{fill:none;stroke:#a46c16;stroke-width:2.5;stroke-dasharray:7 5;marker-end:url(#async-arrow)}
+    </style>
+  </defs>
+  <rect width="1280" height="720" fill="#fff"/>
+  <text class="title" x="34" y="37">当前压测架构：行情、发单、撮合与回报</text>
+  <text class="sub" x="35" y="62">蓝色实线：首单发出主路径　　金色虚线：异步任务、撮合投递或回报　　主指标到交易所读完整 HTTP 请求为止</text>
+
+  <rect class="proc" x="35" y="88" width="365" height="550" rx="17"/>
+  <text class="head" x="55" y="119">SimVenue · C++ 模拟交易所</text>
+  <rect class="group" x="51" y="143" width="333" height="311" rx="13"/>
+  <text class="group-head" x="69" y="171">io 工作线程 ×1（下列操作串行）</text>
+  <rect class="node" x="69" y="187" width="297" height="61" rx="9"/>
+  <text class="node-head" x="84" y="212">行情定时器 + 公有 WS</text>
+  <text class="small" x="84" y="233">生成盘口/成交帧，向 1000 个标的发送</text>
+  <rect class="node" x="69" y="264" width="297" height="76" rx="9"/>
+  <text class="node-head" x="84" y="290">订单簿 + 撮合 + 账户余额</text>
+  <text class="small" x="84" y="311">校验订单、限价撮合、生成成交</text>
+  <text class="small" x="84" y="328">与行情发送共用同一个 io 线程</text>
+  <rect class="node" x="69" y="357" width="297" height="70" rx="9"/>
+  <text class="node-head" x="84" y="384">私有 WS 回报</text>
+  <text class="small" x="84" y="405">NEW / TRADE / CANCELED、余额更新</text>
+  <rect class="group" x="51" y="474" width="333" height="147" rx="13"/>
+  <text class="group-head" x="69" y="501">rest_io 工作线程 ×1</text>
+  <rect class="node" x="69" y="514" width="297" height="88" rx="9"/>
+  <text class="node-head" x="84" y="539">16 条 REST socket 的 accept / read</text>
+  <text class="small" x="84" y="559">HTTP 读完整回调 = 主指标终点</text>
+  <text class="small" x="84" y="580">之后 post 给上面的 io 线程撮合</text>
+
+  <rect class="proc" x="435" y="88" width="395" height="550" rx="17"/>
+  <text class="head" x="455" y="119">QuantServer · 下单热路径</text>
+  <rect class="group" x="451" y="143" width="363" height="478" rx="13"/>
+  <text class="group-head" x="469" y="171">Shard 工作线程 ×8（线程之间并行）</text>
+  <text class="small" x="469" y="190">1000 个 Shard，约 125 个 / 线程；每线程内部串行</text>
+  <rect class="node" x="469" y="205" width="327" height="66" rx="9"/>
+  <text class="node-head" x="484" y="231">BinanceFeed → Market → Strategy</text>
+  <text class="small" x="484" y="251">收完整 WS 帧、解析、更新盘口、算报价</text>
+  <rect class="node" x="469" y="286" width="327" height="66" rx="9"/>
+  <text class="node-head" x="484" y="312">ShardTradingState::BeginSubmit</text>
+  <text class="small" x="484" y="332">订单 ID、本地风控、Shard 自有额度预留</text>
+  <rect class="node" x="469" y="367" width="327" height="77" rx="9"/>
+  <text class="node-head" x="484" y="394">TradingAccount::SubmitFromShard</text>
+  <text class="small" x="484" y="414">同一 Shard 线程：准入检查，任务/日志入队</text>
+  <text class="small" x="484" y="431">调用对应 Shard 工作者的 REST 客户端</text>
+  <rect class="node" x="469" y="460" width="327" height="93" rx="9"/>
+  <text class="node-head" x="484" y="486">BinanceTradeClient · 本线程运行</text>
+  <text class="small" x="484" y="507">优先级队列、共享限速器、签名/组包</text>
+  <text class="small" x="484" y="528">每工作线程 2 条 HTTP/1.1 异步连接</text>
+  <rect class="node" x="469" y="566" width="327" height="38" rx="9"/>
+  <text class="small" x="484" y="590">共 16 条连接；网络等待可重叠</text>
+
+  <rect class="proc" x="865" y="88" width="380" height="550" rx="17"/>
+  <text class="head" x="885" y="119">QuantServer · 异步支路</text>
+  <rect class="async-group" x="881" y="143" width="348" height="478" rx="13"/>
+  <rect class="async-node" x="899" y="190" width="312" height="103" rx="9"/>
+  <text class="node-head" x="914" y="217">账户 io 工作线程 ×1</text>
+  <text class="small" x="914" y="239">镜像订单/资金、私有事件、REST 回调</text>
+  <text class="small" x="914" y="258">历史入队、视图发布，再 post 给 Shard</text>
+  <text class="small" x="914" y="277">按账户任务顺序执行；发单不等它完成</text>
+  <rect class="async-node" x="899" y="319" width="312" height="68" rx="9"/>
+  <text class="node-head" x="914" y="345">私有 WS 工作线程 ×1</text>
+  <text class="small" x="914" y="366">读取交易所回报，投到账户队列</text>
+  <rect class="async-node" x="899" y="412" width="312" height="70" rx="9"/>
+  <text class="node-head" x="914" y="439">OrderJournal 写线程 ×1</text>
+  <text class="small" x="914" y="460">写订单意图；发单不等待 COMMIT</text>
+  <rect class="async-node" x="899" y="508" width="312" height="70" rx="9"/>
+  <text class="node-head" x="914" y="535">History 写/读线程各 ×1</text>
+  <text class="small" x="914" y="556">账户线程稍后将历史记录入队</text>
+
+  <path class="hot" d="M366 221 L467 232"/>
+  <text class="edge" x="394" y="211">行情 WS</text>
+  <path class="hot" d="M469 583 L418 583 L418 556 L368 556"/>
+  <text class="edge" x="393" y="539">REST</text>
+  <path class="async" d="M69 555 L58 555 L58 303 L69 303"/>
+  <text class="edge-async" x="62" y="464">post 撮合</text>
+  <path class="async" d="M796 390 L843 390 L843 239 L897 239"/>
+  <text class="edge-async" x="815" y="376">镜像任务</text>
+  <path class="async" d="M796 424 L861 424 L861 447 L897 447"/>
+  <text class="edge-async" x="805" y="458">日志意图</text>
+  <path class="async" d="M366 393 L419 393 L419 666 L848 666 L848 353 L897 353"/>
+  <text class="edge-async" x="540" y="690">私有 WS 回报：交易所撮合后才进入该支路</text>
+  <path class="async" d="M1055 319 L1055 295"/>
+  <text class="edge-async" x="1063" y="310">事件入队</text>
+  <path class="async" d="M899 279 L814 279 L814 319 L798 319"/>
+  <text class="edge-async" x="817" y="269">视图 / 回报</text>
+</svg>

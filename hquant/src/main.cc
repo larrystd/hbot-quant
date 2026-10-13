@@ -181,27 +181,16 @@ bool WriteRestClientTrace(
     const std::vector<hquant::v1::TradePerfSnapshot::RestRequestTrace>& rows) {
   std::string output;
   output.reserve(rows.size() * 72 + 64);
-  output += "client_id,kind,enqueued_ns,dispatched_ns,write_start_ns,write_done_ns,posted_ns,queued_before_post,active_lanes_on_post\n";
+  output += "client_id,kind,enqueued_ns,dispatched_ns,write_start_ns,write_done_ns,posted_ns,queued_before_post,active_lanes_on_post,first_write_call_ns,first_write_return_ns,write_calls,response_done_ns\n";
   for (const auto& row : rows) {
-    std::format_to(std::back_inserter(output), "{},{},{},{},{},{},{},{},{}\n", row.client_id,
+    std::format_to(std::back_inserter(output), "{},{},{},{},{},{},{},{},{},{},{},{},{}\n", row.client_id,
                    row.cancel ? "CANCEL" : "SUBMIT", row.enqueued_ns,
                    row.dispatched_ns,
                    row.write_start_ns, row.write_done_ns, row.posted_ns,
-                   row.queued_before_post, row.active_lanes_on_post);
+                   row.queued_before_post, row.active_lanes_on_post,
+                   row.first_write_call_ns, row.first_write_return_ns,
+                   row.write_calls, row.response_done_ns);
   }
-  return WriteTextFile(path, output);
-}
-
-bool WriteAccountSubmitTrace(
-    const std::string& path,
-    const std::vector<hquant::v1::TradePerfSnapshot::AccountSubmitTrace>&
-        rows) {
-  std::string output;
-  output.reserve(rows.size() * 72 + 64);
-  output += "client_id,requested_ns,started_ns,finished_ns\n";
-  for (const auto& row : rows)
-    std::format_to(std::back_inserter(output), "{},{},{},{}\n", row.client_id,
-                   row.requested_ns, row.started_ns, row.finished_ns);
   return WriteTextFile(path, output);
 }
 
@@ -442,12 +431,6 @@ bool WriteBenchOutput(const std::string& path,
            "shared_view_flush_trace.csv")
               .string(),
           trade.shared_view_flush_trace))
-    return false;
-  if (!WriteAccountSubmitTrace(
-          (std::filesystem::path(path).parent_path() /
-           "account_submit_trace.csv")
-              .string(),
-          trade.account_submit_trace))
     return false;
   if (!WriteRestClientTrace(
           (std::filesystem::path(path).parent_path() /

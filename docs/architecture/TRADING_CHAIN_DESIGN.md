@@ -1,6 +1,6 @@
 # hquant 完整交易系统设计（提案）
 
-本文设计从原 Paper 系统演进到单交易所、账户级现货交易系统的完整目标。1000 标的、30 秒模拟交易所压测是第一个验收节点，不是最终架构边界。首轮核心链路已经实现并通过该节点，当前代码和实测结果见[实施记录](TRADING_CHAIN_IMPLEMENTATION.md)；可靠恢复、风控与实盘门禁仍属于后续目标。[DESIGN.md](DESIGN.md) 描述的是原 Paper 系统，其中“实盘主要替换 PaperExchange”的设想不适用于共享账户和异步订单回报。
+本文设计从原 Paper 系统演进到单交易所、账户级现货交易系统的完整目标。1000 标的、30 秒模拟交易所压测是第一个验收节点，不是最终架构边界。首轮核心链路已经实现并通过该节点，当前代码和实测结果见[实施记录](../development/TRADING_CHAIN_IMPLEMENTATION.md)；可靠恢复、风控与实盘门禁仍属于后续目标。[DESIGN.md](DESIGN.md) 描述的是原 Paper 系统，其中“实盘主要替换 PaperExchange”的设想不适用于共享账户和异步订单回报。
 
 ## 1. 现状与目标
 
@@ -41,10 +41,10 @@
 
 | Hummingbot 参照 | 当前 hquant 缺口 | 本设计落点 |
 | --- | --- | --- |
-| [InFlightOrder](../../hummingbot/hummingbot/core/data_type/in_flight_order.py) 保存本地与交易所订单 ID、执行量和状态 | PaperExchange 订单只服务单 Shard，外部发包和回报没有统一订单状态 | OrderState 保存订单投影，FundsState 保存资金预留，TradingAccount 串行协调 |
-| [ClientOrderTracker](../../hummingbot/hummingbot/connector/client_order_tracker.py) 跟踪活动、已结束缓存和丢失订单 | OnAccountEvent 主要写历史，异步撤单没有等待确认的门禁 | TradingAccount 串行处理回报，Shard 在状态确认后再决策 |
-| [BinanceExchange](../../hummingbot/hummingbot/connector/exchange/binance/binance_exchange.py) 分开下单、私有 executionReport、查订单和补查成交 | 目前只有进程内 Paper 调用 | BinanceTradeClient、BinanceUserStream 与 SyncFromVenue 分工，并按成交 ID 去重 |
-| [私有流数据源](../../hummingbot/hummingbot/connector/exchange/binance/binance_api_user_stream_data_source.py) 负责签名订阅及事件解包 | 目前只有公开行情 WS | 每账户一条私有流，断线后停止新单并同步账户状态 |
+| [InFlightOrder](../../../hummingbot/hummingbot/core/data_type/in_flight_order.py) 保存本地与交易所订单 ID、执行量和状态 | PaperExchange 订单只服务单 Shard，外部发包和回报没有统一订单状态 | OrderState 保存订单投影，FundsState 保存资金预留，TradingAccount 串行协调 |
+| [ClientOrderTracker](../../../hummingbot/hummingbot/connector/client_order_tracker.py) 跟踪活动、已结束缓存和丢失订单 | OnAccountEvent 主要写历史，异步撤单没有等待确认的门禁 | TradingAccount 串行处理回报，Shard 在状态确认后再决策 |
+| [BinanceExchange](../../../hummingbot/hummingbot/connector/exchange/binance/binance_exchange.py) 分开下单、私有 executionReport、查订单和补查成交 | 目前只有进程内 Paper 调用 | BinanceTradeClient、BinanceUserStream 与 SyncFromVenue 分工，并按成交 ID 去重 |
+| [私有流数据源](../../../hummingbot/hummingbot/connector/exchange/binance/binance_api_user_stream_data_source.py) 负责签名订阅及事件解包 | 目前只有公开行情 WS | 每账户一条私有流，断线后停止新单并同步账户状态 |
 
 可靠发送意图、崩溃恢复和账户级风险门禁仍需在 hquant 中明确实现与验证，不能由上述参照代码或第一轮压测自动保证。
 

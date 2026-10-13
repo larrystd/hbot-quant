@@ -20,6 +20,19 @@ cc_test(
     size = "small",
 )
 
+cc_test(
+    name = "sim_venue_market_test",
+    srcs = ["sim_venue_market_test.cc"],
+    deps = [
+        ":sim_venue",
+        "@boost.asio//:boost.asio",
+        "@boost.beast//:boost.beast",
+        "@simdjson//:simdjson",
+    ],
+    size = "medium",
+    tags = ["local"],
+)
+
 cc_library(
     name = "sim_venue",
     srcs = ["sim_venue.cc"],

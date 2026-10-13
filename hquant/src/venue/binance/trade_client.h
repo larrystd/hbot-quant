@@ -25,8 +25,8 @@
 
 namespace hquant::v1 {
 
-// Private stream and REST sockets have separate IO workers. Account callbacks
-// are returned to the account worker, which remains the sole account owner.
+// REST sockets can run on their owning Shard worker. Private stream and account
+// callbacks remain separate from the outbound order path.
 class BinanceTradeClient final : public TradePort {
  public:
   BinanceTradeClient(boost::asio::io_context& io, const AccountConfig& config,
@@ -35,7 +35,9 @@ class BinanceTradeClient final : public TradePort {
                      BinanceUserStream::HealthSink on_health,
                      TradePerf* perf = nullptr, size_t queue_capacity = 8192,
                      std::shared_ptr<RequestScheduler> scheduler = nullptr,
-                     std::string rule_symbol = {});
+                     std::string rule_symbol = {},
+                     boost::asio::io_context* shard_rest_io = nullptr,
+                     bool start_private_stream = true);
   ~BinanceTradeClient() override;
 
   bool Submit(SubmitCommand command, Completion done,
@@ -82,6 +84,7 @@ class BinanceTradeClient final : public TradePort {
     uint64_t dispatched_ns = 0;
     uint64_t write_start_ns = 0;
     uint64_t write_done_ns = 0;
+    HttpWriteTrace write_trace;
     uint64_t posted_ns = 0;
     size_t queued_before_post = 0;
     size_t active_lanes_on_post = 0;
@@ -100,7 +103,8 @@ class BinanceTradeClient final : public TradePort {
     bool waiting_for_schedule = false;
   };
 
-  bool Enqueue(Job job);
+  bool Enqueue(Job&& job);
+  void QueueOnRest(Job&& job);
   void StartDrains();
   static RequestClass Classify(Job::Kind kind);
   static size_t Priority(Job::Kind kind);
@@ -108,10 +112,12 @@ class BinanceTradeClient final : public TradePort {
   Job PopNextJob();
   HttpRequest MakeRequest(Job& job) const;
   boost::asio::awaitable<void> Drain(RestLane& lane);
+  void CompleteTrade(Job& job, TradeResponse response);
   void Complete(Job& job, absl::StatusOr<HttpResponse> response);
 
   boost::asio::io_context& io_;
-  boost::asio::io_context rest_io_;
+  boost::asio::io_context owned_rest_io_;
+  boost::asio::io_context& rest_io_;
   boost::asio::executor_work_guard<boost::asio::io_context::executor_type>
       rest_guard_;
   boost::asio::executor_work_guard<boost::asio::io_context::executor_type>
@@ -125,6 +131,7 @@ class BinanceTradeClient final : public TradePort {
   std::string api_key_;
   std::string api_secret_;
   std::string rule_symbol_;
+  bool private_stream_enabled_ = true;
   size_t queue_capacity_;
   std::chrono::seconds submit_queue_timeout_;
   TradePerf* perf_ = nullptr;

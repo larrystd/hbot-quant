@@ -6,6 +6,9 @@
 #include <chrono>
 #include <cstdint>
 #include <cstdio>
+#include <cstdlib>
+#include <cstring>
+#include <dlfcn.h>
 #include <deque>
 #include <functional>
 #include <limits>
@@ -19,6 +22,10 @@
 #include <unordered_map>
 #include <utility>
 #include <vector>
+
+#ifdef __APPLE__
+#include <pthread/qos.h>
+#endif
 
 #include "boost/asio.hpp"
 #include "boost/beast.hpp"
@@ -34,6 +41,16 @@ namespace http = beast::http;
 namespace websocket = beast::websocket;
 using tcp = net::ip::tcp;
 using Error = boost::system::error_code;
+
+int SetBenchmarkQos(bool requested) {
+  if (!requested) return 0;
+#ifdef __APPLE__
+  return ::pthread_set_qos_class_self_np(QOS_CLASS_USER_INTERACTIVE, 0);
+#else
+  return -1;
+#endif
+}
+
 constexpr int64_t kScale = 1'000'000'000;
 constexpr int64_t kCent = 10'000'000;
 constexpr std::string_view kKey = "hquant-sim-key";
@@ -43,6 +60,13 @@ uint64_t ClockNs() {
   timespec t{};
   clock_gettime(CLOCK_MONOTONIC, &t);
   return uint64_t(t.tv_sec) * 1'000'000'000 + t.tv_nsec;
+}
+
+uint64_t ReadReadyNs(int fd) {
+  using Probe = uint64_t (*)(int);
+  static Probe probe = reinterpret_cast<Probe>(
+      dlsym(RTLD_DEFAULT, "hquant_kevent_read_ready_ns"));
+  return probe ? probe(fd) : 0;
 }
 
 uint64_t EpochMs() {
@@ -369,19 +393,62 @@ struct SimVenue::Impl {
   };
 
   struct HttpSession : std::enable_shared_from_this<HttpSession> {
+    struct TimedReadStream {
+      using executor_type = tcp::socket::executor_type;
+      tcp::socket& socket;
+      uint64_t& first_read_ns;
+      uint64_t& last_read_ns;
+      uint32_t& reads;
+      uint64_t& read_ready_ns;
+
+      executor_type get_executor() const noexcept {
+        return socket.get_executor();
+      }
+
+      template <typename Buffers, typename Handler>
+      void async_read_some(const Buffers& buffers, Handler&& handler) {
+        socket.async_read_some(
+            buffers,
+            [this, handler = std::forward<Handler>(handler)](
+                Error error, size_t bytes) mutable {
+              if (bytes != 0) {
+                const uint64_t now = ClockNs();
+                if (first_read_ns == 0) {
+                  first_read_ns = now;
+                  read_ready_ns = ReadReadyNs(socket.native_handle());
+                }
+                last_read_ns = now;
+                ++reads;
+              }
+              handler(error, bytes);
+            });
+      }
+    };
+
     Impl& venue;
     tcp::socket socket;
     beast::flat_buffer buffer;
     http::request<http::string_body> request;
     int kind;
+    uint64_t first_socket_read_ns = 0;
+    uint64_t last_socket_read_ns = 0;
+    uint32_t socket_reads = 0;
+    uint64_t read_ready_ns = 0;
+    TimedReadStream timed_read;
 
     HttpSession(Impl& venue, tcp::socket socket, int kind)
-        : venue(venue), socket(std::move(socket)), kind(kind) {}
+        : venue(venue), socket(std::move(socket)), kind(kind),
+          timed_read{this->socket, first_socket_read_ns,
+                     last_socket_read_ns, socket_reads, read_ready_ns} {}
 
     void Read() {
       auto self = shared_from_this();
       request = {};
-      http::async_read(socket, buffer, request, [self](Error error, size_t) {
+      first_socket_read_ns = 0;
+      last_socket_read_ns = 0;
+      socket_reads = 0;
+      read_ready_ns = 0;
+      auto complete = [self](Error error, size_t) {
         if (error) return;
         const uint64_t received_ns = ClockNs();
         if (self->kind == 2) {
@@ -391,7 +458,11 @@ struct SimVenue::Impl {
         } else {
           self->HandleRequest(received_ns);
         }
-      });
+      };
+      if (kind == 2)
+        http::async_read(timed_read, buffer, request, std::move(complete));
+      else
+        http::async_read(socket, buffer, request, std::move(complete));
     }
 
     void HandleRequest(uint64_t received_ns) {
@@ -408,10 +479,17 @@ struct SimVenue::Impl {
               target.substr(order_path.size() + 1),
               method == http::verb::post ? "newClientOrderId"
                                          : "origClientOrderId");
-          if (!client.empty())
-            venue.trace.requests.push_back(
-                {client, method == http::verb::post ? "SUBMIT" : "CANCEL",
-                 received_ns});
+          if (!client.empty()) {
+            VenueTrace::AccountStamp stamp;
+            stamp.client_id = client;
+            stamp.status = method == http::verb::post ? "SUBMIT" : "CANCEL";
+            stamp.at_ns = received_ns;
+            stamp.first_socket_read_ns = first_socket_read_ns;
+            stamp.last_socket_read_ns = last_socket_read_ns;
+            stamp.socket_reads = socket_reads;
+            stamp.read_ready_ns = read_ready_ns;
+            venue.trace.requests.push_back(std::move(stamp));
+          }
         }
       }
       if (kind == 1 || kind == 3) {
@@ -907,6 +985,8 @@ struct SimVenue::Impl {
   net::executor_work_guard<net::io_context::executor_type> rest_guard;
   std::thread worker;
   std::thread rest_worker;
+  std::atomic<int> market_io_qos_status{0};
+  std::atomic<int> rest_io_qos_status{0};
   VenuePorts ports;
   MatchingEngine matcher;
   std::vector<std::string> symbols;
@@ -943,9 +1023,18 @@ VenuePorts SimVenue::ports() const { return impl_->ports; }
 std::string SimVenue::Symbol(size_t shard) { return SymbolName(shard); }
 void SimVenue::Start() {
   for (auto& listener : impl_->listeners) listener->Accept();
-  impl_->worker = std::thread([this] { impl_->io.run(); });
+  const char* qos_env = std::getenv("HQUANT_BENCH_PERFORMANCE_QOS");
+  const bool qos_requested = !qos_env || std::strcmp(qos_env, "0") != 0;
+  impl_->trace.performance_qos_requested = qos_requested;
+  impl_->worker = std::thread([this, qos_requested] {
+    impl_->market_io_qos_status = SetBenchmarkQos(qos_requested);
+    impl_->io.run();
+  });
   try {
-    impl_->rest_worker = std::thread([this] { impl_->rest_io.run(); });
+    impl_->rest_worker = std::thread([this, qos_requested] {
+      impl_->rest_io_qos_status = SetBenchmarkQos(qos_requested);
+      impl_->rest_io.run();
+    });
   } catch (...) {
     impl_->io.stop();
     impl_->worker.join();
@@ -977,6 +1066,8 @@ VenueTrace SimVenue::StopAndCollect() {
   impl_->io.stop();
   if (impl_->worker.joinable()) impl_->worker.join();
   if (impl_->rest_worker.joinable()) impl_->rest_worker.join();
+  impl_->trace.market_io_qos_status = impl_->market_io_qos_status;
+  impl_->trace.rest_io_qos_status = impl_->rest_io_qos_status;
   for (const auto& [asset, balance] : impl_->wallet)
     impl_->trace.balances.push_back({asset, balance.free, balance.locked});
   return std::move(impl_->trace);

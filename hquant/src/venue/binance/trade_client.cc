@@ -15,6 +15,7 @@
 #include "absl/status/status.h"
 #include "boost/asio/co_spawn.hpp"
 #include "boost/asio/detached.hpp"
+#include "boost/asio/dispatch.hpp"
 #include "boost/asio/post.hpp"
 #include "boost/asio/redirect_error.hpp"
 #include "boost/asio/use_awaitable.hpp"
@@ -254,8 +255,10 @@ BinanceTradeClient::BinanceTradeClient(
     BinanceUserStream::EventSink on_event,
     BinanceUserStream::HealthSink on_health, TradePerf* perf,
     size_t queue_capacity, std::shared_ptr<RequestScheduler> scheduler,
-    std::string rule_symbol)
+    std::string rule_symbol, boost::asio::io_context* shard_rest_io,
+    bool start_private_stream)
     : io_(io),
+      rest_io_(shard_rest_io ? *shard_rest_io : owned_rest_io_),
       rest_guard_(boost::asio::make_work_guard(rest_io_)),
       account_guard_(boost::asio::make_work_guard(io_)),
       private_guard_(boost::asio::make_work_guard(private_io_)),
@@ -268,6 +271,7 @@ BinanceTradeClient::BinanceTradeClient(
       api_key_(std::move(api_key)),
       api_secret_(std::move(api_secret)),
       rule_symbol_(std::move(rule_symbol)),
+      private_stream_enabled_(start_private_stream),
       queue_capacity_(queue_capacity),
       submit_queue_timeout_(config.mode == TradingMode::PressureSim
                                 ? std::chrono::seconds(30)
@@ -276,14 +280,19 @@ BinanceTradeClient::BinanceTradeClient(
   rest_lanes_.reserve(config.rest_connections);
   for (size_t i = 0; i < config.rest_connections; ++i)
     rest_lanes_.push_back(std::make_unique<RestLane>(rest_io_, config));
-  user_stream_.Start();
+  if (private_stream_enabled_)
+    user_stream_.Start();
+  else
+    private_guard_.reset();
   try {
-    rest_worker_ = std::thread([this] { rest_io_.run(); });
-    private_worker_ = std::thread([this] { private_io_.run(); });
+    if (!shard_rest_io)
+      rest_worker_ = std::thread([this] { rest_io_.run(); });
+    if (private_stream_enabled_)
+      private_worker_ = std::thread([this] { private_io_.run(); });
   } catch (...) {
     rest_guard_.reset();
     private_guard_.reset();
-    rest_io_.stop();
+    if (!shard_rest_io) rest_io_.stop();
     private_io_.stop();
     if (rest_worker_.joinable()) rest_worker_.join();
     if (private_worker_.joinable()) private_worker_.join();
@@ -297,7 +306,7 @@ BinanceTradeClient::~BinanceTradeClient() {
   if (private_worker_.joinable()) private_worker_.join();
 }
 
-bool BinanceTradeClient::Enqueue(Job job) {
+bool BinanceTradeClient::Enqueue(Job&& job) {
   const size_t queued = accepted_queued_jobs_.load();
   if (stopped_.load() || queued >= queue_capacity_) {
     ++queue_rejections_;
@@ -317,7 +326,6 @@ bool BinanceTradeClient::Enqueue(Job job) {
   }
   job.enqueued = std::chrono::steady_clock::now();
   if (perf_) job.enqueued_ns = BenchClockNowNs();
-  if (job.done) job.done = OnAccount(io_, std::move(job.done));
   if (job.query_done)
     job.query_done = OnAccount(io_, std::move(job.query_done));
   if (job.trades_done)
@@ -328,26 +336,29 @@ bool BinanceTradeClient::Enqueue(Job job) {
     job.open_orders_done = OnAccount(io_, std::move(job.open_orders_done));
   if (job.rules_done)
     job.rules_done = OnAccount(io_, std::move(job.rules_done));
-  if (job.write_started) {
-    job.write_started = [this, callback = std::move(job.write_started)] {
-      boost::asio::post(io_, callback);
-    };
-  }
   const size_t accepted = accepted_queued_jobs_.fetch_add(1) + 1;
   size_t peak = queue_peak_.load();
   while (accepted > peak &&
          !queue_peak_.compare_exchange_weak(peak, accepted)) {}
-  boost::asio::post(rest_io_, [this, job = std::move(job)]() mutable {
-    if (perf_) job.posted_ns = BenchClockNowNs();
-    job.queued_before_post = queued_jobs_;
-    job.active_lanes_on_post = active_lanes_;
-    queues_[Priority(job.kind)].push_back(std::move(job));
-    ++queued_jobs_;
-    for (const auto& lane : rest_lanes_)
-      if (lane->waiting_for_schedule) lane->schedule_timer.cancel();
-    StartDrains();
-  });
+  if (rest_io_.get_executor().running_in_this_thread()) {
+    QueueOnRest(std::move(job));
+  } else {
+    boost::asio::dispatch(rest_io_, [this, job = std::move(job)]() mutable {
+      QueueOnRest(std::move(job));
+    });
+  }
   return true;
+}
+
+void BinanceTradeClient::QueueOnRest(Job&& job) {
+  if (perf_) job.posted_ns = BenchClockNowNs();
+  job.queued_before_post = queued_jobs_;
+  job.active_lanes_on_post = active_lanes_;
+  queues_[Priority(job.kind)].push_back(std::move(job));
+  ++queued_jobs_;
+  for (const auto& lane : rest_lanes_)
+    if (lane->waiting_for_schedule) lane->schedule_timer.cancel();
+  StartDrains();
 }
 
 void BinanceTradeClient::StartDrains() {
@@ -527,9 +538,10 @@ HttpRequest BinanceTradeClient::MakeRequest(Job& job) const {
   request.deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
   if (job.kind == Job::Kind::Submit || job.kind == Job::Kind::Cancel) {
     request.on_write_start = [this, &job] {
-      if (job.write_started) job.write_started();
+      if (job.write_started) boost::asio::post(io_, job.write_started);
       if (perf_) job.write_start_ns = BenchClockNowNs();
     };
+    if (perf_) request.write_trace = &job.write_trace;
   }
   request.on_write = [this, &job](auto begin, auto done) {
     job.write_begin = begin;
@@ -547,9 +559,9 @@ boost::asio::awaitable<void> BinanceTradeClient::Drain(RestLane& lane) {
     if (selected.kind == Job::Kind::Submit &&
         now - selected.enqueued >= submit_queue_timeout_) {
       Job expired = PopNextJob();
-      expired.done(TradeResponse{TradeResponse::Result::NotSent,
-                                 {},
-                                 "local submit queue expired before send"});
+      CompleteTrade(expired,
+                    TradeResponse{TradeResponse::Result::NotSent, {},
+                                  "local submit queue expired before send"});
       continue;
     }
     const auto delay = scheduler_->Reserve(kind, now);
@@ -570,6 +582,7 @@ boost::asio::awaitable<void> BinanceTradeClient::Drain(RestLane& lane) {
     job.dispatched = std::chrono::steady_clock::now();
     if (perf_) job.dispatched_ns = BenchClockNowNs();
     auto response = co_await lane.http.Send(MakeRequest(job));
+    const uint64_t response_done_ns = perf_ ? BenchClockNowNs() : 0;
     if (response.ok()) {
       scheduler_->Observe(*response, std::chrono::steady_clock::now());
     }
@@ -585,7 +598,11 @@ boost::asio::awaitable<void> BinanceTradeClient::Drain(RestLane& lane) {
                                   job.write_done_ns,
                                   job.posted_ns,
                                   job.queued_before_post,
-                                  job.active_lanes_on_post});
+                                  job.active_lanes_on_post,
+                                  job.write_trace.first_write_call_ns,
+                                  job.write_trace.first_write_return_ns,
+                                  job.write_trace.write_calls,
+                                  response_done_ns});
       }
       perf_->Record(job.enqueued, job.dispatched, job.write_begin,
                     job.write_done, std::chrono::steady_clock::now(),
@@ -635,6 +652,13 @@ boost::asio::awaitable<void> BinanceTradeClient::Drain(RestLane& lane) {
   if (--active_lanes_ == 0 && rest_stop_processed_) FinishRestStop();
 }
 
+void BinanceTradeClient::CompleteTrade(Job& job, TradeResponse response) {
+  boost::asio::post(
+      io_, [done = std::move(job.done), response = std::move(response)]() mutable {
+        done(std::move(response));
+      });
+}
+
 void BinanceTradeClient::Complete(Job& job,
                                   absl::StatusOr<HttpResponse> response) {
   if (job.kind == Job::Kind::Query || job.kind == Job::Kind::Trades ||
@@ -663,53 +687,52 @@ void BinanceTradeClient::Complete(Job& job,
     return;
   }
   if (!response.ok()) {
-    job.done(
-        TradeResponse{job.write_begin == std::chrono::steady_clock::time_point{}
+    CompleteTrade(job,
+                  TradeResponse{
+                      job.write_begin == std::chrono::steady_clock::time_point{}
                           ? TradeResponse::Result::NotSent
                           : TradeResponse::Result::Unknown,
-                      {},
-                      std::string(response.status().message())});
+                      {}, std::string(response.status().message())});
     return;
   }
   if (response->status >= 500 || response->status == 408 ||
       response->status == 429 || response->status == 418 ||
       ExecutionMayBeUnknown(*response)) {
-    job.done(TradeResponse{
-        TradeResponse::Result::Unknown, {}, ErrorText(*response)});
+    CompleteTrade(job, TradeResponse{TradeResponse::Result::Unknown, {},
+                                     ErrorText(*response)});
     return;
   }
   if (response->status != 200) {
     const TradeResponse::Result result = job.kind == Job::Kind::Cancel
                                              ? TradeResponse::Result::Unknown
                                              : TradeResponse::Result::Rejected;
-    job.done(TradeResponse{result, {}, ErrorText(*response)});
+    CompleteTrade(job, TradeResponse{result, {}, ErrorText(*response)});
     return;
   }
   simdjson::dom::parser parser;
   auto root = Parse(parser, response->body);
   if (!root.ok()) {
-    job.done(TradeResponse{TradeResponse::Result::Unknown,
-                           {},
-                           std::string(root.status().message())});
+    CompleteTrade(job, TradeResponse{TradeResponse::Result::Unknown, {},
+                                     std::string(root.status().message())});
     return;
   }
   auto exchange_id = Number(*root, "orderId");
   if (!exchange_id.ok()) {
-    job.done(TradeResponse{TradeResponse::Result::Unknown,
-                           {},
-                           std::string(exchange_id.status().message())});
+    CompleteTrade(job, TradeResponse{TradeResponse::Result::Unknown, {},
+                                     std::string(exchange_id.status().message())});
     return;
   }
   if (job.kind == Job::Kind::Submit) {
     auto client = Text(*root, "clientOrderId");
     if (!client.ok() || *client != job.submit.client_order_id.value) {
-      job.done(TradeResponse{TradeResponse::Result::Unknown,
-                             {},
-                             "submit response client ID mismatch"});
+      CompleteTrade(job,
+                    TradeResponse{TradeResponse::Result::Unknown, {},
+                                  "submit response client ID mismatch"});
       return;
     }
-    job.done(TradeResponse{
-        TradeResponse::Result::Confirmed, ExchangeOrderId{*exchange_id}, {}});
+    CompleteTrade(job,
+                  TradeResponse{TradeResponse::Result::Confirmed,
+                                ExchangeOrderId{*exchange_id}, {}});
     return;
   }
   auto original = Text(*root, "origClientOrderId");
@@ -717,23 +740,25 @@ void BinanceTradeClient::Complete(Job& job,
   auto executed = Fixed(*root, "executedQty");
   if (!original.ok() || *original != job.cancel.client_order_id.value ||
       !quantity.ok() || !executed.ok() || *executed > *quantity) {
-    job.done(TradeResponse{TradeResponse::Result::Unknown,
-                           {},
-                           "cancel response incomplete or mismatched"});
+    CompleteTrade(job,
+                  TradeResponse{TradeResponse::Result::Unknown, {},
+                                "cancel response incomplete or mismatched"});
     return;
   }
-  job.done(TradeResponse{TradeResponse::Result::Confirmed,
-                         ExchangeOrderId{*exchange_id},
-                         {},
-                         *quantity - *executed});
+  CompleteTrade(job,
+                TradeResponse{TradeResponse::Result::Confirmed,
+                              ExchangeOrderId{*exchange_id}, {},
+                              *quantity - *executed});
 }
 
 void BinanceTradeClient::Stop() {
   if (stopped_.exchange(true)) return;
-  boost::asio::post(private_io_, [this] {
-    user_stream_.Stop();
-    private_guard_.reset();
-  });
+  if (private_stream_enabled_) {
+    boost::asio::post(private_io_, [this] {
+      user_stream_.Stop();
+      private_guard_.reset();
+    });
+  }
   boost::asio::post(rest_io_, [this] {
     for (const auto& lane : rest_lanes_) {
       lane->schedule_timer.cancel();
@@ -752,7 +777,7 @@ void BinanceTradeClient::Stop() {
       } else if (job.kind == Job::Kind::Rules) {
         job.rules_done(absl::CancelledError("trade client stopped"));
       } else {
-        job.done(TradeResponse{
+        CompleteTrade(job, TradeResponse{
             TradeResponse::Result::NotSent, {}, "trade client stopped"});
       }
     }

@@ -79,6 +79,25 @@ cc_library(
 )
 
 cc_library(
+    name = "trading_state",
+    srcs = ["trading_state.cc"],
+    hdrs = ["trading_state.h"],
+    strip_include_prefix = "/hquant/src",
+    include_prefix = "hquant",
+    deps = [
+        "//hquant/src:config",
+        "//hquant/src/base:fixed",
+        "//hquant/src/trading:order_journal",
+        "//hquant/src/trading:order_manager",
+        "//hquant/src/trading:risk_limits",
+        "//hquant/src/trading:trade_port",
+        "@abseil-cpp//absl/status:status",
+        "@abseil-cpp//absl/status:statusor",
+    ],
+    visibility = ["//hquant/src:__subpackages__", "//hquant/test:__pkg__"],
+)
+
+cc_library(
     name = "shard",
     srcs = ["shard.cc"],
     hdrs = ["shard.h"],
@@ -88,9 +107,11 @@ cc_library(
         ":market",
         ":market_type",
         ":strategy",
+        ":trading_state",
         "//hquant/src:config",
         "//hquant/src:perf_probe",
         "//hquant/src/base:log",
+        "//hquant/src/trading:client_order_id",
         "//hquant/src/trading:trading_account",
         "@abseil-cpp//absl/status:status",
         "@abseil-cpp//absl/status:statusor",

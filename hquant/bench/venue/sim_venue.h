@@ -17,6 +17,9 @@ struct VenuePorts {
 };
 
 struct VenueTrace {
+  bool performance_qos_requested = false;
+  int market_io_qos_status = 0;
+  int rest_io_qos_status = 0;
   uint64_t market_messages = 0;
   uint64_t market_actions = 0;
   uint64_t account_submits = 0;
@@ -31,6 +34,10 @@ struct VenueTrace {
     uint64_t exchange_order_id = 0;
     uint64_t trade_id = 0;
     uint64_t write_done_ns = 0;
+    uint64_t first_socket_read_ns = 0;
+    uint64_t last_socket_read_ns = 0;
+    uint32_t socket_reads = 0;
+    uint64_t read_ready_ns = 0;
   };
   std::vector<AccountStamp> requests;
   std::vector<AccountStamp> reports;

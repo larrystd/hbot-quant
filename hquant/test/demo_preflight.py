@@ -84,14 +84,20 @@ def get_json(path, params=None, api_key=None):
         with urlopen(Request(target, headers=headers), timeout=8) as response:
             return json.load(response)
     except HTTPError as error:
-        raise RuntimeError(f"Demo {path} returned HTTP {error.code}; no retry") from None
+        try:
+            venue_code = json.load(error).get("code")
+        except (ValueError, OSError, AttributeError):
+            venue_code = None
+        detail = f", Binance code {venue_code}" if isinstance(venue_code, int) else ""
+        raise RuntimeError(
+            f"Demo {path} returned HTTP {error.code}{detail}; no retry") from None
     except URLError as error:
         raise RuntimeError(f"Demo {path} connection failed: {error.reason}") from None
 
 
-def signed_get(path, params, credentials):
+def signed_get(path, params, credentials, recv_window_ms=5000):
     params = dict(params)
-    params["recvWindow"] = 5000
+    params["recvWindow"] = recv_window_ms
     params["timestamp"] = int(time.time() * 1000)
     payload = urlencode(params)
     params["signature"] = hmac.new(credentials["api_secret"].encode(),

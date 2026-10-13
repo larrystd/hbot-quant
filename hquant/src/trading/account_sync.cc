@@ -9,6 +9,7 @@
 #include <string>
 #include <utility>
 
+#include "boost/asio/post.hpp"
 #include "hquant/base/fixed.h"
 
 namespace hquant::v1 {
@@ -17,6 +18,7 @@ AccountSync::AccountSync(Inputs inputs)
     : inputs_(std::move(inputs)), sync_timer_(inputs_.io) {}
 
 void AccountSync::Disconnect() {
+  inputs_.disable_admission();
   sync_timer_.cancel();
   ++generation_;
   syncing_ = false;
@@ -52,6 +54,12 @@ struct AccountSync::State {
 void AccountSync::Start() {
   sync_timer_.cancel();
   inputs_.order_query_timer.cancel();
+  inputs_.disable_admission();
+  if (inputs_.quiescing) return;
+  if (!inputs_.account_queue_empty()) {
+    boost::asio::post(inputs_.io, GuardState([this] { Start(); }));
+    return;
+  }
   if (!inputs_.journal || !inputs_.port() || !inputs_.private_connected) {
     inputs_.pause("cannot synchronize account without trading connection");
     return;
@@ -70,9 +78,9 @@ void AccountSync::Start() {
   state->generation = generation;
   state->expected_totals = inputs_.funds.ProjectedTotals();
   if (!inputs_.port()->QueryRules(
-          [this, state](absl::StatusOr<std::vector<VenueRule>> response) {
+          GuardState([this, state](absl::StatusOr<std::vector<VenueRule>> response) {
             SyncRules(state, std::move(response));
-          })) {
+          }))) {
     syncing_ = false;
     inputs_.pause("trading rules query queue unavailable");
   }
@@ -130,9 +138,9 @@ void AccountSync::SyncRules(std::shared_ptr<State> state,
   }
   inputs_.venue_rules = std::move(rules);
   if (!inputs_.port()->QueryOpenOrders(
-          [this, state](absl::StatusOr<std::vector<OrderReport>> response) {
+          GuardState([this, state](absl::StatusOr<std::vector<OrderReport>> response) {
             SyncOpenOrders(state, std::move(response));
-          })) {
+          }))) {
     syncing_ = false;
     inputs_.pause("open orders query queue unavailable");
   }
@@ -183,7 +191,7 @@ void AccountSync::SyncNextOrder(std::shared_ptr<State> state) {
   }
   const QueryCommand query{order->market, id, order->exchange_order_id};
   if (!inputs_.port()->Query(
-          query, [this, state, query](absl::StatusOr<OrderReport> result) {
+          query, GuardState([this, state, query](absl::StatusOr<OrderReport> result) {
             if (state->generation != generation_ || !syncing_) return;
             if (!result.ok()) {
               syncing_ = false;
@@ -204,7 +212,7 @@ void AccountSync::SyncNextOrder(std::shared_ptr<State> state) {
                 state->report.order.exchange_order_id;
             if (!inputs_.port()->QueryTrades(
                     trades_query,
-                    [this, state](absl::StatusOr<std::vector<Fill>> trades) {
+                    GuardState([this, state](absl::StatusOr<std::vector<Fill>> trades) {
                       if (state->generation != generation_ || !syncing_) return;
                       if (!trades.ok()) {
                         syncing_ = false;
@@ -214,11 +222,11 @@ void AccountSync::SyncNextOrder(std::shared_ptr<State> state) {
                       }
                       state->trades = std::move(*trades);
                       SyncNextTrade(state);
-                    })) {
+                    }))) {
               syncing_ = false;
               inputs_.pause("restored trades query queue unavailable");
             }
-          })) {
+          }))) {
     syncing_ = false;
     inputs_.pause("restored order query queue unavailable");
   }
@@ -303,7 +311,7 @@ void AccountSync::SyncNextTrade(std::shared_ptr<State> state) {
 void AccountSync::SyncBalances(std::shared_ptr<State> state) {
   if (state->generation != generation_ || !syncing_) return;
   if (!inputs_.port()->QueryBalances(
-          [this, state](absl::StatusOr<std::vector<BalanceUpdate>> result) {
+          GuardState([this, state](absl::StatusOr<std::vector<BalanceUpdate>> result) {
             if (state->generation != generation_ || !syncing_) return;
             if (!result.ok()) {
               syncing_ = false;
@@ -329,6 +337,13 @@ void AccountSync::SyncBalances(std::shared_ptr<State> state) {
                               balance.asset);
                 return;
               }
+              if (balance.locked_nanos >
+                  inputs_.funds.Reserved(balance.asset)) {
+                syncing_ = false;
+                inputs_.pause("venue locked funds exceed shard reservations: " +
+                              balance.asset);
+                return;
+              }
             }
             for (const auto& [asset, total] : state->expected_totals) {
               if (!seen.contains(asset)) {
@@ -339,7 +354,7 @@ void AccountSync::SyncBalances(std::shared_ptr<State> state) {
             }
             state->balance_index = 0;
             SyncNextBalance(state);
-          })) {
+          }))) {
     syncing_ = false;
     inputs_.pause("account balance query queue unavailable");
   }
@@ -371,7 +386,7 @@ void AccountSync::SyncNextBalance(std::shared_ptr<State> state) {
 
 void AccountSync::FinishSync(std::shared_ptr<State> state) {
   if (state->generation != generation_ || !syncing_) return;
-  if (!buffered_private_.empty()) {
+  if (!buffered_private_.empty() || inputs_.pending_private_events() != 0) {
     // 快照期间来了新回报，重新查询后才能发布 Ready。
     buffered_private_.clear();
     Start();
@@ -387,16 +402,17 @@ void AccountSync::FinishSync(std::shared_ptr<State> state) {
                   : demo_read_only      ? "demo read-only validation"
                                         : "";
   inputs_.publish_all();
+  if (inputs_.ready) inputs_.enable_admission();
   inputs_.orders.RearmPending();
   inputs_.schedule_order_query();
   if (!inputs_.quiescing) {
     sync_timer_.expires_after(std::chrono::seconds(60));
-    sync_timer_.async_wait([this](const boost::system::error_code& error) {
+    sync_timer_.async_wait(GuardState([this](const boost::system::error_code& error) {
       if (!error && inputs_.private_connected && !inputs_.quiescing &&
           !syncing_) {
         Start();
       }
-    });
+    }));
   }
 }
 

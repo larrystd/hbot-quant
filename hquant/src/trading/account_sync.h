@@ -6,7 +6,9 @@
 #include <functional>
 #include <map>
 #include <memory>
+#include <mutex>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "absl/status/statusor.h"
@@ -21,6 +23,7 @@ class AccountSync {
   // 借用账户状态；回调在账户 io 上执行，不另起线程。
   struct Inputs {
     boost::asio::io_context& io;
+    std::recursive_mutex& state_mutex;
     const AccountConfig& config;
     const std::map<uint16_t, MarketConfig>& markets;
     std::map<std::string, VenueRule>& venue_rules;
@@ -33,6 +36,10 @@ class AccountSync {
     const bool& manual_paused;
     const std::atomic<bool>& quiescing;
     bool& ready;
+    std::function<void()> disable_admission;
+    std::function<void()> enable_admission;
+    std::function<bool()> account_queue_empty;
+    std::function<size_t()> pending_private_events;
     std::string& error;
     std::function<bool(AccountEvent, bool, std::function<void(absl::Status)>)>
         persist_and_apply;
@@ -50,6 +57,14 @@ class AccountSync {
   void CancelTimer();
 
  private:
+  template <typename Callback>
+  auto GuardState(Callback callback) {
+    return [this, callback = std::move(callback)](auto&&... args) mutable {
+      std::lock_guard lock(inputs_.state_mutex);
+      callback(std::forward<decltype(args)>(args)...);
+    };
+  }
+
   struct State;
   void SyncRules(std::shared_ptr<State> state,
                  absl::StatusOr<std::vector<VenueRule>> response);

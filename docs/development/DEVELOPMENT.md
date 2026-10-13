@@ -1,8 +1,8 @@
 # hquant 1.0 开发文档
 
-本文件说明如何把 [设计](DESIGN.md) 落成代码。目标是 C++20、Shard 共用最多 8 个 Asio 工作线程并在所属线程串行处理事件；1.0 只做 Binance 公开行情、文件回放和本地模拟交易。
+本文件说明如何把 [设计](../architecture/DESIGN.md) 落成代码。目标是 C++20、Shard 共用最多 8 个 Asio 工作线程并在所属线程串行处理事件；1.0 只做 Binance 公开行情、文件回放和本地模拟交易。
 
-第 4 节保留原实现顺序作历史记录。当前实现已通过 Release 端到端测试；压力测试结果和未完成事项见 [README](../README.md#性能)与[问题清单](CURRENT_ISSUES_2026-10-06.md)。
+第 4 节保留原实现顺序作历史记录。当前实现已通过 Release 端到端测试；早期压力测试结果和未完成事项见[历史问题清单](../performance/CURRENT_ISSUES_2026-10-06.md)，当前发单链路见[性能优化记录](../performance/TRADING_PATH_OPTIMIZATION_2026-10-12.md)。
 
 ## 1. 代码边界
 

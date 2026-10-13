@@ -1,5 +1,6 @@
 #pragma once
 
+#include <array>
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
@@ -8,7 +9,10 @@
 #include <map>
 #include <memory>
 #include <mutex>
+#include <optional>
+#include <shared_mutex>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "absl/status/status.h"
@@ -50,6 +54,7 @@ class PublishedAssetView {
 struct AccountView {
   uint64_t revision = 0;
   TradingRule rule;
+  std::optional<VenueRule> venue_rule;
   uint64_t maker_fee_rate_ppb = 0;
   std::vector<OrderId> open_order_ids;
   std::vector<OrderId> pending_cancel_ids;
@@ -94,12 +99,16 @@ enum class AccountAction : uint8_t {
   CancelAll,
 };
 
-// 每个交易账户一个实例。运行期订单、资金与同步状态只在 io_ 所属线程修改；
-// Runtime 在启动前注入交易连接、日志和 Shard 视图回调。
+// 每个交易账户一个实例。Shard 本地接纳订单；本对象异步维护交易所对账副本。
 class TradingAccount {
  public:
   using ViewSink = std::function<void(AccountView)>;
-  using Admission = std::function<void(bool, std::string)>;
+  struct TradeSink {
+    std::function<void(AccountEvent)> event;
+    std::function<void(ClientOrderId, bool, TradeResponse)> response;
+    std::function<void(ClientOrderId, bool)> writing;
+    std::function<void(std::function<void(uint64_t)>)> cancel_all;
+  };
 
   TradingAccount(boost::asio::io_context& io, AccountConfig config,
                  std::vector<ShardConfig> shards, std::string run_id,
@@ -110,18 +119,25 @@ class TradingAccount {
   TradingAccount& operator=(const TradingAccount&) = delete;
 
   void SetPort(std::unique_ptr<TradePort> port);
+  TradePort* AddShardPort(std::unique_ptr<TradePort> port);
+  void SetShardPort(ShardId shard, TradePort* port);
   void SetJournal(OrderJournal* journal) { journal_ = journal; }
   absl::Status RestoreJournal(const std::vector<JournalEntry>& entries);
   void SetViewSink(ShardId shard, ViewSink sink);
+  void SetTradeSink(ShardId shard, TradeSink sink);
+  bool SubmitFromShard(const TrackedOrder& order, std::string asset,
+                       uint64_t amount_nanos, uint64_t view_revision);
+  bool CancelFromShard(ShardId shard, CancelCommand command,
+                       uint64_t source_bench_seq, uint64_t requested_ms);
+  bool AdmissionEnabled(uint64_t view_revision) const {
+    return admission_enabled_.load(std::memory_order_acquire) &&
+           view_revision >=
+               min_ready_revision_.load(std::memory_order_acquire);
+  }
+  void ReportShardError(ShardId shard, absl::Status error);
   std::shared_ptr<const PublishedAssetView> AssetView(
       const std::string& asset) const;
   std::shared_ptr<const std::atomic<uint64_t>> AssetRevision() const;
-  // 返回值仅表示账户任务入队；done 表示本地接纳，不代表交易所确认。
-  bool TrySubmit(ShardId shard, MarketId market, LimitOrderRequest order,
-                 uint64_t source_bench_seq, Admission done);
-  bool TryCancel(ShardId shard, OrderId order, Admission done);
-  bool TryCancel(ShardId shard, OrderId order, uint64_t source_bench_seq,
-                 Admission done);
   bool PostView(ShardId shard, ViewSink done);
   bool PostStatus(std::function<void(AccountStatus)> done);
   bool PostFinalStatus(std::function<void(AccountStatus)> done);
@@ -136,20 +152,17 @@ class TradingAccount {
   const std::string& Id() const { return config_.id; }
 
  private:
-  struct QueueProbe {
-    uint64_t enqueued_ns = 0;
-    size_t tasks_ahead = 0;
-    bool drain_scheduled = false;
-  };
-  // 多个调用线程入队，由账户线程分批取出执行。
-  bool TryEnqueue(std::function<void()> task, QueueProbe* probe = nullptr);
+  template <typename Callback>
+  auto GuardState(Callback callback) {
+    return [this, callback = std::move(callback)](auto&&... args) mutable {
+      std::lock_guard lock(state_mutex_);
+      callback(std::forward<decltype(args)>(args)...);
+    };
+  }
+
+  // 控制、状态与跨线程回报任务仍由账户 io 线程分批执行。
+  bool TryEnqueue(std::function<void()> task);
   void Drain();
-  void ProcessSubmit(ShardId shard, const MarketId& market,
-                     const LimitOrderRequest& request,
-                     uint64_t source_bench_seq, uint64_t requested_ns,
-                     uint64_t started_ns, Admission done);
-  void ProcessCancel(ShardId shard, OrderId id, uint64_t source_bench_seq,
-                     Admission done);
   void SubmitResponse(ClientOrderId id, TradeResponse response);
   void CancelResponse(ClientOrderId id, TradeResponse response);
   // 交易所事实先提交可靠日志，再更新订单、资金和 Shard 视图。
@@ -181,6 +194,13 @@ class TradingAccount {
   Order ReportOrder(const TrackedOrder& tracked) const;
   void Pause(std::string error);
   void Record(AccountHistoryRecord record);
+  void NotifyResponse(const ClientOrderId& id, bool cancel,
+                      TradeResponse response);
+  void NotifyWriting(const ClientOrderId& id, bool cancel);
+  void NotifyEvent(const AccountEvent& event);
+  void DisableAdmission();
+  void EnableAdmission();
+  bool AccountQueueEmpty() const;
 
   boost::asio::io_context& io_;
   boost::asio::executor_work_guard<boost::asio::io_context::executor_type>
@@ -198,6 +218,12 @@ class TradingAccount {
   FundsState funds_;
   OrderManager order_manager_;
   std::unique_ptr<TradePort> port_;
+  std::vector<std::unique_ptr<TradePort>> extra_ports_;
+  std::array<TradePort*, kMaxShards> shard_ports_{};
+  // TradePort 可以同步回调；账户状态的同线程重入也使用这同一把锁。
+  mutable std::recursive_mutex state_mutex_;
+  mutable std::shared_mutex admission_gate_mutex_;
+  mutable std::mutex journal_mutex_;
   // 锁只保护账户任务队列、调度标志和队列统计，不保护订单或资金状态。
   mutable std::mutex queue_mutex_;
   std::deque<std::function<void()>> queue_;
@@ -207,21 +233,23 @@ class TradingAccount {
   bool stopped_ = false;
   std::atomic<bool> stop_requested_{false};
   std::atomic<bool> quiescing_{false};
-  // TradePort 同步回调期间暂缓发布中间视图。
-  bool processing_port_ = false;
+  std::atomic<bool> admission_enabled_{false};
+  std::atomic<uint64_t> min_ready_revision_{0};
   bool ready_ = true;
-  uint64_t demo_submissions_ = 0;
+  std::atomic<uint64_t> demo_submissions_{0};
   uint64_t history_sequence_ = 0;
   uint64_t journal_sequence_ = 0;
-  size_t pending_journal_ = 0;
-  size_t journal_pending_peak_ = 0;
-  uint64_t journal_rejections_ = 0;
+  std::atomic<size_t> pending_journal_{0};
+  std::atomic<size_t> pending_private_events_{0};
+  std::atomic<size_t> journal_pending_peak_{0};
+  std::atomic<uint64_t> journal_rejections_{0};
   bool replaying_ = false;
   bool manual_paused_ = false;
   bool private_connected_ = false;
   std::string error_;
   std::unique_ptr<AccountViewPublisher> views_;
   std::unique_ptr<AccountSync> sync_;
+  std::map<uint16_t, TradeSink> trade_sinks_;
 };
 
 }  // namespace hquant::v1

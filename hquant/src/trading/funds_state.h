@@ -36,6 +36,10 @@ class FundsState {
 
   absl::Status Reserve(const ClientOrderId& id, std::string asset,
                        uint64_t amount_nanos);
+  // Used by the account reconciliation copy after a shard has already
+  // admitted the order against its exclusive allocation.
+  absl::Status ReserveAllocated(const ClientOrderId& id, std::string asset,
+                                uint64_t amount_nanos);
   absl::Status SetHold(const ClientOrderId& id, uint64_t amount_nanos);
   absl::Status MarkVenueAccepted(const ClientOrderId& id);
   absl::Status Release(const ClientOrderId& id);
@@ -60,6 +64,8 @@ class FundsState {
   std::map<std::string, AssetFunds> Assets() const;
 
  private:
+  absl::Status ReserveImpl(const ClientOrderId& id, std::string asset,
+                           uint64_t amount_nanos, bool check_available);
   struct TimedEffect {
     uint64_t transaction_ms = 0;
     uint64_t amount_nanos = 0;

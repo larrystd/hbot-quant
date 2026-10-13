@@ -11,6 +11,7 @@
 #include <future>
 #include <memory>
 #include <string>
+#include <stdexcept>
 #include <utility>
 
 #ifdef __APPLE__
@@ -42,7 +43,7 @@ uint64_t ThreadCpuNs() {
 void RunAccountContext(boost::asio::io_context& context) {
   // After an account event, nearby Shards often submit another order within
   // tens of microseconds. Poll briefly before sleeping so their posts do not
-  // pay a second OS wakeup. The account state still has one owner.
+  // pay a second OS wakeup. Account state is protected when Shards submit directly.
   constexpr auto kIdlePoll = std::chrono::microseconds(50);
   while (context.run_one() != 0) {
     auto idle_until = std::chrono::steady_clock::now() + kIdlePoll;
@@ -125,6 +126,10 @@ Runtime::Runtime(const AppConfig& config, PerfProbe* perf)
               [this] { RequestStop(); }}) {
   account_worker_count_ = std::min<size_t>(2, config_.accounts.size());
   shard_worker_count_ = std::min<size_t>(8, config_.shards.size());
+  auto allocations = ResolveShardAllocations(config_);
+  if (!allocations.ok()) {
+    throw std::invalid_argument(std::string(allocations.status().message()));
+  }
   io_contexts_.reserve(account_worker_count_ + shard_worker_count_);
   for (size_t i = 0; i < account_worker_count_ + shard_worker_count_; ++i) {
     io_contexts_.push_back(std::make_unique<boost::asio::io_context>());
@@ -142,18 +147,43 @@ Runtime::Runtime(const AppConfig& config, PerfProbe* perf)
     accounts_.emplace(config.id, std::move(account));
   }
   shards_.reserve(config_.shards.size());
+  std::map<std::string, size_t> next_worker_for_account;
   for (size_t i = 0; i < config_.shards.size(); ++i) {
     const ShardConfig& shard = config_.shards[i];
     TradingAccount* account = accounts_.at(shard.account_id).get();
+    const auto account_config = std::find_if(
+        config_.accounts.begin(), config_.accounts.end(),
+        [&](const AccountConfig& value) { return value.id == shard.account_id; });
+    const size_t available_workers =
+        std::min(shard_worker_count_, account_config->rest_connections);
+    const size_t shard_worker =
+        next_worker_for_account[shard.account_id]++ % available_workers;
+    shard_worker_by_id_[shard.id.value] = shard_worker;
     shards_.push_back(std::make_unique<Shard>(
-        *io_contexts_[account_worker_count_ + i % shard_worker_count_], shard,
-        config_.input,
+        *io_contexts_[account_worker_count_ + shard_worker], shard,
+        config_.input, *account_config, allocations->at(shard.id.value),
         perf_ ? &perf_->shards[shard.id.value] : nullptr, account));
     shard_by_id_[shard.id.value] = shards_.back().get();
     Shard* target = shards_.back().get();
     account->SetViewSink(shard.id, [target](AccountView view) {
       target->PostAccountView(std::move(view));
     });
+    account->SetTradeSink(
+        shard.id,
+        TradingAccount::TradeSink{
+            [target](AccountEvent event) {
+              target->PostTradeEvent(std::move(event));
+            },
+            [target](ClientOrderId id, bool cancel, TradeResponse response) {
+              target->PostTradeResponse(std::move(id), cancel,
+                                        std::move(response));
+            },
+            [target](ClientOrderId id, bool cancel) {
+              target->PostTradeWriting(std::move(id), cancel);
+            },
+            [target](std::function<void(uint64_t)> done) {
+              target->PostCancelAll(std::move(done));
+            }});
   }
 }
 
@@ -173,6 +203,14 @@ absl::Status Runtime::Start() {
     if (!entries.ok()) return entries.status();
     if (auto status = account->RestoreJournal(*entries); !status.ok()) {
       return status;
+    }
+    for (const ShardConfig& shard : config_.shards) {
+      if (shard.account_id != config.id) continue;
+      if (auto status = shard_by_id_[shard.id.value]->RestoreTradingJournal(
+              *entries);
+          !status.ok()) {
+        return status;
+      }
     }
   }
   // All Binance accounts in this process share one outbound request budget.
@@ -230,27 +268,64 @@ absl::Status Runtime::Start() {
       secret = value;
     }
     TradingAccount* account = accounts_.at(config.id).get();
-    account->SetPort(std::make_unique<BinanceTradeClient>(
-        *io_contexts_[worker], config, std::move(key), std::move(secret),
-        [account](AccountEvent event) {
-          account->OnVenueEvent(std::move(event));
-        },
-        [account](bool connected, std::string reason) {
-          account->OnConnectionState(connected, std::move(reason));
-        },
-        perf_ ? &perf_->trade : nullptr, 8192, request_scheduler,
+    std::vector<size_t> shard_workers;
+    for (const ShardConfig& shard : config_.shards) {
+      if (shard.account_id == config.id)
+        shard_workers.push_back(shard_worker_by_id_[shard.id.value]);
+    }
+    std::sort(shard_workers.begin(), shard_workers.end());
+    shard_workers.erase(
+        std::unique(shard_workers.begin(), shard_workers.end()),
+        shard_workers.end());
+    const auto on_event = [account](AccountEvent event) {
+      account->OnVenueEvent(std::move(event));
+    };
+    const auto on_health = [account](bool connected, std::string reason) {
+      account->OnConnectionState(connected, std::move(reason));
+    };
+    const std::string rule_symbol =
         config.mode == TradingMode::OnlineSim
             ? config_.shards.front().market.id.symbol
-            : std::string{}));
+            : std::string{};
+    if (shard_workers.empty()) {
+      account->SetPort(std::make_unique<BinanceTradeClient>(
+          *io_contexts_[worker], config, key, secret, on_event, on_health,
+          perf_ ? &perf_->trade : nullptr, 8192, request_scheduler,
+          rule_symbol));
+      continue;
+    }
+    for (size_t index = 0; index < shard_workers.size(); ++index) {
+      const size_t shard_worker = shard_workers[index];
+      AccountConfig port_config = config;
+      port_config.rest_connections =
+          config.rest_connections / shard_workers.size() +
+          (index < config.rest_connections % shard_workers.size() ? 1 : 0);
+      auto client = std::make_unique<BinanceTradeClient>(
+          *io_contexts_[worker], port_config, key, secret, on_event, on_health,
+          perf_ ? &perf_->trade : nullptr, 8192, request_scheduler,
+          index == 0 ? rule_symbol : std::string{},
+          io_contexts_[account_worker_count_ + shard_worker].get(),
+          index == 0);
+      TradePort* port = client.get();
+      if (index == 0)
+        account->SetPort(std::move(client));
+      else
+        account->AddShardPort(std::move(client));
+      for (const ShardConfig& shard : config_.shards) {
+        if (shard.account_id == config.id &&
+            shard_worker_by_id_[shard.id.value] == shard_worker)
+          account->SetShardPort(shard.id, port);
+      }
+    }
   }
   if (auto status = history_.Start(); !status.ok()) return status;
   started_ = true;
   const char* qos_env = std::getenv("HQUANT_BENCH_PERFORMANCE_QOS");
   const bool prefer_performance_qos =
-      perf_ && qos_env && std::strcmp(qos_env, "1") == 0;
+      perf_ && (!qos_env || std::strcmp(qos_env, "0") != 0);
   const char* realtime_env = std::getenv("HQUANT_BENCH_REALTIME_IO");
   const bool realtime_io =
-      perf_ && realtime_env && std::strcmp(realtime_env, "1") == 0;
+      perf_ && (!realtime_env || std::strcmp(realtime_env, "0") != 0);
   if (perf_) {
     perf_->io_worker_count = io_contexts_.size();
     perf_->performance_qos_requested = prefer_performance_qos;

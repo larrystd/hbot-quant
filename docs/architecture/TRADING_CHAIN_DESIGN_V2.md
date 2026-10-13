@@ -1,6 +1,6 @@
 # hquant 交易链路设计 V2：账户级订单跟踪
 
-状态：V2 本机实现与设计说明，基于 2026-10-11 工作区代码。`OrderManager`、按单查单、发送阶段、资金覆盖与外部模拟交易所已落地；本机及两笔真实 Binance Demo 虚拟资金成交的实测见第 8 节。旧版 [交易链路设计](TRADING_CHAIN_DESIGN.md)记录了从进程内 Paper 到外部交易接口的第一轮方案；Demo API 验证明细见[Binance Demo 验证记录](BINANCE_DEMO_VALIDATION.md)。当前交易模式只有 `pressure_sim`（压力器模拟）与 `online_sim`（Binance Spot Demo 在线模拟）；不提供真实资金实盘模式。旧文档中的 `live` 曾指预留的实盘模式，以此处定义为准。
+状态：V2 本机实现与设计说明，基于 2026-10-11 工作区代码。`OrderManager`、按单查单、发送阶段、资金覆盖与外部模拟交易所已落地；本机及两笔真实 Binance Demo 虚拟资金成交的实测见第 8 节。旧版 [交易链路设计](TRADING_CHAIN_DESIGN.md)记录了从进程内 Paper 到外部交易接口的第一轮方案；Demo API 验证明细见[Binance Demo 验证记录](../operations/BINANCE_DEMO_VALIDATION.md)。当前交易模式只有 `pressure_sim`（压力器模拟）与 `online_sim`（Binance Spot Demo 在线模拟）；不提供真实资金实盘模式。旧文档中的 `live` 曾指预留的实盘模式，以此处定义为准。
 
 ## 与 V1 设计的区别
 
@@ -17,7 +17,7 @@
 
 ## 1. 现状、目标与差距
 
-当前 `schema_version: 2` 已允许多个 Shard 共用一个 `TradingAccount`。公开行情经 `Shard::OnMarket()` 驱动策略；`Shard::RunAccountDecision()` 把挂单、撤单交给账户。账户在 [`trading_account.cc`](../hquant/src/trading/trading_account.cc) 中完成风险检查、调用 [`client_order_id.cc`](../hquant/src/trading/client_order_id.cc) 生成随机 `client_order_id`、预留资金、记可靠意图、调用 `TradePort`；[`trade_client.cc`](../hquant/src/venue/binance/trade_client.cc) 负责签名 REST 和有界异步发送队列；[`user_stream.cc`](../hquant/src/venue/binance/user_stream.cc) 收私有 WS。REST 结果、私有事件和查询结果回到账户，先记 `OrderJournal`，再应用到 `OrderState`、`FundsState` 和账户视图。可靠日志和回放在 [`trading_account_journal.cc`](../hquant/src/trading/trading_account_journal.cc)；启动、断线和周期全账户同步由 [`AccountSync`](../hquant/src/trading/account_sync.cc) 执行；[`AccountViewPublisher`](../hquant/src/trading/account_view_publisher.cc) 负责构造并推送 Shard 视图。两者由 TradingAccount 组合持有，运行在账户的同一 I/O 线程。
+当前 `schema_version: 2` 已允许多个 Shard 共用一个 `TradingAccount`。公开行情经 `Shard::OnMarket()` 驱动策略；`Shard::RunAccountDecision()` 把挂单、撤单交给账户。账户在 [`trading_account.cc`](../../hquant/src/trading/trading_account.cc) 中完成风险检查、调用 [`client_order_id.cc`](../../hquant/src/trading/client_order_id.cc) 生成随机 `client_order_id`、预留资金、记可靠意图、调用 `TradePort`；[`trade_client.cc`](../../hquant/src/venue/binance/trade_client.cc) 负责签名 REST 和有界异步发送队列；[`user_stream.cc`](../../hquant/src/venue/binance/user_stream.cc) 收私有 WS。REST 结果、私有事件和查询结果回到账户，先记 `OrderJournal`，再应用到 `OrderState`、`FundsState` 和账户视图。可靠日志和回放在 [`trading_account_journal.cc`](../../hquant/src/trading/trading_account_journal.cc)；启动、断线和周期全账户同步由 [`AccountSync`](../../hquant/src/trading/account_sync.cc) 执行；[`AccountViewPublisher`](../../hquant/src/trading/account_view_publisher.cc) 负责构造并推送 Shard 视图。两者由 TradingAccount 组合持有，运行在账户的同一 I/O 线程。
 
 V1 外部链路曾在本机模拟交易所的 1000 标的、30 秒 case 中验证；V2 已重新运行同一 case，并用两笔 BTCUSDT 虚拟资金成交验证了真实 Binance Spot Demo 的挂单、私有成交回报、非空成交查询、余额对账及重启。配置值 `online_sim` 仅允许固定 Binance Demo 域名、Demo 凭据、一个账户和一个标的；示例默认零笔挂单，单次上限一笔。
 
@@ -203,7 +203,7 @@ V2 前 `PaperExchange` 保存进程内订单和资金，schema v1 的 Shard 直�
 
 交易所的 `free/locked/total` 是外部账本，`FundsState` 是本地安全投影。买单预留报价资产和可确定的手续费余量，卖单预留基础资产；手续费若可能从第三种资产扣除，需要相应余额或风险余量。`PendingSubmit`、活动单、`PendingCancel` 和结果未知都保留占用。部分成交缩小剩余预留，并在余额事件反映成交前保持临时扣减。
 
-V2 将当前 [`FundsHold.reflected_by_venue`](../hquant/src/trading/funds_state.h) 的布尔语义改成可核对的覆盖金额／版本：
+V2 将当前 [`FundsHold.reflected_by_venue`](../../hquant/src/trading/funds_state.h) 的布尔语义改成可核对的覆盖金额／版本：
 
 ```text
 可用于新订单的资产金额
@@ -220,8 +220,8 @@ V2 将当前 [`FundsHold.reflected_by_venue`](../hquant/src/trading/funds_state.
 
 | 数据库 | 文件 | 写入时机与用途 |
 | --- | --- | --- |
-| 可靠日志 | `order_journal.sqlite`，实现为 [`OrderJournal`](../hquant/src/trading/order_journal.cc) | 发包前将 `SubmitIntent`／`CancelIntent` 放入有界写队列，不等待 SQLite COMMIT；REST 结果、私有订单／成交／余额事件仍在应用前提交。SQLite WAL + `synchronous=FULL` 用于已写入记录的持久性。 |
-| 观察历史 | `history.sqlite`，实现为 [`SqliteHistory`](../hquant/src/sqlite_history.cc) | 命令进入发送链路后异步记历史；回报应用后异步记订单、成交、余额与阶段。可查询和核对历史序号；写入成功不代表交易所成功，写入失败不能用这份库恢复订单。 |
+| 可靠日志 | `order_journal.sqlite`，实现为 [`OrderJournal`](../../hquant/src/trading/order_journal.cc) | 发包前将 `SubmitIntent`／`CancelIntent` 放入有界写队列，不等待 SQLite COMMIT；REST 结果、私有订单／成交／余额事件仍在应用前提交。SQLite WAL + `synchronous=FULL` 用于已写入记录的持久性。 |
+| 观察历史 | `history.sqlite`，实现为 [`SqliteHistory`](../../hquant/src/sqlite_history.cc) | 命令进入发送链路后异步记历史；回报应用后异步记订单、成交、余额与阶段。可查询和核对历史序号；写入成功不代表交易所成功，写入失败不能用这份库恢复订单。 |
 
 账户日志序号必须连续。意图入日志队列后可立即进入 TradePort；发送队列明确拒绝时异步记 `Abort`，并立即撤销未发出的本地状态。订单超时从实际开始写 socket 计时，不能把仍在交易客户端队列中的订单提前当成交易所结果未知。意图提交失败时 Quill 记录带 `client_order_id` 的错误、账户暂停新单，并对仍未决的订单启动查单；已入队不能当作未发出。会改变订单或资金的回报仍先可靠提交再应用、发布账户视图、写观察历史。**进程在意图 COMMIT 前崩溃可能丢失本地 `client_order_id`**：启动同步可发现陌生活动单并暂停，但已终结订单仍需交易所历史排查；当前实现不保证这个窗口的自动恢复。
 
@@ -334,7 +334,7 @@ hquant/
 4. **补齐发送与未知结果语义。** `TradePort` 报告确定未发出与可能已发出；`OrderManager` 按单计时、退避查询；撤单结果决定重试或换单。覆盖丢 REST 响应、私有回报先到、查单先于撤单、队列停机。
 5. **修正资金覆盖与日志回放。** 核对交易所 `locked` 和本地预留，覆盖余额晚到与第三资产手续费；回放日志后先查账再开放新单。不能解释的差异保持暂停。
 6. **先跑本机正确性，再测性能。** 沿用 1000 标的、30 秒 case，核对模拟交易所独立账本、`OrderManager`／`FundsState`、`order_journal.sqlite` 和 `history.sqlite`；分段报告日志提交、队列等待、发包、REST 结果、私有回报应用与历史提交。
-7. **单独验收 `online_sim` 的 Demo 成交路径。** 一个 BTCUSDT 标的、最多一笔小额虚拟资金订单，按[Demo 验证手册](BINANCE_DEMO_VALIDATION.md)核对真实 `TRADE` 回报、非空成交查询、余额与两份 SQLite。1000 标的压测只对本机模拟交易所运行。
+7. **单独验收 `online_sim` 的 Demo 成交路径。** 一个 BTCUSDT 标的、最多一笔小额虚拟资金订单，按[Demo 验证手册](../operations/BINANCE_DEMO_VALIDATION.md)核对真实 `TRADE` 回报、非空成交查询、余额与两份 SQLite。1000 标的压测只对本机模拟交易所运行。
 
 通过条件是：任一时刻每笔订单只有一个 `client_order_id` 和可解释状态；未决命令的资金不会被第二个 Shard 复用；确认撤单前不会换单；REST、私有 WS、查单和重启回放得到相同订单／资金终态；可靠日志无序号缺口；观察历史的缺口明确可见；请求队列、查询次数与账户状态均有上限。行情吞吐和订单性能只能在这些正确性条件满足后解释。
 
@@ -352,14 +352,14 @@ hquant/
 | 交易发送队列等待 | 2613 ms |
 | socket 写入 / REST 响应等待 | 1.9 / 3.2 ms |
 
-这些是本机正确性负载下的观测值；订单队列等待主导延迟，不能据此推断真实交易所性能。1000 标的压测没有访问真实 Demo API。新版本又以单标的、最多一笔、20 虚拟 USDT 硬额度完成真实 Demo 成交验收：订单状态 `FILLED`，一笔 `executionReport: TRADE` 已应用，签名 `myTrades` 返回一笔，成交 ID、数量、价格、手续费、资产和成交时间与可靠日志及 SQLite 一致，独立账户余额匹配，未结订单为零。同一状态目录保留原始基线只读重启，回放订单和成交后全账户同步完成，没有新挂单或日志缺口。具体记录见[Demo 验证文档](BINANCE_DEMO_VALIDATION.md)。Demo 环境的丢响应、私有流断线、第三资产手续费和账户外变动仍是扩大运行范围前的缺口。
+这些是本机正确性负载下的观测值；订单队列等待主导延迟，不能据此推断真实交易所性能。1000 标的压测没有访问真实 Demo API。新版本又以单标的、最多一笔、20 虚拟 USDT 硬额度完成真实 Demo 成交验收：订单状态 `FILLED`，一笔 `executionReport: TRADE` 已应用，签名 `myTrades` 返回一笔，成交 ID、数量、价格、手续费、资产和成交时间与可靠日志及 SQLite 一致，独立账户余额匹配，未结订单为零。同一状态目录保留原始基线只读重启，回放订单和成交后全账户同步完成，没有新挂单或日志缺口。具体记录见[Demo 验证文档](../operations/BINANCE_DEMO_VALIDATION.md)。Demo 环境的丢响应、私有流断线、第三资产手续费和账户外变动仍是扩大运行范围前的缺口。
 
 ## 9. 开发 Prompt
 
 下面保留本轮开发使用的 Prompt，供后续复查和扩展测试时参考。
 
 ```text
-在 /Users/larry/project/open_project/hummingbot-cpp-redesign 按 docs/TRADING_CHAIN_DESIGN_V2.md 实施交易链路 V2。使用 C++20，并遵循现有 hquant 命名、Bazel 目标和账户单写入者风格。
+在 /Users/larry/project/open_project/hummingbot-cpp-redesign 按 docs/architecture/TRADING_CHAIN_DESIGN_V2.md 实施交易链路 V2。使用 C++20，并遵循现有 hquant 命名、Bazel 目标和账户单写入者风格。
 
 目标：交易只走外部接口。移除进程内 PaperExchange、PaperTradePort、TradingMode::Paper、schema v1 Paper 兼容、Shard 直连 Executor/Paper、TradingAccount::TryMarket 和 TradePort::OnMarket；迁移依赖 Paper 的测试与配置。保留 src/venue/binance/ 目录及其 Binance 协议适配器。正确性测试使用 bench/venue/mock_binance_server.py 的独立账本和真实 REST／私有 WS socket。
 
